@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DaxTerm Session Exchange v2",
+  "description": "Portable connection metadata. No passwords, private key contents, credential references, or host trust. Runtime validation additionally checks UTF-8 byte lengths and ID references.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "profiles", "groups", "tunnels"],
+  "properties": {
+    "format": { "const": "daxterm.sessions" },
+    "version": { "const": 2 },
+    "profiles": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/profile" } },
+    "groups": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/group" } },
+    "tunnels": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/tunnel" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "host",
+        "port",
+        "username",
+        "auth",
+        "keyPath",
+        "favorite",
+        "timeout",
+        "keepalive"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[^\\s/\\\\,\\[\\]\\u0000-\\u001f\\u007f]+$"
+        },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "auth": { "enum": ["password", "key", "agent", "interactive"] },
+        "protocol": { "enum": ["ssh", "ftp", "ftps"], "default": "ssh" },
+        "tlsCaPath": { "type": "string", "maxLength": 4096, "default": "" },
+        "encoding": {
+          "enum": ["utf-8", "euc-kr", "shift_jis", "gbk", "big5", "windows-1252"],
+          "default": "utf-8"
+        },
+        "keyPath": { "type": "string", "maxLength": 4096 },
+        "groupId": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }], "default": null },
+        "favorite": { "type": "boolean" },
+        "timeout": { "type": "integer", "minimum": 5, "maximum": 120 },
+        "keepalive": { "type": "integer", "minimum": 5, "maximum": 300 },
+        "lastConnected": {
+          "type": ["integer", "null"],
+          "description": "Ignored on import; exported as null."
+        },
+        "hasSecret": { "const": false, "default": false }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "auth": { "const": "key" } } },
+          "then": { "properties": { "keyPath": { "minLength": 1 } } }
+        },
+        {
+          "if": {
+            "required": ["protocol"],
+            "properties": { "protocol": { "enum": ["ftp", "ftps"] } }
+          },
+          "then": { "properties": { "auth": { "const": "password" } } }
+        }
+      ]
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 }
+      }
+    },
+    "tunnel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "profileId", "name", "kind", "port", "host", "targetPort", "autoStart"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "profileId": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "kind": { "enum": ["local", "remote", "dynamic"] },
+        "port": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
+        },
+        "targetPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "autoStart": { "type": "boolean", "description": "Always reset to false on import." }
+      }
+    }
+  }
+}
