@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-config-apply"
+description = "Enables the config_apply command without any pre-configured scope."
+commands.allow = ["config_apply"]
+
+[[permission]]
+identifier = "deny-config-apply"
+description = "Denies the config_apply command without any pre-configured scope."
+commands.deny = ["config_apply"]

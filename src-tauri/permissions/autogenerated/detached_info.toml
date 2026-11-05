@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-detached-info"
+description = "Enables the detached_info command without any pre-configured scope."
+commands.allow = ["detached_info"]
+
+[[permission]]
+identifier = "deny-detached-info"
+description = "Denies the detached_info command without any pre-configured scope."
+commands.deny = ["detached_info"]

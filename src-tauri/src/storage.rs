@@ -1,0 +1,470 @@
+use rusqlite::{Connection, params};
+use serde::{Deserialize, Serialize};
+use std::{path::Path, sync::Mutex};
+use uuid::Uuid;
+
+pub type Result<T> = std::result::Result<T, String>;
+pub fn db_error(_: rusqlite::Error) -> String {
+    "세션 데이터베이스 작업에 실패했습니다.".into()
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Profile {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth: String,
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
+    #[serde(default)]
+    pub tls_ca_path: String,
+    #[serde(default = "crate::encoding::default_encoding")]
+    pub encoding: String,
+    pub key_path: String,
+    pub group_id: Option<String>,
+    pub favorite: bool,
+    pub timeout: u64,
+    pub keepalive: u64,
+    #[serde(default)]
+    pub last_connected: Option<i64>,
+    #[serde(default)]
+    pub has_secret: bool,
+}
+fn default_protocol() -> String {
+    "ssh".into()
+}
+impl Profile {
+    pub fn validate(&self) -> Result<()> {
+        crate::encoding::get(&self.encoding)?;
+        if !["ssh", "ftp", "ftps"].contains(&self.protocol.as_str())
+            || (self.protocol != "ssh" && self.auth != "password")
+            || self.tls_ca_path.len() > 4096
+        {
+            return Err("프로토콜 또는 TLS 설정을 확인하세요.".into());
+        }
+        if self.name.trim().is_empty()
+            || self.name.len() > 200
+            || self.host.is_empty()
+            || self.host.len() > 253
+            || self.host.chars().any(|c| {
+                c.is_whitespace() || c.is_control() || matches!(c, '/' | '\\' | ',' | '[' | ']')
+            })
+            || self.port == 0
+            || self.username.is_empty()
+            || self.username.len() > 256
+            || self.username.chars().any(char::is_control)
+            || !matches!(
+                self.auth.as_str(),
+                "password" | "key" | "agent" | "interactive"
+            )
+            || self.key_path.len() > 4096
+            || (self.auth == "key" && self.key_path.is_empty())
+            || !(5..=120).contains(&self.timeout)
+            || !(5..=300).contains(&self.keepalive)
+        {
+            return Err(
+                "연결 설정을 확인하세요. 타임아웃 5~120초, KeepAlive 5~300초가 필요합니다.".into(),
+            );
+        }
+        Ok(())
+    }
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Group {
+    pub id: String,
+    pub name: String,
+}
+#[derive(Serialize)]
+pub struct Snapshot {
+    pub profiles: Vec<Profile>,
+    pub groups: Vec<Group>,
+    #[serde(rename = "credentialWarning")]
+    pub credential_warning: Option<String>,
+}
+pub struct Store(pub Mutex<Connection>);
+impl Store {
+    pub fn open(path: &Path) -> Result<Self> {
+        let mut connection = Connection::open(path).map_err(db_error)?;
+        connection
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(db_error)?;
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(db_error)?;
+        if version > 3 {
+            return Err("더 새로운 버전에서 만든 데이터베이스입니다. 앱을 업데이트하세요.".into());
+        }
+        let integrity: String = connection
+            .query_row("PRAGMA quick_check", [], |r| r.get(0))
+            .map_err(db_error)?;
+        if integrity != "ok" {
+            return Err(
+                "세션 데이터베이스가 손상되었습니다. 원본을 보존하고 설정 복구본을 사용하세요."
+                    .into(),
+            );
+        }
+        connection
+            .execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")
+            .map_err(db_error)?;
+        let tx = connection.transaction().map_err(db_error)?;
+        tx.execute_batch("
+            CREATE TABLE IF NOT EXISTS groups(id TEXT PRIMARY KEY, name TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY, data TEXT NOT NULL, group_id TEXT REFERENCES groups(id) ON DELETE SET NULL, secret_ref TEXT, last_connected INTEGER);
+            CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS credential_gc(id TEXT PRIMARY KEY);
+            PRAGMA user_version=3;").map_err(db_error)?;
+        tx.commit().map_err(db_error)?;
+        Ok(Self(Mutex::new(connection)))
+    }
+    pub fn list(&self) -> Result<Snapshot> {
+        let db = self.0.lock().unwrap();
+        let mut statement = db
+            .prepare("SELECT data,group_id,secret_ref,last_connected FROM profiles ORDER BY rowid")
+            .map_err(db_error)?;
+        let profiles = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<i64>>(3)?,
+                ))
+            })
+            .map_err(db_error)?
+            .map(|row| {
+                let (data, group, secret, last) = row.map_err(db_error)?;
+                let mut p: Profile =
+                    serde_json::from_str(&data).map_err(|_| "세션 데이터 형식 오류".to_string())?;
+                p.group_id = group;
+                p.has_secret = secret.is_some();
+                p.last_connected = last;
+                Ok(p)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let groups = db
+            .prepare("SELECT id,name FROM groups ORDER BY name")
+            .map_err(db_error)?
+            .query_map([], |r| {
+                Ok(Group {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                })
+            })
+            .map_err(db_error)?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(db_error)?;
+        Ok(Snapshot {
+            profiles,
+            groups,
+            credential_warning: None,
+        })
+    }
+    pub fn profile(&self, id: &str) -> Result<Profile> {
+        self.list()?
+            .profiles
+            .into_iter()
+            .find(|p| p.id == id)
+            .ok_or("세션을 찾을 수 없습니다.".into())
+    }
+    pub fn secret_ref(&self, id: &str) -> Result<Option<String>> {
+        use rusqlite::OptionalExtension;
+        self.0
+            .lock()
+            .unwrap()
+            .query_row("SELECT secret_ref FROM profiles WHERE id=?", [id], |r| {
+                r.get(0)
+            })
+            .optional()
+            .map(|r| r.flatten())
+            .map_err(db_error)
+    }
+    pub fn save(&self, mut p: Profile, secret: Option<String>) -> Result<Profile> {
+        p.validate()?;
+        if p.id.is_empty() {
+            p.id = Uuid::new_v4().to_string();
+        } else {
+            self.profile(&p.id)?;
+        }
+        p.has_secret = false;
+        p.last_connected = None;
+        let data = serde_json::to_string(&p).map_err(|_| "세션 직렬화 오류")?;
+        {
+            let mut db = self.0.lock().unwrap();
+            let tx = db.transaction().map_err(db_error)?;
+            tx.execute("INSERT OR IGNORE INTO credential_gc SELECT secret_ref FROM profiles WHERE id=?1 AND secret_ref IS NOT NULL AND secret_ref IS NOT ?2",params![p.id,secret]).map_err(db_error)?;
+            tx.execute("INSERT INTO profiles(id,data,group_id,secret_ref) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET data=?2,group_id=?3,secret_ref=?4",params![p.id,data,p.group_id,secret]).map_err(db_error)?;
+            tx.execute("DELETE FROM credential_gc WHERE id=?", [&secret])
+                .map_err(db_error)?;
+            tx.commit().map_err(db_error)?;
+        }
+        self.profile(&p.id)
+    }
+    pub fn stage_secret(&self, id: &str) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .execute("INSERT OR IGNORE INTO credential_gc VALUES(?)", [id])
+            .map_err(db_error)?;
+        Ok(())
+    }
+    pub fn cleanup_credentials(&self) -> Result<()> {
+        let db = self.0.lock().unwrap();
+        let ids=db.prepare("SELECT id FROM credential_gc WHERE id NOT IN (SELECT secret_ref FROM profiles WHERE secret_ref IS NOT NULL)").map_err(db_error)?.query_map([],|r|r.get::<_,String>(0)).map_err(db_error)?.collect::<std::result::Result<Vec<_>,_>>().map_err(db_error)?;
+        for id in ids {
+            crate::credentials::delete(&id)?;
+            db.execute("DELETE FROM credential_gc WHERE id=?", [id])
+                .map_err(db_error)?;
+        }
+        Ok(())
+    }
+    pub fn touch(&self, id: &str) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE profiles SET last_connected=unixepoch() WHERE id=?",
+                [id],
+            )
+            .map_err(db_error)?;
+        Ok(())
+    }
+    pub fn delete(&self, id: &str) -> Result<()> {
+        use rusqlite::OptionalExtension;
+        let mut db = self.0.lock().unwrap();
+        let tx = db.transaction().map_err(db_error)?;
+        tx.execute("INSERT OR IGNORE INTO credential_gc SELECT secret_ref FROM profiles WHERE id=? AND secret_ref IS NOT NULL", [id]).map_err(db_error)?;
+        tx.execute("DELETE FROM profiles WHERE id=?", [id])
+            .map_err(db_error)?;
+        if let Some(value) = tx
+            .query_row("SELECT value FROM settings WHERE key='tunnels'", [], |r| {
+                r.get::<_, String>(0)
+            })
+            .optional()
+            .map_err(db_error)?
+        {
+            let mut configs: Vec<crate::tunnels::Config> =
+                serde_json::from_str(&value).map_err(|_| "터널 설정 형식 오류")?;
+            configs.retain(|c| c.profile_id != id);
+            let value = serde_json::to_string(&configs).map_err(|_| "터널 설정 직렬화 오류")?;
+            tx.execute("UPDATE settings SET value=? WHERE key='tunnels'", [value])
+                .map_err(db_error)?;
+        }
+        tx.commit().map_err(db_error)?;
+        Ok(())
+    }
+    pub fn group(&self, id: Option<String>, name: Option<String>) -> Result<()> {
+        let id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let db = self.0.lock().unwrap();
+        if let Some(name) = name {
+            if name.trim().is_empty() || name.len() > 100 {
+                return Err("그룹 이름은 1~100자로 입력하세요.".into());
+            }
+            db.execute(
+                "INSERT INTO groups VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET name=?2",
+                params![id, name.trim()],
+            )
+            .map_err(db_error)?;
+        } else {
+            db.execute("DELETE FROM groups WHERE id=?", [id])
+                .map_err(db_error)?;
+        }
+        Ok(())
+    }
+}
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    pub fn profile() -> Profile {
+        Profile {
+            id: String::new(),
+            name: "서버".into(),
+            host: "localhost".into(),
+            port: 22,
+            username: "user".into(),
+            auth: "password".into(),
+            protocol: "ssh".into(),
+            tls_ca_path: String::new(),
+            encoding: "utf-8".into(),
+            key_path: String::new(),
+            group_id: None,
+            favorite: false,
+            timeout: 15,
+            keepalive: 15,
+            last_connected: None,
+            has_secret: false,
+        }
+    }
+    #[test]
+    fn persistence_and_groups() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sessions.db");
+        let s = Store::open(&path).unwrap();
+        s.group(Some("group".into()), Some("개발".into())).unwrap();
+        let mut p = profile();
+        p.group_id = Some("group".into());
+        let p = s.save(p, Some("reference-only".into())).unwrap();
+        s.touch(&p.id).unwrap();
+        drop(s);
+        let s = Store::open(&path).unwrap();
+        assert!(s.profile(&p.id).unwrap().has_secret);
+        assert!(s.profile(&p.id).unwrap().last_connected.is_some());
+        s.group(Some("group".into()), None).unwrap();
+        assert!(s.profile(&p.id).unwrap().group_id.is_none());
+        s.delete(&p.id).unwrap();
+        assert!(s.list().unwrap().profiles.is_empty());
+    }
+    #[test]
+    fn invalid_targets_rejected() {
+        for host in ["bad\nhost", "host,other", "[host]", ""] {
+            let mut p = profile();
+            p.host = host.into();
+            assert!(p.validate().is_err());
+        }
+    }
+    #[test]
+    fn failed_save_preserves_old_secret_reference_and_journals_new_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("test.db")).unwrap();
+        let mut p = store.save(profile(), Some("old-reference".into())).unwrap();
+        store.stage_secret("new-reference").unwrap();
+        p.group_id = Some("missing-group".into());
+        assert!(store.save(p.clone(), Some("new-reference".into())).is_err());
+        assert_eq!(
+            store.secret_ref(&p.id).unwrap().as_deref(),
+            Some("old-reference")
+        );
+        let count: i64 = store
+            .0
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT count(*) FROM credential_gc WHERE id='new-reference'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+    #[test]
+    fn legacy_schema_keeps_profiles_and_defaults_encoding() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.db");
+        let store = Store::open(&path).unwrap();
+        let p = store.save(profile(), None).unwrap();
+        let mut data = serde_json::to_value(&p).unwrap();
+        data.as_object_mut().unwrap().remove("encoding");
+        store
+            .0
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE profiles SET data=? WHERE id=?",
+                params![data.to_string(), p.id],
+            )
+            .unwrap();
+        store
+            .0
+            .lock()
+            .unwrap()
+            .execute_batch("PRAGMA user_version=1")
+            .unwrap();
+        drop(store);
+        let migrated = Store::open(&path).unwrap();
+        assert_eq!(migrated.profile(&p.id).unwrap().encoding, "utf-8");
+        assert_eq!(
+            migrated
+                .0
+                .lock()
+                .unwrap()
+                .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            3
+        );
+    }
+    #[test]
+    fn future_schema_is_not_downgraded() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("future.db");
+        let db = Connection::open(&path).unwrap();
+        db.execute_batch("PRAGMA user_version=9").unwrap();
+        drop(db);
+        assert!(Store::open(&path).is_err());
+        let db = Connection::open(path).unwrap();
+        assert_eq!(
+            db.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            9
+        );
+    }
+    #[test]
+    fn failed_delete_keeps_profile_and_does_not_schedule_credential_removal() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("db")).unwrap();
+        let p = store
+            .save(profile(), Some("existing-reference".into()))
+            .unwrap();
+        store.0.lock().unwrap().execute_batch("CREATE TRIGGER reject_delete BEFORE DELETE ON profiles BEGIN SELECT RAISE(ABORT, 'injected'); END;").unwrap();
+        assert!(store.delete(&p.id).is_err());
+        assert_eq!(
+            store.secret_ref(&p.id).unwrap().as_deref(),
+            Some("existing-reference")
+        );
+        let db = store.0.lock().unwrap();
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM credential_gc", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        db.execute_batch("DROP TRIGGER reject_delete").unwrap();
+        drop(db);
+        store.delete(&p.id).unwrap();
+        assert!(store.profile(&p.id).is_err());
+        assert_eq!(
+            store
+                .0
+                .lock()
+                .unwrap()
+                .query_row("SELECT id FROM credential_gc", [], |r| r
+                    .get::<_, String>(0))
+                .unwrap(),
+            "existing-reference"
+        );
+    }
+    #[test]
+    fn corrupt_database_is_preserved() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("db");
+        let bytes = b"invalid database, preserve for recovery";
+        std::fs::write(&path, bytes).unwrap();
+        assert!(Store::open(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    }
+    #[test]
+    fn failed_schema_setup_rolls_back_created_tables_and_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("db");
+        let db = Connection::open(&path).unwrap();
+        db.execute_batch("CREATE TABLE sentinel(value TEXT); CREATE INDEX settings ON sentinel(value); PRAGMA user_version=1;").unwrap();
+        drop(db);
+        assert!(Store::open(&path).is_err());
+        let db = Connection::open(&path).unwrap();
+        assert_eq!(
+            db.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            db.query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='profiles'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+    }
+}

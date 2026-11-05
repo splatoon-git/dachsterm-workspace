@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-file-batch"
+description = "Enables the file_batch command without any pre-configured scope."
+commands.allow = ["file_batch"]
+
+[[permission]]
+identifier = "deny-file-batch"
+description = "Denies the file_batch command without any pre-configured scope."
+commands.deny = ["file_batch"]

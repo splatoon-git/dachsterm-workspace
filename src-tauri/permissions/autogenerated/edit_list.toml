@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-edit-list"
+description = "Enables the edit_list command without any pre-configured scope."
+commands.allow = ["edit_list"]
+
+[[permission]]
+identifier = "deny-edit-list"
+description = "Denies the edit_list command without any pre-configured scope."
+commands.deny = ["edit_list"]

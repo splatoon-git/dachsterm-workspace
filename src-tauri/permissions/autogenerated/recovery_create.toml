@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-recovery-create"
+description = "Enables the recovery_create command without any pre-configured scope."
+commands.allow = ["recovery_create"]
+
+[[permission]]
+identifier = "deny-recovery-create"
+description = "Denies the recovery_create command without any pre-configured scope."
+commands.deny = ["recovery_create"]

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+target/
+src-tauri/gen/
+.env*
+*.log
+test-results/
+test-results-native/
+playwright-report/
+*.tsbuildinfo
+test-results-audit.json
+
+.tools/

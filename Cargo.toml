@@ -1,0 +1,7 @@
+[workspace]
+members = ["src-tauri", "crates/ssh-probe"]
+default-members = ["src-tauri"]
+resolver = "2"
+
+[patch.crates-io]
+ssh-key = { path = "vendor/ssh-key" }

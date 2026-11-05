@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transfer-discard"
+description = "Enables the transfer_discard command without any pre-configured scope."
+commands.allow = ["transfer_discard"]
+
+[[permission]]
+identifier = "deny-transfer-discard"
+description = "Denies the transfer_discard command without any pre-configured scope."
+commands.deny = ["transfer_discard"]

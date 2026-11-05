@@ -1,0 +1,40 @@
+[package]
+name = "daxterm"
+version = "0.5.1"
+edition = "2024"
+default-run = "daxterm"
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = [] }
+
+[dependencies]
+portable-pty = "=0.9.0"
+tauri = { version = "=2.12.5", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+russh = { version = "=0.65.1", default-features = false, features = ["ring"] }
+ring = "=0.17.14"
+crypto-bigint = { version = "=0.7.10", features = ["zeroize"] }
+pkcs1 = { version = "=0.8.0-rc.4", features = ["pem"] }
+pkcs8 = { version = "=0.11.0", features = ["encryption", "pem"] }
+tokio = { version = "1", features = ["full"] }
+russh-sftp = "=3.0.1"
+suppaftp = { version = "=12.2.1", features = ["tokio-rustls-ring", "no-log"] }
+rustls-native-certs = "=0.8.5"
+encoding_rs = "=0.8.35"
+sha2 = "0.10"
+argon2 = { version = "=0.5.3", features = ["zeroize"] }
+aes-gcm = { version = "=0.10.3", features = ["zeroize"] }
+rfd = "0.15"
+rusqlite = { version = "0.38", features = ["bundled"] }
+keyring = { version = "3.6", features = ["windows-native", "apple-native"] }
+uuid = { version = "1", features = ["v4"] }
+zeroize = "1"
+dirs = "6"
+base64 = "0.22"
+hmac = "0.12"
+sha1 = "0.10"
+tempfile = "3"
+
+[dev-dependencies]
+
