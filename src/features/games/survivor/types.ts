@@ -10,6 +10,7 @@ export type SurvivorStats = {
   attackBonus: number;
   cooldownReduction: number;
   experienceBonus: number;
+  goldBonus: number;
 };
 
 export type SurvivorPlayer = Point & {
@@ -21,8 +22,7 @@ export type SurvivorPlayer = Point & {
   invulnerableUntilTick: number;
 };
 
-// G.8.1 only implements the starting weapon/enemy/drop. Extend these unions with
-// their implementations in G.8.2/G.8.3, rather than advertising unavailable content.
+// Enemy kinds and physical drops expand in G.8.3.
 export type SurvivorEnemy = Point & {
   id: number;
   kind: 'slime';
@@ -32,6 +32,10 @@ export type SurvivorEnemy = Point & {
   speed: number;
   damage: number;
   xp: number;
+  recoil?: Point;
+  knockbackImmune?: boolean;
+  orbitHitUntilTick?: number;
+  trailHitUntilTick?: number;
 };
 export type SurvivorDrop = Point & { id: number; kind: 'xp'; value: number };
 export type BiteAttack = {
@@ -40,7 +44,74 @@ export type BiteAttack = {
   origin: Point;
   direction: Point;
   hitIds: number[];
+  radius: number;
+  halfAngle: number;
+  damage: number;
 };
+
+export type WeaponId = 'bite' | 'boomerang' | 'wave' | 'orbit' | 'trail' | 'acorn';
+export type AbilityId = 'fangs' | 'tail' | 'heart' | 'fur' | 'feet' | 'nose' | 'wisdom' | 'luck';
+export type EvolutionId = 'king-bite' | 'golden-bone' | 'lion-roar';
+export type OwnedWeapon = { id: WeaponId; rank: number; evolved: boolean };
+export type OwnedAbility = { id: AbilityId; rank: number };
+/** Validated run-start values; persistence and purchases belong to G.8.4. */
+export type SurvivorStartOptions = {
+  unlockedWeapons?: readonly WeaponId[];
+  extraReroll?: boolean;
+  bonuses?: Partial<{
+    hp: number;
+    attack: number;
+    pickup: number;
+    gold: number;
+    move: number;
+    cooldown: number;
+  }>;
+};
+export type CardEffect = { label: string; before: number; after: number; unit: string };
+export type SurvivorCard = {
+  id: string;
+  name: string;
+  fromRank: number;
+  toRank: number;
+  effects: CardEffect[];
+} & (
+  | { kind: 'weapon'; target: WeaponId }
+  | { kind: 'ability'; target: AbilityId }
+  | { kind: 'evolution'; target: EvolutionId }
+  | { kind: 'reward'; target: 'heal' | 'gold' }
+);
+export type CardChoice = { id: number; cards: SurvivorCard[] };
+
+type AttackBase = { id: number; damage: number; radius: number; hitIds: number[] };
+export type BoomerangAttack = AttackBase &
+  Point & {
+    kind: 'boomerang';
+    origin: Point;
+    direction: Point;
+    range: number;
+    speed: number;
+    distance: number;
+    leg: 'out' | 'back' | 'waiting';
+    readyTick: number;
+    repeats: number;
+  };
+export type WaveAttack = AttackBase &
+  Point & {
+    kind: 'wave';
+    maxRadius: number;
+    startTick: number;
+    repeats: number;
+    waiting: boolean;
+  };
+export type TrailAttack = AttackBase & Point & { kind: 'trail'; endTick: number };
+export type AcornAttack = AttackBase &
+  Point & {
+    kind: 'acorn';
+    impactTick: number;
+    exploded: boolean;
+  };
+export type OrbitAttack = AttackBase & Point & { kind: 'orbit'; index: number; count: number };
+export type SurvivorAttack = BoomerangAttack | WaveAttack | TrailAttack | AcornAttack | OrbitAttack;
 
 /** Owned mutable simulation state, intended for a ref, not per-frame React state.
  * Read entity objects only during the current tick: removed entities are pooled.
@@ -60,6 +131,18 @@ export type SurvivorRun = {
   enemies: SurvivorEnemy[];
   drops: SurvivorDrop[];
   bite: { nextReadyTick: number; sequence: number; lastAttack: BiteAttack | null };
+  weapons: OwnedWeapon[];
+  abilities: OwnedAbility[];
+  startBonuses: Required<NonNullable<SurvivorStartOptions['bonuses']>>;
+  unlockedWeapons: WeaponId[];
+  weaponTimers: Record<Exclude<WeaponId, 'bite' | 'orbit'>, number>;
+  orbitAngle: number;
+  attacks: SurvivorAttack[];
+  nextAttackId: number;
+  choice: CardChoice | null;
+  choiceSequence: number;
+  rerolls: number;
+  gold: number;
   kills: number;
   level: number;
   xp: number;

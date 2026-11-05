@@ -1,6 +1,4 @@
 import {
-  BASE_STATS,
-  BITE,
   FIXED_STEP,
   INVULNERABLE_TICKS,
   LIMITS,
@@ -17,6 +15,8 @@ import {
   xpToNextLevel,
 } from './content';
 import { nextRandom, seedStreams } from './random';
+import { initialProgression, openSurvivorChoice } from './progression';
+import { stepWeapons } from './weapons';
 import { EnemyGrid } from './spatial';
 import type {
   Point,
@@ -24,6 +24,7 @@ import type {
   SurvivorEnemy,
   SurvivorInput,
   SurvivorRun,
+  SurvivorStartOptions,
 } from './types';
 
 const IDLE: SurvivorInput = { moveX: 0, moveY: 0 };
@@ -44,7 +45,8 @@ function scratchFor(run: SurvivorRun): Scratch {
   return scratch;
 }
 
-export function newSurvivor(seed = 1): SurvivorRun {
+export function newSurvivor(seed = 1, options: SurvivorStartOptions = {}): SurvivorRun {
+  const start = initialProgression(options);
   const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : 1;
   return {
     contentVersion: SURVIVOR_CONTENT_VERSION,
@@ -60,8 +62,8 @@ export function newSurvivor(seed = 1): SurvivorRun {
       x: WORLD.width / 2,
       y: WORLD.height / 2,
       radius: PLAYER_RADIUS,
-      hp: BASE_STATS.maxHp,
-      stats: { ...BASE_STATS },
+      hp: start.stats.maxHp,
+      stats: start.stats,
       facing: { x: 1, y: 0 },
       recoil: { x: 0, y: 0 },
       invulnerableUntilTick: 0,
@@ -69,6 +71,18 @@ export function newSurvivor(seed = 1): SurvivorRun {
     enemies: [],
     drops: [],
     bite: { nextReadyTick: 0, sequence: 0, lastAttack: null },
+    weapons: [{ id: 'bite', rank: 1, evolved: false }],
+    abilities: [],
+    startBonuses: start.bonuses,
+    unlockedWeapons: start.unlockedWeapons,
+    weaponTimers: { boomerang: 0, wave: 0, trail: 0, acorn: 0 },
+    orbitAngle: 0,
+    attacks: [],
+    nextAttackId: 1,
+    choice: null,
+    choiceSequence: 0,
+    rerolls: start.rerolls,
+    gold: 0,
     kills: 0,
     level: 1,
     xp: 0,
@@ -151,63 +165,22 @@ function chasePlayer(run: SurvivorRun) {
     const dx = run.player.x - e.x;
     const dy = run.player.y - e.y;
     const distance = Math.hypot(dx, dy);
-    if (!distance) continue;
     const travel = Math.min(distance, e.speed * FIXED_STEP);
-    e.x = clamp(e.x + (dx / distance) * travel, e.radius, WORLD.width - e.radius);
-    e.y = clamp(e.y + (dy / distance) * travel, e.radius, WORLD.height - e.radius);
-  }
-}
-
-// Exact circle/sector intersection, including either radial edge and the tip.
-function inBite(origin: Point, direction: Point, e: SurvivorEnemy): boolean {
-  const dx = e.x - origin.x;
-  const dy = e.y - origin.y;
-  const distance = Math.hypot(dx, dy);
-  if (distance > BITE.radius + e.radius) return false;
-  const forward = dx * direction.x + dy * direction.y;
-  const sideways = Math.abs(dx * direction.y - dy * direction.x);
-  const cos = Math.cos(BITE.halfAngle);
-  const sin = Math.sin(BITE.halfAngle);
-  if (distance === 0 || forward >= distance * cos) return true;
-  const alongEdge = clamp(forward * cos + sideways * sin, 0, BITE.radius);
-  return (forward - alongEdge * cos) ** 2 + (sideways - alongEdge * sin) ** 2 <= e.radius ** 2;
-}
-
-function bite(run: SurvivorRun, grid: EnemyGrid) {
-  if (run.tick < run.bite.nextReadyTick) return;
-  let target: SurvivorEnemy | undefined;
-  let nearest = Infinity;
-  grid.visit(run.player.x, run.player.y, BITE.radius + SLIME.radius, (e) => {
-    const distance = distanceSquared(run.player, e);
-    if (e.hp <= 0 || distance > (BITE.radius + e.radius) ** 2) return;
-    if (distance < nearest || (distance === nearest && (!target || e.id < target.id))) {
-      target = e;
-      nearest = distance;
+    e.x = clamp(
+      e.x + (distance ? (dx / distance) * travel : 0) + (e.recoil?.x ?? 0) * FIXED_STEP,
+      e.radius,
+      WORLD.width - e.radius,
+    );
+    e.y = clamp(
+      e.y + (distance ? (dy / distance) * travel : 0) + (e.recoil?.y ?? 0) * FIXED_STEP,
+      e.radius,
+      WORLD.height - e.radius,
+    );
+    if (e.recoil) {
+      e.recoil.x *= RECOIL_DECAY;
+      e.recoil.y *= RECOIL_DECAY;
     }
-  });
-  if (!target) return; // Waiting for a target does not spend or bank attacks.
-  const distance = Math.sqrt(nearest);
-  const direction = distance
-    ? { x: (target.x - run.player.x) / distance, y: (target.y - run.player.y) / distance }
-    : { ...run.player.facing };
-  const attack = {
-    id: ++run.bite.sequence,
-    tick: run.tick,
-    origin: { x: run.player.x, y: run.player.y },
-    direction,
-    hitIds: [] as number[],
-  };
-  const damage = Math.round(BITE.damage * (1 + run.player.stats.attackBonus));
-  grid.visit(run.player.x, run.player.y, BITE.radius + SLIME.radius, (e) => {
-    if (e.hp <= 0 || !inBite(run.player, direction, e)) return;
-    e.hp = Math.max(0, e.hp - damage);
-    attack.hitIds.push(e.id);
-  });
-  attack.hitIds.sort((a, b) => a - b);
-  run.bite.lastAttack = attack;
-  run.bite.nextReadyTick =
-    run.tick +
-    Math.ceil(BITE.cooldownTicks * Math.max(0.5, 1 - run.player.stats.cooldownReduction));
+  }
 }
 
 function addXpDrop(run: SurvivorRun, enemy: SurvivorEnemy, scratch: Scratch) {
@@ -252,7 +225,7 @@ function contactDamage(run: SurvivorRun, grid: EnemyGrid) {
   const p = run.player;
   if (run.tick < p.invulnerableUntilTick) return;
   let source: SurvivorEnemy | undefined;
-  grid.visit(p.x, p.y, p.radius + SLIME.radius, (e) => {
+  grid.visit(p.x, p.y, p.radius + grid.maxRadius, (e) => {
     if (e.hp <= 0 || distanceSquared(p, e) > (p.radius + e.radius) ** 2) return;
     // One shared damage window; deterministic strongest contact wins this tick.
     if (!source || e.damage > source.damage || (e.damage === source.damage && e.id < source.id))
@@ -288,7 +261,10 @@ function collectXp(run: SurvivorRun, scratch: Scratch) {
     run.pendingChoices++;
   }
   if (run.level === MAX_LEVEL) run.xp = 0;
-  if (run.pendingChoices > 0) run.phase = 'choosing';
+  if (run.pendingChoices > 0) {
+    run.phase = 'choosing';
+    openSurvivorChoice(run);
+  }
 }
 
 function spawnSlime(run: SurvivorRun, scratch: Scratch) {
@@ -329,6 +305,10 @@ function spawnSlime(run: SurvivorRun, scratch: Scratch) {
       speed: SLIME.speed,
       damage: SLIME.damage,
       xp: SLIME.xp,
+      recoil: undefined,
+      knockbackImmune: false,
+      orbitHitUntilTick: 0,
+      trailHitUntilTick: 0,
     } satisfies SurvivorEnemy);
     run.enemies.push(enemy);
     return;
@@ -341,7 +321,7 @@ function tickSurvivor(run: SurvivorRun, input: SurvivorInput) {
   movePlayer(run, input);
   chasePlayer(run);
   scratch.grid.rebuild(run.enemies);
-  bite(run, scratch.grid);
+  stepWeapons(run, scratch.grid);
   contactDamage(run, scratch.grid);
   reapEnemies(run, scratch);
   if (run.player.hp <= 0) {
