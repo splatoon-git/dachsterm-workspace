@@ -69,7 +69,8 @@ test('Space bites without jumping and Down stomps an enemy then bounces', async 
   const board = game.getByRole('group', { name: '닥스의 모험 게임판' });
   await page.clock.install();
   await page.clock.pauseAt(new Date(Date.now() + 1000));
-  await game.getByRole('button', { name: '게임 시작', exact: true }).click();
+  await expect(board).toBeFocused();
+  await page.keyboard.press('Space');
   await page.keyboard.press('Space');
   await page.clock.runFor(30);
   await expect(board).toHaveAttribute('data-motion', 'bite');
@@ -97,7 +98,7 @@ test('Space bites without jumping and Down stomps an enemy then bounces', async 
   await expect(game.locator('.adventure-enemy')).toHaveCount(7);
 });
 
-test('a generated stage clears and the next biome starts only on request', async ({ page }) => {
+test('keyboard-only play defeats the boss and Space starts the next biome', async ({ page }) => {
   test.setTimeout(60000);
   const { generateLevel } = await import('../../src/features/games/adventureLevels');
   const level = generateLevel(42, 0);
@@ -109,35 +110,118 @@ test('a generated stage clears and the next biome starts only on request', async
   await game.locator('.adventure-map-options summary').click();
   await page.clock.install();
   await page.clock.pauseAt(new Date(Date.now() + 1000));
-  await game.getByRole('button', { name: '게임 시작', exact: true }).click();
-  await page.keyboard.down('d');
-  for (let i = 0; i < 500; i++) {
+  await board.focus();
+  await page.keyboard.press('Space');
+  let direction = 0;
+  let captured = false;
+  for (let i = 0; i < 1000; i++) {
     if (await game.locator('.adventure-next').count()) break;
     const x = Number(await board.getAttribute('data-x'));
     const y = Number(await board.getAttribute('data-y'));
+    const bossAlive = Number(await board.getAttribute('data-boss-health')) > 0;
+    const inArena = (await board.getAttribute('data-boss')) !== 'dormant' && bossAlive;
+    const bossX = Number(await board.getAttribute('data-boss-x'));
+    const desired = inArena ? (Math.abs(bossX - x) > 15 ? Math.sign(bossX - x) : 0) : 1;
+    if (desired !== direction) {
+      if (direction) await page.keyboard.up(direction > 0 ? 'd' : 'a');
+      if (desired) await page.keyboard.down(desired > 0 ? 'd' : 'a');
+      direction = desired;
+    }
+    if (inArena && !captured) {
+      await expect(game.locator('.adventure-boss-hud')).toContainText('이끼숲 수호자');
+      await page.screenshot({ path: 'target/verification/adventure-boss.png' });
+      captured = true;
+    }
     if (
       y === 0 &&
-      (level.spikes.some((p) => p.x - x > 0 && p.x - x < 72) ||
+      ((inArena && Math.abs(bossX - x) < 230) ||
+        level.spikes.some((p) => p.x - x > 0 && p.x - x < 72) ||
         level.gaps.some((g) => g.x - x > 0 && g.x - x < 40))
     )
       await page.keyboard.press('ArrowUp');
     await page.keyboard.press('Space');
     await page.clock.runFor(64);
   }
-  await page.keyboard.up('d');
+  if (direction) await page.keyboard.up(direction > 0 ? 'd' : 'a');
+  expect(captured).toBe(true);
+  await expect(board).toHaveAttribute('data-boss-health', '0');
   await expect(game.getByRole('status')).toContainText('구간 완료');
   const score = await game.getByTestId('game-score').textContent();
   const frozen = await board.innerHTML();
   await page.clock.runFor(1000);
   expect(await board.innerHTML()).toBe(frozen);
-  await game.getByRole('button', { name: '다음 구간 → 물길 유적', exact: true }).click();
+  await page.keyboard.press('Space');
   await expect(board).toHaveAttribute('data-level', '1');
   await expect(board).toHaveAttribute('data-seed', '42');
   await expect(board).toHaveAttribute('data-x', '100');
   await expect(game.getByTestId('game-score')).toHaveText(score!);
-  await expect(game.getByRole('button', { name: '게임 시작', exact: true })).toBeVisible();
-  const ready = await board.innerHTML();
-  await page.clock.runFor(1000);
-  expect(await board.innerHTML()).toBe(ready);
+  await expect(game.getByRole('button', { name: '일시정지', exact: true })).toBeVisible();
+  await expect(board).toHaveAttribute('data-motion', 'idle');
+  await page.keyboard.down('d');
+  await page.clock.runFor(300);
+  await page.keyboard.up('d');
+  expect(Number(await board.getAttribute('data-x'))).toBeGreaterThan(140);
   await page.screenshot({ path: 'target/verification/adventure-next-stage.png' });
+});
+
+test('Space and P handle start, repeat suppression and pause/resume without mouse input', async ({
+  page,
+}) => {
+  const game = await openAdventure(page);
+  const board = game.getByRole('group', { name: '닥스의 모험 게임판' });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await expect(board).toBeFocused();
+  await page.keyboard.down('Space');
+  await page.keyboard.down('Space');
+  await page.clock.runFor(80);
+  await expect(board).toHaveAttribute('data-motion', 'idle');
+  await page.keyboard.up('Space');
+  await page.keyboard.press('Space');
+  await page.clock.runFor(32);
+  await expect(board).toHaveAttribute('data-motion', 'bite');
+  await page.keyboard.press('p');
+  const paused = await board.innerHTML();
+  await page.clock.runFor(500);
+  expect(await board.innerHTML()).toBe(paused);
+  await page.keyboard.press('Space');
+  await expect(game.getByRole('button', { name: '일시정지', exact: true })).toBeVisible();
+  await page.keyboard.press('p');
+  await page.keyboard.press('p');
+  await expect(game.getByRole('button', { name: '일시정지', exact: true })).toBeVisible();
+  await page.keyboard.press('m');
+  await expect(game.getByRole('button', { name: '효과음 꺼짐 · M' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(game.locator('.adventure-impact-camera')).toHaveCSS('transform', 'none');
+});
+
+test('Space retries after defeat from the latest shelter with no mouse interaction', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const game = await openAdventure(page);
+  const board = game.getByRole('group', { name: '닥스의 모험 게임판' });
+  await expect(board).toBeFocused();
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await page.keyboard.press('Space');
+  await page.keyboard.down('d');
+  const retry = game.getByRole('button', { name: 'Space 쉼터에서 재도전', exact: true });
+  for (let i = 0; i < 80 && !(await retry.count()); i++) await page.clock.runFor(1000);
+  await page.keyboard.up('d');
+  await expect(retry).toBeVisible();
+  const checkpoint = await board.getAttribute('data-checkpoint');
+  const seed = await board.getAttribute('data-seed');
+  const score = await game.getByTestId('game-score').textContent();
+  await page.keyboard.press('Space');
+  await expect(board).toHaveAttribute('data-x', checkpoint!);
+  await expect(board).toHaveAttribute('data-seed', seed!);
+  await expect(game.getByTestId('adventure-health')).toHaveAttribute('aria-label', '체력 5 / 5');
+  await expect(game.getByTestId('game-score')).toHaveText(score!);
+  await expect(game.getByRole('button', { name: '일시정지', exact: true })).toBeVisible();
+  await page.clock.runFor(100);
+  await expect(board).toHaveAttribute('data-motion', 'idle');
 });

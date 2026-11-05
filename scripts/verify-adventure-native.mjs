@@ -16,7 +16,10 @@ export async function verifyAdventureVariety(page, game) {
   }
   await game.getByRole('button', { name: '바람숲', exact: true }).click();
   await game.locator('.adventure-map-options summary').click();
-  await game.getByRole('button', { name: '게임 시작', exact: true }).click();
+  await board.focus();
+  await page.keyboard.press('Space');
+  await expect(game.getByRole('button', { name: '일시정지', exact: true })).toBeVisible();
+  await expect(board).toHaveAttribute('data-motion', 'idle');
   await page.keyboard.press('Space');
   await expect(board).toHaveAttribute('data-motion', 'bite');
   await expect(board).toHaveAttribute('data-y', '0');
@@ -29,6 +32,9 @@ export async function verifyAdventureVariety(page, game) {
   const frozen = await board.innerHTML();
   await page.waitForTimeout(150);
   expect(await board.innerHTML()).toBe(frozen);
+  await page.keyboard.press('Space');
+  await expect(game.getByRole('button', { name: '일시정지', exact: true })).toBeVisible();
+  await page.keyboard.press('p');
   await page.screenshot({ path: 'target/verification/adventure-native.png' });
   console.log(
     'Native adventure: four seeded biomes, Space bite without jump, Up jump, Down fast stomp and pause passed.',
