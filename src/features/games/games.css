@@ -579,8 +579,232 @@
 .adventure-next {
   margin: 0 0 12px;
 }
+.adventure-clouds {
+  fill: var(--terminal-background);
+  opacity: 0.65;
+}
+.adventure-horizon {
+  fill: var(--adventure-accent);
+  opacity: 0.12;
+}
+.adventure-far {
+  opacity: 0.2;
+}
+.adventure-near {
+  opacity: 0.26;
+}
+.adventure-props {
+  fill: color-mix(in srgb, var(--adventure-accent) 23%, var(--terminal-background));
+  stroke: color-mix(in srgb, var(--adventure-accent) 45%, var(--terminal-background));
+  stroke-width: 2;
+}
+.adventure-props .prop-dark {
+  fill: color-mix(in srgb, var(--adventure-accent) 36%, var(--terminal-background));
+}
+.adventure-props .prop-leaves {
+  fill: color-mix(in srgb, var(--terminal-green) 28%, var(--terminal-background));
+}
+.adventure-props .prop-detail {
+  fill: none;
+  stroke: var(--terminal-background);
+  stroke-width: 2;
+  opacity: 0.65;
+}
+.adventure-props .prop-vine {
+  fill: none;
+  stroke: var(--terminal-green);
+  opacity: 0.45;
+  stroke-width: 5;
+}
+.adventure-props .prop-water {
+  stroke: var(--terminal-cyan);
+  stroke-width: 3;
+  opacity: 0.4;
+}
+.adventure-props .prop-crystal {
+  fill: color-mix(in srgb, var(--adventure-accent) 34%, var(--terminal-background));
+}
+.adventure-props .prop-snow {
+  fill: var(--terminal-background);
+  stroke: none;
+  opacity: 0.8;
+}
+.adventure-waystone {
+  opacity: 0.75;
+}
+.adventure-ground rect {
+  fill: var(--adventure-accent);
+  fill-opacity: 0.16;
+}
+.adventure-ground .adventure-ground-cap {
+  fill-opacity: 0.65;
+}
+.adventure-ground-stone {
+  fill: var(--adventure-accent);
+  fill-opacity: 0.1;
+}
+.adventure-ground-stone path {
+  stroke: var(--adventure-accent);
+  stroke-opacity: 0.18;
+  stroke-width: 1;
+}
+.adventure-platform {
+  fill: color-mix(in srgb, var(--adventure-accent) 12%, var(--terminal-background));
+  stroke: var(--adventure-accent);
+}
+.adventure-platform .adventure-platform-top {
+  opacity: 0.9;
+  stroke-width: 3;
+}
+.adventure-platform .adventure-platform-underside {
+  opacity: 0.4;
+  fill: var(--adventure-accent);
+}
+.adventure-enemy {
+  fill: color-mix(in srgb, var(--terminal-red) 12%, var(--terminal-background));
+}
+.adventure-enemy.hopper {
+  fill: color-mix(in srgb, var(--terminal-green) 20%, var(--terminal-background));
+}
+.adventure-enemy.bat {
+  fill: color-mix(in srgb, var(--terminal-magenta) 18%, var(--terminal-background));
+}
+.adventure-enemy.boar {
+  fill: color-mix(in srgb, var(--terminal-yellow) 22%, var(--terminal-background));
+}
+.adventure-bite {
+  stroke: var(--terminal-yellow);
+  stroke-width: 3;
+}
+.adventure-impact-rays {
+  stroke: var(--terminal-yellow);
+  stroke-width: 3;
+}
+.adventure-impact-star {
+  fill: var(--terminal-yellow);
+  stroke: var(--terminal-background);
+  stroke-width: 1;
+}
+.adventure-effect.boss,
+.adventure-effect.victory {
+  stroke: var(--terminal-yellow);
+  stroke-width: 3;
+}
+.adventure-effect text {
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--terminal-background);
+  stroke-width: 3;
+}
+.adventure-arena {
+  stroke: var(--adventure-accent);
+  stroke-width: 2;
+}
+.arena-floor {
+  fill: var(--adventure-accent);
+  fill-opacity: 0.12;
+  stroke: none;
+}
+.arena-pillar {
+  fill: color-mix(in srgb, var(--adventure-accent) 20%, var(--terminal-background));
+}
+.arena-rune,
+.arena-sigil {
+  fill: none;
+  opacity: 0.55;
+}
+.arena-beacon {
+  fill: var(--terminal-yellow);
+  stroke: var(--terminal-background);
+}
+.arena-barrier {
+  stroke: var(--terminal-red);
+  opacity: 0.65;
+  stroke-dasharray: 8 6;
+}
+.adventure-arena .arena-name {
+  stroke: none;
+  letter-spacing: 3px;
+  font-size: 18px;
+  opacity: 0.35;
+}
+.adventure-boss {
+  stroke: var(--adventure-accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.boss-shell {
+  fill: color-mix(in srgb, var(--adventure-accent) 37%, var(--terminal-background));
+}
+.boss-leg,
+.boss-armor {
+  fill: color-mix(in srgb, var(--adventure-accent) 62%, var(--terminal-background));
+}
+.boss-face {
+  fill: color-mix(in srgb, var(--adventure-accent) 20%, var(--terminal-background));
+}
+.boss-crown {
+  fill: var(--adventure-accent);
+}
+.boss-tusk {
+  fill: var(--terminal-background);
+  stroke: var(--terminal-foreground);
+}
+.boss-eye {
+  fill: none;
+  stroke: var(--terminal-red);
+  stroke-width: 4;
+}
+.boss-detail {
+  fill: none;
+  stroke: var(--terminal-background);
+  stroke-opacity: 0.6;
+}
+.boss-danger-zone {
+  stroke: var(--terminal-red);
+  stroke-width: 6;
+  opacity: 0.4;
+  stroke-dasharray: 12 8;
+}
+.adventure-boss .boss-warning {
+  font-size: 30px;
+  fill: var(--terminal-red);
+  stroke: var(--terminal-background);
+  paint-order: stroke;
+}
+.boss-dizzy,
+.boss-speed {
+  fill: none;
+  stroke: var(--terminal-yellow);
+  stroke-width: 3;
+}
+.adventure-boss-hud .boss-panel {
+  fill: var(--terminal-background);
+  fill-opacity: 0.93;
+  stroke: var(--game-line);
+}
+.boss-health-track {
+  fill: var(--game-line);
+}
+.boss-health-fill {
+  fill: var(--terminal-red);
+}
+.adventure-boss-hud text {
+  font-weight: 600;
+}
+.adventure-sound {
+  margin: 0 0 12px 8px;
+  font-size: 11px;
+}
 @media (prefers-reduced-motion: reduce) {
   .adventure-weather {
+    display: none;
+  }
+  .adventure-impact-camera {
+    transform: none;
+  }
+  .adventure-impact-rays,
+  .adventure-stomp-trail {
     display: none;
   }
 }
