@@ -416,3 +416,13 @@
 - 최초 `npm run typecheck`가 Node Zone Allocation 메모리 오류로 종료134였다. `node --max-old-space-size=1024 node_modules/typescript/bin/tsc --noEmit`, 같은 옵션의 `node_modules/eslint/bin/eslint.js .`, `node_modules/vitest/vitest.mjs run src --maxWorkers=1`로 순차 재실행해 모두 종료0, 테스트56개 통과했다. 변경 파일 인증정보 패턴 일치0건, `git diff --check` 통과.
 - 이번 커밋 작업에서 Windows native/UI·release 빌드·Mac·실제 SSH 검사를 재실행하지 않았다. G.7의 기존 실제 검증 결과와 미검증 이유는 위 기록을 따른다. 남은 작업 ID는 G.7 Mac·물리 멀티터치·실제 SSH, G.7/5.3 최신 NSIS다.
 - Git 전송 확인은 `git ls-remote --heads origin refs/heads/main`과 로컬 `git rev-parse HEAD` 비교, `git status -sb`로 수행한다. 제품 작업의 다음 첫 행동은 G.7 기록의 최신 실행 파일 확인이다.
+
+## G.8.0 — 닥스의 서바이버 설계 (2026-11-05, 설계안 작성 완료)
+
+- 사용자 요청: 먼저 설계. 서바이버류 로그라이크에 HP·경험치·골드·레벨업 랜덤 능력 카드를 포함한다. 후속 답변으로 **5분 생존 + 최종 보스**, **골드 영구 강화·해금**을 확정했다. 제품 구현은 이번 요청 범위에 포함하지 않는다.
+- 파일: `docs/design/dax-survivor.md` 신규 설계안, `docs/roadmap.md` §11 G.8 범위/순서/완료 기준, 이 진행 기록. `catalog.ts`, `GamePane.tsx`, `shared.tsx`, `AdventureGame.tsx`, `DaxSprite.tsx`, `src/app/App.tsx`의 게임 연결 지점을 읽어 기존 6종·탭 보존·포커스·마스코트 계약을 확인했다.
+- 설계 내용: 이동·자동 공격, HP/피격/무적, XP 곡선·연속 레벨업, 랜덤 3장 중 1장·무기/능력 각 4슬롯·다시 뽑기·진화, 5분 구간별 적/정예/최종 보스, 사망 시 수집 골드 보존, 영구 구매·환불·해금, 5초 체크포인트·중복 정산 방지·여러 창 소유권, 화면/키보드/테마/Canvas 성능 설계. 무기 6·능력 8·진화 3 등 콘텐츠 수와 상세 수치는 설계 제안이며 밸런스 실증값이 아니다.
+- 실제 문서 검증: `git diff --check` 종료 0. PowerShell로 변경 3문서의 로컬 링크 **25개**를 확인하고 신규 설계 문서 후행 공백 **0개**를 확인했다. JavaScript로 XP 식의 누적 값을 검산해 레벨 16/20/22에 각각 **657/1152/1471 XP**, 5분 기본 생성 예산 **600마리**(상한·스킵 전), 영구 HP/공격/수집/골드 강화 전체 비용 **460/575/190/290**을 확인했다. 수치 산술 검산이며 실제 플레이 성공이나 밸런스 검증이 아니다.
+- 검토 보완: 단일 숫자용 기존 `useBest`를 재화 저장에 사용하지 않도록 분리했다. 앱 재시작 시 전투 복원과 체크포인트 골드 회수를 구분했고, 오래된 종료 이벤트의 재지급을 막는 runId 조건·실제 지불액 기준 강화 환불을 명시했다. 현재 atlas가 8방향 이미지라고 가정하지 않는다.
+- 미실행/이유: 소스·빌드 설정을 바꾸지 않은 설계 작업이므로 제품 타입/린트/테스트/빌드·브라우저/Windows native·실제 SSH·Mac·물리 터치·설치본 검증을 새로 실행하지 않았다. Web Locks 지원·60fps 목표·첫 판 난이도·골드 수익은 구현 단계의 확인 항목이며 성공으로 기록하지 않는다. 기존 Phase 및 G.7 검증 상태를 변경하지 않는다.
+- 남은 ID: **G.8.1~G.8.6 전부 미착수**. 다음 첫 행동: 설계 수정 요청은 이 설계안과 roadmap을 함께 갱신한다. 구현 요청을 받으면 G.8.1의 `survivor/types.ts`, `content.ts`, `engine.ts`부터 고정 시간 이동·물기·슬라임·HP·XP를 만들고 후속 작업을 순서대로 이어간다.
