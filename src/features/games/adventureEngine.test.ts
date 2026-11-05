@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   newAdventure,
   nextAdventure,
+  retryAdventure,
   stepAdventure,
   jumpAdventure,
   biteAdventure,
@@ -21,6 +22,7 @@ const empty = (): Adventure => {
   const s = newAdventure();
   return {
     ...s,
+    boss: { ...s.boss, health: 0, mode: 'defeated' },
     enemies: [],
     pickups: [],
     level: {
@@ -36,6 +38,14 @@ const empty = (): Adventure => {
   };
 };
 function pilot(s: Adventure): AdventureInput {
+  if (s.boss.mode !== 'dormant' && s.boss.health > 0) {
+    const dx = s.boss.x - s.x;
+    return {
+      direction: Math.abs(dx) > 15 ? Math.sign(dx) : 0,
+      jump: s.grounded && Math.abs(dx) < 230,
+      bite: true,
+    };
+  }
   const jump =
     s.grounded &&
     (s.level.spikes.some((p) => p.x - s.x > 0 && p.x - s.x < 65) ||
@@ -227,7 +237,7 @@ describe('닥스 랜덤 모험', () => {
     const fall = stepAdventure({ ...rest, x: 2000, y: -170 }, 0.02);
     expect(fall.x).toBe(1620);
     expect(fall.health).toBe(3);
-    const finish = stepAdventure({ ...empty(), x: 3760, score: 100 }, 0.02);
+    const finish = stepAdventure({ ...empty(), x: empty().level.goal, score: 100 }, 0.02);
     expect(finish.won).toBe(true);
     expect(finish.score).toBe(300);
     expect(stepAdventure(finish, 1)).toBe(finish);
@@ -257,5 +267,82 @@ describe('닥스 랜덤 모험', () => {
     };
     expect(Math.abs(run(30).x - run(120).x)).toBeLessThan(1);
     expect(Math.abs(run(30).y - run(120).y)).toBeLessThan(1);
+  });
+  it('freezes physics briefly on impact and preserves a queued jump until it resumes', () => {
+    const hit = stepAdventure({ ...empty(), enemies: [enemy(170)] }, 1 / 120, {
+      direction: 0,
+      bite: true,
+    });
+    expect(hit.hitstop).toBeGreaterThan(0);
+    const frozen = stepAdventure(hit, 0.02, { direction: 1, jump: true });
+    expect(frozen.x).toBe(hit.x);
+    expect(frozen.elapsed).toBe(hit.elapsed);
+    expect(frozen.pending.jump).toBe(true);
+    const resumed = frames(frozen, 8);
+    expect(resumed.y).toBeGreaterThan(0);
+    expect(resumed.score).toBe(50);
+  });
+  it('locks the arena, telegraphs charge and leap, then opens the exit after one boss reward', () => {
+    let s = { ...newAdventure(42), x: 3660 };
+    s = frames(s, 1);
+    expect(s.boss.mode).toBe('intro');
+    expect(frames(s, 10, { direction: -1 }).x).toBeGreaterThanOrEqual(s.level.arena.start);
+    s = frames(s, 75);
+    expect(s.boss.mode).toBe('windup');
+    s = frames(s, 60);
+    expect(s.boss.mode).toBe('charge');
+    s = frames(s, 70);
+    expect(s.boss.mode).toBe('recover');
+    s = frames(s, 145);
+    expect(s.boss.mode).toBe('leap');
+    expect(s.boss.y).toBeGreaterThan(0);
+    const base = newAdventure(42);
+    const bitten = stepAdventure(
+      { ...base, x: 4070, boss: { ...base.boss, mode: 'recover', timer: 2 } },
+      0.01,
+      { direction: 0, bite: true },
+    );
+    expect(bitten.boss.health).toBe(7);
+    expect(frames(bitten, 10).boss.health).toBe(7);
+    const stomped = stepAdventure(
+      {
+        ...base,
+        x: 4170,
+        y: 72,
+        velocity: -500,
+        grounded: false,
+        boss: { ...base.boss, health: 2, mode: 'recover', timer: 2 },
+      },
+      0.02,
+    );
+    expect(stomped.boss.health).toBe(0);
+    expect(stomped.velocity).toBeGreaterThan(0);
+    expect(stomped.score).toBe(500);
+    const cleared = frames(stomped, 180, { direction: 1 });
+    expect(cleared.won).toBe(true);
+    expect(cleared.score).toBe(700);
+    expect(frames(cleared, 10).score).toBe(700);
+  });
+  it('retries at the saved shelter, restores the undefeated boss and preserves collected progress', () => {
+    const s = newAdventure(42);
+    const dead: Adventure = {
+      ...s,
+      x: 4000,
+      checkpoint: 3550,
+      health: 0,
+      score: 250,
+      over: true,
+      switches: [0],
+      boss: { ...s.boss, health: 1, mode: 'charge' },
+    };
+    const retry = retryAdventure(dead);
+    expect(retry.x).toBe(3550);
+    expect(retry.health).toBe(5);
+    expect(retry.boss.health).toBe(8);
+    expect(retry.boss.mode).toBe('dormant');
+    expect(retry.score).toBe(250);
+    expect(retry.switches).toEqual([0]);
+    expect(retry.over).toBe(false);
+    expect(retryAdventure(s)).toBe(s);
   });
 });

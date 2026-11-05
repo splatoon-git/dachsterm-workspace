@@ -27,7 +27,20 @@ export type AdventureEffect = {
   x: number;
   y: number;
   life: number;
-  kind: 'hit' | 'treat' | 'dust' | 'rest' | 'stomp' | 'switch';
+  kind: 'hit' | 'treat' | 'dust' | 'rest' | 'stomp' | 'switch' | 'boss' | 'victory';
+};
+export type AdventureBoss = {
+  x: number;
+  y: number;
+  velocity: number;
+  direction: number;
+  health: number;
+  maxHealth: number;
+  mode: 'dormant' | 'intro' | 'windup' | 'charge' | 'leap' | 'recover' | 'defeated';
+  timer: number;
+  cycle: number;
+  shield: number;
+  lastBite: number;
 };
 export type Adventure = {
   level: Level;
@@ -52,6 +65,11 @@ export type Adventure = {
   checkpoint: number;
   stomping: boolean;
   bounce: number;
+  boss: AdventureBoss;
+  hitstop: number;
+  impact: number;
+  attackId: number;
+  pending: AdventureInput;
   platformId: number | null;
   crumbling: Record<number, number>;
   switches: number[];
@@ -87,6 +105,23 @@ export function newAdventure(seed = 1, index = 0): Adventure {
     checkpoint: 100,
     stomping: false,
     bounce: 0,
+    boss: {
+      x: level.arena.bossX,
+      y: 0,
+      velocity: 0,
+      direction: -1,
+      health: 8,
+      maxHealth: 8,
+      mode: 'dormant',
+      timer: 0,
+      cycle: 0,
+      shield: 0,
+      lastBite: -1,
+    },
+    hitstop: 0,
+    impact: 0,
+    attackId: 0,
+    pending: { direction: 0 },
     platformId: null,
     crumbling: {},
     switches: [],
@@ -118,6 +153,35 @@ export function nextAdventure(s: Adventure): Adventure {
     distanceOffset: s.distance,
   };
 }
+export function retryAdventure(s: Adventure): Adventure {
+  if (!s.over || s.won) return s;
+  const fresh = newAdventure(s.level.seed, s.level.index);
+  return {
+    ...s,
+    x: s.checkpoint,
+    y: 0,
+    vx: 0,
+    velocity: 0,
+    grounded: true,
+    health: 5,
+    shield: 1.5,
+    hurt: 0,
+    attack: 0,
+    cooldown: 0,
+    coyote: 0.1,
+    jumpBuffer: 0,
+    stomping: false,
+    bounce: 0,
+    platformId: null,
+    hitstop: 0,
+    impact: 0,
+    pending: { direction: 0 },
+    effects: [],
+    boss: s.boss.health > 0 ? fresh.boss : s.boss,
+    over: false,
+    won: false,
+  };
+}
 export function jumpAdventure(s: Adventure): Adventure {
   if (s.over || s.stomping) return s;
   if (!s.grounded && s.coyote <= 0) return { ...s, jumpBuffer: 0.12 };
@@ -132,7 +196,9 @@ export function jumpAdventure(s: Adventure): Adventure {
   };
 }
 export function biteAdventure(s: Adventure): Adventure {
-  return s.over || s.cooldown > 0 || s.stomping ? s : { ...s, attack: 0.24, cooldown: 0.44 };
+  return s.over || s.cooldown > 0 || s.stomping
+    ? s
+    : { ...s, attack: 0.24, cooldown: 0.44, attackId: s.attackId + 1 };
 }
 export function stompAdventure(s: Adventure): Adventure {
   return s.over || s.grounded || s.stomping
@@ -168,15 +234,26 @@ export function stepAdventure(
 ): Adventure {
   if (previous.over || seconds <= 0) return previous;
   let s = previous;
+  input = {
+    direction: input.direction,
+    jump: input.jump || s.pending.jump,
+    bite: input.bite || s.pending.bite,
+    stomp: input.stomp || s.pending.stomp,
+  };
+  s = { ...s, pending: { direction: 0 } };
   let remaining = Math.min(seconds, 0.05);
   while (remaining > 0.000001) {
     const dt = Math.min(remaining, 1 / 120);
-    s = advance(s, dt, input);
-    input = { direction: input.direction };
+    if (s.hitstop > 0) {
+      s = { ...s, hitstop: Math.max(0, s.hitstop - dt), impact: Math.max(0, s.impact - dt) };
+    } else {
+      s = advance(s, dt, input);
+      input = { direction: input.direction };
+    }
     remaining -= dt;
     if (s.over) break;
   }
-  return s;
+  return { ...s, pending: input };
 }
 function advance(previous: Adventure, dt: number, input: AdventureInput): Adventure {
   let s: Adventure = {
@@ -185,6 +262,8 @@ function advance(previous: Adventure, dt: number, input: AdventureInput): Advent
     shield: Math.max(0, previous.shield - dt),
     hurt: Math.max(0, previous.hurt - dt),
     bounce: Math.max(0, previous.bounce - dt),
+    impact: Math.max(0, previous.impact - dt),
+    boss: { ...previous.boss },
     attack: Math.max(0, previous.attack - dt),
     cooldown: Math.max(0, previous.cooldown - dt),
     coyote: previous.grounded ? 0.1 : Math.max(0, previous.coyote - dt),
@@ -198,6 +277,10 @@ function advance(previous: Adventure, dt: number, input: AdventureInput): Advent
   const level = s.level;
   const effect = (x: number, y: number, kind: AdventureEffect['kind']) =>
     s.effects.push({ id: s.sequence++, x, y, kind, life: 0.4 });
+  const impact = (strong = false) => {
+    s.hitstop = Math.max(s.hitstop, strong ? 0.075 : 0.045);
+    s.impact = strong ? 0.28 : 0.18;
+  };
   for (const [id, time] of Object.entries(s.crumbling))
     if (s.elapsed - time >= 3.65) delete s.crumbling[Number(id)];
   if (previous.platformId !== null && previous.grounded) {
@@ -322,6 +405,7 @@ function advance(previous: Adventure, dt: number, input: AdventureInput): Advent
       s.coyote = 0;
       s.bounce = 0.22;
       effect(e.x, top, 'stomp');
+      impact(true);
       continue;
     }
     const ahead = (e.x - s.x) * s.facing;
@@ -329,7 +413,100 @@ function advance(previous: Adventure, dt: number, input: AdventureInput): Advent
       e.alive = false;
       s.score += 50;
       effect(e.x, e.y + 25, 'hit');
+      impact();
     } else if (horizontal && s.y < top && s.y + 60 > e.y) damage(e.x);
+  }
+  const b = s.boss;
+  const arena = level.arena;
+  if (b.health > 0 && s.x >= arena.start && b.mode === 'dormant') {
+    b.mode = 'intro';
+    b.timer = 1.2;
+    s.checkpoint = Math.max(s.checkpoint, 3550);
+  }
+  if (b.mode !== 'dormant' && b.health > 0) {
+    s.x = Math.max(arena.start + 24, Math.min(arena.end - 24, s.x));
+    b.timer = Math.max(0, b.timer - dt);
+    b.shield = Math.max(0, b.shield - dt);
+    const oldBossY = b.y;
+    if ((b.mode === 'intro' || b.mode === 'recover') && b.timer === 0) {
+      b.mode = 'windup';
+      b.timer = b.health <= 4 ? 0.7 : 0.95;
+      b.direction = s.x < b.x ? -1 : 1;
+    } else if (b.mode === 'windup' && b.timer === 0) {
+      b.cycle++;
+      if (b.cycle % 2 === 0) {
+        b.mode = 'leap';
+        b.velocity = 520;
+      } else {
+        b.mode = 'charge';
+        b.timer = 1.05;
+      }
+    }
+    if (b.mode === 'charge') {
+      b.x += b.direction * (b.health <= 4 ? 330 : 285) * dt;
+      if (b.timer === 0 || b.x < arena.start + 95 || b.x > arena.end - 95) {
+        b.mode = 'recover';
+        b.timer = 1.65;
+      }
+    } else if (b.mode === 'leap') {
+      b.x += b.direction * 210 * dt;
+      b.velocity -= 1200 * dt;
+      b.y += b.velocity * dt;
+      if (b.y <= 0) {
+        b.y = 0;
+        b.velocity = 0;
+        b.mode = 'recover';
+        b.timer = 1.65;
+        effect(b.x, 4, 'dust');
+      }
+    }
+    b.x = Math.max(arena.start + 80, Math.min(arena.end - 80, b.x));
+    const stomp =
+      Math.abs(s.x - b.x) < 65 &&
+      s.velocity <= 0 &&
+      oldY >= oldBossY + 66 &&
+      s.y <= b.y + 68 &&
+      !previous.grounded;
+    const bite =
+      s.attack > 0 &&
+      b.lastBite !== s.attackId &&
+      (b.x - s.x) * s.facing > 0 &&
+      (b.x - s.x) * s.facing < 137 &&
+      Math.abs(s.y + 28 - (b.y + 32)) < 53;
+    if (stomp) {
+      s.y = b.y + 69;
+      s.velocity = 490;
+      s.grounded = false;
+      s.platformId = null;
+      s.stomping = false;
+      s.coyote = 0;
+      s.bounce = 0.22;
+    }
+    if ((stomp || bite) && b.shield === 0) {
+      b.health = Math.max(0, b.health - (stomp ? 2 : 1));
+      b.shield = 0.36;
+      b.lastBite = s.attackId;
+      b.x = Math.max(arena.start + 80, Math.min(arena.end - 80, b.x + (s.x < b.x ? 14 : -14)));
+      effect(b.x, b.y + 50, 'boss');
+      impact(stomp);
+      if (b.health === 0) {
+        b.mode = 'defeated';
+        s.score += 500;
+        s.health = Math.min(5, s.health + 2);
+        effect(b.x, b.y + 50, 'victory');
+        impact(true);
+      }
+    } else if (
+      !stomp &&
+      Math.abs(s.x - b.x) < 68 &&
+      s.y < b.y + 65 &&
+      s.y + 55 > b.y &&
+      b.mode !== 'intro'
+    )
+      damage(b.x);
+  } else if (b.health > 0) {
+    // The exit cannot be skipped, including by a high jump.
+    s.x = Math.min(arena.end - 24, s.x);
   }
   for (const spike of level.spikes)
     if (s.x + 18 > spike.x && s.x - 18 < spike.x + spike.width && s.y < 22 && s.y > -30)
@@ -380,7 +557,7 @@ function advance(previous: Adventure, dt: number, input: AdventureInput): Advent
   s.furthest = Math.max(s.furthest, s.x);
   s.distance = s.distanceOffset + (s.furthest - 100) / 20;
   if (s.health === 0) s.over = true;
-  else if (s.x >= level.goal && s.grounded) {
+  else if (s.x >= level.goal && s.grounded && s.boss.health === 0) {
     s.won = true;
     s.over = true;
     s.score += 200;

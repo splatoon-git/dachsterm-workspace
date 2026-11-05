@@ -18,6 +18,7 @@ export type Level = {
   hint: string;
   end: number;
   goal: number;
+  arena: { start: number; end: number; bossX: number; name: string };
   gaps: Span[];
   spikes: Span[];
   platforms: Platform[];
@@ -73,8 +74,14 @@ export function generateLevel(seed: number, index = 0): Level {
     biome: biome.id,
     name: biome.name,
     hint: biome.hint,
-    end: 3880,
-    goal: 3760,
+    end: 4780,
+    goal: 4640,
+    arena: {
+      start: 3650,
+      end: 4460,
+      bossX: 4170,
+      name: ['이끼숲 수호자', '유적의 파수꾼', '수정 갑각왕', '서리 엄니왕'][safeIndex % 4],
+    },
     gaps: [],
     spikes: [],
     platforms: [],
@@ -82,7 +89,7 @@ export function generateLevel(seed: number, index = 0): Level {
     ice: [],
     vents: [],
     gates: [],
-    checkpoints: [1620, 2580],
+    checkpoints: [1620, 2580, 3550],
     enemies: [{ x: 490, kind: biome.id === 'snow' ? 'boar' : 'spike', range: 65 }],
     treats: [{ x: 300, y: 30 }],
     chunks: [],
