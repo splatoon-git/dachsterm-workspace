@@ -1,7 +1,7 @@
 # DaxTerm 구현 진행 현황
 
 - 마지막 갱신: 2026-11-05
-- **G.6 랜덤 모험·환경/기믹·밟기 구현·Windows 검증 완료 / release 빌드 진행 중**: Space 물기·↑/W 점프·공중 ↓/S 빠른 밟기와 자동 머리 밟기, 시드 재현/4환경 순환/기믹·적 다양화. 최종 규칙53개·고유 게임 UI15개·실제 WebView2와 로컬 PTY 입력 격리 통과. 상세는 하단 G.6.
+- **G.6 랜덤 모험·환경/기믹·밟기 구현·Windows 검증·release 빌드 완료**: Space 물기·↑/W 점프·공중 ↓/S 빠른 밟기와 자동 머리 밟기, 시드 재현/4환경 순환/기믹·적 다양화. 최종 규칙53개·고유 게임 UI15개·실제 WebView2와 로컬 PTY 입력 격리 통과. 상세는 하단 G.6.
 - **G.5 간식 타임 개선 구현·Windows 검증·release 빌드 완료**: G.4 모션 atlas 공유, 좌우 가감속/반전·씹기·별 점프·피격/점수 효과, 연속 기록·정원·결과 화면. 전체 규칙53개, 게임 UI17개, 실제 WebView2 6종·로컬 PTY 입력 격리 통과. 최신 `target/release/daxterm.exe` 반영. 상세·남은 환경 검증은 하단 G.5 기록.
 - **G.4 닥스의 모험 횡스크롤 액션 구현·Windows 검증·release 빌드 완료**: 직접 좌우 이동·점프·물기, 6포즈 스프라이트, 적/발판/가시/협곡/쉼터/완주를 추가했다. 규칙44개·게임 UI11개·실제 WebView2 6종과 로컬 PTY 입력 격리 통과. 상세·남은 검증은 하단 G.4 기록.
 - **G.3 닥스 미니게임 2종 구현·Windows 검증·release 빌드 완료**: 게임 목록에 간식 타임·닥스의 모험을 추가했다. 규칙38개/신규 UI4개/기존 게임 UI5개 및 실제 WebView2 6종·로컬 PowerShell 입력 격리 통과. 최신 `target/release/daxterm.exe`에 반영. 파일·결과·남은 항목은 하단 G.3 기록 참조.
@@ -364,8 +364,10 @@
 - 빌드/검사 중 문제와 해결: 최초 frontendDist를 Windows 절대 경로로 지정하니 file URL로 처리되어 내장 앱 페이지 검사2회 실패했다. `../target/adventure-web` 상대 경로로 수정하고 debug 재빌드(38.95초)·별도 EXE 복사 후 통과. 잘못된 config로 대기 중이던 **이 작업 소유 release 프로세스만 종료**한 뒤 올바른 config로 재시작했다. 이후 native의 간식 이동 기대 좌표 변화가 없어1회 실패했으며, 캡처 뒤 테스트 앱 재활성·필요 시 명시적 재개·게임판 포커스를 확보하게 검사 코드를 보강한 전체 재실행이 종료0. 제품의 자동 정지 계약은 유지했다.
 - 최종 코드 검증: 변경 뒤 `npm test`53개 통과, lint·Prettier 최종 확인. `npm run build`의 tsc+Vite 통과, 기존500KB 메인 번들 경고 유지. Rust/IPC/권한 변경은 없으므로 Rust 단위/clippy·SSH 엔진 회귀를 이번에 재실행하지 않았다.
 - 미검증/남은 ID: **G.6 Mac 실기기**, **G.6 물리 멀티터치**, **G.6 실제 SSH 배경 입력 격리 재검증**, **G.6/5.3 최신 설치 패키지**. 환경 부재/요청 범위 내 로컬 PTY 검증으로 대기한다. 모든 가능한 시드를 전수 플레이했다고 주장하지 않으며 자동 검증 범위는800맵 제약·20맵 입력 완주다. 기존 Phase 상태는 유지한다.
-- 다음 첫 행동: 최종 release 결과/식별값을 확인한 뒤 실행 → 게임 → 닥스의 모험. Space 물기·↑ 점프·공중 ↓ 밟기로 플레이하고, 정지 후 맵 선택에서 시드42/4환경을 재현한다. 후속은 물리 터치/Mac/실제 SSH, 배포 시 최신 설치 패키지 검사다.
+- 다음 첫 행동: 최신 `target/release/daxterm.exe` 실행 → 게임 → 닥스의 모험. Space 물기·↑ 점프·공중 ↓ 밟기로 플레이하고, 정지 후 맵 선택에서 시드42/4환경을 재현한다. 후속은 물리 터치/Mac/실제 SSH, 배포 시 최신 설치 패키지 검사다.
 - 안전거리 최종 보정: 쉼터와 순찰 적의 중심 거리에서 순찰 범위를 빼도 충돌 반경43보다 크도록 일반 적 위치를 조각 시작+80, 멧돼지+100/범위40으로 제한했다. 800맵 모두 해당 조건을 검사하도록 추가하고 규칙13개·20맵 입력 완주 재통과. 최종 랜덤 UI4개(시드/4환경/Space·밟기/완주→다음 구간)도 다시 전부 통과. 같은 자산으로 debug 재빌드 종료0(45.78초), 마지막 release에 이 보정도 포함한다.
+
+- 최종 산출물: 안전거리 보정판의 native 전체 검사 재실행도 종료0. 최종 release `npm run tauri -- build --no-bundle --config target/adventure-tauri.json` 종료0(5분00초). `target/release/daxterm.exe`와 동일 해시 보관본 `target/verification/daxterm-adventure.exe`: 2026-11-05 13:25:27 KST, 28859392바이트, SHA256 0A52B3621104C5508801E155CDB287D4FF72D9DB53F23ECC603391504AF88920. G.5 간식 개선도 함께 포함한다. 실제 동작 검사는 같은 최종 자산의 별도 debug EXE 기준이며 release 자체 실행 검사를 추가한 것은 아니다. 기존 NSIS 설치본은 재생성하지 않았다.
 
 ## GitHub 원격 연결 (2026-11-05)
 
@@ -378,3 +380,39 @@
 - 초기 스냅샷을 네이티브 코어·의존성(`56ac994`), 데스크톱 UI·테마·게임(`6c42960`), 회귀 검사·Windows CI(`88e1069`), 문서로 나눴다. 문서 커밋에 `AGENTS.md`, `README.md`, `docs/`를 포함했다.
 - `npm run typecheck`, `npm run lint`, `npm test -- --maxWorkers=1`(53개), `cargo metadata --locked --no-deps --format-version 1` 통과. `git check-ignore`로 빌드·테스트 산출물, 로컬 도구, 환경 파일 제외를 확인했다. `git diff --cached --check`는 기존 라이선스 고지, Cargo 매니페스트와 일부 Markdown 문서의 공백을 보고했으며 원본을 보존했다.
 - 이번 작업에서는 제품 빌드, Windows 네이티브, Mac, 실제 SSH 검증을 재실행하지 않았다. 기존 작업 ID와 다음 행동은 각 Phase 기록을 따른다. 커밋은 로컬 `main`에 있으며 공개 원격 푸시는 게시 요청 시 별도로 진행한다.
+
+
+
+
+## G.7 — 보스전·타격감·맵 표현·키보드 진행 (2026-11-05, 구현·Windows 검증·release 빌드 완료)
+
+- 요청: 보스전, 물기/밟기 타격감, 맵 표현 향상, Space 시작/다음 스테이지를 포함한 키보드 전용 진행. G.6 생성기/물리와 G.5 공유 마스코트·간식 구현을 유지해 확장했다.
+- 파일: `src/features/games/{adventureLevels.ts,adventureEngine.ts,AdventureGame.tsx,AdventureWorld.tsx,adventureAudio.ts,games.css,adventureEngine.test.ts}`, `tests/ui/adventure-random.spec.ts`, `scripts/verify-adventure-native.mjs`, `docs/roadmap.md` G.7.
+- 보스: 월드4,780·출구4,640, 전장3,650~4,460와 직전쉼터3,550. 네 환경 수호자 외형/이름·체력8, 예고→돌진/도약→회복, 절반 체력 시 빨라지는 돌진. 물기1/머리 밟기2·짧은 무적·공격별 중복 피해 제한, 처치500점/체력2 회복, 전장 양쪽 잠금과 처치 후 출구 개방. 사망 Space는 마지막 쉼터·체력5·미처치 보스 초기화, 기존 점수/획득/스위치 유지. 같은 맵 처음부터 재시작 버튼은 별도 유지.
+- 타격/입력: 물기45ms·밟기75ms 물리 정지, 예약 입력 보존·정지/blur 시 예약 제거, 반동/불꽃/명중 문구/화면 진동. 사용자 동작 후 Web Audio 합성 단발 효과음, M 음소거, 정지/비활성 시 suspend·unmount close. 모션 줄이기는 진동/충격 광선 생략. Space 준비→시작/정지→재개/클리어→다음 즉시 시작/사망→쉼터 재도전, P 정지/재개. repeat는 전환/공격 중복 방지. 기존 게임판 포커스 및 터미널 입력 격리 유지, 새 IPC/네트워크/의존성 없음.
+- 맵 표현: 토큰 기반 그라데이션 하늘/광원·다중 원근, 큰 나무/유적 아치·물길/수정/눈 덮인 전나무, 지면 덮개·돌 질감/발판 두께/보스 기둥·문양/체력 HUD. 기존 닥스 atlas 유지. `target/verification/adventure-{forest,ruins,cave,snow}-{1280,360}.png`, `adventure-boss.png`, `adventure-stomp.png`, `adventure-next-stage.png` 생성. 숲·보스·360px 동굴 화면 직접 확인.
+- 현재 통과: `npm test -- --maxWorkers=1` 전체56개(모험16개), 800맵 생성 제약과20맵 보스 포함 일반 조작 완주. `npm run typecheck`, 전체lint, frontend build 통과(기존500KB 메인 번들 경고 유지). `npx playwright test --config target/playwright-adventure.config.ts tests/ui/adventure-random.spec.ts tests/ui/dax-games.spec.ts tests/ui/games.spec.ts --workers=2` 16개 통과: 키보드 시작/보스 처치/다음 즉시 시작·반복 억제·정지/재개·음소거/모션 줄이기 및 기존 게임/테마/포인터/탭 회귀.
+- 검증 중 발견: 추가 사망/Space 재도전 UI 검사는 lazy 게임판 준비 전 키를 전송해 시작하지 못했고1회 실패했다. 게임판 자동 포커스 확인을 기다린 후 입력하게 수정해 재실행 중이다. 정지 중 타격 예약 입력까지 지우도록 최종 보강 후 frontend+native debug를 다시 빌드 중이다.
+- 남은 ID: **G.7 Windows native/최종 release** 실행 중, **G.7 Mac·물리 멀티터치·실제 SSH·NSIS 설치본** 미실행 대기. 이번 로컬/브라우저 결과를 실제 SSH/Mac 결과로 대체하지 않는다. 다음 첫 행동: 진행 중 UI/빌드 결과 확인 → 같은 자산 debug EXE 실제 WebView2·로컬 PTY 검사 → 최종 release와 결과/해시 기록.
+- 후속 확인: 사망/Space 쉼터 재도전 UI 통과(총 고유 UI17개). 최종 입력 정리를 Effect 안 setState에서 재개 첫 tick의 예약 제거로 변경해 React set-state-in-effect 린트 오류를 해결했다. 최종 변경 파일 ESLint 종료0, 밟기/키보드 시작·정지·재개/사망 재도전 UI3개 재통과. 최신 frontend build 종료0 후 같은 자산으로 debug 재빌드 중이다.
+- Windows 실제 검증: 최종 debug 재빌드 종료0(51.07초), `DAXTERM_TEST_BINARY=target/verification/daxterm-adventure-debug.exe`로 `node scripts/test-games-native.mjs` **종료0**. 실제 WebView2에서4환경/시드42·Space 시작(공격 오발 없음)/물기·↑점프·↓밟기·P 정지/Space 재개, 기존6종게임·기록·탭 복귀, 실제 로컬 PowerShell PTY 유지와 게임 키 입력 격리를 확인했다. 보스 완주는 엔진20맵·브라우저 실조작 결과이며 native에서 보스까지 완주했다고 주장하지 않는다. 테스트 앱은 finally에서 종료했다. `target/verification/adventure-native.png` 저장.
+- 사용 설명: `README.md`의 쉼터 수를3곳으로 갱신하고 보스/Space 전체 흐름·P/M·쉼터 재도전과 맵 처음부터 재시작의 차이를 기록했다. Rust/IPC/권한 변경 없음. 같은 최종 자산을 사용하는 release 빌드 진행 중이며 Mac/물리 터치/실제 SSH/설치 패키지는 위 대기 상태다.
+
+
+- 최종 산출물: `npm run tauri -- build --no-bundle --config target/adventure-tauri.json` **종료0**, 최적화 빌드12분12초. `target/release/daxterm.exe`와 보관본 `target/verification/daxterm-adventure.exe` 해시 일치: 2026-11-05 14:16:06 KST, 29,264,896바이트, SHA256 **975FD934394673713C9FC120ECD5AF01C7A8718F4E17447D0C6054CE80C18C3E**. 최종 입력 정리 수정까지 포함한 내장 자산이다. Windows 동작 검증은 동일 최종 자산의 debug EXE 기준이며 release 자체 실행 검사는 별도로 하지 않았다. G.5 간식 개선도 포함한다.
+- 최종 검증 상태: 규칙56개·고유 게임 UI17개·실제 Windows WebView2/로컬 PTY 검사 통과. 마지막 입력 정리 수정 후 관련 UI3개 및 해당 파일 ESLint, frontend build를 재통과했다. 변경 파일 Prettier 및 `git diff --check` 종료0. 실패한 사망 UI의 초기 포커스 대기와 Effect setState 린트 문제는 위와 같이 수정·재검증했다. 문서의 기존 초기 Git 기록과 다른 Phase 상태는 보존했다.
+- 남은 ID/미검증: **G.7 Mac 실기기**, **G.7 물리 멀티터치**, **G.7 실제 SSH 배경 입력 격리 재검증**, **G.7/5.3 최신 NSIS 설치본**. 해당 환경 부재 및 이번 Windows 로컬 검증 범위로 대기한다. Rust/IPC/권한 코드는 바꾸지 않아 Rust 단위/clippy/SSH 엔진 회귀는 재실행하지 않았다.
+- 다음 첫 행동: 최신 `target/release/daxterm.exe` 실행 → 게임 → 닥스의 모험 → Space. ←/→ 이동·↑ 점프·Space 물기·공중 ↓ 밟기, P 정지/재개·M 효과음. 보스를 처치하고 출구에 도착하면 Space로 다음 스테이지가 즉시 시작되며 사망하면 Space로 마지막 쉼터에서 재도전한다. 후속 환경 검증/배포를 진행할 때 Mac·물리 터치·실제 SSH·최신 설치 패키지부터 확인한다.
+
+## GitHub main 푸시 (2026-11-05)
+
+- 사용자 요청에 따라 초기 커밋 4개를 그대로 `origin/main`에 푸시했다. 최종 커밋은 `e9410ddb45c1d14a7b18b4431be0496e8157dbcb`다.
+- `git ls-remote --heads origin refs/heads/main`에서 원격 SHA 일치를 확인했고 `git rev-list --count origin/main`은 4다. 로컬 `main`의 upstream을 `origin/main`으로 설정했다.
+- 이후 G.7 작업의 수정/미추적 파일은 작업 트리에 있으며 이번 푸시 대상은 기존 4개 커밋이다. 이 진행 기록은 로컬 변경으로 남겼다. 제품 검증은 이번 Git 전송 작업에서 재실행하지 않았으며 남은 작업 ID와 다음 첫 행동은 G.7 기록을 따른다.
+
+## G.7 변경 분리 커밋·푸시 (2026-11-05)
+
+- 사용자 요청에 따라 남은 변경을 보스전/쉼터 엔진·규칙 검사(`b800773`), 화면·효과음·키보드 조작(`05cacb1`), 브라우저/native 회귀 검사(`b692582`), README·roadmap·progress 문서로 나눠 커밋했다. 원격 대상은 `origin/main`이다.
+- 최초 `npm run typecheck`가 Node Zone Allocation 메모리 오류로 종료134였다. `node --max-old-space-size=1024 node_modules/typescript/bin/tsc --noEmit`, 같은 옵션의 `node_modules/eslint/bin/eslint.js .`, `node_modules/vitest/vitest.mjs run src --maxWorkers=1`로 순차 재실행해 모두 종료0, 테스트56개 통과했다. 변경 파일 인증정보 패턴 일치0건, `git diff --check` 통과.
+- 이번 커밋 작업에서 Windows native/UI·release 빌드·Mac·실제 SSH 검사를 재실행하지 않았다. G.7의 기존 실제 검증 결과와 미검증 이유는 위 기록을 따른다. 남은 작업 ID는 G.7 Mac·물리 멀티터치·실제 SSH, G.7/5.3 최신 NSIS다.
+- Git 전송 확인은 `git ls-remote --heads origin refs/heads/main`과 로컬 `git rev-parse HEAD` 비교, `git status -sb`로 수행한다. 제품 작업의 다음 첫 행동은 G.7 기록의 최신 실행 파일 확인이다.
