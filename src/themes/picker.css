@@ -1,0 +1,199 @@
+.settings-dialog {
+  width: min(920px, calc(100vw - 32px));
+}
+.theme-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+.theme-heading h3 {
+  margin: 0 0 var(--space-sm);
+  font-size: 18px;
+}
+.theme-heading p,
+.theme-current {
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  line-height: 1.6;
+  margin: 0;
+}
+.theme-count {
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--color-text-secondary);
+}
+.theme-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.theme-picker legend {
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-small);
+  color: var(--color-text-secondary);
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+.theme-card {
+  display: block;
+  min-width: 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  background: var(--color-surface-panel);
+}
+.theme-card:hover {
+  border-color: var(--color-border-input);
+}
+.theme-card[data-selected='true'] {
+  border-color: var(--color-action-primary);
+  box-shadow: 0 0 0 1px var(--color-action-primary);
+  background: var(--color-action-selected);
+}
+.theme-card:focus-within {
+  outline: var(--border-width-focus) solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+.theme-thumbnail {
+  overflow: hidden;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+  background: var(--color-surface-panel);
+  pointer-events: none;
+}
+.theme-mini-toolbar {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  background: var(--color-surface-header);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.theme-mini-toolbar > i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-text-secondary);
+}
+.theme-mini-toolbar > span {
+  margin-left: auto;
+  font: 8px var(--font-ui);
+}
+.theme-mini-workspace {
+  display: flex;
+  height: 75px;
+}
+.theme-mini-sidebar {
+  width: 24%;
+  padding: 11px 7px;
+  background: var(--color-surface-subtle);
+  border-right: 1px solid var(--color-border-default);
+}
+.theme-mini-sidebar i {
+  display: block;
+  height: 4px;
+  background: var(--color-border-input);
+  border-radius: 2px;
+  margin-bottom: 8px;
+}
+.theme-mini-sidebar i:first-child {
+  background: var(--color-action-primary);
+}
+.theme-mini-sidebar i:last-child {
+  width: 65%;
+}
+.theme-mini-terminal {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px;
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+  font: 9px var(--font-mono);
+}
+.theme-mini-terminal b,
+.theme-mini-prompt {
+  color: var(--terminal-cursor);
+}
+.theme-mini-prompt i {
+  display: inline-block;
+  width: 5px;
+  height: 10px;
+  vertical-align: middle;
+  background: var(--terminal-cursor);
+}
+.theme-mini-ansi {
+  display: flex;
+  gap: 3px;
+}
+.theme-mini-ansi i {
+  width: 12px;
+  height: 5px;
+  border-radius: 1px;
+}
+.theme-card-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+}
+.theme-card-label input {
+  margin: 0;
+  padding: 0;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  accent-color: var(--color-action-primary);
+}
+.theme-card-label strong {
+  font-size: 12px;
+}
+.theme-card-label span {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+}
+.theme-card > p {
+  margin: 5px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.theme-current {
+  margin-top: var(--space-md);
+}
+.settings-data {
+  margin-top: var(--space-xl);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border-default);
+}
+.settings-data h3 {
+  font-size: var(--font-body);
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .theme-count {
+    display: none;
+  }
+}
+@media (max-width: 420px) {
+  .theme-grid {
+    grid-template-columns: 1fr;
+  }
+}

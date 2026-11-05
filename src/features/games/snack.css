@@ -1,0 +1,186 @@
+.game-play.snack-play {
+  max-width: 900px;
+}
+.snack-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 12px;
+}
+.snack-heading > span:first-child {
+  opacity: 0.65;
+}
+.snack-play .game-stats {
+  gap: 12px 28px;
+  margin: 20px 0 16px;
+}
+.snack-play .game-stats > div {
+  flex-direction: column;
+  gap: 5px;
+}
+.snack-play .game-stats span {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.snack-play .game-stats strong {
+  font-size: 19px;
+  font-weight: 600;
+}
+.snack-play .game-stats > div:first-child {
+  margin-right: auto;
+}
+.snack-clock {
+  height: 3px;
+  background: var(--game-line);
+}
+.snack-clock > span {
+  display: block;
+  height: 100%;
+  background: var(--terminal-foreground);
+}
+.game-board.snack-board {
+  position: relative;
+  display: block;
+  padding: 0;
+  isolation: isolate;
+}
+.snack-board > svg {
+  height: auto;
+}
+.snack-board text {
+  font-family: var(--font-mono);
+  fill: currentColor;
+}
+.snack-scenery {
+  fill: currentColor;
+  fill-opacity: 0.045;
+}
+.snack-scenery g path {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.1;
+  stroke-width: 3;
+}
+.snack-canopy {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.13;
+  stroke-width: 1;
+}
+.snack-floor rect {
+  fill: currentColor;
+  fill-opacity: 0.045;
+}
+.snack-floor path {
+  stroke: var(--game-line);
+}
+.snack-hazard-ring {
+  fill: var(--terminal-background);
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.snack-star-halo {
+  fill: currentColor;
+  opacity: 0.1;
+}
+.snack-effect text {
+  font-size: 15px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--terminal-background);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.snack-sparks,
+.snack-crumbs {
+  fill: currentColor;
+}
+.snack-mood {
+  font-size: 13px;
+}
+.snack-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 68px 14px 0;
+  pointer-events: none;
+}
+.snack-overlay-card {
+  width: min(360px, 100%);
+  text-align: center;
+  padding: 20px 12px;
+  border: 1px solid var(--game-line);
+  background: color-mix(in srgb, var(--terminal-background) 96%, transparent);
+  border-radius: 8px;
+}
+.snack-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  opacity: 0.65;
+}
+.snack-overlay h3 {
+  font-family: inherit;
+  font-size: 21px;
+  margin: 10px 0;
+}
+.snack-overlay p {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 5px 0 0;
+}
+.snack-overlay .snack-overlay-note {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.snack-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.snack-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.snack-legend svg {
+  width: 24px;
+  height: 24px;
+}
+.snack-play > .dax-help {
+  opacity: 0.75;
+}
+.snack-play .dax-touch-controls button {
+  flex: 1;
+  max-width: 160px;
+}
+@container (max-width: 510px) {
+  .snack-play .game-stats {
+    gap: 14px 20px;
+  }
+  .snack-play .game-stats strong {
+    font-size: 16px;
+  }
+  .snack-play .game-stats > div:first-child {
+    margin-right: 0;
+  }
+  .snack-overlay {
+    padding-top: 38px;
+  }
+  .snack-overlay-card {
+    padding: 14px 8px;
+  }
+  .snack-overlay h3 {
+    font-size: 18px;
+  }
+  .snack-legend {
+    gap: 8px 12px;
+    font-size: 11px;
+  }
+}

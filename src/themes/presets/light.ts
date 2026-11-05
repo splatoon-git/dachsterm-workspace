@@ -1,0 +1,63 @@
+import type { ThemeDefinition } from '../contract';
+import { foundations } from '../foundations';
+const surface = { app: '#F7F2E7', panel: '#FFFCF5', subtle: '#FBF7EE', header: '#F1EADB' };
+const text = { primary: '#263447', secondary: '#5F686F', onAction: '#FFFFFF', disabled: '#606970' };
+const status = { success: '#376F45', info: '#286F6D', warning: '#A24E0C', error: '#B54137' };
+export const lightTheme = {
+  id: 'pms-retro-light',
+  name: 'DaxTerm Classic',
+  description: '지금의 따뜻한 크림색 · 기본 테마',
+  category: '기본',
+  colorScheme: 'light',
+  foundations,
+  color: {
+    surface,
+    text,
+    status,
+    border: { default: '#D8D0C0', subtle: '#E3DCCD', input: '#8B8271' },
+    action: {
+      primary: '#3978A8',
+      default: surface.panel,
+      hover: '#EAE3D5',
+      active: '#D7CEBC',
+      selected: '#DCE8F2',
+      disabled: '#EEE8DD',
+      focus: '#3978A8',
+      accent: '#D9AA42',
+      onAccent: text.primary,
+    },
+    focus: { ring: '#3978A8' },
+    overlay: { backdrop: '#26344718' },
+  },
+  terminal: {
+    background: surface.panel,
+    foreground: text.primary,
+    cursor: '#3978A8',
+    cursorAccent: surface.panel,
+    selectionBackground: '#DCE8F2',
+    selectionForeground: text.primary,
+    black: '#000000',
+    red: '#B54137',
+    green: '#468150',
+    yellow: '#87600D',
+    blue: '#387AAC',
+    magenta: '#80519C',
+    cyan: '#2E807E',
+    white: '#606970',
+    brightBlack: '#58626C',
+    brightRed: '#A92F27',
+    brightGreen: '#296739',
+    brightYellow: '#765008',
+    brightBlue: '#235F8D',
+    brightMagenta: '#70428E',
+    brightCyan: '#1D6462',
+    brightWhite: '#4B535C',
+  },
+  chart: {
+    series: ['#3978A8', status.success, '#80519C', status.warning],
+    axis: text.secondary,
+    grid: '#D8D0C0',
+    tooltip: surface.panel,
+    tooltipText: text.primary,
+  },
+} satisfies ThemeDefinition;

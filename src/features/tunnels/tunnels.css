@@ -1,0 +1,277 @@
+.tunnel-dialog {
+  width: min(920px, calc(100vw - 32px));
+}
+.tunnel-dialog h3 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.tunnel-dialog h4,
+.tunnel-dialog legend {
+  font-size: var(--font-body);
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.tunnel-dialog p,
+.tunnel-dialog small {
+  line-height: 1.6;
+}
+.tunnel-notice:empty {
+  display: none;
+}
+.tunnel-notice {
+  color: var(--color-status-success);
+  font-size: var(--font-small);
+}
+.tunnel-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tunnel-list-heading p {
+  margin: 0;
+}
+.tunnel-list-heading > button {
+  flex-shrink: 0;
+}
+.tunnel-empty {
+  border: 1px dashed var(--color-border-input);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface-subtle);
+  padding: 40px 16px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+.tunnel-empty p {
+  margin: 0;
+  font-size: var(--font-small);
+  color: var(--color-text-secondary);
+}
+.tunnel-dialog .tunnel-list {
+  max-height: none;
+  overflow: visible;
+  margin-bottom: 16px;
+}
+.tunnel-dialog .tunnel-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  padding: 16px;
+  margin-bottom: 8px;
+  background: var(--color-surface-subtle);
+}
+.tunnel-card-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tunnel-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.tunnel-dialog .tunnel-card strong {
+  font-size: var(--font-body);
+}
+.tunnel-dialog .tunnel-card small {
+  font-size: var(--font-small);
+}
+.tunnel-state {
+  font-size: var(--font-small);
+  border-radius: var(--radius-small);
+  padding: 2px 8px;
+  background: var(--color-surface-panel);
+  border: 1px solid var(--color-border-default);
+}
+.tunnel-state[data-state='running'] {
+  color: var(--color-status-success);
+}
+.tunnel-state[data-state='error'] {
+  color: var(--color-status-error);
+}
+.tunnel-route {
+  margin: 0;
+  font-size: var(--font-small);
+  overflow-wrap: anywhere;
+}
+.tunnel-route code {
+  font-family: var(--font-mono);
+}
+.tunnel-card-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  justify-content: center;
+}
+.tunnel-auto {
+  display: flex;
+  gap: 6px;
+  font-size: var(--font-small);
+}
+.tunnel-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tunnel-row-actions button {
+  min-width: 54px;
+}
+.tunnel-connection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-small);
+}
+.tunnel-connection select {
+  width: auto;
+  min-width: 0;
+}
+.tunnel-delete {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid var(--color-border-default);
+  padding-top: 12px;
+  font-size: var(--font-small);
+}
+.tunnel-editor-fields,
+.tunnel-kind-picker {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.tunnel-kind-picker {
+  margin-top: 24px;
+}
+.tunnel-kind-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.tunnel-dialog .tunnel-kind {
+  flex-direction: row;
+  padding: 12px;
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  background: var(--color-surface-subtle);
+}
+.tunnel-kind:has(input:checked) {
+  background: var(--color-action-selected);
+  border-color: var(--color-action-primary);
+  box-shadow: inset 0 0 0 1px var(--color-action-primary);
+}
+.tunnel-kind input {
+  width: auto;
+  margin: 3px 0 0;
+  align-self: flex-start;
+  accent-color: var(--color-action-primary);
+}
+.tunnel-kind span {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.tunnel-flow-section,
+.tunnel-save-section {
+  margin-top: 24px;
+}
+.tunnel-flow-section > .muted {
+  margin-top: -4px;
+}
+.tunnel-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr);
+  gap: 6px;
+}
+.tunnel-node {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface-subtle);
+}
+.tunnel-node-ssh {
+  background: var(--color-surface-header);
+}
+.tunnel-node small {
+  overflow-wrap: anywhere;
+}
+.tunnel-node p {
+  margin: 0;
+}
+.tunnel-node-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-small);
+}
+.tunnel-node-heading svg {
+  flex-shrink: 0;
+}
+.tunnel-flow-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-action-primary);
+}
+.tunnel-hint {
+  padding: 10px 12px;
+  background: var(--color-surface-header);
+  border-radius: var(--radius-small);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.tunnel-save-section .checkbox {
+  align-self: center;
+}
+.tunnel-dialog .form-actions {
+  border-top: 1px solid var(--color-border-default);
+  padding-top: 16px;
+}
+.tunnel-dialog .form-actions > span {
+  margin-right: auto;
+}
+@media (max-width: 700px) {
+  .tunnel-dialog {
+    padding: 16px;
+  }
+  .tunnel-kind-options,
+  .tunnel-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tunnel-flow-arrow {
+    transform: rotate(90deg);
+    height: 20px;
+  }
+  .tunnel-dialog .tunnel-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tunnel-card-controls {
+    align-items: flex-start;
+  }
+  .tunnel-dialog .form-actions > span {
+    flex-basis: 100%;
+  }
+  .tunnel-connection {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

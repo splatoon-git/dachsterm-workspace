@@ -1,0 +1,52 @@
+.transfer-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+.session-transfer label {
+  min-width: 0;
+}
+.session-transfer select,
+.session-transfer input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+}
+.transfer-rows {
+  max-height: 320px;
+  overflow: auto;
+  margin-block: var(--space-md);
+}
+.transfer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(100px, 1fr);
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.transfer-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  overflow-wrap: anywhere;
+}
+.session-transfer .transfer-select input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+}
+.transfer-select > span {
+  min-width: 0;
+}
+.transfer-select small {
+  display: block;
+  color: var(--color-text-secondary);
+}
+.transfer-preview ul {
+  padding-left: var(--space-xl);
+}
+@media (max-width: 560px) {
+  .transfer-options,
+  .transfer-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,7 @@
+**/*.png
+**/*.ico
+**/*.icns
+tests/openssh/
+src/assets/brand/README.md
+package-lock.json
+test-results-audit.json

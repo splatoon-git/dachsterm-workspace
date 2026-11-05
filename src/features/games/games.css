@@ -1,0 +1,586 @@
+.game-terminal {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px;
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  container-type: inline-size;
+  --game-line: color-mix(in srgb, var(--terminal-foreground) 35%, var(--terminal-background));
+}
+.game-terminal[hidden] {
+  display: none;
+}
+.game-terminal button {
+  font: inherit;
+  color: var(--terminal-foreground);
+  background: transparent;
+  border: 1px solid var(--game-line);
+  border-radius: 0;
+  padding: 6px 10px;
+}
+.game-terminal button:hover:enabled,
+.game-terminal button[aria-pressed='true'] {
+  background: var(--terminal-selection-background);
+  color: var(--terminal-selection-foreground);
+}
+.game-terminal :focus-visible {
+  outline-color: var(--terminal-foreground);
+  outline-offset: 2px;
+}
+.game-terminal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--game-line);
+}
+.game-terminal-heading small {
+  font: inherit;
+}
+.game-terminal-heading button {
+  border-color: transparent;
+  padding: 4px 0;
+}
+.game-terminal kbd {
+  font: inherit;
+  margin-left: 8px;
+}
+.game-play {
+  max-width: 620px;
+}
+.dax-board {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+.dax-board > svg {
+  display: block;
+  width: 100%;
+}
+.dax-ground {
+  fill: none;
+  stroke: var(--game-line);
+  stroke-width: 1;
+}
+.dax-onion {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.dax-obstacle {
+  fill: currentColor;
+}
+.dax-help {
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 12px 0;
+}
+.dax-touch-controls button {
+  min-width: 70px;
+  min-height: 44px;
+  touch-action: none;
+}
+.game-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 18px 0;
+}
+.game-stats > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.game-stats strong {
+  font-size: 13px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.game-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+.game-board {
+  display: grid;
+  flex-shrink: 0;
+  padding: 5px;
+  border: 1px solid var(--game-line);
+}
+.game-guide {
+  width: 180px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.game-guide h3 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 400;
+}
+.game-guide p {
+  margin: 12px 0;
+}
+.blocks-board {
+  width: 192px;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 1px;
+}
+.block-cell {
+  aspect-ratio: 1;
+}
+.blocks-board .block-0 {
+  background: radial-gradient(var(--game-line) 0.7px, transparent 1px) center / 100% 100%;
+}
+.block-1,
+.block-2,
+.block-3,
+.block-4,
+.block-5,
+.block-6,
+.block-7 {
+  background: var(--terminal-foreground);
+  box-shadow: inset 0 0 0 1px var(--terminal-background);
+}
+.block--1 {
+  border: 1px dotted var(--game-line);
+}
+.next-block {
+  display: grid;
+  grid-template-columns: repeat(var(--columns), 16px);
+  gap: 1px;
+  margin-top: 12px;
+}
+.snake-board {
+  width: 272px;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 1px;
+}
+.snake-cell {
+  aspect-ratio: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 13px;
+}
+.snake-body {
+  background: var(--terminal-foreground);
+}
+.snake-head {
+  background: var(--terminal-foreground);
+  color: var(--terminal-background);
+}
+.snake-food {
+  color: var(--terminal-foreground);
+}
+.tiles-board {
+  width: 272px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+}
+.number-tile {
+  aspect-ratio: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--game-line);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.tile-0 {
+  border-color: transparent;
+}
+.tile-3,
+.tile-4 {
+  font-weight: 700;
+}
+.mines-board {
+  width: 272px;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 2px;
+}
+.game-terminal .mine-cell {
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+  font-size: 14px;
+}
+.game-terminal .mine-cell.opened {
+  border-color: transparent;
+}
+.game-terminal .mine-cell.exploded {
+  background: var(--terminal-foreground);
+  color: var(--terminal-background);
+}
+.game-direction-pad {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 12px 0;
+}
+.game-direction-pad > button {
+  margin-left: 36px;
+}
+.game-direction-pad > div {
+  display: flex;
+  gap: 4px;
+}
+.game-direction-pad button {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+}
+.game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.game-status {
+  font-size: 12px;
+  min-height: 20px;
+  margin: 16px 0 8px;
+}
+.games-footnote {
+  margin: 24px 0 0;
+  font-size: 11px;
+  line-height: 1.8;
+}
+@container (max-width: 510px) {
+  .game-stage {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .game-guide {
+    width: 100%;
+  }
+  .game-guide p {
+    margin: 6px 0;
+  }
+  .game-direction-pad {
+    display: none;
+  }
+  .snake-board,
+  .tiles-board,
+  .mines-board {
+    width: min(272px, 100%);
+  }
+  .blocks-board {
+    width: min(192px, 100%);
+  }
+}
+@media (max-width: 700px) {
+  .game-terminal {
+    padding: 12px;
+  }
+}
+
+/* Adventure art uses the same terminal/theme contract; the mascot retains its original colors. */
+.adventure-play {
+  max-width: 1000px;
+}
+.adventure-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.adventure-board {
+  padding: 0;
+  display: block;
+  background: var(--terminal-background);
+}
+.adventure-board > svg {
+  height: auto;
+}
+.adventure-board text {
+  font-family: var(--font-mono);
+  fill: currentColor;
+  font-size: 11px;
+}
+.adventure-scenery {
+  fill: currentColor;
+  opacity: 0.055;
+}
+.adventure-sun {
+  opacity: 0.8;
+}
+.adventure-trees {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 3;
+  opacity: 0.08;
+}
+.adventure-ground rect {
+  fill: var(--terminal-foreground);
+  fill-opacity: 0.07;
+}
+.adventure-ground path {
+  stroke: var(--game-line);
+  stroke-width: 2;
+}
+.adventure-platform {
+  fill: var(--terminal-background);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.adventure-platform path {
+  opacity: 0.25;
+}
+.adventure-spikes {
+  fill: currentColor;
+  opacity: 0.65;
+}
+.adventure-checkpoint,
+.adventure-home {
+  fill: var(--terminal-background);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.adventure-checkpoint text,
+.adventure-home text {
+  stroke: none;
+}
+.adventure-home {
+  stroke-width: 3;
+}
+.adventure-treat {
+  fill: currentColor;
+  stroke: currentColor;
+}
+.adventure-enemy {
+  fill: var(--terminal-background);
+  stroke: currentColor;
+  stroke-width: 2.5;
+}
+.adventure-enemy circle {
+  fill: currentColor;
+  stroke: none;
+}
+.adventure-shadow {
+  fill: currentColor;
+  opacity: 0.12;
+}
+.adventure-dust,
+.adventure-bite,
+.adventure-effect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.adventure-dust {
+  opacity: 0.3;
+}
+.adventure-effect text,
+.adventure-bite text {
+  stroke: none;
+}
+.adventure-effect.dust {
+  opacity: 0.25;
+}
+.adventure-route {
+  stroke: currentColor;
+  fill: currentColor;
+}
+.adventure-route path {
+  opacity: 0.15;
+  stroke-width: 2;
+}
+.adventure-overlay rect {
+  fill: var(--terminal-background);
+  fill-opacity: 0.95;
+  stroke: var(--game-line);
+}
+.adventure-overlay .adventure-overlay-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.adventure-controls {
+  gap: 6px;
+}
+.adventure-controls button {
+  flex: 1;
+  min-width: 58px;
+  max-width: 130px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .adventure-scenery,
+  .adventure-trees {
+    display: none;
+  }
+}
+.adventure-play[data-biome='forest'] {
+  --adventure-accent: var(--terminal-green);
+}
+.adventure-play[data-biome='ruins'] {
+  --adventure-accent: var(--terminal-cyan);
+}
+.adventure-play[data-biome='cave'] {
+  --adventure-accent: var(--terminal-magenta);
+}
+.adventure-play[data-biome='snow'] {
+  --adventure-accent: var(--terminal-blue);
+}
+.adventure-sky {
+  fill: var(--adventure-accent);
+  opacity: 0.045;
+}
+.adventure-orb {
+  fill: var(--adventure-accent);
+  opacity: 0.18;
+}
+.adventure-far {
+  fill: var(--adventure-accent);
+  opacity: 0.13;
+}
+.adventure-near {
+  fill: var(--adventure-accent);
+  stroke: var(--adventure-accent);
+  stroke-width: 2;
+  opacity: 0.22;
+}
+.adventure-snowcap {
+  fill: var(--terminal-background);
+  opacity: 0.8;
+}
+.adventure-weather {
+  stroke: var(--adventure-accent);
+  fill: var(--adventure-accent);
+  opacity: 0.3;
+}
+.adventure-platform.moving {
+  stroke: var(--adventure-accent);
+}
+.adventure-track {
+  opacity: 0.4;
+}
+.adventure-platform.crumble {
+  stroke-dasharray: 5 2;
+}
+.adventure-spring,
+.adventure-gate {
+  fill: var(--terminal-background);
+  stroke: var(--adventure-accent);
+  stroke-width: 2;
+}
+.adventure-spring text,
+.adventure-gate text {
+  stroke: none;
+}
+.adventure-wire {
+  stroke-dasharray: 4 5;
+  opacity: 0.5;
+}
+.adventure-ice {
+  fill: var(--adventure-accent);
+  fill-opacity: 0.25;
+  stroke: var(--adventure-accent);
+}
+.adventure-ice text {
+  stroke: none;
+  fill: currentColor;
+  fill-opacity: 1;
+}
+.adventure-vent {
+  fill: var(--terminal-background);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.adventure-vent text {
+  stroke: none;
+}
+.adventure-vent.warning,
+.adventure-vent.active {
+  stroke: var(--terminal-red);
+}
+.adventure-vent .adventure-steam {
+  fill: var(--terminal-red);
+  fill-opacity: 0.15;
+  stroke: none;
+}
+.adventure-gap {
+  stroke: var(--adventure-accent);
+  fill: none;
+  opacity: 0.7;
+}
+.adventure-gap text {
+  stroke: none;
+}
+.adventure-enemy.hopper {
+  stroke: var(--terminal-green);
+}
+.adventure-enemy.bat {
+  stroke: var(--terminal-magenta);
+}
+.adventure-enemy.boar {
+  stroke: var(--terminal-yellow);
+}
+.adventure-enemy text {
+  stroke: none;
+  font-size: 22px;
+  font-weight: bold;
+}
+.adventure-stomp-trail {
+  stroke: var(--adventure-accent);
+  stroke-width: 3;
+  fill: none;
+  opacity: 0.8;
+}
+.adventure-effect.stomp {
+  stroke: var(--adventure-accent);
+  stroke-width: 3;
+}
+.adventure-map-options {
+  margin: 12px 0;
+  border-bottom: 1px solid var(--game-line);
+  padding-bottom: 10px;
+  font-size: 12px;
+}
+.adventure-map-options summary {
+  cursor: pointer;
+}
+.adventure-map-options p {
+  line-height: 1.7;
+}
+.adventure-map-options form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+}
+.adventure-map-options input {
+  width: 130px;
+  color: var(--terminal-foreground);
+  background: var(--terminal-background);
+  border: 1px solid var(--game-line);
+  padding: 6px;
+  font: inherit;
+}
+.adventure-map-options button {
+  min-height: 32px;
+}
+.adventure-controls button {
+  min-width: 78px;
+  max-width: 150px;
+}
+.adventure-next {
+  margin: 0 0 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .adventure-weather {
+    display: none;
+  }
+}
