@@ -1,0 +1,57 @@
+.survivor-hub {
+  max-width: 960px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.survivor-hub h2 {
+  font-size: 20px;
+}
+.survivor-hub h3 {
+  margin-top: 24px;
+}
+.survivor-hub h4 {
+  margin: 0;
+}
+.survivor-hub h4 small {
+  font-weight: normal;
+}
+.survivor-hub button,
+.survivor-hub select,
+.survivor-hub label {
+  min-height: 44px;
+}
+.survivor-hub button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.survivor-shop {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+.survivor-shop article,
+.survivor-refund {
+  border: 1px solid var(--game-line);
+  padding: 16px;
+  min-width: 0;
+}
+.survivor-shop button {
+  width: 100%;
+}
+.survivor-hub label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px;
+  white-space: nowrap;
+}
+.survivor-hub input[type='checkbox'] {
+  width: auto;
+  flex: none;
+}
+.survivor-hub select {
+  color: inherit;
+  background: var(--terminal-background);
+  font: inherit;
+  border: 1px solid var(--game-line);
+}
