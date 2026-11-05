@@ -19,6 +19,7 @@ import {
 import { useBest, useRound, Stats, RoundControls, phaseText } from './shared';
 import { DaxSnackGame } from './DaxGames';
 import { DaxAdventureGame } from './AdventureGame';
+import { SurvivorGame, type SurvivorCloseRegistration } from './survivor/SurvivorGame';
 import './games.css';
 
 const directions: Record<string, Direction> = {
@@ -397,15 +398,18 @@ export default function GamePane({
   game,
   active,
   leave,
+  registerSurvivorClose,
 }: {
   game: GameId;
   active: boolean;
   leave: () => void;
+  registerSurvivorClose?: SurvivorCloseRegistration;
 }) {
   const pane = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (active) pane.current?.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
-  }, [active]);
+    if (active && game !== 'survivor')
+      pane.current?.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
+  }, [active, game]);
   return (
     <section
       ref={pane}
@@ -441,6 +445,8 @@ export default function GamePane({
         <DaxSnackGame active={active} />
       ) : game === 'adventure' ? (
         <DaxAdventureGame active={active} />
+      ) : game === 'survivor' ? (
+        <SurvivorGame active={active} registerClose={registerSurvivorClose} />
       ) : (
         <MinesGame />
       )}

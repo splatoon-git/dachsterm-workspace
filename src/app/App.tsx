@@ -1,5 +1,6 @@
 import { FtpPane } from '../features/sftp/FtpPane';
 import { useFullscreen } from './useFullscreen';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { MaintenancePanel } from '../features/settings/MaintenancePanel';
 import { SessionTransfer } from '../features/sessions/SessionTransfer';
 import { BroadcastControl } from '../features/terminal/BroadcastControl';
@@ -154,6 +155,43 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [gameTabs, setGameTabs] = useState<GameId[]>([]);
   const [activeGame, setActiveGame] = useState<GameId | null>(null);
+  const survivorClose = useRef<(() => boolean) | null>(null);
+  const registerSurvivorClose = useCallback((close: (() => boolean) | null) => {
+    survivorClose.current = close;
+  }, []);
+  const settleSurvivorBeforeClose = useCallback(() => {
+    if (survivorClose.current && !survivorClose.current()) {
+      setActiveGame('survivor');
+      return false;
+    }
+    return true;
+  }, []);
+  useEffect(() => {
+    if (!desktop) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWindow()
+      .onCloseRequested((event) => {
+        if (!settleSurvivorBeforeClose()) event.preventDefault();
+      })
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      })
+      .catch((e) => setError(errorText(e)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [settleSurvivorBeforeClose]);
+  useEffect(() => {
+    // Browser reload/close is best-effort; native close uses the cancellable handler above.
+    const save = (event: BeforeUnloadEvent) => {
+      if (!settleSurvivorBeforeClose()) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', save);
+    return () => window.removeEventListener('beforeunload', save);
+  }, [settleSurvivorBeforeClose]);
   const tabStrip = useRef<HTMLDivElement>(null);
   useEffect(() => {
     tabStrip.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({
@@ -173,6 +211,7 @@ export function App() {
     closeDrawer();
   };
   const closeGame = (id: GameId) => {
+    if (id === 'survivor' && !settleSurvivorBeforeClose()) return;
     setGameTabs((previous) => previous.filter((game) => game !== id));
     if (activeGame === id) leaveGame();
   };
@@ -1016,7 +1055,12 @@ export function App() {
           )}
           {gameTabs.map((game) => (
             <Suspense key={game} fallback={activeGame === game ? <p>준비 중…</p> : null}>
-              <GamePane game={game} active={activeGame === game} leave={leaveGame} />
+              <GamePane
+                game={game}
+                active={activeGame === game}
+                leave={leaveGame}
+                registerSurvivorClose={registerSurvivorClose}
+              />
             </Suspense>
           ))}
           {!activeGame &&

@@ -5,6 +5,7 @@ export const games = [
   { id: 'mines', title: '지뢰찾기' },
   { id: 'snack', title: '닥스의 간식 타임' },
   { id: 'adventure', title: '닥스의 모험' },
+  { id: 'survivor', title: '닥스의 서바이버' },
 ] as const;
 
 export type GameId = (typeof games)[number]['id'];

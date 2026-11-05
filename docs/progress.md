@@ -1,6 +1,7 @@
 # DaxTerm 구현 진행 현황
 
 - 마지막 갱신: 2026-11-05
+- **G.8.5 닥스의 서바이버 게임탭·전투 UI·입력/음향·종료 정산 연결 완료**: 게임 목록에서 쉼터/Canvas/HUD/카드/통과/결과를 사용할 수 있다. 단위209개·브라우저 고유28개(최종 서바이버UI9+기존19)·타입/전체린트/빌드, 최신 Windows debug의 자연 첫 카드·저장 실패 창닫기 차단·재시도·정상 종료/재실행 검증 통과. [UI 검증 기록](verification/survivor-ui.md)과 하단 G.8.5가 최신 상태다. **G.8.6 밸런스·성능·실제PTY/SSH·OS/배포 검증은 남음**, G.8 전체 완료는 아니다.
 - **G.8.4 닥스의 서바이버 영구 성장·저장·쉼터 구현/해당 범위 검증 완료**: 강화4종·무기2종/다시뽑기 해금·실제 지불액 환불, 스키마1·단일 소유권·체크포인트/중단 복구·종료 정산/중복 보상 방지와 독립 쉼터를 추가했다. 전체209개/브라우저8개·타입/린트/빌드, Windows WebView2 저장 API/6초 대기 후 강제 종료 복구 실증 통과. 즉시 전체 프로세스 강제 종료의 디스크 반영 전 손실은 확인된 한계다. [검증 기록](verification/survivor-profile.md) 및 하단 G.8.4가 최신 상태다. 게임 카탈로그/전투/탭 종료 연결은 G.8.5, 밸런스/실환경/산출물은 G.8.6이다.
 - **G.8.3 닥스의 서바이버 연속 스테이지·적/보스·드롭 엔진 구현·규칙 검증 완료**: 60초 일반 구간·3의 배수 보스·성장/누적 시간 유지·통과/다음/종료, 일반적5/정예2/보스1·골드/회복 드롭을 연결했다. 서바이버94개/전체150개·타입·전체린트·프런트엔드 빌드 통과. [상세 설계](design/dax-survivor.md)와 하단 G.8.3 기록이 최신 상태다. 영구 저장/정산은 G.8.4, 실제 화면 연결은 G.8.5, 실플레이/성능/실환경은 G.8.6이며 전체 G.8 완료가 아니다.
 - **G.8.2 닥스의 서바이버 카드·무기·진화 구현·규칙 검증 완료**: G.8.1 엔진에 카드3장 추첨/연속 선택·6무기·8능력·3진화·다시 뽑기를 연결했다. 전체 규칙109개(서바이버53개)·타입·전체 린트·프런트엔드 빌드 통과. 이 수치는 G.8.2 당시 검증 기록이며 보스/드롭의 현재 상태는 위 G.8.3을 따른다. 영구 성장/화면/실환경은 G.8.4~G.8.6이며 게임 목록에는 아직 노출하지 않는다. [설계안](design/dax-survivor.md)의 엔진 연결 계약과 하단 구현 기록을 따른다.
@@ -527,3 +528,24 @@
 
 - 사용자 요청으로 G.8.4 제품/검사11개 파일과 설계/roadmap/progress/검증4개 문서를 로컬 커밋 대상으로 묶었다. 제목은 `feat(survivor): add persistent upgrades and run settlement`이며 원격 푸시는 하지 않는다. 위 미커밋 표기는 구현 완료 당시 이력이다.
 - 이번 작업은 제품 코드 변경 없이 Git 변경 목록·`git diff --check` 및 스테이징된 diff를 확인한다. 직전 단위209개·브라우저8개·WebView2 저장 실증·타입/린트/빌드 통과 후 제품 코드가 바뀌지 않아 검사를 반복하지 않는다. 남은 ID는 G.8.5~G.8.6이며 다음 첫 행동은 위 G.8.4 인계의 store/session과 실제 게임 탭 수명 연결이다. 강제 종료 저장 한계와 Mac/실제SSH/설치본 등 미실행 범위는 그대로 유지한다.
+
+## G.8.5 — 닥스의 서바이버 게임탭·Canvas·입력·종료 저장 (2026-11-05, 구현/해당 범위 검증 완료)
+
+- 요청 범위: **8.5만 구현**. roadmap/설계/진행 기록과 실제8.4 session/store 계약을 읽고 연결했다. 작업 중 반영된8.4 커밋 `d62c5bc` 및 별도 제품명 검토 기록은 보존했다. 이번8.5는 커밋·푸시하지 않았다. 기존 release/NSIS를 최신 서바이버 산출물로 표시하지 않는다.
+- 신규 제품 파일: `src/features/games/survivor/{controller.ts,renderer.ts,SurvivorGame.tsx,survivor.css,audio.ts}`, `src-tauri/capabilities/survivor-window.json`. 연결 변경: `src/app/App.tsx`, `src/features/games/{catalog.ts,GamePane.tsx}`. 신규 검사: `tests/ui/survivor.spec.ts`, `tests/ui/fixtures/survivor.{html,tsx}`, `scripts/test-survivor-ui-native.mjs`. 문서: README의 실행 안내, roadmap/설계/progress 및 [UI 검증](verification/survivor-ui.md). 기존 순수 엔진·profile/store/session·Rust 제품 코드는 변경하지 않았다.
+- 화면: 게임 목록 등록, 기존 쉼터 연결, 고정960×540 논리 Canvas/3200×3200 경계·기존 atlas·8종 적/공격 예고·3종 드롭·6무기/진화 공격·보스 체력/방향. 테마 토큰과 시드 기반 장식을 사용하며 렌더러는 전투 난수/상태를 바꾸지 않는다. HUD는 구간/보스 시간·HP/XP·이번 수집/보스/영구 골드를 분리하고, 각4슬롯과 최종 조합을 제공한다. 카드·정지·통과·결과는 전장 위 스크롤 가능한 DOM 패널이다.
+- 입력/음향: WASD/방향키·숫자선택·R/P/M/Space/Enter, 키 반복/keyup 경계·오래된 choiceId/구간 입력 거부·포커스한 마무리 버튼의 Enter를 연결했다. 카드·blur·비활성 전환은 이동키/포인터/RAF를 멈추며 수동 재개한다. 외부 텍스트/조합키/IME 조합은 가로채지 않고 외부 포커스를 빼앗지 않는다.8방향 패드의 pointer capture/up/cancel/lost capture와44px 크기, 모션 줄이기·합성 효과음 최대3음/80ms·음소거 저장을 추가했다. 실제 스피커 청취 품질은 미검증이다.
+- 탭/저장: controller/store/session은 탭마다1개, StrictMode cleanup은 정산하지 않는다. 프레임/명령 뒤 sync,5초/상태 변화 저장과 실패 정지, 명시적 포기/마무리/닫기의 정산을 연결했다. 탭 닫기 false는 제거를 취소하고 결과/재시도를 유지한다. main 창의 onCloseRequested도 실패 시 취소하며 성공 후 기존 Rust 종료 정리를 사용한다. Tauri 기본 close handler의 destroy 권한을 main 창에만 추가했으며 새 Rust IPC/프레임별 업무 IPC는 없다.
+- 단위/정적: `node --max-old-space-size=1024 node_modules/vitest/vitest.mjs run src --maxWorkers=1` **12파일/209개 통과**. `node --max-old-space-size=1024 node_modules/typescript/bin/tsc --noEmit` 종료0. 최종 `node --max-old-space-size=1024 node_modules/eslint/bin/eslint.js .` 종료0. 변경13개 소스/검사/설정 `prettier --check` 종료0.
+- 브라우저: Node 메모리 설정 후 `node node_modules/@playwright/test/cli.js test tests/ui/survivor.spec.ts tests/ui/survivor-profile.spec.ts tests/ui/games.spec.ts tests/ui/dax-games.spec.ts --workers=1` **26개 통과**(당시 신규7+기존19). 최종 `... test tests/ui/survivor.spec.ts --workers=1` **9개 통과**, 중복을 제외한 고유28개다.360/560/1280·기본/다크·내부스크롤/3열·95/135정산·연속 카드/다음/다시뽑기·Esc/탭·pointercancel·StrictMode잠금·실패닫기/재시도·외부포커스/조합키·resize/테마 후 전체 엔진 상태 일치와 기존6종/xterm 인스턴스 회귀를 확인했다. 복잡한 카드/통과/보스 보상은 fixture 상태 설정 검사이며 일반 입력 보스 클리어 근거가 아니다.
+- 초기 브라우저 실패: 실행 중 포맷 변경에 따른 Vite reload1건, 가상 시계 설치 시점/화면 밖 포인터 좌표/choosing 전 카드 요청 fixture 설정을 바로잡은 뒤 통과했다. 제품 시간·전투 규칙을 실패 검사에 맞춰 바꾸지 않았다. 캡처 `target/verification/survivor-{battle,cards,result}-{360,560,1280}.png`와 native 화면을 직접 확인해 카드 상단 정렬을 보완했다. 가상 패드에서 Canvas 포커스로 이동할 때 화면이 튀지 않도록 preventScroll을 적용하고 스크롤 유지 검사를 추가했다.
+- 빌드/실제Windows: `$env:NODE_OPTIONS='--max-old-space-size=1024'` 및 Cargo PATH 설정 후 `node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle` **종료0**(tsc-b/Vite 포함). 최종 `node scripts/test-survivor-ui-native.mjs` **종료0**. 새 내장 제품/격리 데이터로 일반 이동→자연 첫 레벨업2/카드3장→Esc/동일카드재개/선택→정지, 실제 창닫기 저장실패차단→재시도1회정산→정상exit0→재실행 전체프로필일치를 확인했다. 엔진 상태·시드 주입 없이 실행했고 저장 실패만 주입했다. pageerror0, 실행 프로세스 종료. 캡처/JSON은 `target/verification/survivor-ui-native.{png,json}`.
+- 최신 debug: `D:/Work/daxterm-workspace/target/debug/daxterm.exe`, SHA256 `79c004c5095a779e5ac06579c9058d6bb2ed31ddca9d1b7c413bc272818bd8aa`. 게임 목록에서 서바이버를 실행할 수 있다. 기존 main 번들500KB 경고 유지. release/NSIS 새빌드·설치는 미실행이다.
+- 미실행/이유: **G.8.6** 첫 두 보스3/6→4/7 일반 입력 클리어·장기 상한/수익/재미·60초p95/반복10판메모리·실제 로컬PTY/SSH 입력격리·OS종료/절전·release/설치본은 후속 범위다. Mac 실기기·물리 멀티터치·스피커청취는 해당 환경/수동 검증이 필요하다. Rust 제품 코드 미변경으로 Rust단위/clippy/SSH엔진 전체 회귀를 반복하지 않았다. 기존Phase/G.7 대기를 유지한다. G.8.4의 강제 종료 디스크 손실 가능성/5초 주기가 손실상한이 아니라는 한계도 유지한다.
+- 남은 ID와 다음 첫 행동: **G.8.6**. 이 기록·UI 검증·설계§11~12를 읽고 위 debug SHA를 확인한 뒤 무강화/서로 다른 시드로 첫 두 보스와4/7 진입을 일반 입력으로 플레이해 시간·사망·카드 빈도·수익을 기록한다. 그 근거로 content 수치를 조정하고 부하/메모리·실제PTY/SSH·OS종료·release 식별/설치를 검증한다. G.8.5 재구현이나8.4 저장소 재생성부터 시작하지 않는다.
+- 최종 문서 확인: 변경5문서의 로컬 Markdown 링크51개 실파일·후행공백0개, debug 파일의 실제 SHA256과 native 결과JSON 일치를 확인했다. `git diff --check` 종료0.
+
+## G.8.5 로컬 커밋 요청 (2026-11-05)
+
+- 사용자 요청으로 G.8.5 제품/검사/설정13개와 README/설계/roadmap/progress/검증5개, 총18개 파일을 로컬 커밋 대상으로 묶었다. 제목은 `feat(survivor): integrate gameplay UI and safe session lifecycle`이며 원격 푸시는 하지 않는다. 별도 제품명 검토 기록은 이번 커밋에서 제외하고 작업 트리에 보존한다. 위 미커밋 표기는 구현 완료 당시 이력이다.
+- 제품 코드는 직전 단위209개·브라우저 고유28개·타입/린트·최신 debug/WebView2 검증 이후 바뀌지 않아 검사를 반복하지 않았다. 이번에는 변경 목록과 `git diff --cached --check`를 확인한다. 남은 ID는 G.8.6 및 기존 환경 대기이며, 다음 첫 행동은 위8.5 인계의 무강화/서로 다른 시드 일반 입력 플레이 검증이다.

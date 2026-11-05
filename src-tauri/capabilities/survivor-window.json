@@ -1,0 +1,6 @@
+{
+  "identifier": "survivor-window",
+  "description": "Allow the main window close-request handler to finish closing after local game settlement succeeds.",
+  "windows": ["main"],
+  "permissions": ["core:window:allow-destroy"]
+}
