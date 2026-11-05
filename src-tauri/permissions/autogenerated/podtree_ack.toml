@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-podtree-ack"
+description = "Enables the podtree_ack command without any pre-configured scope."
+commands.allow = ["podtree_ack"]
+
+[[permission]]
+identifier = "deny-podtree-ack"
+description = "Denies the podtree_ack command without any pre-configured scope."
+commands.deny = ["podtree_ack"]

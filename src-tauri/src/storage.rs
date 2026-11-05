@@ -23,6 +23,12 @@ pub struct Profile {
     #[serde(default = "crate::encoding::default_encoding")]
     pub encoding: String,
     pub key_path: String,
+    #[serde(default)]
+    pub jump_ids: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub sort_order: i32,
     pub group_id: Option<String>,
     pub favorite: bool,
     pub timeout: u64,
@@ -38,6 +44,19 @@ fn default_protocol() -> String {
 impl Profile {
     pub fn validate(&self) -> Result<()> {
         crate::encoding::get(&self.encoding)?;
+        if self.jump_ids.len() > crate::routes::MAX_HOPS
+            || (self.protocol != "ssh" && !self.jump_ids.is_empty())
+            || self.tags.len() > 32
+            || self
+                .tags
+                .iter()
+                .any(|t| t.trim().is_empty() || t.len() > 64 || t.chars().any(char::is_control))
+        {
+            return Err(
+                "경유지는 최대 4개, 태그는 64바이트 이하 32개입니다. SSH 경유 설정을 확인하세요."
+                    .into(),
+            );
+        }
         if !["ssh", "ftp", "ftps"].contains(&self.protocol.as_str())
             || (self.protocol != "ssh" && self.auth != "password")
             || self.tls_ca_path.len() > 4096
@@ -72,10 +91,14 @@ impl Profile {
     }
 }
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Group {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    #[serde(default)]
+    pub sort_order: i32,
 }
 #[derive(Serialize)]
 pub struct Snapshot {
@@ -94,7 +117,7 @@ impl Store {
         let version: i64 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(db_error)?;
-        if version > 3 {
+        if version > 4 {
             return Err("더 새로운 버전에서 만든 데이터베이스입니다. 앱을 업데이트하세요.".into());
         }
         let integrity: String = connection
@@ -116,6 +139,14 @@ impl Store {
             CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS credential_gc(id TEXT PRIMARY KEY);
             PRAGMA user_version=3;").map_err(db_error)?;
+        if version < 4 {
+            let has_parent: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('groups') WHERE name='parent_id')",[],|r|r.get(0)).map_err(db_error)?;
+            if !has_parent {
+                tx.execute_batch("ALTER TABLE groups ADD COLUMN parent_id TEXT REFERENCES groups(id) ON DELETE SET NULL; ALTER TABLE groups ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;").map_err(db_error)?;
+            }
+        }
+        tx.execute_batch("PRAGMA user_version=4;")
+            .map_err(db_error)?;
         tx.commit().map_err(db_error)?;
         Ok(Self(Mutex::new(connection)))
     }
@@ -145,12 +176,14 @@ impl Store {
             })
             .collect::<Result<Vec<_>>>()?;
         let groups = db
-            .prepare("SELECT id,name FROM groups ORDER BY name")
+            .prepare("SELECT id,name,parent_id,sort_order FROM groups ORDER BY sort_order,name")
             .map_err(db_error)?
             .query_map([], |r| {
                 Ok(Group {
                     id: r.get(0)?,
                     name: r.get(1)?,
+                    parent_id: r.get(2)?,
+                    sort_order: r.get(3)?,
                 })
             })
             .map_err(db_error)?
@@ -187,6 +220,16 @@ impl Store {
             p.id = Uuid::new_v4().to_string();
         } else {
             self.profile(&p.id)?;
+        }
+        let mut profiles = self.list()?.profiles;
+        profiles.retain(|old| old.id != p.id);
+        profiles.push(p.clone());
+        if profiles.len() > 500 {
+            return Err("세션은 최대 500개입니다.".into());
+        }
+        crate::routes::validate(&profiles)?;
+        for t in crate::session_management::templates(self)? {
+            t.validate(&profiles, &self.list()?.groups)?;
         }
         p.has_secret = false;
         p.last_connected = None;
@@ -232,6 +275,20 @@ impl Store {
         Ok(())
     }
     pub fn delete(&self, id: &str) -> Result<()> {
+        if self
+            .list()?
+            .profiles
+            .iter()
+            .any(|p| p.jump_ids.iter().any(|h| h == id))
+            || crate::session_management::templates(self)?.iter().any(|t| {
+                t.options
+                    .jump_ids
+                    .as_ref()
+                    .is_some_and(|ids| ids.iter().any(|h| h == id))
+            })
+        {
+            return Err("다른 세션 또는 템플릿의 경유지입니다. 참조를 먼저 수정하세요. 열린 연결은 기존 경로를 유지합니다.".into());
+        }
         use rusqlite::OptionalExtension;
         let mut db = self.0.lock().unwrap();
         let tx = db.transaction().map_err(db_error)?;
@@ -257,13 +314,26 @@ impl Store {
     }
     pub fn group(&self, id: Option<String>, name: Option<String>) -> Result<()> {
         let id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let groups = self.list()?.groups;
+        if name.is_some() && groups.len() >= 100 && !groups.iter().any(|g| g.id == id) {
+            return Err("그룹은 최대 100개입니다.".into());
+        }
+        if name.is_none()
+            && crate::session_management::templates(self)?
+                .iter()
+                .any(|t| t.options.group_id.as_deref() == Some(&id))
+        {
+            return Err(
+                "템플릿에서 참조 중인 그룹입니다. 템플릿의 그룹 설정을 먼저 변경하세요.".into(),
+            );
+        }
         let db = self.0.lock().unwrap();
         if let Some(name) = name {
             if name.trim().is_empty() || name.len() > 100 {
                 return Err("그룹 이름은 1~100자로 입력하세요.".into());
             }
             db.execute(
-                "INSERT INTO groups VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET name=?2",
+                "INSERT INTO groups(id,name) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET name=?2",
                 params![id, name.trim()],
             )
             .map_err(db_error)?;
@@ -289,6 +359,9 @@ pub(crate) mod tests {
             tls_ca_path: String::new(),
             encoding: "utf-8".into(),
             key_path: String::new(),
+            jump_ids: vec![],
+            tags: vec![],
+            sort_order: 0,
             group_id: None,
             favorite: false,
             timeout: 15,
@@ -381,7 +454,7 @@ pub(crate) mod tests {
                 .unwrap()
                 .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
                 .unwrap(),
-            3
+            4
         );
     }
     #[test]

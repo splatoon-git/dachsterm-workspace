@@ -11,7 +11,8 @@ const env = {
   ...process.env,
   PATH: `${process.env.USERPROFILE}\\.cargo\\bin;${process.env.PATH}`,
   DAXTERM_FTP_ROOT: root,
-  DAXTERM_TEST_BINARY: path.join(targetRoot, 'debug', 'daxterm.exe'),
+  DAXTERM_TEST_BINARY:
+    process.env.DAXTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', 'daxterm.exe'),
   DAXTERM_FTP_PASSWORD: randomBytes(32).toString('base64url'),
 };
 let fixture;
@@ -79,8 +80,10 @@ try {
     DAXTERM_FTP_LEGACY_PORT: String(info.ports.legacy),
     DAXTERM_FTP_CA: info.ca,
   };
-  if (!process.argv.includes('--native-only'))
+  if (!process.argv.includes('--native-only') && !process.argv.includes('--queue-native-only'))
     await run(path.join(targetRoot, 'debug/examples/ftp_probe.exe'), [], connectionEnv);
+  if (process.argv.includes('--queue-native-only'))
+    await run(process.execPath, ['scripts/test-transfer-queue-native.mjs'], connectionEnv);
   if (process.argv.includes('--native') || process.argv.includes('--native-only'))
     await run(process.execPath, ['scripts/test-ftp-native.mjs'], connectionEnv);
 } finally {

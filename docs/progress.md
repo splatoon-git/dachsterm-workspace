@@ -1,6 +1,11 @@
 # DaxTerm 구현 진행 현황
 
 - 마지막 갱신: 2026-11-05
+- **6.2 스니펫·6.6 기본 명령/로그 필터/조작표 구현·Windows 실제 통합 검증 완료**: SQLite 스니펫·최종 대상/본문 확인·브로드캐스트 격리, 기본 명령26/필터7·복사·수동/Bash 실행 알림 조작표. 실제 SSH/PowerShell/WSL·독립 창·재시작7개 시나리오 묶음 통과, pageErrors0. [검증 기록](verification/phase-6-2-6.md)과 하단 최종 기록 참조. 물리IME/Mac 및 최신 release/설치본 대기이며 Phase6 전체 환경 검증 완료는 아니다.
+- **6.3 세션 로그·6.7 PodTree 구현 및 Windows 실제 통합 검증 완료 / Mac·선택 환경 대기**: UTF-8 로그/마스킹/회전/자동 기록, 독립 PodTree PTY·고정 context/namespace·조회/운영 모드·종료 정리. 실제 PowerShell/OpenSSH/WSL·Kubernetes 13개 시나리오와 앱 재시작 통과. [검증 기록](verification/phase63-67.md), 하단 최종 기록과 보존 debug를 따른다. 전체 Phase 6 완료는 아니다.
+- **6.4/6.5 구현·Windows 자동 검증 완료 / 외부 실파일·Mac 대기**: 최대4홉 SSH·각 홉 인증/신뢰, 계층/태그/일괄 수정/템플릿, JSON v3·외부 이관 확장. 실제 OpenSSH 1/2홉·혼합 인증·SFTP/편집/모니터링/터널·중간 단절 격리 및 최종 WebView2의 경유 인증/신뢰·PTY·템플릿·일괄 수정·재시작 통과. Rust54개·세션 규칙3개·관련 브라우저8개 통과. debug 산출물과 별도 대기는 [검증 기록](verification/phase-6-jump-sessions.md), 상세는 하단 6.4/6.5를 따른다. 전체 Phase 6 완료는 아니다.
+- **6.1 폴더 전송·영속 큐 구현 / Windows 자동·실제 프로토콜 검증 완료**: SFTP/FTP/FTPS 재귀 업·다운로드, 다중 선택·드롭 확인, 충돌3종, 영속 큐/순서/묶음 제어/상한을 추가했다. 실제 폴더·64MiB 재개/자원·권한·ENOSPC·기존 프로토콜 회귀와 Windows 앱256MiB 강제종료→재인증→UI재개/해시 일치를 확인했다. OS 선택창/물리 드롭·네트워크/절전·Mac은 대기. [6.1 검증](verification/phase-6-1.md)과 하단 최종 기록을 따른다.
+- **Phase 6 구현 진행**: 6.1 폴더 전송·큐 → 6.2 스니펫 → 6.3 세션 로그 → 6.4 점프 호스트 → 6.5 고급 세션 관리·이관 → 6.6 기본 명령·로그 필터·초심자 조작표 → 6.7 PodTree 내장. 범위·검증 기준은 roadmap §16 및 §4.0, 각 작업의 최신 상태는 상단/하단 해당 기록을 따른다. 이전 계획 등록 시점의 미착수 기록은 이력이다.
 - **G.8.6 중단 대응·Windows 자동 검증·배포 산출물 반영 / 수동·환경 검증 대기**: 긴 프레임/pagehide/freeze 정지·입력 해제·저장을 추가했다. 단위215개·브라우저30개, 실제 내장 앱의 무강화2시드 일반 키보드3/6 보스→4/7, 실제 PowerShell/OpenSSH 입력 격리, 저장 실패 종료/재시작 회귀·새 release/NSIS 설치/재설치/제거를 검증했다. 부하/메모리·스냅샷/해시·남은 사람 평가/OS 절전·종료/Mac은 [8.6 검증](verification/survivor-validation.md)과 하단 G.8.6을 따른다. 공유 트리의 병행 콘텐츠/시각 변경은8.6 고정 검증 범위와 구분한다. **G.8 전체 검증 완료는 아니다.**
 - **G.8.5 닥스의 서바이버 게임탭·전투 UI·입력/음향·종료 정산 연결 완료**: 게임 목록에서 쉼터/Canvas/HUD/카드/통과/결과를 사용할 수 있다. 단위209개·브라우저 고유28개(최종 서바이버UI9+기존19)·타입/전체린트/빌드, 최신 Windows debug의 자연 첫 카드·저장 실패 창닫기 차단·재시도·정상 종료/재실행 검증 통과. [UI 검증 기록](verification/survivor-ui.md)과 하단 G.8.5가 최신 상태다. **G.8.6 밸런스·성능·실제PTY/SSH·OS/배포 검증은 남음**, G.8 전체 완료는 아니다.
 - **G.8.4 닥스의 서바이버 영구 성장·저장·쉼터 구현/해당 범위 검증 완료**: 강화4종·무기2종/다시뽑기 해금·실제 지불액 환불, 스키마1·단일 소유권·체크포인트/중단 복구·종료 정산/중복 보상 방지와 독립 쉼터를 추가했다. 전체209개/브라우저8개·타입/린트/빌드, Windows WebView2 저장 API/6초 대기 후 강제 종료 복구 실증 통과. 즉시 전체 프로세스 강제 종료의 디스크 반영 전 손실은 확인된 한계다. [검증 기록](verification/survivor-profile.md) 및 하단 G.8.4가 최신 상태다. 게임 카탈로그/전투/탭 종료 연결은 G.8.5, 밸런스/실환경/산출물은 G.8.6이다.
@@ -50,6 +55,7 @@
 | 3 — 멀티 터미널·터널링 | Windows 검증 완료 | Mac 실기기 대기 |
 | 4 — 모니터링 | Windows 검증 완료 | Mac 실기기 대기 |
 | 5 — 안정화·배포 | 일부 검증 대기 | Windows 자동 검사·설치 통과. 수동 OS·장시간·Mac·서명 대기 |
+| 6 — SSH 작업 기능 확장 | 구현·Windows 자동 검증 반영, 환경 검증 대기 | 6.1~6.7 구현 기록 있음. 외부 실파일·물리IME/OS·장시간·Mac·선택 환경 및 최신 설치본은 각 최종 기록 참조 |
 
 ## 작업별 상태
 
@@ -74,6 +80,8 @@
 | 5.1 | Windows 종합 검증 | 수동 검증 대기 | 최신 자동 회귀 통과. 물리 IME·OS 조작·장시간·절전 대기 |
 | 5.2 | macOS 종합 검증 | 환경 대기 | Mac 실기기 부재. Windows/Mock으로 대체하지 않음 |
 | 5.3 | 설치·릴리스 | Mac·공개 배포 대기 | Windows0.5.0 NSIS 설치/실행/종료/제거 통과. Mac/서명·공증 미실행 |
+| 6.2 | 스니펫 | 구현·Windows 검증 완료 | 실제 SSH/PowerShell/WSL·명시대상·독립 창·재시작, 물리IME/Mac 대기 |
+| 6.6 | 기본 명령·로그 필터·조작표 | 구현·Windows 검증 완료 | Linux 실제 필터와 SSH/WSL Bash 알림·수동 고정·좁은 창, 물리IME/Mac 대기 |
 
 ## 구현과 주요 계약
 
@@ -530,6 +538,15 @@
 - 사용자 요청으로 G.8.4 제품/검사11개 파일과 설계/roadmap/progress/검증4개 문서를 로컬 커밋 대상으로 묶었다. 제목은 `feat(survivor): add persistent upgrades and run settlement`이며 원격 푸시는 하지 않는다. 위 미커밋 표기는 구현 완료 당시 이력이다.
 - 이번 작업은 제품 코드 변경 없이 Git 변경 목록·`git diff --check` 및 스테이징된 diff를 확인한다. 직전 단위209개·브라우저8개·WebView2 저장 실증·타입/린트/빌드 통과 후 제품 코드가 바뀌지 않아 검사를 반복하지 않는다. 남은 ID는 G.8.5~G.8.6이며 다음 첫 행동은 위 G.8.4 인계의 store/session과 실제 게임 탭 수명 연결이다. 강제 종료 저장 한계와 Mac/실제SSH/설치본 등 미실행 범위는 그대로 유지한다.
 
+## 제품명 변경 범위 검토 (2026-11-05, 이름 미확정)
+
+- 사용자 문의: DaxTerm 대신 DachsTerm 명칭의 인상과 수정 범위 검토. 개명 구현 요청은 아니므로 제품 코드·설정·저장 규약은 변경하지 않았다. AGENTS의 세션 종료 기록 요구에 따라 이 검토만 추가한다.
+- 확인: `git grep -il daxterm`/`git grep -in daxterm` 기준 추적85파일/344줄. 표시명 후보는 src/index.html/Tauri 설정/안내문/고지 생성 범위17파일이며 테스트·문서는 추가다. 이는 수정 확정 파일 수가 아니라 검색 결과다.
+- 주의 위치: `src-tauri/tauri.conf.json`의 identifier, `src-tauri/src/credentials.rs`의 OS 저장소 서비스명, `src-tauri/src/vault.rs`의 WRAP_AAD, `settings.rs`의 JSON format, 프런트 localStorage 키. 전체 치환하면 기존 저장 데이터·인증정보·암호문·내보내기 호환성을 잃을 수 있어 보존 또는 명시적 이전이 필요하다.
+- 검증: 문서/코드 검색과 설정 읽기만 실행했다. 이름 변경·빌드·설치·데이터 이전 검사는 미실행(이름 미확정 및 구현 미요청). 기존 진행 중 변경은 보존했다.
+- 남은 ID: 개명 작업 ID는 미부여, 기존 G.8.5/G.8.6 및 환경 검증 대기는 그대로다. 다음 첫 행동: 개명 구현 요청 시 표시명 변경과 내부 식별자 변경 범위를 정하고 기존 데이터 호환 정책부터 확정한다.
+
+
 ## G.8.5 — 닥스의 서바이버 게임탭·Canvas·입력·종료 저장 (2026-11-05, 구현/해당 범위 검증 완료)
 
 - 요청 범위: **8.5만 구현**. roadmap/설계/진행 기록과 실제8.4 session/store 계약을 읽고 연결했다. 작업 중 반영된8.4 커밋 `d62c5bc` 및 별도 제품명 검토 기록은 보존했다. 이번8.5는 커밋·푸시하지 않았다. 기존 release/NSIS를 최신 서바이버 산출물로 표시하지 않는다.
@@ -550,6 +567,17 @@
 
 - 사용자 요청으로 G.8.5 제품/검사/설정13개와 README/설계/roadmap/progress/검증5개, 총18개 파일을 로컬 커밋 대상으로 묶었다. 제목은 `feat(survivor): integrate gameplay UI and safe session lifecycle`이며 원격 푸시는 하지 않는다. 별도 제품명 검토 기록은 이번 커밋에서 제외하고 작업 트리에 보존한다. 위 미커밋 표기는 구현 완료 당시 이력이다.
 - 제품 코드는 직전 단위209개·브라우저 고유28개·타입/린트·최신 debug/WebView2 검증 이후 바뀌지 않아 검사를 반복하지 않았다. 이번에는 변경 목록과 `git diff --cached --check`를 확인한다. 남은 ID는 G.8.6 및 기존 환경 대기이며, 다음 첫 행동은 위8.5 인계의 무강화/서로 다른 시드 일반 입력 플레이 검증이다.
+
+## 2026-11-05 주요 터미널 대비 기능 격차 점검
+
+- 요청: MobaXterm 및 유명 터미널 대비 부족한 기능 평가. 구현 요청으로 확대하지 않았으며 제품 코드/로드맵 범위는 변경하지 않았다.
+- 확인: roadmap/progress/README/session-transfer와 실제 storage.rs, session_transfer.rs, workspace.rs, sftp.rs, ssh.rs/ssh_auth.rs, terminal/session.ts·preferences.ts·TerminalPane.tsx, lib.rs를 대조했다. 외부 비교 근거는 MobaXterm 공식 features/documentation, SecureCRT 공식 features, Termius 공식 제품 페이지다.
+- 현재 강점: SSH/SFTP/FTP·FTPS, 외부 편집·충돌 복구, 분할/SSH 독립 창/멀티 입력, 로컬 PowerShell·WSL, 터널 3종, 모니터링, 12개 테마, 마스터 암호, SSH agent·keyboard-interactive/MFA, 기본 외부 세션 가져오기는 이미 구현되어 있다. 과거 기록의 agent/MFA 미지원은 현재 상태가 아니다.
+- 주요 격차: 점프 호스트/접속 프록시, 폴더 재귀 업·다운로드와 전송 대기열, 스니펫/매크로/스크립팅, 터미널 영구 로그, 고급 세션 이관과 계층형 그룹, 내장 텍스트 편집기. 호스트 CA/GSSAPI·agent forwarding, Serial/Telnet/Zmodem 등은 사용 환경에 따라 필요성을 판단한다. X11/RDP/VNC·클라우드/팀 기능은 기존 의도적 제외 범위다.
+- 추천 후보(새 작업 승인/ID 부여 아님): 폴더 전송·큐 → 스니펫 → 로그 → 점프 호스트. 사내망/경유 접속이 주 사용처라면 점프 호스트를 첫 순위로 올린다. 장시간·절전/네트워크 전환·물리 IME/OS 조작 검증과 서명/업데이트 배포도 기능 추가와 별도로 남는다.
+- 수행 검증: Get-Content/rg로 문서·소스 대조, git status --short로 병행 변경 확인. 기능 테스트·실제 SSH·Mac·장시간 검사는 이번 평가에서 재실행하지 않았으므로 기존 성공/대기 상태를 변경하지 않는다. 기존 병행 게임 변경을 유지했다.
+- 남은 기존 ID: W.3, W.4/5.1, 5.2, 5.3 및 S.1 실환경 대기. 최신 설치본 반영 여부는 병행 G.8.6 산출물 기록을 우선 확인한다. 다음 첫 행동: 사용자 선택 범위에 맞춰 후보의 계약/완료 기준을 정하거나 기존 Windows 수동 체크리스트를 이어간다.
+- 공식 비교 자료: https://mobaxterm.mobatek.net/features.html , https://mobaxterm.mobatek.net/documentation.html , https://www.vandyke.com/products/securecrt/features.html , https://termius.com/ .
 
 ## G.8.6 — 중단 대응·밸런스/성능/실환경·산출물 (2026-11-05, 구현/Windows 자동 검증 반영·수동/환경 검증 대기)
 
@@ -574,6 +602,15 @@
 
 - 종료 전 확인: 변경5문서의 로컬 Markdown 링크61개 실파일 확인·문서/이번 소유 소스/검사17파일 후행공백0개. 이번 소유 추적 파일 `git diff --check` 종료0. 최종 새JS/TS 검사 도구 eslint/prettier 종료0. 보존debug/release/NSIS SHA를 다시 확인했으며 이번 보존debug 검사 프로세스 잔여0개다. 별도 작업의 소스/프로세스/산출물은 종료하거나 되돌리지 않았다.
 
+## Phase 6 로드맵 등록 (2026-11-05)
+
+- 사용자 요청: 폴더 전송·큐, 스니펫, 세션 로그, 점프 호스트, 고급 세션 관리·이관을 로드맵에 추가.
+- 변경 파일: docs/roadmap.md §4.0 작업표 및 §16에 6.1~6.5의 순서·범위·보안/호환 계약·완료 기준 추가. docs/progress.md 상단과 Phase 상태표에 미착수 등록. 기존 Phase 번호·검증 대기와 병행 게임 변경은 유지했다.
+- 검증: git diff --check -- docs/roadmap.md docs/progress.md 통과(줄끝 LF→CRLF 안내만 존재). rg로 §16 및 6.1~6.5 상세 제목/작업표, progress 상태 등록을 확인했다. 문서 변경만 수행해 빌드·기능 테스트·실제 SSH/Mac 검증은 실행하지 않았다.
+- 남은 ID: 6.1~6.5 모두 구현 미착수. 기존 W/Phase 5 및 다른 추가 작업의 남은 상태는 해당 최신 기록을 유지한다.
+- 다음 첫 행동: Phase 6 구현 요청 시 실제 workspace.rs/sftp.rs/ftp.rs의 전송·재개 구조와 큐 저장 방식을 확인하고 6.1의 작업 상태/경로·충돌 계약부터 구현한다. 6.5의 점프 호스트 이관은 6.4 완료 모델을 사용한다.
+
+
 ## G.8.Q1 — 서바이버 지역·적·밀도 품질 개선 (2026-11-05)
 
 - 사용자 요청: 메이저 스테이지 단위 맵 다양성/장식, 적 외형/종류/숫자 개선. 별도 진행 중인 G.8.6의 `SurvivorGame.tsx`, UI/성능/수명/설치 검증 변경과 문서의 Phase6 추가 등은 보존했다. 커밋·푸시하지 않았다.
@@ -595,8 +632,140 @@
 - 코드 변경 없이 기존 단위649개·브라우저13개/최종quality2개·타입/린트·Windows debug/실행 검증 결과를 유지한다. 이번에는 변경 목록·스테이징 범위·`git diff --cached --check`를 확인한다. 설계에 남은 콘텐츠버전3 표기는 현행4로 바로잡았다.
 - 남은 ID와 다음 첫 행동은 위 G.8.Q1 인계와 같다. G.8.6의 사람 평가·최종 소스 장기부하/배포 및 환경 대기는 그대로이며, 이 커밋으로 검증 완료로 바꾸지 않는다.
 
+## Phase 6.6/6.7 명령 도우미·PodTree 계획 추가 (2026-11-05)
+
+- 요청: 주요 명령을 외우지 않고 찾고 완성하는 기능, 제공한 podtree.sh의 내장 가능성 검토. 기존 로드맵 작업을 이어 6.6/6.7 계획을 추가했으며 제품 구현·스크립트 실행은 하지 않았다.
+- 변경: docs/roadmap.md §4.0/§16의 작업표·범위·순서·전체 완료 조건을 6.1~6.7로 확장. 6.6은 오프라인 목적 검색/인자 입력/지원 셸의 인라인 완성 및 6.2 스니펫 연결, 6.7은 버전 고정한 PodTree를 SSH/WSL 전용 PTY에서 여는 방식이다. 네이티브 GUI 재작성은 후속 후보다. docs/progress.md 상단/상태표도 갱신했다.
+- 근거: 제공 경로의 podtree.sh(214596바이트, 소스 버전2.4.0)와 README 및 실행 경로를 정적 확인. Bash4+/kubectl/PTY 의존, context 인자, delete/rollout/cordon 외 exec/debug 등이 read-only 제한 밖임을 확인해 조회 모드 보완을 완료 기준에 포함했다. 폴더/README에서 별도 LICENSE/라이선스 표기를 찾지 못했으며 배포 반입 시 조건 확인을 남겼다. 사용자 원본은 변경하지 않았다. kubectl 공식 completion 문서도 확인했다.
+- 검증: 문서 작업표/상세 제목/상태표의 6.1~6.7 일치와 git diff --check -- docs/roadmap.md docs/progress.md를 확인한다. 기능 테스트·SSH·실제 Kubernetes·스크립트 실행은 계획만 변경하여 미실행이며 실증 완료를 주장하지 않는다.
+- 남은 ID: 6.1~6.7 구현 미착수. 다음 첫 행동: 전체 요청이면 6.1 전송 구조부터, 6.6 지정이면 6.2 입력 계약과 셸 통합 지원 범위부터, 6.7 지정이면 원본 반입 조건·독립 PTY/의존성·조회 모드 경계를 확인한다. 기존 Phase 5 및 병행 작업의 환경 대기는 유지한다.
+
+
+## Phase 6.6 범위 정정 — 기본 명령어 복사 (2026-11-05)
+
+- 사용자 정정에 따라 이전 6.6 목적 검색·명령 생성·자동 완성 계획을 폐기하고 일반 Linux 서버 사용자의 기본 명령 약20~30개를 설명/명령/복사 버튼으로 제공하는 범위로 대체했다. 사용자 직접 붙여넣기 방식이며 입력 폼·AI·셸 통합·자동 실행이 없다. 6.2 사용자 스니펫과 6.7 PodTree는 유지한다.
+- 변경 파일: docs/roadmap.md §4.0/§16/6.6 및 progress 상단. 6.6의 6.2 선행 의존을 제거했다. 과거 계획 추가 기록은 이력으로 보존하며 현재 범위는 이 정정과 roadmap 6.6을 따른다.
+- 검증: git diff --check -- docs/roadmap.md docs/progress.md 및 rg로 작업표/상세 범위/상단 명칭 일치를 확인. 문서만 변경했으므로 제품 테스트·Linux 명령 실행은 하지 않았다.
+- 남은 ID: 6.1~6.7 구현 미착수. 다음 첫 행동: 6.6 구현 요청 시 기본 명령 목록과 간단한 복사 UI를 작성한다. 기존 Phase 전체 요청은 6.1부터 진행한다.
+
 ## G.8.6 로컬 커밋 요청 (2026-11-05)
 
 - 사용자 요청으로8.6의 중단 대응·장기/실환경 검증 도구와 관련 문서만 로컬 커밋 대상으로 묶는다. 제목은 `fix(survivor): pause safely after suspension and verify release`이며 원격 푸시는 하지 않는다. 별도 G.8.Q1 콘텐츠/시각 개선·Phase6 계획·기존 제품명 검토 변경은 작업 트리에 보존하고 이번 커밋에서 제외한다.
 - 공유 문서의8.6 부분만 스테이징하고 diff/공백 검사와 파일 목록을 확인한다. 제품 코드는 직전8.6의 단위215개·브라우저30개·실제 PTY/SSH·일반 입력 두보스·산출물/설치 검증 후 이 커밋 작업에서 바꾸지 않아 기능 검사를 반복 실행하지 않는다. 이번 커밋이 콘텐츠버전4/병행 작업의 검증을 뜻하지 않는다.
 - 남은 ID는 G.8.6의 사람 평가·실제 OS 절전/종료·Mac·장시간 전투 메모리/전경 프레임 간격 및 기존 환경 대기다. 다음 첫 행동은 위8.6 인계의 보존 EXE/manifest 확인 후 남은 수동/환경 검증이다.
+
+
+## Phase 6.6 파일 찾기·로그 필터·조작표 확장 (2026-11-05)
+
+- 사용자 추가 요청: 파일명/설치 경로 찾기, tail/vi 등의 이동·검색·페이지·종료 범례, tail/cat에서 원하는 내용만 쉽게 필터해서 보기. 세 요청을 roadmap 6.6에 함께 반영했다.
+- 변경 파일: docs/roadmap.md §4.0/§16/6.6, docs/progress.md 상단/이번 기록. 기본 복사 UI를 유지하고 포함/제외/OR/AND/앞뒤/실시간 필터 예제와 교체할 부분 강조, vi/vim/less/tail/cat별 조작표를 추가했다. cat/tail에 없는 자체 검색·페이지 기능을 표시하지 않으며 스크롤백/less와 구분한다.
+- 자동 조작표는 지원 셸의 실행 메타데이터 확인 시에만 표시하고 불가 환경은 수동 선택·고정한다. 과거의 “셸 통합 없음”은 자동 완성 관련 범위 제외였으며 이번 제한적 실행 상태 연동은 별도 추가 요청이다. 명령/인증 입력 수집·자동 실행은 하지 않는다.
+- 검증: git diff --check -- docs/roadmap.md docs/progress.md 및 작업표/상세 제목 대조. 이번에는 계획 문서만 변경해 명령 실행·필터/SSH/UI 검사는 하지 않았다. 구현 시 Linux fixture와 실제 PTY로 검증한다.
+- 남은 ID: 6.1~6.7 미착수. 다음 첫 행동: 6.6 지정 시 기본 명령/필터 목록·짧은 키 범례 데이터를 정하고 기존 터미널의 실행 메타데이터 지원 여부를 확인한다. 전체 Phase 6 요청은 6.1부터 진행한다.
+
+
+## Phase 6.3·6.7 구현 진행 (2026-11-05)
+
+- 요청 범위: 세션 로그와 PodTree. 6.1/6.2/6.4/6.5/6.6의 병행 변경을 보존한다.
+- 사용자에게 PodTree 원본의 포함·수정·배포 권한을 확인받았다. 원본은 변경하지 않고 2.4.0-daxterm.1 앱 자산과 출처/해시를 추가했다. 별도 공개 라이선스를 추정하지 않는다.
+- 진행 파일: src-tauri/src/session_log.rs, podtree.rs, ssh/local/lib의 출력·수명 연결, assets/podtree, build/capability 명령 등록, SessionLog/PodTreeDialog/session/TerminalPane/App UI.
+- 현재 검증: TypeScript 통과, 초기 로그 Rust 단위 3개 통과, WSL Bash 구문 검사 통과. 전체 빌드·추가 단위·실제 Windows/SSH/Kubernetes 검증 진행 중으로 완료 아님.
+- 남은 ID: 6.3·6.7 통합 검증/보완 및 Mac 환경 대기. 다음 첫 행동: 최신 빌드로 로그 출력/회전/정지와 PodTree 독립 PTY/조회 차단/종료 정리를 실증한다. 아래 최종 기록이 추가되면 그 결과를 우선한다.
+
+## 6.1 폴더 전송·영속 전송 큐 — 구현/검증 진행 (2026-11-05)
+
+- 요청 범위는 6.1만이다. 공유 트리의 6.3/6.4/6.5/6.7 등 병행 변경은 되돌리거나 이 작업의 구현으로 보고하지 않는다.
+- 제품 파일: `src-tauri/src/transfer_queue.rs`, `sftp.rs`, `ftp.rs`, `workspace.rs`, 명령 등록 `lib.rs`/`build.rs`/`capabilities/main.json`; `src/features/sftp/{FilePanel,TransferQueue}.tsx`, `src/app/workspace.css`. 기존 단일 파일 엔진의 부분 파일 전체 prefix/원본 크기·시각 검증을 재사용한다.
+- 폴더 사전 탐색/빈 폴더/상대 경로, 100개 큐·동시2·묶음10,000항목·전체20,000·깊이64·탐색 경로4MiB·기록16MiB/전체64MiB 상한. 큐 상태/순서/결과를 SQLite settings의 version1 queue 레코드로 저장하고 이전 transfer 레코드를 이행한다. 재시작은 자동 실행하지 않고 같은 프로필/목적지 재인증 후 확인 재개한다. 인증 비밀은 저장하지 않는다.
+- 충돌은 기본 건너뛰기/UUID 접미사 이름 변경/선택 전체에 명시적 덮어쓰기. 같은 폴더는 병합한다. 링크·junction·특수파일/Windows 위험 이름·경로 이탈/중복 목적지를 거부한다. 취소는 부분 파일·빈 폴더 보존, 별도 정리도 기존 파일/완료 파일/빈 폴더는 삭제하지 않는다.
+- SFTP 덮어쓰기는 posix-rename 확장, 로컬은 rename, FTP는 기존 파일 백업→교체→백업 정리와 재시작 복구를 사용한다. 확장 미지원 SFTP는 기존 파일을 보존하며 실패한다. 완료 직전 중단은 저장된 intent와 전체 바이트 비교로 복구한다.
+- 검증 도구: `src-tauri/examples/queue/checks.rs`를 기존 `phase1_probe.rs`/`ftp_probe.rs`에서 실행. `tests/ui/transfer-queue.spec.ts`, `tests/ui/fixtures/queue.{html,tsx}`, 별도 포트의 `tests/queue.config.ts`.
+- 현재 통과: Rust queue 단위5개, `node scripts/run-phase1.mjs` 종료0(신규 폴더·빈 폴더·한글/공백·동명·24작은파일 왕복/충돌3종/64MiB중지·영속복구·재개/동시2·순서·묶음취소·링크거부 + 기존128MiB재개·SSH전체), `playwright test --config tests/queue.config.ts --workers=1` 2개(360/800px·키보드·상태·묶음·새연결ID·결과). 캡처 `target/verification/transfer-queue-{360,800}.png` 확인.
+- 중간 실패/보완: FTP Windows 서버의 기존 파일 위 RNTO 거부→백업 교체 구현. 기존 download prefix 검사 후 ABOR의226/225응답 경합→부분 RETR 검사 세션을 버리고 새 세션에서 REST. FTP/FTPS 신규 큐는 이후 통과했으나 기존 FTPS 파일작업 중550이 한 번 발생해 전체 회귀를 다시 확인한다. 첫 UI fixture는 좁은창의 `.files` 숨김 CSS로 실패했고 독립 fixture 표시를 수정해 통과했다.
+- 전체 clippy/typecheck 중간 실행은 병행 파일의 `TerminalSession.podtree` 타입 및 `session_transfer.rs`/`settings.rs` lint 오류를 보고했다. 이 상태를 전체 통과로 기록하지 않는다.
+- 남은 ID: **6.1 검증 진행** — 최종 소스 Rust/TS/lint/빌드, 실제 권한·ENOSPC·탐색 취소·원본 변경/단절·Windows 실제 앱 재시작/UI·FTP/FTPS 전체 회귀. OS 폴더 선택/물리 드롭과 Mac은 아직 미실행. 다음 첫 행동은 현재 실행 중인 FTP/컴파일 결과 확인 후 `queue/checks.rs`의 실제 SFTP 제한 tmpfs/권한 검사를 실행하고 native 큐 검증을 완료하는 것이다.
+
+
+## Phase 6.4/6.5 구현·Windows 자동 검증 완료 (2026-11-05)
+
+- 요청 범위: 6.4 점프 호스트 → 6.5 세션 관리·이관. 병행 중인 6.1~6.3/6.6~6.7 및 기존 작업 파일을 보존했다. 커밋·푸시·배포하지 않았다.
+- 제품: `src-tauri/src/{routes,ssh,ssh_auth,storage,commands,settings,session_management,session_transfer,config_includes}.rs`, IPC 등록/권한, `src/features/sessions/{SessionForm,JumpEditor,SessionManager,SessionTransfer,model}`, `src/lib/ipc.ts`, App 그룹/검색, terminal/session.ts의 홉별 host-key challenge. SQLite4/JSON3, v1/v2 읽기 유지.
+- 검사: `examples/jump_checks/mod.rs`, phase1_probe와 run-phase1의 `--jumps`, `scripts/test-jump-native.mjs`, model 단위와 session-manager 브라우저 fixture/spec. Schema v3와 기존 v2 파일을 분리 보존했다.
+- 실제 엔진: 최종 `node scripts/run-phase1.mjs --jumps` 종료0. 1/2홉·암호/RSA SHA-2/MFA/OS agent, PTY·SFTP/편집·모니터링·Local/Remote/SOCKS5, 중간 실제 단절/종속 터널 종료·직접 연결 격리·새 셸 재접속, 첫/중간/최종 변경 호스트키 차단·포워딩 handshake timeout·인증 취소·맵 정리 통과. 임시 fixture 제거 확인.
+- 실제 Windows 앱: `DAXTERM_TEST_BINARY`를 보존 EXE로 지정한 `node scripts/run-phase1.mjs --native --jumps --reuse-build` 종료0. 두 host:port의 승인·경유 암호 입력·실제 PTY, v3 참조 재매핑/그룹·일괄 미리보기/적용·템플릿·비밀 제외 복구 내보내기/재시작 통과, pageErrors0. `target/verification/session-management-native.{json,png}`, `session-v3-export.json`에 근거 보존. 직전 빌드의 `--native --session-transfer --reuse-build`도 종료0: 기존 v2/직접 접속·암호 일회용/저장 동의·OS 보관함 재사용/잠금 실패 회귀 통과.
+- 자동 검사: `cargo test -p daxterm --lib -- --test-threads=1` 최종54개, `cargo clippy -p daxterm --all-targets -- -D warnings` 통과. `npx vitest run src/features/sessions --maxWorkers=1` 3개, `npx playwright test tests/ui/session-manager.spec.ts tests/ui/session-transfer.spec.ts --workers=1` 8개, 앞선 navigation 포함 실행11개 통과. `tsc --noEmit`, 관련 프런트 소스 ESLint, 최종 `tauri build --debug --no-bundle` 통과. 기존 번들 크기 경고 유지.
+- 검증 실행 파일: `target/verification/phase64-65/daxterm-debug.exe`, SHA256 `74E4B3566DF94481B8B87117C194A704BAB741552DFF6A51A1979327806C3304`. 병행 빌드가 공유 `target/debug`를 덮어쓸 수 있어 별도로 보존했다. 이후 변경은 Rust 서식/문서 정리이며 release/설치 패키지를 갱신하지 않았다.
+- 최종 정리: 해당 Rust 파일/예제의 `rustfmt --edition 2024 --config skip_children=true --check`와 `git diff --check` 종료0. 보존 EXE 해시를 다시 확인해 native 결과 JSON과 일치했다.
+- 발견/수정: 기존 단일 trust 응답 상태 때문에 두 번째 홉 UI 승인 실패. 상태를 홉마다 재설정하고 일회용 challenge를 검증하도록 변경했다. 빠른 다음 이벤트를 이전 IPC 응답으로 지우지 않게 TS trust 처리도 수정했다.
+- 검사 도구 보완: 단절 후 없어진 control에 ACK를 보내던 probe와 최종 호스트키 검사 중 MFA에 응답하지 않던 probe를 수정해 재실행했다. 이전 도구 실패를 제품의 단절/호스트키 성공 근거로 사용하지 않는다.
+- 남은 ID: **6.5 외부 실파일·제품 버전별 대조 및 OS 파일 선택/저장**, **6.4/6.5 Mac 실기기**, **6.4 실제 OTP/하드웨어 agent·절전/장시간**. 환경/익명화 원본 부재로 미실행이며 합성 어댑터·Windows 검사로 대체하지 않는다. 최신 release/설치 패키지는 별도 5.3 범위다.
+- 다음 첫 행동: 실제 PuTTY/MobaXterm에서 생성한 익명화 설정과 제품 버전을 확보해 `docs/verification/phase-6-jump-sessions.md`의 지원표대로 비교하고 Windows OS 대화상자 가져오기/저장을 확인한다. Mac 환경이 준비되면 동일 경유 시나리오를 실제 실행한다. 요청하지 않은 후속 소번호로 확장하지 않는다.
+
+## 6.1 최종 구현·Windows 자동 검증 (2026-11-05)
+
+- 구현: 재귀 업·다운로드/다중 선택·드롭 확인/빈 폴더, 충돌 건너뛰기·이름 변경·명시적 묶음 덮어쓰기, SQLite 영속 큐·7상태·대기순서·개별/묶음 제어·동시2, 탐색/깊이/기록/결과 IPC 상한, symlink/junction·위험경로·중복 목적지 거부, 파일별 오류/결과, 같은 대상 재인증·완료 항목 보존. 기존 부분 prefix 전체 검증을 재사용한다. 백업/준비 파일을 사용한 교체와 완료 직전 중단 복구를 포함한다.
+- 파일: 위 진행 기록의 제품 파일 및 새 `docs/verification/phase-6-1.md`, README 전송 안내/제약, roadmap 6.1 체크리스트. 검사 `examples/queue/checks.rs`, 기존 OpenSSH/FTP probe 연결, `scripts/test-transfer-queue-native.mjs`/`run-ftp.mjs --queue-native-only`, UI fixture/spec/별도포트 config. 다른 Phase 병행 파일은 보존한다.
+- 정적/단위: `cargo test -p daxterm --lib --locked` **54개 통과**(큐5 포함), `cargo clippy -p daxterm --lib --locked -- -D warnings` 종료0. `node --max-old-space-size=1024 node_modules/vitest/vitest.mjs run src --maxWorkers=1` **41파일652개 통과**. TypeScript·이번 TS/JS ESLint·이번 파일 Prettier·Rust 변경 소스 rustfmt 통과. 공유 트리의 중간 타입/lint 오류는 이후 해소된 상태에서 다시 검사했다. 게임/다른 기능의 최종 실환경 검증으로 대신하지 않는다.
+- 실제 SFTP: `node scripts/run-phase1.mjs` 최종 종료0. 중첩/빈 폴더/한글/공백/동명·24작은파일 왕복, 충돌3종,64MiB재개/저장복구/잘못된프로필 거부,동시2·순서·묶음취소·재시도,링크,탐색중지/10,001개상한/원본변경 거부. chmod권한거부와 컨테이너 전용 제한 tmpfs의 실제 ENOSPC·정리 통과. 기존128MiB부분변조·업다운재개, SSH 인증/호스트키/5연결/터널/편집/모니터링/정리도 통과했다. 확대 검사 중 한 번 전체 실행 실패가 있었고(큐 검사는 통과), 테스트 전체 상한을300→600초로 늘리고 최종 전체를 다시 통과했다. 이전 실패 원인을 시간 초과로 확정해 기록하지 않는다.
+- 실제 FTP/FTPS: `node scripts/run-ftp.mjs` 최종 종료0. 위 공통 큐 시나리오를 FTP/FTPS/CP949 각각 통과했고 기존32MiB 재개/복사·이름 변경·삭제도 통과했다. FTP Windows RNTO 덮어쓰기거부→백업교체, 부분RETR 종료의226/225응답경합/파일핸들잔류→ABOR응답처리 후 새세션REST로 보완했다.
+- UI: `node node_modules/@playwright/test/cli.js test --config tests/queue.config.ts --workers=1` **360/800px 2개 통과**, 키보드/7상태/묶음ID/새연결ID/순서/결과/가로넘침, 스크린샷 확인. 좁은 창 fixture 숨김은 fixture에서 보정했다. 제품의 새 폴더 업로드 버튼 행과 큐 표시 높이도 보완했다.
+- 실제 Windows: debug Tauri 빌드(tsc-b/Vite 포함) 종료0. WebView2+실제FTPS의256MiB전송중 프로세스트리 강제종료→재시작paused/비자동실행→다시암호인증/새연결ID→제품UI재개→6항목완료·전체SHA256일치·기완료파일mtime유지·pageerror0 통과. 처음 발견한 동기 `transfer_control`의 Tokio reactor 부재 panic은 async IPC로 수정하고 재실행해 통과했다. 인증 암호는 세션에 저장하지 않았다. 테스트 앱/fixture 종료·정리.
+- 실행: `DAXTERM_TEST_BINARY=<보존 debug> node scripts/run-ftp.mjs --reuse-build --queue-native-only`. 보존 EXE `target/verification/transfer-queue-artifacts/daxterm-debug.exe`, 증거 `target/verification/transfer-queue-native/{result.json,queue.png}`. 최종 해시는 아래 종료 기록에 남긴다. 공유 target/debug와 release/NSIS는 이 고정본과 구분한다. 이번 작업은 release/설치본을 만들지 않았다.
+- 남은 ID: **6.1 수동/환경 검증** — Windows OS 폴더 다중선택/실제 탐색기 드롭, 실제 네트워크 단절/절전, Mac 빌드·UI·파일 권한·링크·선택/드롭. 원격SFTP tmpfs ENOSPC 외 로컬Windows/FTP 실디스크소진 검사는 미실행. 현재 구현으로6.2~6.7 또는Phase6전체 완료를 선언하지 않는다. 기존 W/Phase5 및 병행 기능의 대기를 유지한다.
+- 다음 첫 행동: 보존EXE와 result.json SHA를 대조하고 OS 폴더선택/물리드롭을 검증한다. 별도 테스트환경에서 네트워크단절/절전 및Mac 항목을 이어 기록한다. 이후 사용자가 지정한 다음 Phase를 확인한다.
+
+- 6.1 종료 확인: 최종 보존 debug SHA256 `7b8ee9f9d52ad698aa6cdc9528365b13d2685cf42076406800e8c35181d665ab`. 최신 큐/오류 결과/복구 정리/버튼 배치/큐 높이를 포함한 Tauri debug 빌드 후 위 EXE를 명시하여 native256MiB 강제종료/재인증/UI재개 검사를 다시 실행해 종료0, pageerror0, 기존완료파일mtime유지/전체해시일치. `result.json`과 EXE SHA 일치를 재확인했다. 최종 OpenSSH 전체 및 FTP/FTPS/CP949 전체 회귀도 종료0. 이번 파일의 diff 공백/포맷/링크 검사와 테스트 프로세스 정리를 수행했으며 남은 수동/환경 ID와 다음 첫 행동은 위 기록과 같다.
+
+
+## 6.3 세션 로그·6.7 PodTree 최종 구현·Windows 검증 (2026-11-05)
+
+- 범위: 요청한6.3/6.7 구현. 병행6.1·6.4/6.5 변경을 유지했으며6.2/6.6으로 확장하지 않았다. PodTree 포함·수정·배포 권한은 사용자가 확인했다. 원본 파일은 변경하지 않고 버전2.4.0/내장2.4.0-daxterm.1·양쪽SHA·저작 고지를 고정했다.
+- 제품 파일: `src-tauri/src/session_log.rs`, `podtree.rs`, `ssh.rs`·`local.rs` PTY 연결, `lib.rs` 앱 종료/IPC, `build.rs`·capabilities·12개 자동 권한 파일, tauri 자산 고지 등록. `src-tauri/assets/podtree/{podtree.sh,provenance.json}`, `licenses/PODTREE_NOTICE.txt`. UI는 `SessionLog.tsx`·`PodTreeDialog.tsx`, `TerminalPane.tsx`·`session.ts`·`App.tsx` 연결. README/roadmap 및 `docs/verification/phase63-67.md`에 계약·사용법·제약을 기록했다.
+- 로그: 출력 생산자에서1회 기록, UTF-8/CP949·ANSI 상태 유지, 유한 비동기 큐, 마스킹·pause 경계·flush, 크기/UTC 날짜 회전·기록별 보관 상한. 이전 기록 폴더의 총 용량은 사용자 관리. 인증 이벤트/입력은 연결하지 않으며 원격 출력의 비밀 자동 제거를 보장하지 않는다. 자동 설정은 명시적으로만 저장하고 마스크는 저장하지 않는다.
+- PodTree: 기존 SSH 또는 WSL/Bash의 별도 PTY, 준비 검사·고정 scope·사용자 전용 임시 배치, 기본 조회·명시적 운영. 조회 모드 exec/debug/capture/forward/raw 경로까지 차단, 운영 부작용/대상 확인, 자식 작업·포워딩·임시 파일 정리. 브로드캐스트/스니펫/세션 로그에서 제외한다.
+- 검사 파일: `scripts/setup-phase63-67.sh`, `tests/podtree-rbac.sh`, `scripts/test-phase63-67-native.mjs`. 실제 독립 kind클러스터/제한RBAC와 일회용 OpenSSH fixture를 사용했다. 테스트 인증정보는 앱 프로필/문서/결과에 저장하지 않았다.
+- 자동 검사: `cargo test -p daxterm --lib`54개, 최종 해당 로그6개/PodTree2개, `cargo clippy -p daxterm --lib -- -D warnings` 통과. `node --max-old-space-size=1024 node_modules/vitest/vitest.mjs run src --maxWorkers=1`41파일652개, TypeScript/관련 ESLint·Prettier, Bash3파일 구문 통과. 최종 Tauri debug 빌드 성공, 기존 Vite 청크 크기 경고 유지.
+- 실제 Windows: 보존 EXE를 지정한 `node scripts/test-phase63-67-native.mjs` 최종13시나리오/종료0/pageErrors0. PowerShell·SSH·WSL 로그, 합성 마스크/ANSI 경계, CP949 분할,3MiB 이상 출력/1MiB 회전/2파일 보관, 창 분리30줄 순서/정확히1회, 자동 기록 재시작/flush. 실제 SSH/WSL Kubernetes 트리·로그·RBAC·빈 목록·이벤트·도구 부재·조회 키 차단·운영 포워딩·resize·탭/부모 연결 종료 정리·current-context 불변. 560px 다크 로그 UI와 크림 PodTree 화면을 확인했다.
+- 보존 산출물: `target/verification/phase63-67-artifacts/daxterm-debug.exe`, SHA256 `4cd220a16efe4d8e54151a98a04391f2f611320c19cb20e89f9546f5aa78b8e4`. 결과 JSON/화면/소스 해시 manifest를 같은 폴더에 보존한다. 공유 target/debug 및 기존 release/NSIS와 구분한다. 테스트 과정의 selector/합성 키·뷰포트 보정 전 실패를 성공 근거로 쓰지 않고 최종 전체 통과 결과만 사용했다.
+- 남은 ID: **6.3 환경 검증** — 실제 디스크 소진/OS 강제 종료·24시간 기록·Mac; **6.7 환경 검증** — 물리 키보드/IME·Mac, GPU/vLLM/DCGM·디버그 이미지/패킷 캡처, 물리 네트워크 단절. 필요한 장비/장시간/선택 환경이 없어 미실행이며 단위 오류 주입이나 기본 트리 성공으로 대신하지 않는다. **5.3** 최신 release/설치본 생성·검증은 이번에 수행하지 않았다.
+- 다음 첫 행동: 보존 EXE/결과 SHA를 대조하고 Windows 물리 키보드·IME와 로그 OS 폴더 선택을 검증한다. 격리 디스크/장시간 및 GPU·Mac 환경이 준비되면 위 대기 항목을 실제 실행하고 기록한다. 기본 Phase6 잔여6.2/6.6은 별도 요청 범위다.
+
+- 6.3/6.7 종료 확인: 보존 EXE와 결과 JSON SHA 일치·증거/소스 해시 manifest 복사 완료. 테스트 전용 kind클러스터·임시 kubeconfig·OpenSSH fixture 정리 완료. 마지막 `git diff --check`와 관련 Prettier·TypeScript·ESLint·Bash 구문 검사 통과. 사용자 기본 kubeconfig/다른 컨테이너는 변경하지 않았다.
+
+## 2026-11-05 다른 세션 구현 완료 여부 확인
+
+- 요청: 다른 세션의 구현 완료 여부 확인. `docs/roadmap.md`·이 문서의 최신 최종 기록, 제품 파일 존재 및 `git -c safe.directory=D:/Work/daxterm-workspace status --short`를 대조했다. 제품 코드는 변경하지 않았다.
+- 확인: 6.1·6.3·6.4·6.5·6.7은 구현과 Windows 검증 완료 기록이 있다. 6.2 스니펫·6.6 기본 명령/로그 필터/조작표는 roadmap 미체크이며 현재 파일 목록에서 구현을 확인하지 못했다. 전체 Phase 6 완료가 아니다.
+- 이번에는 테스트/빌드/실제 SSH를 재실행하지 않았다. 기존 검증 결과는 각 세션 기록을 인용하며, 다른 세션의 실시간 실행 상태는 확인하지 않았다. 현재 Phase 6 변경은 작업 트리에 있고 미커밋 파일이 남아 있다. 최신 Phase 6 release/설치본 반영은 완료 기록이 없다.
+- 남은 ID: 6.2·6.6 구현, 각 기능의 수동/환경 검증, 5.3 최신 release/설치본. 다음 첫 행동: 전체 Phase 6 구현 요청 시 6.2부터 현재 코드를 재확인하고 진행한다.
+
+## 6.2·6.6 구현 및 검증 진행 (2026-11-05)
+
+- 요청 범위: 스니펫과 기본 명령·로그 필터·프로그램 조작표. `snippets.rs`/IPC 등록, `SnippetDialog`/`snippets`, `CommandGuide`/`guideData`/공통 CSS, App/독립 창/TerminalSession 연결을 구현했다.
+- 현재 통과: Rust56개(샌드박스의 기존 symlink 권한 실패 후 권한 허용 재검사), 프런트42파일656개, 브라우저 최초3개, TypeScript·관련 ESLint, all-targets clippy. 실제 Linux 파일/경로·필터·실시간 버퍼링·로그 회전·SIGINT 검사는 통과했다. 최종 UI 확대/현재 소스 빌드·native 재검사 중이다.
+- 실제 Windows 중간 결과: PowerShell 입력만/Enter, 실제 SSH 한글·여러줄·명시대상·브로드캐스트 중복 방지·실패 격리, SSH vi/vim.tiny/less/cat/tail와 WSL cat의 실행 알림/종료·수동 고정·탭 격리를 확인했다. 최종 전체 통과로 기록하지 않는다.
+- 발견한 선행 수정: 독립 창에서 과거 TUI 상태질의 출력 재생 시 xterm 자동 응답이 서버 입력에 섞였다. Broker의 재생 시작/끝 이벤트와 xterm 파싱 완료까지 입력 차단을 추가했으며 정확한 스니펫 전달을 위해 현재 재검증한다. Bash 연동은 파이프/리다이렉션에 알림을 넣지 않고 현재 셸의 prompt 알림으로 Ctrl+C 종료를 처리한다.
+- 검사 파일: `tests/ui/assistant.spec.ts`/fixture/config, `scripts/test-assistant-native.mjs`, `tests/assistant-linux.py`, 기존 OpenSSH 이미지에 less 추가. 인증정보는 기록하지 않는다. 후속 최종 기록을 우선한다.
+- 남은 ID: 6.2/6.6 최종 native·확대UI·최종빌드 검증, 물리IME/Mac 환경 검증. 다음 첫 행동: 수정한 재생 경계가 포함된 앱을 빌드하고 독립 창·재시작까지 native 전체를 재실행한다.
+
+
+## 6.2·6.6 최종 구현·Windows 실제 검증 (2026-11-05)
+
+- 요청한 두 소번호를 구현했다. 다른 세션의6.1·6.3~6.5·6.7 변경은 보존했으며 커밋/푸시/배포하지 않았다. 앞선 “6.2/6.6 미구현” 및 중간 검증 기록은 당시 이력이며 이 최종 기록을 우선한다.
+- 제품: `src-tauri/src/snippets.rs`/IPC·권한3개, `src/features/terminal/{SnippetDialog,snippets,CommandGuide,guideData,assistant.css,session,TerminalPane}`, `src/app/{App,DetachedWindow}.tsx`. SQLite revision 충돌/필드·용량 상한, CRUD·검색·복제·삭제, 자리표시자 임시 값, 정확한 연결ID/소유권·최종본문 확인, 입력만/Enter 실행, 여러줄 확인, 대상별 오류·브로드캐스트 우회. 비밀정보 저장 확인을 요구하며 인증 UI/PodTree는 제외한다.
+- 명령 모음: GNU/Linux 기본26개·필터7개, 강조 부분 교체/순수명령 복사·실패 안내, 인용·실시간/회전 설명. 조작표는 탭별 수동고정/끄기 및 명시적 Bash 실행 알림만 사용한다. 파이프/리다이렉션에 메타데이터를 넣지 않으며 prompt 종료 알림으로 Ctrl+C 후 해제한다. 설정 파일·명령 인자·이력은 앱에서 수집/저장하지 않는다.
+- 선행 수정: 실제 독립 창 검사에서 과거 TUI DSR/DA 질의 출력 재생이 서버에 응답을 다시 보내 스니펫 입력에 섞이는 문제를 발견했다. `ssh::Event::Replay`·`windows::Broker::attach` 시작/끝과 `TerminalSession` xterm 파싱 완료 경계까지 입력/스니펫 준비를 막도록 보완해 최종 실제 검사에서 전달/출력을 통과했다.
+- 최종 자동 검사: `cargo test -p daxterm --lib --locked`56개, `cargo clippy -p daxterm --all-targets --locked -- -D warnings`, 프런트42파일656개, TypeScript·src전체/추가검사 ESLint·해당파일 Prettier/rustfmt 통과. 초기 전체Rust의 기존 큐symlink 검사는 sandbox 권한부족으로 실패했고 권한허용 최종 전체에서 통과했다. Vite 큰청크·Windows 캐시하드링크복사 경고는 유지한다.
+- 브라우저: `node node_modules/@playwright/test/cli.js test --config tests/assistant.config.ts --workers=1` 최종5개 통과. CRUD/복제/삭제/검색/복원·리터럴/한글·여러줄 확인/취소·재접속 거부·명시다중대상/키보드·PodTree제외·복사문자열/실패·360/800px·자동조작표열기/해제/고정유지. 화면4종을 시각 확인했다.
+- 실제: 고정 debug를 `DAXTERM_TEST_BINARY`로 지정한 `node scripts/test-assistant-native.mjs` 최종7개 시나리오 묶음/종료0/pageErrors0. Linux fixture의 파일/경로/고정문자/포함/제외/OR/AND/앞뒤/인용·실시간버퍼링/교체/SIGINT, PowerShell입력만/Enter·실제SSH한글/여러줄·멀티입력중복방지/명시대상/실패격리, SSH vi/vim.tiny/less/cat/tail와 WSLcat 메타데이터·Ctrl+C/고정/탭격리, 독립창스니펫/이전창소유권거부, 실제재시작SQLite복원/임시값미보존/비자동실행을 확인했다.
+- 산출물: `target/verification/phase62-66-artifacts/daxterm-debug.exe`, SHA256 `0f6a92e588eee799267f2e4e62c563899274f7221c4f2f00b4953d737c466155`. `target/verification/assistant-native.json`과 결과/화면 사본을 보존한다. 최종 제품 동작과 동일하며 이후 Rust 서식/문서·검사만 정리했다. 기존release/NSIS를 이번 결과로 대체하지 않는다.
+- 상세/명령/중간실패: `docs/verification/phase-6-2-6.md`. README·roadmap6.2/6.6 구현체크를 갱신했다. 테스트용OpenSSH컨테이너와 앱은 정상/정리 경로로 종료했다. 사용자SSH/WSL설정파일은 변경하지 않았다.
+- 남은 ID: **6.2/6.6 물리WindowsIME·Mac**. 스니펫CP949 실서버는 별도 미실행(기존변환단위/실제UTF-8과 구분). **5.3** 최신release/설치본 생성·설치검증. 나머지 소번호의 외부실파일·장시간·수동/선택환경 대기는 유지한다. **전체Phase6 환경검증 완료를 선언하지 않는다.**
+- 다음 첫 행동: 고정EXE와 결과JSON의SHA를 대조하고 물리IME/Mac검사를 진행한다. 배포 요청 시 최신소스release/설치본을 생성해 실제 설치 검증한다.
+
+## Phase 6 전체 변경 커밋·푸시 요청 (2026-11-06)
+
+- 사용자 요청: 작업 트리 변경 전체를 커밋하고 원격에 푸시한다. 범위는 병행 구현한6.1~6.7 제품/IPC/권한·PodTree자산/고지·테스트·README/roadmap/검증기록과 독립창재생입력 수정이다.
+- 대상: `main` → `origin/main` (`splatoon-git/daxterm-workspace`). 원격 fetch 후 로컬이9커밋 앞서고 원격 단독 변경은0개임을 확인했다. 사용자 전체 푸시 요청에 따라 기존9개 로컬커밋과 이번Phase6커밋을 함께 일반 push한다. 빌드EXE/설치본/target/dist 등 기존 무시 파일은 추가하지 않는다.
+- 이번 확인: `git diff --check` 통과, 신규 자산/고지와 .gitignore 제외 확인. 제품 코드를 추가 변경하지 않아 테스트를 재실행하지 않았으며 직전 최종56개Rust/656개프런트/5개UI/실제Windows7개시나리오 결과는 위 구현 기록을 따른다. Mac·수동·최신설치본 대기를 해소했다고 기록하지 않는다.
+- 이 기록을 포함한 커밋/원격 반영 결과는 Git 이력과 `git status`/`origin/main` 대조로 확인한다. 남은ID는 위6.2/6.6 환경검증 및 기존 각 소번호·5.3과 같다. 다음 구현 행동은 요청 범위에 따라 물리IME/Mac검증 또는 최신release/설치본 생성·검증이다.

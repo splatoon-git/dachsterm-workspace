@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-log-action"
+description = "Enables the log_action command without any pre-configured scope."
+commands.allow = ["log_action"]
+
+[[permission]]
+identifier = "deny-log-action"
+description = "Denies the log_action command without any pre-configured scope."
+commands.deny = ["log_action"]

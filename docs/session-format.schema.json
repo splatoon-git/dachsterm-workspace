@@ -1,19 +1,52 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "DaxTerm Session Exchange v2",
+  "title": "DaxTerm Session Exchange v3",
   "description": "Portable connection metadata. No passwords, private key contents, credential references, or host trust. Runtime validation additionally checks UTF-8 byte lengths and ID references.",
   "type": "object",
   "additionalProperties": false,
   "required": ["format", "version", "profiles", "groups", "tunnels"],
   "properties": {
-    "format": { "const": "daxterm.sessions" },
-    "version": { "const": 2 },
-    "profiles": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/profile" } },
-    "groups": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/group" } },
-    "tunnels": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/tunnel" } }
+    "format": {
+      "const": "daxterm.sessions"
+    },
+    "version": {
+      "const": 3
+    },
+    "profiles": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/profile"
+      }
+    },
+    "groups": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/group"
+      }
+    },
+    "tunnels": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/tunnel"
+      }
+    },
+    "templates": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/template"
+      }
+    }
   },
   "$defs": {
-    "id": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
     "profile": {
       "type": "object",
       "additionalProperties": false,
@@ -30,50 +63,139 @@
         "keepalive"
       ],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
         "host": {
           "type": "string",
           "minLength": 1,
           "maxLength": 253,
           "pattern": "^[^\\s/\\\\,\\[\\]\\u0000-\\u001f\\u007f]+$"
         },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
         "username": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
           "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
         },
-        "auth": { "enum": ["password", "key", "agent", "interactive"] },
-        "protocol": { "enum": ["ssh", "ftp", "ftps"], "default": "ssh" },
-        "tlsCaPath": { "type": "string", "maxLength": 4096, "default": "" },
+        "auth": {
+          "enum": ["password", "key", "agent", "interactive"]
+        },
+        "protocol": {
+          "enum": ["ssh", "ftp", "ftps"],
+          "default": "ssh"
+        },
+        "tlsCaPath": {
+          "type": "string",
+          "maxLength": 4096,
+          "default": ""
+        },
         "encoding": {
           "enum": ["utf-8", "euc-kr", "shift_jis", "gbk", "big5", "windows-1252"],
           "default": "utf-8"
         },
-        "keyPath": { "type": "string", "maxLength": 4096 },
-        "groupId": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }], "default": null },
-        "favorite": { "type": "boolean" },
-        "timeout": { "type": "integer", "minimum": 5, "maximum": 120 },
-        "keepalive": { "type": "integer", "minimum": 5, "maximum": 300 },
+        "keyPath": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "groupId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "favorite": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 120
+        },
+        "keepalive": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 300
+        },
         "lastConnected": {
           "type": ["integer", "null"],
           "description": "Ignored on import; exported as null."
         },
-        "hasSecret": { "const": false, "default": false }
+        "hasSecret": {
+          "const": false,
+          "default": false
+        },
+        "jumpIds": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "sortOrder": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "auth": { "const": "key" } } },
-          "then": { "properties": { "keyPath": { "minLength": 1 } } }
+          "if": {
+            "properties": {
+              "auth": {
+                "const": "key"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "keyPath": {
+                "minLength": 1
+              }
+            }
+          }
         },
         {
           "if": {
             "required": ["protocol"],
-            "properties": { "protocol": { "enum": ["ftp", "ftps"] } }
+            "properties": {
+              "protocol": {
+                "enum": ["ftp", "ftps"]
+              }
+            }
           },
-          "then": { "properties": { "auth": { "const": "password" } } }
+          "then": {
+            "properties": {
+              "auth": {
+                "const": "password"
+              }
+            }
+          }
         }
       ]
     },
@@ -82,8 +204,29 @@
       "additionalProperties": false,
       "required": ["id", "name"],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 100 }
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "parentId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sortOrder": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        }
       }
     },
     "tunnel": {
@@ -91,19 +234,186 @@
       "additionalProperties": false,
       "required": ["id", "profileId", "name", "kind", "port", "host", "targetPort", "autoStart"],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "profileId": { "$ref": "#/$defs/id" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "kind": { "enum": ["local", "remote", "dynamic"] },
-        "port": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "profileId": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "kind": {
+          "enum": ["local", "remote", "dynamic"]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
         "host": {
           "type": "string",
           "minLength": 1,
           "maxLength": 253,
           "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
         },
-        "targetPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "autoStart": { "type": "boolean", "description": "Always reset to false on import." }
+        "targetPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "autoStart": {
+          "type": "boolean",
+          "description": "Always reset to false on import."
+        }
+      }
+    },
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "options"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "port": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "auth": {
+              "anyOf": [
+                {
+                  "enum": ["password", "key", "agent", "interactive"]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "keyPath": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "encoding": {
+              "anyOf": [
+                {
+                  "enum": ["utf-8", "euc-kr", "shift_jis", "gbk", "big5", "windows-1252"],
+                  "default": "utf-8"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 5,
+                  "maximum": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "keepalive": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 5,
+                  "maximum": 300
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "jumpIds": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "maxItems": 4,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/$defs/id"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tags": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "maxItems": 32,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "favorite": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sortOrder": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -2147483648,
+                  "maximum": 2147483647
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "groupId": {
+              "type": ["string", "null"],
+              "maxLength": 200
+            }
+          }
+        }
       }
     }
   }

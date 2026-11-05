@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-podtree-inspect"
+description = "Enables the podtree_inspect command without any pre-configured scope."
+commands.allow = ["podtree_inspect"]
+
+[[permission]]
+identifier = "deny-podtree-inspect"
+description = "Denies the podtree_inspect command without any pre-configured scope."
+commands.deny = ["podtree_inspect"]

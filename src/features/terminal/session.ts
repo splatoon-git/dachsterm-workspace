@@ -1,5 +1,6 @@
 import { TerminalDecoder } from '../../lib/encoding';
 import { directoryFromOsc } from './preferences';
+import { programMetadata, type GuideProgram } from './guideData';
 import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -7,16 +8,24 @@ import { SearchAddon } from '@xterm/addon-search';
 import { call, errorText, type Profile } from '../../lib/ipc';
 import { terminalTheme } from '../../themes/adapters/xterm';
 import type { ThemeDefinition } from '../../themes/contract';
+export type PodTreeLaunch = {
+  location: { kind: 'ssh' | 'local'; id: string };
+  context: string;
+  namespace: string;
+  operational: boolean;
+};
 export type LocalTarget = { id: string; name: string; kind: 'shell' | 'wsl' };
 export type LocalCatalog = { targets: LocalTarget[]; warning: string | null };
 type HostKey = {
   type: 'hostKey';
+  challenge: string;
   host: string;
   port: number;
   algorithm: string;
   fingerprint: string;
 };
 type Event =
+  | { type: 'replay'; active: boolean }
   | AuthPrompt
   | HostKey
   | { type: 'state'; status: string; message: string }
@@ -34,6 +43,10 @@ export type SessionState = {
   hostKey: HostKey | null;
   authPrompt?: AuthPrompt | null;
   directory?: string | null;
+  guideEnabled?: boolean;
+  guideProgram?: GuideProgram | null;
+  guideRun?: number;
+  replaying?: boolean;
 };
 export class TerminalSession {
   followDirectory?: boolean;
@@ -51,12 +64,14 @@ export class TerminalSession {
   private pending = false;
   private inputQueue: string[] = [];
   private sending = false;
+  private replaying = false;
   private channel?: Channel<Event>;
   constructor(
     public profile: Profile,
     theme: ThemeDefinition,
     readonly onConnected: () => void,
     readonly localTarget?: LocalTarget,
+    readonly podtree?: PodTreeLaunch,
   ) {
     this.terminal = new Terminal({
       theme: terminalTheme(theme),
@@ -76,17 +91,31 @@ export class TerminalSession {
       return true;
     };
     this.terminal.parser.registerOscHandler(7, (value) => directory(value, true));
+    this.terminal.parser.registerOscHandler(777, (value) => {
+      const program = programMetadata(value);
+      if (program === undefined) return false;
+      if (this.current.guideEnabled && !this.podtree)
+        this.update({
+          ...this.current,
+          guideProgram: program,
+          guideRun: (this.current.guideRun ?? 0) + 1,
+        });
+      return true;
+    });
     this.terminal.parser.registerOscHandler(1337, (value) =>
       value.startsWith('CurrentDir=') ? directory(value.slice(11), false) : false,
     );
     this.terminal.onData((data) => this.send(data));
     this.terminal.onResize(({ cols, rows }) => {
       if (this.current.status === 'connected' && this.profile.protocol === 'ssh')
-        void call(this.localTarget ? 'local_resize' : 'terminal_resize', {
-          id: this.connectionId,
-          cols,
-          rows,
-        }).catch((e) => this.notice(errorText(e)));
+        void call(
+          this.podtree ? 'podtree_resize' : this.localTarget ? 'local_resize' : 'terminal_resize',
+          {
+            id: this.connectionId,
+            cols,
+            rows,
+          },
+        ).catch((e) => this.notice(errorText(e)));
     });
   }
   subscribe = (listener: () => void) => {
@@ -96,6 +125,9 @@ export class TerminalSession {
     };
   };
   snapshot = () => this.current;
+  enableGuide(enabled: boolean) {
+    this.update({ ...this.current, guideEnabled: enabled, guideProgram: null });
+  }
   private update(state: SessionState) {
     this.current = state;
     this.listeners.forEach((fn) => fn());
@@ -119,42 +151,67 @@ export class TerminalSession {
     this.channel = new Channel<Event>();
     this.bindEvents(this.channel, id);
     try {
-      await (this.localTarget
-        ? call('local_open', {
+      await (this.podtree
+        ? call('podtree_open', {
             id,
-            targetId: this.localTarget.id,
+            launch: this.podtree,
             cols: this.terminal.cols,
             rows: this.terminal.rows,
             onEvent: this.channel,
           })
-        : call('connect', {
-            id,
-            profileId: this.profile.id,
-            expected: this.profile,
-            secret,
-            remember,
-            onEvent: this.channel,
-          }));
+        : this.localTarget
+          ? call('local_open', {
+              id,
+              targetId: this.localTarget.id,
+              cols: this.terminal.cols,
+              rows: this.terminal.rows,
+              onEvent: this.channel,
+            })
+          : call('connect', {
+              id,
+              profileId: this.profile.id,
+              expected: this.profile,
+              secret,
+              remember,
+              onEvent: this.channel,
+            }));
     } catch (e) {
       this.update({ status: 'error', message: errorText(e), hostKey: null });
     } finally {
       this.pending = false;
       if (this.disposed)
-        await call(this.localTarget ? 'local_close' : 'disconnect', { id }).catch(() => {});
+        await call(
+          this.podtree ? 'podtree_close' : this.localTarget ? 'local_close' : 'disconnect',
+          { id },
+        ).catch(() => {});
     }
   }
   private bindEvents(channel: Channel<Event>, id: string) {
     const decoder = new TerminalDecoder(this.profile.encoding ?? 'utf-8');
     channel.onmessage = (event) => {
       if (this.disposed || this.connectionId !== id) return;
-      if (event.type === 'data') {
+      if (event.type === 'replay') {
+        if (event.active) {
+          this.replaying = true;
+          this.update({ ...this.current, replaying: true });
+        } else {
+          // xterm parses asynchronously. Resume input only after the last replay
+          // byte, so historical DSR/DA queries cannot write responses to the shell.
+          this.terminal.write('', () => {
+            if (this.disposed || this.connectionId !== id) return;
+            this.replaying = false;
+            this.update({ ...this.current, replaying: false });
+          });
+        }
+      } else if (event.type === 'data') {
         const text = decoder.push(event.bytes);
         if (text.includes('\uFFFD'))
           this.notice('일부 문자가 대체 표시되었습니다. 세션 인코딩과 서버 로케일을 확인하세요.');
         this.terminal.write(text, () => {
-          void call(this.localTarget ? 'local_ack' : 'terminal_ack', { id, seq: event.seq }).catch(
-            () => {},
-          );
+          void call(
+            this.podtree ? 'podtree_ack' : this.localTarget ? 'local_ack' : 'terminal_ack',
+            { id, seq: event.seq },
+          ).catch(() => {});
         });
       } else if (event.type === 'authPrompt')
         this.update({
@@ -175,14 +232,22 @@ export class TerminalSession {
           message: event.message,
           hostKey: null,
           authPrompt: null,
+          guideProgram: null,
         });
         if (event.status === 'connected') {
           if (this.profile.protocol === 'ssh')
-            void call(this.localTarget ? 'local_resize' : 'terminal_resize', {
-              id,
-              cols: this.terminal.cols,
-              rows: this.terminal.rows,
-            }).catch((e) => this.notice(errorText(e)));
+            void call(
+              this.podtree
+                ? 'podtree_resize'
+                : this.localTarget
+                  ? 'local_resize'
+                  : 'terminal_resize',
+              {
+                id,
+                cols: this.terminal.cols,
+                rows: this.terminal.rows,
+              },
+            ).catch((e) => this.notice(errorText(e)));
           this.onConnected();
         }
       }
@@ -203,18 +268,21 @@ export class TerminalSession {
   }
   async trust(accept: boolean) {
     try {
-      await call('trust_host', { id: this.connectionId, accept });
-      this.update({
-        ...this.current,
-        hostKey: null,
-        message: accept ? '호스트키를 저장하고 있습니다.' : '연결을 취소하고 있습니다.',
-      });
+      const challenge = this.current.hostKey?.challenge;
+      if (!challenge) return;
+      await call('trust_host', { id: this.connectionId, accept, challenge });
+      if (this.current.hostKey?.challenge === challenge)
+        this.update({
+          ...this.current,
+          hostKey: null,
+          message: accept ? '호스트키를 저장하고 있습니다.' : '연결을 취소하고 있습니다.',
+        });
     } catch (e) {
       this.notice(errorText(e));
     }
   }
   send(data: string) {
-    if (this.current.status !== 'connected') return;
+    if (this.current.status !== 'connected' || this.replaying) return;
     // Bound both queued input and individual IPC messages. Preserve surrogate pairs.
     if (this.inputQueue.reduce((n, s) => n + s.length, 0) + data.length > 65536) {
       this.notice('붙여넣기는 한 번에 64KiB 이하로 나누어 주세요.');
@@ -236,10 +304,13 @@ export class TerminalSession {
     this.sending = true;
     try {
       while (this.inputQueue.length && !this.disposed)
-        await call(this.localTarget ? 'local_input' : 'terminal_input', {
-          id: this.connectionId,
-          data: this.inputQueue.shift()!,
-        });
+        await call(
+          this.podtree ? 'podtree_input' : this.localTarget ? 'local_input' : 'terminal_input',
+          {
+            id: this.connectionId,
+            data: this.inputQueue.shift()!,
+          },
+        );
     } catch (e) {
       this.inputQueue = [];
       this.notice(errorText(e));
@@ -248,9 +319,9 @@ export class TerminalSession {
     }
   }
   async disconnect() {
-    await call(this.localTarget ? 'local_close' : 'disconnect', { id: this.connectionId }).catch(
-      (e) => this.notice(errorText(e)),
-    );
+    await call(this.podtree ? 'podtree_close' : this.localTarget ? 'local_close' : 'disconnect', {
+      id: this.connectionId,
+    }).catch((e) => this.notice(errorText(e)));
   }
   async reconnect(secret: string | null, profile: Profile, remember = false) {
     if (!['closed', 'error'].includes(this.current.status)) return;

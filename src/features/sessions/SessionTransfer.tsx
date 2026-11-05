@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { call, desktop, errorText, type Profile, type Group } from '../../lib/ipc';
 import './transfer.css';
+import { importSelection, routeNames } from './model';
+import type { SessionTemplate } from './SessionManager';
 
 type Bundle = {
   format?: string;
@@ -8,10 +10,24 @@ type Bundle = {
   profiles: Profile[];
   groups: Group[];
   tunnels: { profileId: string; [key: string]: unknown }[];
+  templates?: SessionTemplate[];
 };
-type Preview = { bundle: Bundle; warnings: string[]; skipped: number };
+type Preview = {
+  bundle: Bundle;
+  warnings: string[];
+  skipped: number;
+  includePlan?: { token: string; files: string[] } | null;
+};
 
-export function SessionTransfer({ changed }: { changed: () => void }) {
+export function SessionTransfer({
+  changed,
+  profiles: existing = [],
+}: {
+  changed: () => void;
+  profiles?: Profile[];
+}) {
+  const [merges, setMerges] = useState<Record<string, string>>({});
+  const [includeFiles, setIncludeFiles] = useState<string[]>([]);
   const [format, setFormat] = useState('auto');
   const [encoding, setEncoding] = useState('utf-8');
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -19,6 +35,12 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const effective = preview
+    ? importSelection(preview.bundle, [
+        ...selected,
+        ...(preview.bundle.templates ?? []).flatMap((t) => t.options.jumpIds ?? []),
+      ])
+    : null;
   async function choose() {
     setBusy(true);
     setError('');
@@ -27,6 +49,8 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
       const result = await call<Preview | null>('config_preview', { format, encoding });
       if (result) {
         setPreview(result);
+        setMerges({});
+        setIncludeFiles([]);
         setSelected(result.bundle.profiles.map((p) => p.id));
       }
     } catch (e) {
@@ -37,18 +61,21 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
     }
   }
   async function apply() {
-    if (!preview) return;
+    if (!preview || !effective) return;
     setBusy(true);
     setError('');
-    const profiles = preview.bundle.profiles.filter((p) => selected.includes(p.id));
-    const bundle = {
-      ...preview.bundle,
-      profiles,
-      groups: preview.bundle.groups.filter((g) => profiles.some((p) => p.groupId === g.id)),
-      tunnels: preview.bundle.tunnels.filter((t) => selected.includes(t.profileId)),
-    };
+    // Template references are included alongside selected route dependencies.
+    const bundle = effective;
     try {
-      const count = await call<number>('config_apply', { data: JSON.stringify(bundle) });
+      const count = await call<number>('config_apply', {
+        data: JSON.stringify(bundle),
+        merges: Object.entries(merges)
+          .filter(([id, target]) => target && bundle.profiles.some((p) => p.id === id))
+          .map(([sourceId, target]) => ({
+            sourceId,
+            expected: existing.find((p) => p.id === target),
+          })),
+      });
       setPreview(null);
       setSelected([]);
       setMessage(`${count}개 세션을 추가했습니다.`);
@@ -63,15 +90,15 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
     <section className="settings-data session-transfer" aria-label="세션 가져오기와 내보내기">
       <h3>세션 가져오기 · 내보내기</h3>
       <p className="muted">
-        DaxTerm JSON으로 세션·그룹·터널을 보관합니다. PuTTY·MobaXterm·OpenSSH는 기본 SSH 접속 정보를
-        변환합니다. 암호와 개인키 내용은 포함하지 않습니다.
+        DaxTerm JSON으로 세션·계층·태그·경유·템플릿·터널을 보관합니다. 외부 형식의 지원·제외 필드는
+        변환 보고서에서 확인하세요. 암호와 개인키 내용은 포함하지 않습니다.
       </p>
       <div className="transfer-options">
         <label>
           가져올 형식
           <select value={format} disabled={busy} onChange={(e) => setFormat(e.target.value)}>
             <option value="auto">자동 감지</option>
-            <option value="daxterm">DaxTerm JSON (v1 / v2)</option>
+            <option value="daxterm">DaxTerm JSON (v1 / v2 / v3)</option>
             <option value="putty">PuTTY (.reg)</option>
             <option value="mobaxterm">MobaXterm (.mxtsessions / .ini)</option>
             <option value="openssh">OpenSSH (config)</option>
@@ -114,6 +141,52 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
       )}
       {preview && (
         <div className="transfer-preview">
+          {preview.includePlan && (
+            <fieldset>
+              <legend>Include 파일 읽기 승인</legend>
+              <p>
+                선택한 설정 루트의 파일 목록입니다. 필요한 설정 파일만 선택하세요. 중첩 Include도
+                승인한 파일만 읽습니다.
+              </p>
+              {preview.includePlan.files.map((f) => (
+                <label className="checkbox" key={f}>
+                  <input
+                    type="checkbox"
+                    checked={includeFiles.includes(f)}
+                    onChange={(e) =>
+                      setIncludeFiles(
+                        e.target.checked
+                          ? [...includeFiles, f]
+                          : includeFiles.filter((v) => v !== f),
+                      )
+                    }
+                  />
+                  {f}
+                </label>
+              ))}
+              <button
+                disabled={busy || !includeFiles.length}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  try {
+                    const next = await call<Preview>('config_include_preview', {
+                      token: preview.includePlan!.token,
+                      files: includeFiles,
+                    });
+                    setPreview(next);
+                    setSelected(next.bundle.profiles.map((p) => p.id));
+                  } catch (e) {
+                    setError(errorText(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                선택한 Include 읽기 · 변환 미리보기
+              </button>
+            </fieldset>
+          )}
           <h4>
             변환 결과: {preview.bundle.profiles.length}개 · 제외 {preview.skipped}개
           </h4>
@@ -125,8 +198,9 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
             </ul>
           )}
           <p className="muted">
-            기존 세션은 덮어쓰지 않고 새 ID로 추가합니다. 같은 파일을 다시 적용하면 사본이
-            추가됩니다. 터널 자동 시작은 꺼지며, 키 경로는 해당 PC에서 다시 확인하세요.
+            기본은 새 ID로 추가합니다. 동일 접속 대상은 명시적으로 병합할 수 있습니다. 선택한 세션의
+            경유지·상위 그룹·템플릿 참조도 함께 가져옵니다. 터널 자동 시작은 꺼지며, 키 경로는 해당
+            PC에서 다시 확인하세요.
           </p>
           <div className="form-actions">
             <button
@@ -145,7 +219,7 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
                 <label className="transfer-select">
                   <input
                     type="checkbox"
-                    checked={selected.includes(p.id)}
+                    checked={effective?.profiles.some((v) => v.id === p.id) ?? false}
                     disabled={busy}
                     onChange={(e) =>
                       setSelected(
@@ -157,6 +231,9 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
                   />
                   <span>
                     {p.name}
+                    {!selected.includes(p.id) && effective?.profiles.some((v) => v.id === p.id) && (
+                      <small>선택한 세션/템플릿에 필요한 경유지 · 함께 가져옴</small>
+                    )}
                     <small>
                       {p.protocol} · {p.host}:{p.port}
                       {p.groupId
@@ -165,6 +242,59 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
                     </small>
                   </span>
                 </label>
+                <p className="muted">{routeNames(p, preview.bundle.profiles).join(' → ')}</p>
+                <label>
+                  충돌 처리
+                  <select
+                    value={merges[p.id] ?? ''}
+                    onChange={(e) => setMerges({ ...merges, [p.id]: e.target.value })}
+                  >
+                    <option value="">새 ID로 추가</option>
+                    {existing
+                      .filter(
+                        (v) =>
+                          v.protocol === p.protocol &&
+                          v.host === p.host &&
+                          v.port === p.port &&
+                          v.username === p.username &&
+                          v.auth === p.auth &&
+                          v.keyPath === p.keyPath &&
+                          v.tlsCaPath === p.tlsCaPath,
+                      )
+                      .map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}에 병합 · 이름/그룹/태그/연결 옵션 교체
+                        </option>
+                      ))}
+                  </select>
+                  <small>
+                    선택 해제하면 건너뜁니다. 필수 경유 참조는 포함됩니다. 병합은 동일
+                    프로토콜·호스트·포트·계정·인증·키·CA 기준이며 저장 암호를 유지합니다.
+                  </small>
+                </label>
+                {merges[p.id] && (
+                  <ul className="muted" aria-label={`${p.name} 병합 변경 필드`}>
+                    {(
+                      [
+                        ['name', '이름'],
+                        ['groupId', '그룹'],
+                        ['tags', '태그'],
+                        ['jumpIds', '경유 참조'],
+                        ['encoding', '인코딩'],
+                        ['timeout', '타임아웃'],
+                        ['keepalive', 'KeepAlive'],
+                        ['favorite', '즐겨찾기'],
+                        ['sortOrder', '정렬 순서'],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <li key={key}>
+                        {label}:{' '}
+                        {JSON.stringify(existing.find((v) => v.id === merges[p.id])?.[key] ?? null)}{' '}
+                        → {JSON.stringify(p[key] ?? null)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <label>
                   사용자명
                   <input
@@ -202,12 +332,12 @@ export function SessionTransfer({ changed }: { changed: () => void }) {
               className="primary"
               disabled={
                 busy ||
-                !selected.length ||
-                preview.bundle.profiles.some((p) => selected.includes(p.id) && !p.username.trim())
+                (!effective?.profiles.length && !preview.bundle.templates?.length) ||
+                effective?.profiles.some((p) => !p.username.trim())
               }
               onClick={() => void apply()}
             >
-              {selected.length}개 세션 추가
+              {effective?.profiles.length ?? 0}개 세션 추가
             </button>
           </div>
         </div>

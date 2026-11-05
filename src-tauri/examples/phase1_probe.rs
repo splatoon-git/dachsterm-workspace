@@ -1,4 +1,7 @@
-//! Runs the actual product engine against the ephemeral OpenSSH fixture. No secret output.
+#[path = "queue/checks.rs"]
+mod queue_checks;
+// Runs the actual product engine against the ephemeral OpenSSH fixture. No secret output.
+mod jump_checks;
 mod workspace_checks;
 use daxterm::{
     credentials, hostkeys,
@@ -145,6 +148,9 @@ fn base() -> Profile {
         tls_ca_path: String::new(),
         encoding: "utf-8".into(),
         key_path: String::new(),
+        jump_ids: vec![],
+        tags: vec![],
+        sort_order: 0,
         group_id: None,
         favorite: true,
         timeout: 5,
@@ -263,6 +269,9 @@ async fn stress(
     Ok(())
 }
 async fn run() -> Result<()> {
+    if std::env::var_os("DAXTERM_PROBE_JUMPS").is_some() {
+        return jump_checks::run().await;
+    }
     let dir = tempfile::tempdir()?;
     let paths = vec![dir.path().join("known_hosts")];
     let store = Arc::new(Store::open(&dir.path().join("sessions.sqlite3"))?);
@@ -274,6 +283,8 @@ async fn run() -> Result<()> {
     println!("PASS product first-host rejection / no persistence");
     let mut first = begin(&manager, &store, &paths, p.clone(), env("PASSWORD"))?;
     first.connected(true).await?;
+    queue_checks::run(manager.clone(), &first.id, "/tmp").await?;
+    println!("PASS queue suite cleanup");
     workspace_checks::files(manager.clone(), &first.id, &store.list()?.profiles[0].id).await?;
     workspace_checks::services(manager.clone(), &first.id, &p.id).await?;
     first.send("stty -echo; printf '\\nREADY_ONE\\n'\n").await?;
@@ -599,7 +610,7 @@ async fn run() -> Result<()> {
 }
 #[tokio::main]
 async fn main() {
-    if timeout(Duration::from_secs(300 + stress_seconds()), run())
+    if timeout(Duration::from_secs(600 + stress_seconds()), run())
         .await
         .is_ok_and(|r| r.is_ok())
     {

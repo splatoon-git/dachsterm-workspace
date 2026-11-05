@@ -415,7 +415,12 @@ pub(crate) async fn transfer(
                 }
                 check.finish().await.map_err(failure)?;
             } else {
-                ftp.abort(check).await.map_err(failure)?;
+                // Do not reuse a control stream after a partial RETR. Servers may
+                // race a queued 226 with ABOR's 225; a fresh session has no stale
+                // replies to misinterpret as the REST response.
+                let _ = tokio::time::timeout(Duration::from_secs(10), ftp.abort(check)).await;
+                drop(ftp);
+                ftp = session.open().await?;
             }
             ftp.resume_transfer(usize::try_from(offset).map_err(|_| "FTP 오프셋 범위 오류")?)
                 .await

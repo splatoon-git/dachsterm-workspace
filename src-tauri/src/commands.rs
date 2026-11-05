@@ -42,7 +42,8 @@ pub fn save_session(
                 || previous.port != profile.port
                 || previous.username != profile.username
                 || previous.auth != profile.auth
-                || previous.key_path != profile.key_path)
+                || previous.key_path != profile.key_path
+                || previous.jump_ids != profile.jump_ids)
         {
             return Err(
                 "접속 대상이나 인증 방식 변경 시 기존 인증정보를 삭제하거나 새로 입력하세요."
@@ -79,6 +80,7 @@ pub fn delete_session(state: State<AppState>, id: String) -> Result<()> {
 }
 #[tauri::command]
 pub fn duplicate_session(state: State<AppState>, id: String) -> Result<Profile> {
+    let _guard = state.mutation.lock().unwrap();
     let mut p = state.store.profile(&id)?;
     p.id.clear();
     p.name = format!("{} 복사", p.name);
@@ -119,6 +121,7 @@ pub async fn connect(
         || profile.encoding != expected.encoding
         || profile.auth != expected.auth
         || profile.key_path != expected.key_path
+        || profile.jump_ids != expected.jump_ids
     {
         return Err("저장된 연결 대상이 변경되었습니다. 세션 목록에서 다시 연결하세요.".into());
     }
@@ -152,10 +155,26 @@ pub async fn connect(
         .filter(|c| c.profile_id == profile_id && c.auto_start)
         .collect::<Vec<_>>();
     let tunnel_connection = id.clone();
-    state.connections.start(
+    let hops = {
+        let _guard = state.mutation.lock().unwrap();
+        let mut route = crate::routes::resolve(&profile, &state.store.list()?.profiles)?;
+        route.pop();
+        route
+            .into_iter()
+            .map(|p| {
+                let secret = match state.store.secret_ref(&p.id)? {
+                    Some(reference) => Some(state.vault.get(&state.store, &reference)?),
+                    None => None,
+                };
+                Ok((p, secret))
+            })
+            .collect::<Result<Vec<_>>>()?
+    };
+    state.connections.start_route(
         id,
         profile,
         secret,
+        hops,
         state.known_hosts.clone(),
         Arc::new(move |mut event| {
             if let Event::State { status, message } = &mut event {
@@ -174,10 +193,10 @@ pub async fn connect(
                             let _ = state.store.cleanup_credentials();
                             result.map(|_| ())
                         })();
-                        *message = match saved {
-                            Ok(()) => "연결됨 · 암호를 보안 저장소에 저장했습니다.".into(),
-                            Err(_) => "연결됨 · 암호 저장에 실패했습니다. 보관함 잠금·세션 변경 여부를 확인하고 세션 편집에서 다시 저장하세요.".into(),
-                        };
+                        message.push_str(match saved {
+                            Ok(()) => " · 암호를 보안 저장소에 저장했습니다.",
+                            Err(_) => " · 암호 저장에 실패했습니다. 보관함 잠금·세션 변경 여부를 확인하고 세션 편집에서 다시 저장하세요.",
+                        });
                     }
                 } else if matches!(status.as_str(), "closed" | "error") {
                     pending_secret.lock().unwrap().take();
@@ -209,6 +228,7 @@ fn same_credential_target(a: &Profile, b: &Profile) -> bool {
         && a.username == b.username
         && a.auth == b.auth
         && a.key_path == b.key_path
+        && a.jump_ids == b.jump_ids
         && a.tls_ca_path == b.tls_ca_path
 }
 #[tauri::command]
@@ -219,12 +239,44 @@ pub fn disconnect(state: State<AppState>, id: String) -> Result<()> {
     Ok(())
 }
 #[tauri::command]
-pub fn trust_host(state: State<AppState>, id: String, accept: bool) -> Result<()> {
+pub fn trust_host(
+    state: State<AppState>,
+    id: String,
+    accept: bool,
+    challenge: String,
+) -> Result<()> {
     let c = state.connections.control(&id)?;
-    if c.trust.borrow().is_some() {
+    decide_trust(&c.trust, &c.trust_request, &challenge, accept)
+}
+fn decide_trust(
+    trust: &tokio::sync::watch::Sender<Option<bool>>,
+    request: &std::sync::Mutex<Option<String>>,
+    challenge: &str,
+    accept: bool,
+) -> Result<()> {
+    let mut pending = request.lock().unwrap();
+    if pending.as_deref() != Some(challenge) || trust.borrow().is_some() {
         return Err("이미 처리된 호스트키 확인입니다.".into());
     }
-    c.trust.send(Some(accept)).map_err(|_| "연결 종료".into())
+    pending.take();
+    trust.send(Some(accept)).map_err(|_| "연결 종료".into())
+}
+#[cfg(test)]
+mod trust_tests {
+    use super::*;
+    #[test]
+    fn previous_hop_reply_cannot_approve_next_host() {
+        let (trust, _receiver) = tokio::sync::watch::channel(None);
+        let request = std::sync::Mutex::new(Some("hop-one".into()));
+        decide_trust(&trust, &request, "hop-one", true).unwrap();
+        assert!(decide_trust(&trust, &request, "hop-one", true).is_err());
+        trust.send_replace(None);
+        *request.lock().unwrap() = Some("hop-two".into());
+        assert!(decide_trust(&trust, &request, "hop-one", true).is_err());
+        assert_eq!(*trust.borrow(), None);
+        decide_trust(&trust, &request, "hop-two", false).unwrap();
+        assert_eq!(*trust.borrow(), Some(false));
+    }
 }
 #[tauri::command]
 pub fn auth_reply(

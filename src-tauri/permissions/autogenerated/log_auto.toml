@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-log-auto"
+description = "Enables the log_auto command without any pre-configured scope."
+commands.allow = ["log_auto"]
+
+[[permission]]
+identifier = "deny-log-auto"
+description = "Denies the log_auto command without any pre-configured scope."
+commands.deny = ["log_auto"]

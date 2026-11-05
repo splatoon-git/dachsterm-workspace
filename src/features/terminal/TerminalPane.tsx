@@ -5,6 +5,8 @@ import type { TerminalSession } from './session';
 import { errorText } from '../../lib/ipc';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
+import { SessionLog } from './SessionLog';
+import { ProgramGuide } from './CommandGuide';
 import { AuthenticationPrompt } from './AuthenticationPrompt';
 import {
   needsPasteConfirmation,
@@ -217,6 +219,9 @@ export function TerminalPane({
           </button>
         </div>
         <div className="terminal-actions">
+          {!session.podtree && (
+            <SessionLog session={session} connected={state.status === 'connected'} />
+          )}
           <button
             onClick={() => {
               void navigator.clipboard
@@ -373,6 +378,7 @@ export function TerminalPane({
         </div>
       )}
       <div className="live-terminal" ref={host} />
+      {!session.podtree && <ProgramGuide key={session.connectionId} session={session} />}
     </section>
   );
 }

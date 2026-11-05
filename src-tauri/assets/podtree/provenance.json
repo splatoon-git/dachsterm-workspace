@@ -1,0 +1,15 @@
+{
+  "upstreamVersion": "2.4.0",
+  "embeddedVersion": "2.4.0-daxterm.1",
+  "source": "User-provided podtree/podtree.sh",
+  "upstreamSha256": "88db6984b284d477b9f60e501116d0ab51d0396daae1be4e8b11c605d3660ca8",
+  "embeddedSha256": "ad83942ec8c56f75d25b78d3c50b714e2239fdd3e6a4f9f8302baf03982d009f",
+  "permission": "User confirmed authorship or permission to include, modify and distribute on 2026-11-05. No additional public license inferred.",
+  "changes": [
+    "output scope pinned; ignore ~/.podtreerc in embedded mode",
+    "read-only guards for exec/debug/capture/forward/probes/raw; disable proxy metrics",
+    "secure pager; operational target confirmations; child process and staged-file cleanup",
+    "keep noncanonical input between read calls; restore original tty modes on exit",
+    "first synchronous collection uses /dev/null stdin, keeping typed keys for the UI"
+  ]
+}

@@ -22,6 +22,9 @@ use zeroize::Zeroizing;
 #[derive(Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Event {
+    Replay {
+        active: bool,
+    },
     AuthPrompt {
         challenge: String,
         name: String,
@@ -33,6 +36,7 @@ pub enum Event {
         message: String,
     },
     HostKey {
+        challenge: String,
         host: String,
         port: u16,
         algorithm: String,
@@ -63,11 +67,13 @@ pub struct Control {
     pub input: mpsc::Sender<Input>,
     pub stop: watch::Sender<bool>,
     pub trust: watch::Sender<Option<bool>>,
+    pub trust_request: Arc<Mutex<Option<String>>>,
     pub ack: watch::Sender<u64>,
     pub broker: Arc<crate::windows::Broker>,
 }
 #[derive(Default)]
 pub struct Connections {
+    pub logs: Arc<crate::session_log::Logs>,
     pub ftp: Mutex<HashMap<String, Arc<crate::ftp::Session>>>,
     pub entries: Mutex<HashMap<String, Arc<Control>>>,
     pub host_lock: Mutex<()>,
@@ -123,7 +129,29 @@ impl Connections {
         sink: Sink,
         store: Arc<Store>,
     ) -> Result<()> {
+        if !profile.jump_ids.is_empty() {
+            return Err("경유 인증 경로가 필요합니다.".into());
+        }
+        self.start_route(id, profile, secret, vec![], paths, sink, store)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn start_route(
+        self: &Arc<Self>,
+        id: String,
+        profile: Profile,
+        secret: Zeroizing<String>,
+        hops: Vec<(Profile, Option<Zeroizing<String>>)>,
+        paths: Vec<PathBuf>,
+        sink: Sink,
+        store: Arc<Store>,
+    ) -> Result<()> {
         profile.validate()?;
+        let resolved = crate::routes::resolve(&profile, &store.list()?.profiles)?;
+        if resolved.len() != hops.len() + 1
+            || resolved.iter().zip(&hops).any(|(a, b)| a.id != b.0.id)
+        {
+            return Err("경유 경로가 변경되었습니다. 다시 연결하세요.".into());
+        }
         let broker = Arc::new(crate::windows::Broker::new(sink));
         let event_broker = broker.clone();
         let sink: Sink = Arc::new(move |event| event_broker.send(event));
@@ -132,6 +160,7 @@ impl Connections {
         let (stop, mut stopped) = watch::channel(false);
         let host_stop = stopped.clone();
         let (trust, trusted) = watch::channel(None);
+        let trust_request = Arc::new(Mutex::new(None));
         let (ack, acked) = watch::channel(0);
         {
             let mut entries = self.entries.lock().unwrap();
@@ -149,6 +178,7 @@ impl Connections {
                     input,
                     stop,
                     trust,
+                    trust_request: trust_request.clone(),
                     ack,
                     broker,
                 }),
@@ -160,6 +190,7 @@ impl Connections {
                 replies,
                 input: rx,
                 trust: trusted,
+                trust_request,
                 ack: acked,
                 stop: host_stop,
             };
@@ -168,6 +199,7 @@ impl Connections {
                     run(
                         profile,
                         secret,
+                        hops,
                         paths,
                         sink.clone(),
                         channels,
@@ -190,6 +222,10 @@ impl Connections {
                 }
             };
             let result = tokio::select! {biased;_ = stopped.changed()=>Ok(()),r=work=>r};
+            if let Ok(control) = manager.control(&id) {
+                let _ = control.stop.send(true);
+            }
+            manager.logs.close(&id);
             manager.ftp.lock().unwrap().remove(&id);
             manager.live.lock().unwrap().remove(&id);
             manager.entries.lock().unwrap().remove(&id);
@@ -211,6 +247,7 @@ pub struct Host {
     paths: Vec<PathBuf>,
     sink: Sink,
     trust: watch::Receiver<Option<bool>>,
+    trust_request: Arc<Mutex<Option<String>>>,
     manager: Arc<Connections>,
     failure: Arc<Mutex<Option<String>>>,
     waiting: watch::Sender<bool>,
@@ -266,7 +303,10 @@ impl Host {
             return Ok(true);
         }
         let _ = self.waiting.send(true);
+        let challenge = uuid::Uuid::new_v4().to_string();
+        *self.trust_request.lock().unwrap() = Some(challenge.clone());
         (self.sink)(Event::HostKey {
+            challenge,
             host: self.profile.host.clone(),
             port: self.profile.port,
             algorithm: key.algorithm().to_string(),
@@ -279,6 +319,7 @@ impl Host {
                 result.map_err(|_| "호스트키 확인 시간이 초과되었습니다.")?.map_err(|_| "호스트키 확인이 취소되었습니다.")?;
             }
         }
+        self.trust_request.lock().unwrap().take();
         if *self.trust.borrow() != Some(true) {
             return Err("호스트키 신뢰를 거부했습니다.".into());
         }
@@ -321,6 +362,7 @@ struct Receivers {
     replies: mpsc::Receiver<AuthReply>,
     input: mpsc::Receiver<Input>,
     trust: watch::Receiver<Option<bool>>,
+    trust_request: Arc<Mutex<Option<String>>>,
     ack: watch::Receiver<u64>,
     stop: watch::Receiver<bool>,
 }
@@ -328,6 +370,7 @@ struct Receivers {
 async fn run(
     p: Profile,
     secret: Zeroizing<String>,
+    hops: Vec<(Profile, Option<Zeroizing<String>>)>,
     paths: Vec<PathBuf>,
     sink: Sink,
     channels: Receivers,
@@ -339,6 +382,7 @@ async fn run(
         mut replies,
         mut input,
         trust,
+        trust_request,
         mut ack,
         stop,
     } = channels;
@@ -346,6 +390,217 @@ async fn run(
         status: "connecting".into(),
         message: "서버에 연결하고 있습니다.".into(),
     })?;
+    let route_text = hops
+        .iter()
+        .map(|(h, _)| format!("{} ({}:{})", h.name, h.host, h.port))
+        .chain(std::iter::once(format!(
+            "{} ({}:{})",
+            p.name, p.host, p.port
+        )))
+        .collect::<Vec<_>>()
+        .join(" → ");
+    let mut route = hops;
+    route.push((p.clone(), Some(secret)));
+    let mut owned: Vec<SessionGuard> = Vec::new();
+    for (index, (hop, secret)) in route.into_iter().enumerate() {
+        let label = format!("{}홉 {} ({}:{})", index + 1, hop.name, hop.host, hop.port);
+        let base_sink = sink.clone();
+        let context = label.clone();
+        let hop_sink: Sink = Arc::new(move |mut event| {
+            match &mut event {
+                Event::State { message, .. } => *message = format!("{context} · {message}"),
+                Event::AuthPrompt { name, .. } => *name = format!("{context} · {name}"),
+                _ => {}
+            }
+            base_sink(event)
+        });
+        sink(Event::State {
+            status: "connecting".into(),
+            message: format!("{route_text} · {label} 연결 중"),
+        })?;
+        manager.control(&id)?.trust.send_replace(None);
+        let work = async {
+            let stream: Box<dyn Transport> = if let Some(parent) = owned.last() {
+                Box::new(
+                    timeout(
+                        Duration::from_secs(hop.timeout),
+                        parent.channel_open_direct_tcpip(
+                            &hop.host,
+                            hop.port as u32,
+                            "127.0.0.1",
+                            0,
+                        ),
+                    )
+                    .await
+                    .map_err(|_| "경유 채널 시간 초과")?
+                    .map_err(|_| "경유 채널을 열 수 없습니다. 포워딩 허용과 목적지를 확인하세요.")?
+                    .into_stream(),
+                )
+            } else {
+                Box::new(
+                    timeout(
+                        Duration::from_secs(hop.timeout),
+                        tokio::net::TcpStream::connect((hop.host.as_str(), hop.port)),
+                    )
+                    .await
+                    .map_err(|_| "접속 시간이 초과되었습니다.")?
+                    .map_err(|_| "서버에 연결할 수 없습니다.")?,
+                )
+            };
+            let secret = match secret {
+                Some(s) => s,
+                None if matches!(hop.auth.as_str(), "password" | "key") => {
+                    crate::ssh_auth::hop_secret(&hop, &hop_sink, &mut replies).await?
+                }
+                None => Zeroizing::new(String::new()),
+            };
+            // Only the final server can match registered Remote forwarding IDs.
+            let handler_id = if hop.id == p.id {
+                id.clone()
+            } else {
+                format!("{id}-hop-{index}")
+            };
+            authenticate_hop(
+                &hop,
+                secret,
+                stream,
+                &paths,
+                hop_sink,
+                &trust,
+                trust_request.clone(),
+                &stop,
+                &manager,
+                &handler_id,
+                &mut replies,
+            )
+            .await
+        }
+        .await
+        .map_err(|e| format!("{label} 실패 · {e}"))?;
+        owned.push(work);
+    }
+    let session = owned.pop().ok_or("경유 경로가 비어 있습니다.")?;
+    let channel = timeout(Duration::from_secs(p.timeout), async {
+        let channel = session.channel_open_session().await?;
+        channel
+            .request_pty(
+                true,
+                "xterm-256color",
+                80,
+                24,
+                0,
+                0,
+                &[(russh::Pty::VERASE, 127), (russh::Pty::IUTF8, 1)],
+            )
+            .await?;
+        channel.request_shell(true).await?;
+        Ok::<_, russh::Error>(channel)
+    })
+    .await
+    .map_err(|_| "PTY 생성 시간이 초과되었습니다.")?
+    .map_err(|_| "PTY를 열 수 없습니다.")?;
+    manager
+        .live
+        .lock()
+        .unwrap()
+        .insert(id.clone(), Arc::downgrade(session.0.as_ref().unwrap()));
+    manager.logs.register(&id, &p.encoding)?;
+    crate::session_log::auto_start(
+        &manager.logs,
+        &store,
+        &id,
+        &format!("ssh:{}", p.id),
+        &p.name,
+    );
+    store.touch(&p.id)?;
+    sink(Event::State {
+        status: "connected".into(),
+        message: format!("연결됨 · {route_text}"),
+    })?;
+    let (mut reader, writer) = channel.split();
+    let output = async {
+        let mut seq = 0_u64;
+        while let Some(message) = reader.wait().await {
+            match message {
+                ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
+                    for chunk in data.chunks(32768) {
+                        seq += 1;
+                        manager.logs.data(&id, chunk);
+                        sink(Event::Data {
+                            seq,
+                            bytes: chunk.to_vec(),
+                        })?;
+                        timeout(Duration::from_secs(30), async {
+                            while *ack.borrow_and_update() < seq {
+                                ack.changed().await.map_err(|_| "출력 구독 종료")?;
+                            }
+                            Ok::<_, String>(())
+                        })
+                        .await
+                        .map_err(|_| "터미널 렌더링 응답이 없어 연결을 종료했습니다.")??;
+                    }
+                }
+                ChannelMsg::Close => break,
+                _ => {}
+            }
+        }
+        if session.is_closed() {
+            Err("서버 연결이 끊어졌습니다. 재접속하면 새 셸이 열립니다.".into())
+        } else {
+            Ok(())
+        }
+    };
+    let input_loop = async {
+        while let Some(command) = input.recv().await {
+            let result = timeout(Duration::from_secs(10), async {
+                match command {
+                    Input::Data(bytes) => writer.data(&bytes[..]).await,
+                    Input::Resize(cols, rows) => writer.window_change(cols, rows, 0, 0).await,
+                }
+            })
+            .await;
+            if !matches!(result, Ok(Ok(()))) {
+                return Err("터미널 입력 전송에 실패했습니다.".to_string());
+            }
+        }
+        Ok(())
+    };
+    let health = async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            if let Some(i) = owned.iter().position(|h| h.is_closed()) {
+                return Err(format!(
+                    "{}홉 연결이 끊어졌습니다. 종속 연결을 종료합니다. 재접속은 새 셸입니다.",
+                    i + 1
+                ));
+            }
+        }
+    };
+    let result = tokio::select! {r=output=>r,r=input_loop=>r,r=health=>r};
+    let _ = timeout(
+        Duration::from_secs(2),
+        session.disconnect(Disconnect::ByApplication, "closed", "en"),
+    )
+    .await;
+    result
+}
+
+trait Transport: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send {}
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send> Transport for T {}
+#[allow(clippy::too_many_arguments)]
+async fn authenticate_hop(
+    p: &Profile,
+    secret: Zeroizing<String>,
+    stream: Box<dyn Transport>,
+    paths: &[PathBuf],
+    sink: Sink,
+    trust: &watch::Receiver<Option<bool>>,
+    trust_request: Arc<Mutex<Option<String>>>,
+    stop: &watch::Receiver<bool>,
+    manager: &Arc<Connections>,
+    id: &str,
+    replies: &mut mpsc::Receiver<AuthReply>,
+) -> Result<SessionGuard> {
     let mut preferred = russh::Preferred::default();
     preferred.key.to_mut().extend([
         russh::keys::Algorithm::Rsa {
@@ -365,25 +620,23 @@ async fn run(
         ..Default::default()
     };
     let failure = Arc::new(Mutex::new(None));
-    // Socket timeout is independent of the user's 120-second trust decision.
-    let stream = timeout(
-        Duration::from_secs(p.timeout),
-        tokio::net::TcpStream::connect((p.host.as_str(), p.port)),
-    )
-    .await
-    .map_err(|_| "접속 시간이 초과되었습니다.")?
-    .map_err(|_| "서버에 연결할 수 없습니다.")?;
+
     let (waiting_tx, mut waiting) = watch::channel(false);
     let handler = Host {
-        id: id.clone(),
+        id: id.to_string(),
         profile: p.clone(),
-        paths,
+        paths: paths.to_vec(),
         sink: sink.clone(),
-        trust,
+        trust: {
+            let mut t = trust.clone();
+            t.borrow_and_update();
+            t
+        },
         manager: manager.clone(),
+        trust_request,
         failure: failure.clone(),
         waiting: waiting_tx,
-        stop,
+        stop: stop.clone(),
     };
     let handshake = client::connect_stream(Arc::new(config), stream, handler);
     tokio::pin!(handshake);
@@ -491,94 +744,12 @@ async fn run(
     drop(secret);
     let partial = matches!(&auth, russh::client::AuthResult::Failure { partial_success: true, remaining_methods } if remaining_methods.contains(&russh::MethodKind::KeyboardInteractive));
     let accepted = if p.auth == "interactive" && !auth.success() || partial {
-        crate::ssh_auth::interactive(&mut session, &p.username, &sink, &mut replies).await?
+        crate::ssh_auth::interactive(&mut session, &p.username, &sink, replies).await?
     } else {
         auth.success()
     };
     if !accepted {
         return Err("인증이 거부되었습니다. 사용자와 인증정보를 확인하세요.".into());
     }
-    let channel = timeout(Duration::from_secs(p.timeout), async {
-        let channel = session.channel_open_session().await?;
-        channel
-            .request_pty(
-                true,
-                "xterm-256color",
-                80,
-                24,
-                0,
-                0,
-                &[(russh::Pty::VERASE, 127), (russh::Pty::IUTF8, 1)],
-            )
-            .await?;
-        channel.request_shell(true).await?;
-        Ok::<_, russh::Error>(channel)
-    })
-    .await
-    .map_err(|_| "PTY 생성 시간이 초과되었습니다.")?
-    .map_err(|_| "PTY를 열 수 없습니다.")?;
-    manager
-        .live
-        .lock()
-        .unwrap()
-        .insert(id, Arc::downgrade(session.0.as_ref().unwrap()));
-    store.touch(&p.id)?;
-    sink(Event::State {
-        status: "connected".into(),
-        message: "연결됨".into(),
-    })?;
-    let (mut reader, writer) = channel.split();
-    let output = async {
-        let mut seq = 0_u64;
-        while let Some(message) = reader.wait().await {
-            match message {
-                ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
-                    for chunk in data.chunks(32768) {
-                        seq += 1;
-                        sink(Event::Data {
-                            seq,
-                            bytes: chunk.to_vec(),
-                        })?;
-                        timeout(Duration::from_secs(30), async {
-                            while *ack.borrow_and_update() < seq {
-                                ack.changed().await.map_err(|_| "출력 구독 종료")?;
-                            }
-                            Ok::<_, String>(())
-                        })
-                        .await
-                        .map_err(|_| "터미널 렌더링 응답이 없어 연결을 종료했습니다.")??;
-                    }
-                }
-                ChannelMsg::Close => break,
-                _ => {}
-            }
-        }
-        if session.is_closed() {
-            Err("서버 연결이 끊어졌습니다. 재접속하면 새 셸이 열립니다.".into())
-        } else {
-            Ok(())
-        }
-    };
-    let input_loop = async {
-        while let Some(command) = input.recv().await {
-            let result = timeout(Duration::from_secs(10), async {
-                match command {
-                    Input::Data(bytes) => writer.data(&bytes[..]).await,
-                    Input::Resize(cols, rows) => writer.window_change(cols, rows, 0, 0).await,
-                }
-            })
-            .await;
-            if !matches!(result, Ok(Ok(()))) {
-                return Err("터미널 입력 전송에 실패했습니다.".to_string());
-            }
-        }
-        Ok(())
-    };
-    let result = tokio::select! {r=output=>r,r=input_loop=>r};
-    let _ = timeout(
-        Duration::from_secs(2),
-        session.disconnect(Disconnect::ByApplication, "closed", "en"),
-    )
-    .await;
-    result
+    Ok(session)
 }

@@ -27,7 +27,12 @@ import {
   type Group,
 } from '../lib/ipc';
 import { SessionForm } from '../features/sessions/SessionForm';
+import { SessionManager } from '../features/sessions/SessionManager';
+import { groupPath, inGroup, matchesSession } from '../features/sessions/model';
 import { TerminalSession, type LocalCatalog, type LocalTarget } from '../features/terminal/session';
+import { PodTreeDialog } from '../features/terminal/PodTreeDialog';
+import { SnippetDialog } from '../features/terminal/SnippetDialog';
+import { CommandCatalog } from '../features/terminal/CommandGuide';
 import { TerminalPane } from '../features/terminal/TerminalPane';
 import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
@@ -103,6 +108,9 @@ export function App() {
   const [localCatalog, setLocalCatalog] = useState<LocalCatalog>({ targets: [], warning: null });
   const [localLoading, setLocalLoading] = useState(desktop);
   const [localOpen, setLocalOpen] = useState(false);
+  const [podtreeOpen, setPodtreeOpen] = useState(false);
+  const [snippetsOpen, setSnippetsOpen] = useState(false);
+  const [commandsOpen, setCommandsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth > 700 && localStorage.getItem('daxterm.sidebar') !== 'false',
@@ -365,6 +373,10 @@ export function App() {
     return () => window.removeEventListener('keydown', listener, true);
   }, []);
   function requestConnect(profile: Profile, existing?: TerminalSession) {
+    if (existing?.podtree) {
+      setPodtreeOpen(true);
+      return;
+    }
     if (existing?.localTarget) {
       void existing.reconnect(null, profile);
       return;
@@ -395,24 +407,24 @@ export function App() {
   }
   const selected = tabs.find((t) => t.tabId === active);
   const fileSession =
-    !selected?.localTarget && selected?.profile.protocol === 'ssh' ? selected : undefined;
+    !selected?.podtree && !selected?.localTarget && selected?.profile.protocol === 'ssh'
+      ? selected
+      : undefined;
   const profiles = snapshot.profiles
     .filter((p) => {
-      const match = `${p.name} ${p.host} ${p.username}`
-        .toLocaleLowerCase()
-        .includes(query.toLocaleLowerCase());
+      const match = matchesSession(p, query, snapshot.groups);
       return (
         match &&
         (filter === 'all' ||
           (filter === 'favorite' && p.favorite) ||
           (filter === 'recent' && p.lastConnected) ||
-          p.groupId === filter)
+          inGroup(p, filter, snapshot.groups))
       );
     })
     .sort((a, b) =>
       filter === 'recent'
         ? (b.lastConnected ?? 0) - (a.lastConnected ?? 0)
-        : a.name.localeCompare(b.name),
+        : (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name),
     );
   return (
     <div className={`app-shell ${fullscreen ? 'terminal-fullscreen' : ''}`}>
@@ -462,6 +474,9 @@ export function App() {
             <button onClick={() => setHelpOpen(true)}>키보드 단축키</button>
           </ToolbarMenu>
           <ToolbarMenu label="도구">
+            <button onClick={() => setSnippetsOpen(true)}>스니펫</button>
+            <button onClick={() => setCommandsOpen(true)}>기본 명령·로그 필터</button>
+            <button onClick={() => setPodtreeOpen(true)}>PodTree 열기</button>
             <button onClick={() => setTunnelsOpen(true)}>
               <Icon name="tunnel" size={16} />
               터널
@@ -639,7 +654,7 @@ export function App() {
                       aria-current={filter === g.id ? 'page' : undefined}
                       onClick={() => setFilter(g.id)}
                     >
-                      ▱ {g.name}
+                      ▱ {groupPath(g.id, snapshot.groups)}
                     </button>
                     <button aria-label={`${g.name} 그룹 수정`} onClick={() => setGroup(g)}>
                       ⋯
@@ -856,7 +871,11 @@ export function App() {
               <button
                 className="detach-button"
                 aria-label="새 창으로 분리 ↗"
-                disabled={!!selected?.localTarget || selected?.profile.protocol !== 'ssh'}
+                disabled={
+                  !!selected?.podtree ||
+                  !!selected?.localTarget ||
+                  selected?.profile.protocol !== 'ssh'
+                }
                 title={
                   selected?.localTarget
                     ? '로컬 터미널은 현재 창의 탭과 분할을 지원합니다.'
@@ -1065,6 +1084,7 @@ export function App() {
           ))}
           {!activeGame &&
             selected &&
+            !selected.podtree &&
             !selected.localTarget &&
             selected.profile.protocol === 'ssh' && (
               <MonitorBar key={selected.connectionId} session={selected} />
@@ -1084,6 +1104,32 @@ export function App() {
         )}
         <span>DaxTerm · 로컬</span>
       </footer>
+      {snippetsOpen && (
+        <SnippetDialog
+          sessions={tabs}
+          active={activeGame ? undefined : active}
+          close={() => setSnippetsOpen(false)}
+        />
+      )}
+      {commandsOpen && <CommandCatalog close={() => setCommandsOpen(false)} />}
+      {podtreeOpen && (
+        <PodTreeDialog
+          sessions={tabs}
+          locals={localCatalog.targets}
+          close={() => setPodtreeOpen(false)}
+          open={(launch, title) => {
+            const profile = { ...blankProfile(), name: `PodTree · ${launch.context}`, host: title };
+            const session = new TerminalSession(profile, theme, () => {}, undefined, launch);
+            setTabs((previous) => [...previous, session]);
+            setActive(session.tabId);
+            setActiveGame(null);
+            setPreview(false);
+            setPodtreeOpen(false);
+            closeDrawer();
+            void session.connect(null);
+          }}
+        />
+      )}
       {localOpen && (
         <Dialog title="로컬 터미널 열기" close={() => setLocalOpen(false)}>
           <p className="muted">
@@ -1146,7 +1192,7 @@ export function App() {
       )}
       {tunnelsOpen && (
         <TunnelPanel
-          session={selected?.localTarget ? undefined : selected}
+          session={selected?.podtree || selected?.localTarget ? undefined : selected}
           sessions={tabs}
           profiles={snapshot.profiles}
           close={() => setTunnelsOpen(false)}
@@ -1181,13 +1227,15 @@ export function App() {
             </div>
             <p className="muted">패널 배치와 분할 방식은 자동 저장됩니다.</p>
           </section>
-          <SessionTransfer changed={() => void refresh()} />
+          <SessionManager snapshot={snapshot} changed={() => void refresh()} />
+          <SessionTransfer changed={() => void refresh()} profiles={snapshot.profiles} />
           <MaintenancePanel restored={() => void refresh()} />
         </Dialog>
       )}
       {form && (
         <SessionForm
           initial={form}
+          profiles={snapshot.profiles}
           groups={snapshot.groups}
           close={() => setForm(null)}
           saved={(p, start, value) => {
@@ -1238,7 +1286,14 @@ export function App() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void action('save_group', { id: group.id || null, name: group.name }).then((ok) => {
+              void action('group_update', {
+                group: {
+                  ...group,
+                  id: group.id || crypto.randomUUID(),
+                  parentId: group.parentId ?? null,
+                  sortOrder: group.sortOrder ?? 0,
+                },
+              }).then((ok) => {
                 if (ok) setGroup(null);
               });
             }}
@@ -1253,7 +1308,36 @@ export function App() {
                 onChange={(e) => setGroup({ ...group, name: e.target.value })}
               />
             </label>
-            <p className="muted">그룹을 삭제해도 세션은 유지됩니다.</p>
+            <label>
+              상위 그룹
+              <select
+                value={group.parentId ?? ''}
+                onChange={(e) => setGroup({ ...group, parentId: e.target.value || null })}
+              >
+                <option value="">최상위</option>
+                {snapshot.groups
+                  .filter((g) => g.id !== group.id)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {groupPath(g.id, snapshot.groups)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              그룹 정렬 순서
+              <input
+                type="number"
+                value={group.sortOrder ?? 0}
+                onChange={(e) => setGroup({ ...group, sortOrder: Number(e.target.value) })}
+              />
+            </label>
+            <p className="muted">
+              삭제 미리보기: 이 그룹의 직속 세션{' '}
+              {snapshot.profiles.filter((p) => p.groupId === group.id).length}개와 직속 하위 그룹{' '}
+              {snapshot.groups.filter((g) => g.parentId === group.id).length}개를 최상위로
+              이동합니다. 하위 그룹의 세션과 열린 연결은 유지됩니다.
+            </p>
             <div className="form-actions">
               {group.id && (
                 <button

@@ -151,7 +151,7 @@ try {
     const data = await readFile(path.join(directory, 'recovery', file), 'utf8');
     assert(!data.includes(process.env.DAXTERM_PROBE_PASSWORD));
     const parsed = JSON.parse(data);
-    assert.equal(parsed.version, 2);
+    assert.equal(parsed.version, 3);
     assert(parsed.profiles.every((p) => !p.hasSecret));
   }
   stage = 'restart reuses saved credential';

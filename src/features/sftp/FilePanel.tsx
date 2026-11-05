@@ -1,3 +1,4 @@
+import { TransferQueue, type Transfer } from './TransferQueue';
 import { PermissionEditor } from './PermissionEditor';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -17,17 +18,6 @@ type Entry = {
   permissions: number | null;
 };
 type Listing = { path: string; entries: Entry[] };
-type Transfer = {
-  profileId: string;
-  id: string;
-  connectionId: string;
-  name: string;
-  direction: string;
-  done: number;
-  total: number;
-  status: string;
-  message: string;
-};
 type Edit = {
   uploadMode: string;
   id: string;
@@ -98,6 +88,8 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [conflict, setConflict] = useState('skip');
+  const [pendingDrop, setPendingDrop] = useState<string[]>([]);
   const [edits, setEdits] = useState<Edit[]>([]);
   const [trayOpen, setTrayOpen] = useState(true);
   const [operation, setOperation] = useState('');
@@ -189,10 +181,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
             y = event.payload.position.y / window.devicePixelRatio;
           if (!bounds || x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom)
             return;
-          for (const local of event.payload.paths)
-            void call('transfer_drop', { id, path: listing.path, local }).catch((e) =>
-              setError(errorText(e)),
-            );
+          setPendingDrop(event.payload.paths);
         }
       })
       .then((unlisten) => {
@@ -431,11 +420,75 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
           <Icon name="plus" size={14} />
           폴더
         </button>
-        <button onClick={() => void run('transfer_pick', { id, path: listing.path, upload: true })}>
+        <button
+          onClick={() =>
+            void run('transfer_batch', {
+              id,
+              path: listing.path,
+              mode: 'files',
+              paths: [],
+              conflict,
+            })
+          }
+        >
           <Icon name="upload" size={14} />
-          업로드
+          파일 업로드
+        </button>
+        <button
+          onClick={() =>
+            void run('transfer_batch', {
+              id,
+              path: listing.path,
+              mode: 'folders',
+              paths: [],
+              conflict,
+            })
+          }
+        >
+          폴더 업로드
         </button>
       </div>
+      <label className="transfer-policy">
+        새 전송 묶음의 동명 파일
+        <select
+          aria-label="전송 충돌 정책"
+          value={conflict}
+          onChange={(e) => setConflict(e.target.value)}
+        >
+          <option value="skip">건너뛰기</option>
+          <option value="rename">이름 변경</option>
+          <option value="overwrite">덮어쓰기 (선택 전체)</option>
+        </select>
+        <small>같은 이름의 폴더는 합칩니다. 기존 다른 파일은 보존합니다.</small>
+        {conflict === 'overwrite' && (
+          <strong>다음에 선택한 파일·폴더 전체의 동명 파일을 교체합니다.</strong>
+        )}
+      </label>
+      {pendingDrop.length > 0 && (
+        <div className="transfer-policy" role="group" aria-label="드롭 전송 확인">
+          <strong>
+            {pendingDrop.length}개 파일·폴더 → {listing.path}
+          </strong>
+          <span>위 충돌 정책을 드롭한 전체에 적용합니다.</span>
+          <button
+            onClick={async () => {
+              if (
+                await run('transfer_batch', {
+                  id,
+                  path: listing.path,
+                  mode: 'drop',
+                  paths: pendingDrop,
+                  conflict,
+                })
+              )
+                setPendingDrop([]);
+            }}
+          >
+            큐에 추가
+          </button>
+          <button onClick={() => setPendingDrop([])}>취소</button>
+        </div>
+      )}
       <div className="file-toolbar file-clipboard" role="group" aria-label="파일 및 클립보드">
         <button
           disabled={working}
@@ -552,6 +605,20 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
             {selected.permissions?.toString(8).slice(-3)}
           </small>
           <div className="file-toolbar">
+            <button
+              disabled={working}
+              onClick={() =>
+                void run('transfer_batch', {
+                  id,
+                  path: listing.path,
+                  mode: 'download',
+                  paths: selection.map((name) => `${listing.path.replace(/\/$/, '')}/${name}`),
+                  conflict,
+                })
+              }
+            >
+              선택 다운로드
+            </button>
             {selection.length === 1 && !selected.directory && (
               <>
                 <button
@@ -624,49 +691,13 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
             진행 중
           </small>
         </summary>
-        {transfers
-          .filter((t) => t.profileId === session.profile.id)
-          .slice(-8)
-          .map((t) => (
-            <div className="transfer-item" key={t.id}>
-              <span>
-                {t.direction === 'upload' ? '↑' : '↓'} {t.name.split('/').pop()}
-              </span>
-              <small>
-                {t.status === 'running' ? `${bytes(t.done)} / ${bytes(t.total)}` : t.message}
-              </small>
-              {t.status === 'paused' && (
-                <div className="file-toolbar">
-                  <button
-                    onClick={() =>
-                      void run('transfer_resume', {
-                        id: t.id,
-                        connectionId: id,
-                        profileId: session.profile.id,
-                      })
-                    }
-                  >
-                    이어서 {t.direction === 'upload' ? '보내기' : '받기'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setOperation(`discard:${t.id}`);
-                    }}
-                  >
-                    부분 파일 삭제
-                  </button>
-                </div>
-              )}
-              {t.status === 'running' && (
-                <>
-                  <progress value={t.done} max={t.total || 1} />
-                  <button onClick={() => void run('transfer_cancel', { id: t.id })}>
-                    일시 중지
-                  </button>
-                </>
-              )}
-            </div>
-          ))}
+        <TransferQueue
+          transfers={transfers.filter((t) => t.profileId === session.profile.id)}
+          connectionId={id}
+          profileId={session.profile.id}
+          run={run}
+          discard={(id) => setOperation(`discard:${id}`)}
+        />
         {edits
           .filter((e) => e.profileId === session.profile.id)
           .map((edit) => (
@@ -1019,7 +1050,10 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                 </p>
               </>
             ) : operation.startsWith('discard:') ? (
-              <p>이 전송의 부분 파일과 이어쓰기 정보를 삭제합니다. 원본 파일은 유지됩니다.</p>
+              <p>
+                큐 기록과 이 전송의 부분 파일을 삭제합니다. 완료된 파일과 생성한 빈 폴더는
+                보존합니다.
+              </p>
             ) : operation === 'delete' || operation.startsWith('overwrite') ? (
               <p>
                 {operation === 'delete'

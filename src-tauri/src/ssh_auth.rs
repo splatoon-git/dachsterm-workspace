@@ -12,6 +12,41 @@ use russh::{
 use std::time::Duration;
 use tokio::{sync::mpsc, time::timeout};
 
+pub async fn hop_secret(
+    p: &crate::storage::Profile,
+    sink: &Sink,
+    replies: &mut mpsc::Receiver<AuthReply>,
+) -> Result<zeroize::Zeroizing<String>> {
+    let challenge = uuid::Uuid::new_v4().to_string();
+    sink(Event::AuthPrompt {
+        challenge: challenge.clone(),
+        name: "경유지 인증".into(),
+        instructions: "이번 연결에만 사용합니다. 저장하려면 해당 경유 프로필을 편집하세요.".into(),
+        prompts: vec![AuthPrompt {
+            prompt: if p.auth == "key" {
+                "Passphrase (없으면 빈 값)"
+            } else {
+                "비밀번호"
+            }
+            .into(),
+            echo: false,
+        }],
+    })?;
+    timeout(Duration::from_secs(120), async {
+        loop {
+            let mut reply = replies.recv().await.ok_or("경유 인증이 취소되었습니다.")?;
+            if reply.challenge == challenge {
+                if reply.responses.len() != 1 {
+                    return Err("인증 응답 개수 오류".into());
+                }
+                return Ok(zeroize::Zeroizing::new(reply.responses.remove(0)));
+            }
+        }
+    })
+    .await
+    .map_err(|_| "경유 인증 입력 시간 초과")?
+}
+
 pub async fn agent(session: &mut client::Handle<Host>, user: &str) -> Result<client::AuthResult> {
     #[cfg(windows)]
     let mut agent = AgentClient::connect_named_pipe(agent_pipe()).await

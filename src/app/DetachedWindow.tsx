@@ -8,10 +8,14 @@ import { TerminalPane } from '../features/terminal/TerminalPane';
 import { FilePanel } from '../features/sftp/FilePanel';
 import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { Icon } from '../components/Icon';
+import { SnippetDialog } from '../features/terminal/SnippetDialog';
+import { CommandCatalog } from '../features/terminal/CommandGuide';
 export function DetachedWindow({ id }: { id: string }) {
   const theme = useTheme();
   const [session, setSession] = useState<TerminalSession | null>(null);
   const [error, setError] = useState('');
+  const [snippetsOpen, setSnippetsOpen] = useState(false);
+  const [commandsOpen, setCommandsOpen] = useState(false);
   const { fullscreen, toggleFullscreen } = useFullscreen(setError);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -60,6 +64,10 @@ export function DetachedWindow({ id }: { id: string }) {
       </header>
       <div className="workspace-controls detached-controls">
         <BroadcastControl />
+        <button disabled={!session} onClick={() => setSnippetsOpen(true)}>
+          스니펫
+        </button>
+        <button onClick={() => setCommandsOpen(true)}>기본 명령·로그 필터</button>
         <button onClick={() => void toggleFullscreen()}>
           {fullscreen ? '전체화면 종료' : '전체화면'}
         </button>
@@ -81,6 +89,14 @@ export function DetachedWindow({ id }: { id: string }) {
         {filesOpen && <FilePanel session={session ?? undefined} />}
       </div>
       {session && <MonitorBar session={session} />}
+      {session && snippetsOpen && (
+        <SnippetDialog
+          sessions={[session]}
+          active={session.tabId}
+          close={() => setSnippetsOpen(false)}
+        />
+      )}
+      {commandsOpen && <CommandCatalog close={() => setCommandsOpen(false)} />}
     </div>
   );
 }

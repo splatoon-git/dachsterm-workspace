@@ -27,7 +27,9 @@
   "bundle": {
     "active": true,
     "resources": {
-      "../licenses/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt"
+      "../licenses/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt",
+      "../licenses/PODTREE_NOTICE.txt": "PODTREE_NOTICE.txt",
+      "assets/podtree/provenance.json": "podtree-provenance.json"
     },
     "targets": "all",
     "icon": [

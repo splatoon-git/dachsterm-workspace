@@ -15,8 +15,10 @@ const env = {
   ...process.env,
   PATH: `${path.join(homedir(), '.cargo', 'bin')}${path.delimiter}${process.env.PATH}`,
   DAXTERM_PROBE_STRESS_SECONDS: String(stressMinutes * 60),
-  DAXTERM_TEST_BINARY: path.join(targetRoot, 'debug', 'daxterm.exe'),
+  DAXTERM_TEST_BINARY:
+    process.env.DAXTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', 'daxterm.exe'),
 };
+if (process.argv.includes('--jumps')) env.DAXTERM_PROBE_JUMPS = '1';
 function capture(args) {
   const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 30_000 });
   if (result.status !== 0) throw new Error(`Docker operation failed: ${args[0]}`);
@@ -64,6 +66,7 @@ try {
     'daxterm-openssh-probe',
   ]);
   created = true;
+  if (process.argv.includes('--jumps')) env.DAXTERM_PROBE_CONTAINER = name;
   let ready = false;
   for (let i = 0; i < 60; i++) {
     const result = spawnSync('docker', ['exec', name, 'test', '-f', '/run/probe/ready'], {
@@ -128,9 +131,11 @@ try {
     await run(
       process.execPath,
       [
-        process.argv.includes('--session-transfer')
-          ? 'scripts/test-session-transfer-native.mjs'
-          : 'scripts/test-native.mjs',
+        process.argv.includes('--jumps')
+          ? 'scripts/test-jump-native.mjs'
+          : process.argv.includes('--session-transfer')
+            ? 'scripts/test-session-transfer-native.mjs'
+            : 'scripts/test-native.mjs',
       ],
       { timeout: 300_000 },
     );

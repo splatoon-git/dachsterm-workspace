@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-session-templates"
+description = "Enables the session_templates command without any pre-configured scope."
+commands.allow = ["session_templates"]
+
+[[permission]]
+identifier = "deny-session-templates"
+description = "Denies the session_templates command without any pre-configured scope."
+commands.deny = ["session_templates"]

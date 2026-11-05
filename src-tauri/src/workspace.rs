@@ -78,8 +78,8 @@ pub async fn transfer_drop(
     local: String,
 ) -> Result<String> {
     let local = std::path::PathBuf::from(local);
-    if !local.is_file() {
-        return Err("일반 파일만 드롭할 수 있습니다.".into());
+    if !local.is_file() && !local.is_dir() {
+        return Err("파일 또는 폴더를 드롭하세요.".into());
     }
     let name = local
         .file_name()
@@ -95,8 +95,123 @@ pub fn transfer_list(state: State<'_, AppState>) -> Vec<Transfer> {
     state.transfers.list()
 }
 #[tauri::command]
-pub fn transfer_cancel(state: State<'_, AppState>, id: String) {
-    state.transfers.cancel(&id)
+pub fn transfer_cancel(state: State<'_, AppState>, id: String) -> Result<()> {
+    state.transfers.control(&[id], "pause")
+}
+#[tauri::command]
+pub async fn transfer_batch(
+    state: State<'_, AppState>,
+    id: String,
+    path: String,
+    mode: String,
+    paths: Vec<String>,
+    conflict: String,
+) -> Result<Vec<String>> {
+    state.connections.ready(&id)?;
+    if paths.len() > 100 {
+        return Err("선택은 최대 100개입니다.".into());
+    }
+    let upload = mode != "download";
+    let roots = match mode.as_str() {
+        "files" | "folders" => {
+            let dialog = rfd::AsyncFileDialog::new()
+                .set_title("전송 큐에 추가 · 선택 전체에 충돌 정책 적용");
+            let selected = if mode == "files" {
+                dialog.pick_files().await
+            } else {
+                dialog.pick_folders().await
+            };
+            selected
+                .unwrap_or_default()
+                .into_iter()
+                .map(|f| {
+                    crate::transfer_queue::component(&f.file_name())?;
+                    Ok((
+                        format!("{}/{}", path.trim_end_matches('/'), f.file_name()),
+                        f.path().to_path_buf(),
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?
+        }
+        "drop" => paths
+            .into_iter()
+            .map(|p| {
+                let p = std::path::PathBuf::from(p);
+                let name = p
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .ok_or("파일 이름 오류")?;
+                crate::transfer_queue::component(name)?;
+                Ok((format!("{}/{name}", path.trim_end_matches('/')), p))
+            })
+            .collect::<Result<Vec<_>>>()?,
+        "download" => {
+            if paths.is_empty() {
+                return Err("다운로드할 항목을 선택하세요.".into());
+            }
+            let Some(folder) = rfd::AsyncFileDialog::new()
+                .set_title("파일·폴더를 받을 로컬 폴더")
+                .pick_folder()
+                .await
+            else {
+                return Ok(vec![]);
+            };
+            paths
+                .into_iter()
+                .map(|remote| {
+                    let name = remote.rsplit('/').next().ok_or("파일 이름 오류")?;
+                    crate::transfer_queue::component(name)?;
+                    let local = folder.path().join(name);
+                    Ok((remote, local))
+                })
+                .collect::<Result<Vec<_>>>()?
+        }
+        _ => return Err("전송 선택 방식 오류".into()),
+    };
+    if roots.is_empty() {
+        return Ok(vec![]);
+    }
+    state.transfers.enqueue(
+        state.connections.clone(),
+        id,
+        roots,
+        upload,
+        &conflict,
+        false,
+    )
+}
+#[tauri::command]
+pub async fn transfer_control(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+    action: String,
+    connection_id: String,
+    profile_id: String,
+) -> Result<()> {
+    if action == "resume" {
+        if ids.len() > 100 {
+            return Err("최대 100개 작업".into());
+        }
+        for id in ids {
+            state.transfers.resume(
+                state.connections.clone(),
+                id,
+                profile_id.clone(),
+                Some(connection_id.clone()),
+            )?;
+        }
+        Ok(())
+    } else {
+        state.transfers.control(&ids, &action)
+    }
+}
+#[tauri::command]
+pub fn transfer_items(
+    state: State<'_, AppState>,
+    id: String,
+    offset: usize,
+) -> Result<Vec<crate::transfer_queue::Item>> {
+    state.transfers.items(&id, offset)
 }
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]

@@ -14,19 +14,22 @@ pub struct Preview {
     bundle: Bundle,
     warnings: Vec<String>,
     skipped: usize,
+    include_plan: Option<crate::config_includes::Plan>,
 }
 impl Preview {
     fn new() -> Self {
         Self {
             bundle: Bundle {
                 format: Some("daxterm.sessions".into()),
-                version: 2,
+                version: 3,
                 profiles: vec![],
                 groups: vec![],
                 tunnels: vec![],
+                templates: vec![],
             },
             warnings: vec![],
             skipped: 0,
+            include_plan: None,
         }
     }
     fn warn(&mut self, message: &str) {
@@ -48,11 +51,17 @@ impl Preview {
             self.warn("유효하지 않은 호스트·포트·세션 설정을 제외했습니다.");
             return Ok(());
         }
-        if !group.is_empty() {
-            if group.len() > 100 {
-                return Err("그룹 경로는 UTF-8 100바이트 이하여야 합니다.".into());
+        let mut parent = None;
+        for part in group.split(" / ").filter(|v| !v.is_empty()) {
+            if part.len() > 100 {
+                return Err("그룹 이름 길이 초과".into());
             }
-            let id = if let Some(g) = self.bundle.groups.iter().find(|g| g.name == group) {
+            let id = if let Some(g) = self
+                .bundle
+                .groups
+                .iter()
+                .find(|g| g.name == part && g.parent_id == parent)
+            {
                 g.id.clone()
             } else {
                 if self.bundle.groups.len() >= 100 {
@@ -61,12 +70,15 @@ impl Preview {
                 let id = uuid::Uuid::new_v4().to_string();
                 self.bundle.groups.push(Group {
                     id: id.clone(),
-                    name: group.into(),
+                    name: part.into(),
+                    parent_id: parent.clone(),
+                    sort_order: 0,
                 });
                 id
             };
-            p.group_id = Some(id);
+            parent = Some(id);
         }
+        p.group_id = parent;
         if p.username.is_empty() {
             self.warn("사용자명이 없는 세션은 미리보기에서 계정을 입력해야 합니다.");
         }
@@ -86,6 +98,9 @@ fn profile(name: &str, host: &str, username: &str, port: u16) -> Profile {
         tls_ca_path: String::new(),
         encoding: "utf-8".into(),
         key_path: String::new(),
+        jump_ids: vec![],
+        tags: vec![],
+        sort_order: 0,
         group_id: None,
         favorite: false,
         timeout: 15,
@@ -94,7 +109,7 @@ fn profile(name: &str, host: &str, username: &str, port: u16) -> Profile {
         has_secret: false,
     }
 }
-fn decode(data: &[u8], encoding: &str) -> Result<String> {
+pub(crate) fn decode(data: &[u8], encoding: &str) -> Result<String> {
     let (codec, skip) = if data.starts_with(&[0xff, 0xfe]) {
         (encoding_rs::UTF_16LE, 2)
     } else if data.starts_with(&[0xfe, 0xff]) {
@@ -165,6 +180,7 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
                 bundle,
                 warnings: vec![],
                 skipped: 0,
+                include_plan: None,
             }
         }
         "putty" => putty(&text)?,
@@ -180,7 +196,7 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
         c.auto_start = false;
     }
     if format != "daxterm" {
-        result.warn("외부 형식에서는 기본 SSH 접속 정보만 변환합니다. 터널·프록시·점프 호스트·자동 명령·터미널 외형·호스트키 신뢰·암호는 이전하지 않습니다. 적용 전 접속 대상을 확인하세요.");
+        result.warn("외부 형식의 지원 범위는 아래 보고서를 확인하세요. 자동 명령·호스트키 신뢰·암호·개인키 내용은 이전하지 않습니다. 터널 자동 시작은 꺼집니다. 적용 전 접속 대상을 확인하세요.");
     }
     Ok(result)
 }
@@ -197,10 +213,28 @@ pub async fn config_preview(format: String, encoding: String) -> Result<Option<P
         return Ok(None);
     };
     let data = zeroize::Zeroizing::new(crate::maintenance::read_config(file.path())?);
+    if matches!(format.as_str(), "auto" | "openssh") {
+        let text = zeroize::Zeroizing::new(decode(&data, &encoding)?);
+        if text.lines().any(|l| {
+            words(l)
+                .ok()
+                .and_then(|w| w.first().cloned())
+                .is_some_and(|w| w.eq_ignore_ascii_case("include"))
+        }) {
+            let mut preview = Preview::new();
+            preview.include_plan = Some(crate::config_includes::plan(file.path(), &encoding)?);
+            preview.warn("Include 파일 내용을 읽기 전에 목록에서 허용할 파일을 선택하세요. 선택한 파일의 폴더를 루트로 사용하며 상대 경로만 지원합니다. 파일·명령은 실행하지 않습니다.");
+            return Ok(Some(preview));
+        }
+    }
     parse(&data, &format, &encoding).map(Some)
 }
 #[tauri::command]
-pub fn config_apply(state: State<AppState>, data: String) -> Result<usize> {
+pub fn config_apply(
+    state: State<AppState>,
+    data: String,
+    merges: Option<Vec<crate::settings::Merge>>,
+) -> Result<usize> {
     if data.len() > crate::maintenance::MAX_CONFIG_BYTES {
         return Err("설정 파일은 2MiB 이하여야 합니다.".into());
     }
@@ -208,7 +242,8 @@ pub fn config_apply(state: State<AppState>, data: String) -> Result<usize> {
     crate::settings::validate_bundle(&bundle)?;
     let _guard = state.mutation.lock().unwrap();
     crate::maintenance::snapshot(&state.store, &state.directory)?;
-    crate::settings::import(&state.store, data.as_bytes())
+    let mut bundle = bundle;
+    crate::settings::apply_bundle(&state.store, &mut bundle, &merges.unwrap_or_default())
 }
 
 // Registry strings only recognize the escapes emitted by regedit; never execute a .reg file.
@@ -277,7 +312,27 @@ fn putty(text: &str) -> Result<Preview> {
                 } else if !key.is_empty() {
                     out.warn("PuTTY PPK 키는 자동 변환하지 않습니다. PuTTYgen에서 OpenSSH 키로 내보낸 후 세션의 키 경로를 지정하세요.");
                 }
+                let id = p.id.clone();
                 out.add(p, "PuTTY")?;
+                if out.bundle.profiles.iter().any(|p| p.id == id) {
+                    if ["LocalPortAcceptAll", "RemotePortAcceptAll"]
+                        .iter()
+                        .any(|k| !matches!(get(k), "" | "0"))
+                    {
+                        out.warn("PuTTY 비루프백 수신 터널은 제외했습니다.");
+                    } else {
+                        for entry in get("PortForwardings").split(',').filter(|v| !v.is_empty()) {
+                            let (listen, target) = entry.split_once('=').unwrap_or((entry, ""));
+                            let parsed = match listen.as_bytes().first() {
+                                Some(b'L') => tunnel(&id, "local", &listen[1..], Some(target)),
+                                Some(b'R') => tunnel(&id, "remote", &listen[1..], Some(target)),
+                                Some(b'D') => tunnel(&id, "dynamic", &listen[1..], None),
+                                _ => Err("지원하지 않는 PuTTY 터널".into()),
+                            };
+                            match parsed {Ok(c)=>out.bundle.tunnels.push(c),Err(_)=>out.warn("PuTTY 터널의 주소·이스케이프·IPv6 수신 형식을 변환하지 못해 제외했습니다.")}
+                        }
+                    }
+                }
             }
         }
         values.clear();
@@ -303,6 +358,9 @@ fn putty(text: &str) -> Result<Preview> {
                 "PublicKeyFile",
                 "PortNumber",
                 "ProxyMethod",
+                "PortForwardings",
+                "LocalPortAcceptAll",
+                "RemotePortAcceptAll",
             ]
             .contains(&key.as_str())
             {
@@ -318,6 +376,7 @@ fn putty(text: &str) -> Result<Preview> {
         }
     }
     flush(&mut result, name, &mut values)?;
+    result.warn("PuTTY reg: 기본 접속·OpenSSH 키 경로·루프백 L/R/D 터널을 변환합니다. PPK·프록시·명령·신뢰·암호는 이전하지 않습니다. reg에는 제품 버전이 없어 버전별 실제 내보내기 검증이 별도로 필요합니다.");
     Ok(result)
 }
 
@@ -339,7 +398,82 @@ fn moba(text: &str) -> Result<Preview> {
                 continue;
             }
             let port = fields[2].parse().unwrap_or(0);
-            out.add(profile(&name, fields[1], fields[3], port), folder)?;
+            let get = |i: usize| fields.get(i).copied().unwrap_or("");
+            if !matches!(get(19), "" | "0")
+                || !get(35).is_empty()
+                || !get(36).is_empty()
+                || get(27) == "2"
+            {
+                out.skipped += 1;
+                out.warn("MobaXterm 프록시·인증서·SSHv1 조건 세션은 제외했습니다.");
+                continue;
+            }
+            let user = if matches!(fields[3], "<default>" | "<username>") {
+                ""
+            } else {
+                fields[3]
+            };
+            let mut p = profile(&name, fields[1], user, port);
+            fn key(p: &mut Profile, value: &str, out: &mut Preview) {
+                if value.is_empty() {
+                    return;
+                }
+                if value.contains("_CurrentDrive_")
+                    || value.to_ascii_lowercase().ends_with(".ppk")
+                    || value.contains("__")
+                {
+                    out.warn("MobaXterm PPK·드라이브 치환 키 경로는 적용 전에 다시 지정하세요.");
+                } else {
+                    p.auth = "key".into();
+                    p.key_path = value.into();
+                }
+            }
+            key(&mut p, get(14), out);
+            if !get(8).is_empty() {
+                let hosts: Vec<_> = get(8).split("__PIPE__").collect();
+                let ports: Vec<_> = get(9).split("__PIPE__").collect();
+                let users: Vec<_> = get(10).split("__PIPE__").collect();
+                let keys: Vec<_> = get(15).split("__PIPE__").collect();
+                if hosts.len() > 4
+                    || hosts.len() != ports.len()
+                    || hosts.len() != users.len()
+                    || (!get(15).is_empty() && keys.len() != hosts.len())
+                {
+                    out.skipped += 1;
+                    out.warn("MobaXterm 게이트웨이 목록 형식이 달라 세션을 제외했습니다.");
+                    continue;
+                }
+                let mut hops = Vec::new();
+                let mut valid = true;
+                for (i, host) in hosts.iter().enumerate() {
+                    let mut hop = profile(
+                        &format!("{name} 경유 {}", i + 1),
+                        host,
+                        users[i],
+                        ports[i].parse().unwrap_or(0),
+                    );
+                    key(&mut hop, keys.get(i).copied().unwrap_or(""), out);
+                    let mut check = hop.clone();
+                    if check.username.is_empty() {
+                        check.username = "preview".into();
+                    }
+                    if check.validate().is_err() {
+                        valid = false;
+                        break;
+                    }
+                    p.jump_ids.push(hop.id.clone());
+                    hops.push(hop);
+                }
+                if !valid {
+                    out.skipped += 1;
+                    out.warn("유효하지 않은 MobaXterm 게이트웨이 때문에 세션을 제외했습니다.");
+                    continue;
+                }
+                for hop in hops {
+                    out.add(hop, &format!("{folder} / 경유"))?;
+                }
+            }
+            out.add(p, folder)?;
         }
         Ok(())
     }
@@ -361,11 +495,11 @@ fn moba(text: &str) -> Result<Preview> {
         }
     }
     flush(&mut result, &folder, &mut entries)?;
-    result.warn("MobaXterm은 SSH 북마크의 이름·호스트·포트·사용자·폴더만 변환합니다. 키 인증은 세션 편집에서 다시 지정하고, 지원하지 않는 게이트웨이·프록시가 필요한 세션은 선택 해제하세요.");
+    result.warn("MobaXterm SSH 북마크의 폴더 계층·키 경로·게이트웨이를 변환합니다. 공개 형식 관찰 자료(26.3)를 참고한 제한적 어댑터이며 실제 제품 내보내기 버전은 파일에서 확인할 수 없습니다. 별도 터널 섹션·PPK·명령·매크로·신뢰 설정은 제외합니다.");
     Ok(result)
 }
 
-fn words(line: &str) -> Result<Vec<String>> {
+pub(crate) fn words(line: &str) -> Result<Vec<String>> {
     let line = line.trim();
     if line.is_empty() || line.starts_with('#') {
         return Ok(vec![]);
@@ -399,7 +533,7 @@ fn words(line: &str) -> Result<Vec<String>> {
     }
     Ok(out)
 }
-fn glob(pattern: &str, value: &str) -> bool {
+pub(crate) fn glob(pattern: &str, value: &str) -> bool {
     let p = pattern.as_bytes();
     let v = value.as_bytes();
     let (mut i, mut j, mut star, mut retry) = (0, 0, None, 0);
@@ -424,6 +558,45 @@ fn glob(pattern: &str, value: &str) -> bool {
     }
     i == p.len()
 }
+fn endpoint(value: &str) -> Option<(String, u16)> {
+    let (host, port) = value.rsplit_once(':')?;
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let port = port.parse::<u16>().ok()?;
+    (!host.is_empty() && port > 0).then(|| (host.into(), port))
+}
+fn tunnel(
+    profile_id: &str,
+    kind: &str,
+    listen: &str,
+    target: Option<&str>,
+) -> Result<crate::tunnels::Config> {
+    let port = if let Ok(port) = listen.parse::<u16>() {
+        port
+    } else {
+        let (host, port) = endpoint(listen).ok_or("터널 수신 주소 형식 오류")?;
+        if !matches!(host.as_str(), "127.0.0.1" | "localhost") {
+            return Err("루프백 IPv4 터널만 변환합니다.".into());
+        }
+        port
+    };
+    let (host, target_port) = if kind == "dynamic" {
+        ("127.0.0.1".into(), 1)
+    } else {
+        endpoint(target.ok_or("터널 목적지 누락")?).ok_or("터널 목적지 형식 오류")?
+    };
+    let c = crate::tunnels::Config {
+        id: uuid::Uuid::new_v4().to_string(),
+        profile_id: profile_id.into(),
+        name: format!("{kind} {port}"),
+        kind: kind.into(),
+        port,
+        host,
+        target_port,
+        auto_start: false,
+    };
+    c.validate()?;
+    Ok(c)
+}
 fn openssh(text: &str) -> Result<Preview> {
     let mut result = Preview::new();
     let mut lines = vec![];
@@ -435,7 +608,9 @@ fn openssh(text: &str) -> Result<Preview> {
         }
         w[0] = w[0].to_ascii_lowercase();
         if matches!(w[0].as_str(), "match" | "include") {
-            return Err("Match/Include가 있는 OpenSSH 파일은 자동 변환하지 않습니다. 해당 조건을 해석한 별도 Host 설정 파일을 선택하세요. 명령과 외부 파일은 실행·조회하지 않았습니다.".into());
+            return Err(
+                "Match는 지원하지 않습니다. Include는 파일 목록 승인 후에만 읽습니다.".into(),
+            );
         }
         if w.len() < 2 {
             return Err("OpenSSH 지시문에 값이 없습니다.".into());
@@ -452,9 +627,12 @@ fn openssh(text: &str) -> Result<Preview> {
     if aliases.len() > 500 {
         return Err("한 번에 500개까지 가져올 수 있습니다.".into());
     }
+    let declared = aliases.clone();
+    let mut jumps = Vec::new();
     for alias in aliases {
         let mut applies = true;
         let mut values = HashMap::new();
+        let mut forwards = vec![];
         for w in &lines {
             if w[0] == "host" {
                 applies = w[1..]
@@ -465,15 +643,27 @@ fn openssh(text: &str) -> Result<Preview> {
                         .any(|p| p.strip_prefix('!').is_some_and(|p| glob(p, &alias)));
             } else if applies {
                 values.entry(w[0].as_str()).or_insert(w[1].as_str());
+                if matches!(
+                    w[0].as_str(),
+                    "localforward" | "remoteforward" | "dynamicforward"
+                ) {
+                    forwards.push(w);
+                }
             }
         }
         let get = |key: &str| values.get(key).copied().unwrap_or("");
-        if ["proxyjump", "proxycommand"]
-            .iter()
-            .any(|k| !matches!(get(k), "" | "none"))
+        if [
+            "proxycommand",
+            "hostkeyalias",
+            "knownhostscommand",
+            "certificatefile",
+        ]
+        .iter()
+        .any(|k| !matches!(get(k), "" | "none"))
+            || !matches!(get("canonicalizehostname"), "" | "no" | "false")
         {
             result.skipped += 1;
-            result.warn("OpenSSH ProxyJump/ProxyCommand 세션은 지원하지 않아 제외했습니다.");
+            result.warn("ProxyCommand·HostKeyAlias·KnownHostsCommand·CertificateFile·호스트 정규화 조건 세션을 제외했습니다.");
             continue;
         }
         let host = if get("hostname").is_empty() {
@@ -481,9 +671,9 @@ fn openssh(text: &str) -> Result<Preview> {
         } else {
             get("hostname")
         };
-        if host.contains('%') || get("user").contains('%') {
+        if host.contains(['%', '$', '~']) || get("user").contains(['%', '$']) {
             result.skipped += 1;
-            result.warn("OpenSSH 토큰 치환이 필요한 접속 대상을 제외했습니다.");
+            result.warn("토큰 치환이 필요한 접속 대상을 제외했습니다.");
             continue;
         }
         let mut p = profile(
@@ -499,21 +689,216 @@ fn openssh(text: &str) -> Result<Preview> {
         let key = get("identityfile");
         if !matches!(key, "" | "none") {
             if key.contains(['%', '$', '~']) {
-                result.warn("환경변수·홈 경로·토큰이 있는 키 경로는 가져오지 않았습니다. 세션에서 키 파일을 다시 지정하세요.");
+                result.warn("환경변수·홈·토큰 키 경로는 적용 전 다시 지정하세요.");
             } else {
                 p.auth = "key".into();
                 p.key_path = key.into();
             }
         }
+        for (name, slot) in [
+            ("connecttimeout", &mut p.timeout),
+            ("serveraliveinterval", &mut p.keepalive),
+        ] {
+            if let Ok(n) = get(name).parse::<u64>() {
+                if (5..=if name == "connecttimeout" { 120 } else { 300 }).contains(&n) {
+                    *slot = n;
+                } else {
+                    result.warn("타임아웃·KeepAlive 범위를 벗어난 값은 기본값을 사용합니다.");
+                }
+            }
+        }
+        let id = p.id.clone();
+        if !matches!(get("proxyjump"), "" | "none") {
+            jumps.push((id.clone(), get("proxyjump").to_string()));
+        }
         result.add(p, "OpenSSH")?;
+        if result.bundle.profiles.iter().any(|p| p.id == id) {
+            for w in forwards {
+                let kind = match w[0].as_str() {
+                    "localforward" => "local",
+                    "remoteforward" => "remote",
+                    _ => "dynamic",
+                };
+                match tunnel(&id, kind, &w[1], w.get(2).map(String::as_str)) {
+                    Ok(c) => result.bundle.tunnels.push(c),
+                    Err(_) => {
+                        result.warn("Unix 소켓·비루프백·지원하지 않는 터널 형식은 제외했습니다.")
+                    }
+                }
+            }
+        }
     }
-    result.warn("OpenSSH는 명시적 Host 별칭과 Host 패턴의 첫 설정값을 적용합니다. User 미지정 시 직접 입력하며 추가 IdentityFile·인증 지시문·KeepAlive 등 나머지 옵션은 이전하지 않습니다.");
+    for (id, value) in jumps {
+        let mut ids = Vec::new();
+        let mut valid = true;
+        for part in value.split(',') {
+            if ids.len() >= crate::routes::MAX_HOPS || part.contains(['%', '$', '~', '/']) {
+                valid = false;
+                break;
+            }
+            let (user, address) = part
+                .rsplit_once('@')
+                .map_or((None, part), |(u, a)| (Some(u), a));
+            let (host, port) = if address.starts_with('[') || address.matches(':').count() == 1 {
+                match endpoint(address) {
+                    Some((h, p)) => (h, Some(p)),
+                    None => {
+                        valid = false;
+                        break;
+                    }
+                }
+            } else {
+                (address.to_string(), None)
+            };
+            let known = result
+                .bundle
+                .profiles
+                .iter()
+                .find(|p| p.name == host)
+                .cloned();
+            if known.is_none() && declared.contains(&host) {
+                valid = false;
+                break;
+            }
+            if let Some(p) = &known
+                && user.is_none()
+                && port.is_none()
+            {
+                ids.push(p.id.clone());
+                continue;
+            }
+            let mut hop = known.unwrap_or_else(|| profile(&format!("경유 {host}"), &host, "", 22));
+            hop.id = uuid::Uuid::new_v4().to_string();
+            hop.name = format!("경유 {part}");
+            if let Some(u) = user {
+                hop.username = u.into();
+            }
+            if let Some(p) = port {
+                hop.port = p;
+            }
+            let hop_id = hop.id.clone();
+            result.add(hop, "OpenSSH / 경유")?;
+            if !result.bundle.profiles.iter().any(|p| p.id == hop_id) {
+                valid = false;
+                break;
+            }
+            ids.push(hop_id);
+        }
+        if valid {
+            if let Some(p) = result.bundle.profiles.iter_mut().find(|p| p.id == id) {
+                p.jump_ids = ids;
+            }
+        } else {
+            result.bundle.profiles.retain(|p| p.id != id);
+            result.skipped += 1;
+            result.warn(
+                "변환할 수 없는 ProxyJump 세션을 제외했습니다. 직접 연결로 바꾸지 않았습니다.",
+            );
+        }
+    }
+    // Remove dependent sessions too; never fall back to direct connection after a missing hop.
+    loop {
+        let invalid: Vec<_> = result
+            .bundle
+            .profiles
+            .iter()
+            .filter(|p| crate::routes::resolve(p, &result.bundle.profiles).is_err())
+            .map(|p| p.id.clone())
+            .collect();
+        if invalid.is_empty() {
+            break;
+        }
+        result.skipped += invalid.len();
+        result.bundle.profiles.retain(|p| !invalid.contains(&p.id));
+        result.warn("순환·중복·누락·4홉 초과 경유 세션을 제외했습니다.");
+    }
+    result
+        .bundle
+        .tunnels
+        .retain(|t| result.bundle.profiles.iter().any(|p| p.id == t.profile_id));
+    result.warn("OpenSSH 명시적 Host와 첫 설정값, ProxyJump, 루프백 Local/Remote/DynamicForward를 변환합니다. 추가 IdentityFile·Match·임의 명령·agent forwarding·신뢰 설정은 이전하지 않습니다. 파일에 제품 버전이 없어 원본 버전은 확인할 수 없습니다.");
     Ok(result)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn external_gateway_keys_and_putty_tunnels_are_inert() {
+        let mut fields = vec![""; 37];
+        fields[0] = "0";
+        fields[1] = "inside.example";
+        fields[2] = "22";
+        fields[3] = "app";
+        fields[8] = "gateway.example";
+        fields[9] = "2222";
+        fields[10] = "gate";
+        fields[14] = "C:/keys/app";
+        fields[15] = "C:/keys/gate";
+        fields[19] = "0";
+        let source = format!(
+            "[Bookmarks]\nSubRep=Prod\\Seoul\nInside=#109#{}#MobaFont",
+            fields.join("%")
+        );
+        let p = parse(source.as_bytes(), "mobaxterm", "utf-8").unwrap();
+        assert_eq!(p.bundle.profiles.len(), 2);
+        assert_eq!(
+            p.bundle.profiles[1].jump_ids,
+            vec![p.bundle.profiles[0].id.clone()]
+        );
+        assert_eq!(p.bundle.profiles[1].key_path, "C:/keys/app");
+        fields[19] = "5";
+        let bad = format!("[Bookmarks]\nUnsafe=#109#{}#MobaFont", fields.join("%"));
+        assert!(
+            parse(bad.as_bytes(), "mobaxterm", "utf-8")
+                .unwrap()
+                .bundle
+                .profiles
+                .is_empty()
+        );
+        let putty = "[HKEY_CURRENT_USER\\Software\\SimonTatham\\PuTTY\\Sessions\\Lab]\n\"Protocol\"=\"ssh\"\n\"HostName\"=\"lab.example\"\n\"UserName\"=\"user\"\n\"PortForwardings\"=\"L8080=localhost:80,R8081=localhost:81,D1080=\"";
+        let p = parse(putty.as_bytes(), "putty", "utf-8").unwrap();
+        assert_eq!(p.bundle.tunnels.len(), 3);
+        assert!(p.bundle.tunnels.iter().all(|t| !t.auto_start));
+    }
+
+    #[test]
+    fn proxyjump_tunnels_and_hierarchy_remap_as_one_transaction() {
+        let source=b"Host gateway\n HostName jump.example\n User gate\nHost inside\n HostName internal.example\n User app\n ProxyJump gateway\n LocalForward 18080 localhost:80\n RemoteForward 18081 localhost:81\n DynamicForward 1080\n";
+        let p = parse(source, "openssh", "utf-8").unwrap();
+        assert_eq!(p.bundle.profiles.len(), 2);
+        assert_eq!(p.bundle.tunnels.len(), 3);
+        assert_eq!(
+            p.bundle.profiles[1].jump_ids,
+            vec![p.bundle.profiles[0].id.clone()]
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::storage::Store::open(&dir.path().join("db")).unwrap();
+        crate::settings::import(&store, &serde_json::to_vec(&p.bundle).unwrap()).unwrap();
+        let all = store.list().unwrap().profiles;
+        let end = all.iter().find(|p| p.name == "inside").unwrap();
+        let route = crate::routes::resolve(end, &all).unwrap();
+        assert_eq!(route.len(), 2);
+        assert_ne!(route[0].id, p.bundle.profiles[0].id);
+        assert!(
+            store
+                .tunnel_configs()
+                .unwrap()
+                .iter()
+                .all(|t| !t.auto_start && t.profile_id == end.id)
+        );
+        assert!(store.delete(&route[0].id).is_err());
+    }
+    #[test]
+    fn unsupported_and_cyclic_hops_never_become_direct() {
+        for text in [
+            "Host a\nUser u\nProxyJump b\nHost b\nUser u\nProxyJump a",
+            "Host a\nUser u\nProxyJump b\nHost b\nUser u\nProxyCommand unsafe",
+        ] {
+            let p = parse(text.as_bytes(), "openssh", "utf-8").unwrap();
+            assert!(p.bundle.profiles.is_empty());
+        }
+    }
 
     #[test]
     fn putty_utf16_registry_is_inert_and_ppk_is_not_misrepresented() {
@@ -545,7 +930,12 @@ mod tests {
         assert!(!errors);
         assert!(parse(&bytes, "auto", "utf-8").is_err());
         let p = parse(&bytes, "auto", "cp949").unwrap();
-        assert_eq!(p.bundle.groups[0].name, "개발 / 서울");
+        assert_eq!(p.bundle.groups[0].name, "개발");
+        assert_eq!(p.bundle.groups[1].name, "서울");
+        assert_eq!(
+            p.bundle.groups[1].parent_id.as_ref(),
+            Some(&p.bundle.groups[0].id)
+        );
         assert_eq!(p.bundle.profiles.len(), 2);
         assert_eq!(p.bundle.profiles[0].name, "테스트");
         assert!(p.bundle.profiles[1].username.is_empty());
@@ -554,7 +944,7 @@ mod tests {
     }
     #[test]
     fn openssh_first_value_patterns_quotes_and_proxy_skip() {
-        let text = "Host lab other\n HostName=lab.example\n User \"test user\" # comment\n Port 2222\n IdentityFile \"C:/keys/test key\"\nHost other\n ProxyJump bastion\nHost * !other\n User fallback\n Port 22\nHost *\n ConnectTimeout 9\n";
+        let text = "Host lab other\n HostName=lab.example\n User \"test user\" # comment\n Port 2222\n IdentityFile \"C:/keys/test key\"\nHost other\n ProxyCommand command\nHost * !other\n User fallback\n Port 22\nHost *\n ConnectTimeout 9\n";
         let p = parse(text.as_bytes(), "openssh", "utf-8").unwrap();
         assert_eq!(p.bundle.profiles.len(), 1);
         assert_eq!(p.skipped, 1);
@@ -564,7 +954,7 @@ mod tests {
         assert_eq!(s.username, "test user");
         assert_eq!(s.key_path, "C:/keys/test key");
         assert_eq!(s.auth, "key");
-        assert_eq!(s.timeout, 15);
+        assert_eq!(s.timeout, 9);
     }
     #[test]
     fn openssh_does_not_evaluate_external_or_conditional_configuration() {
@@ -613,7 +1003,7 @@ mod tests {
         assert!(!stored.profiles[0].has_secret);
         let exported = crate::settings::export(&store).unwrap();
         let p = parse(&exported, "auto", "utf-8").unwrap();
-        assert_eq!(p.bundle.version, 2);
+        assert_eq!(p.bundle.version, 3);
         assert_eq!(p.bundle.format.as_deref(), Some("daxterm.sessions"));
         assert_eq!(p.bundle.profiles[0].host, "lab.example");
     }

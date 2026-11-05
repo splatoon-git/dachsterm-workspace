@@ -25,9 +25,9 @@ pub struct Target {
     pub name: String,
     pub kind: String,
     #[serde(skip)]
-    program: PathBuf,
+    pub(crate) program: PathBuf,
     #[serde(skip)]
-    args: Vec<String>,
+    pub(crate) args: Vec<String>,
 }
 #[derive(Serialize)]
 pub struct Catalog {
@@ -63,6 +63,14 @@ pub struct Locals {
     entries: Mutex<HashMap<String, Arc<Control>>>,
 }
 impl Locals {
+    pub(crate) fn target(&self, id: &str) -> Result<Target> {
+        self.targets
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or("로컬 목록을 새로고침하세요.".into())
+    }
     pub fn shutdown(&self) {
         self.closing.store(true, Ordering::SeqCst);
         for c in self.entries.lock().unwrap().values() {
@@ -196,6 +204,8 @@ pub async fn local_open(
     on_event: Channel<Event>,
 ) -> Result<()> {
     let locals = state.locals.clone();
+    let logs = state.connections.logs.clone();
+    let store = state.store.clone();
     if state.closing.load(Ordering::SeqCst) {
         return Err("앱이 종료 중입니다.".into());
     }
@@ -248,6 +258,14 @@ pub async fn local_open(
             exited: AtomicBool::new(false),
             ack: (Mutex::new(0), Condvar::new()),
         });
+        logs.register(&id, "utf-8")?;
+        crate::session_log::auto_start(
+            &logs,
+            &store,
+            &id,
+            &format!("local:{}", target.id),
+            &target.name,
+        );
         entries.insert(id.clone(), control.clone());
         drop(entries);
         let exit_control = control.clone();
@@ -315,6 +333,7 @@ pub async fn local_open(
                     continue;
                 }
                 seq += 1;
+                logs.data(&id, &bytes[..n]);
                 if on_event
                     .send(Event::Data {
                         seq,
@@ -337,6 +356,7 @@ pub async fn local_open(
                 }
             }
             control.stop();
+            logs.close(&id);
             locals.entries.lock().unwrap().remove(&id);
             let _ = on_event.send(Event::State {
                 status: "closed".into(),

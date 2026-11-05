@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-config-include-preview"
+description = "Enables the config_include_preview command without any pre-configured scope."
+commands.allow = ["config_include_preview"]
+
+[[permission]]
+identifier = "deny-config-include-preview"
+description = "Denies the config_include_preview command without any pre-configured scope."
+commands.deny = ["config_include_preview"]

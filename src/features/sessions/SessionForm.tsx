@@ -1,20 +1,32 @@
 import { VaultDialog } from './VaultDialog';
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Dialog } from '../../components/Dialog';
+import { JumpEditor } from './JumpEditor';
+import { groupPath } from './model';
+import type { SessionTemplate } from './SessionManager';
 import { call, errorText, type Group, type Profile } from '../../lib/ipc';
 export function SessionForm({
   initial,
   groups,
+  profiles,
   close,
   saved,
 }: {
   initial: Profile;
   groups: Group[];
+  profiles: Profile[];
   close: () => void;
   saved: (profile: Profile, connect: boolean, secret: string | null) => void;
 }) {
   const [vaultOpen, setVaultOpen] = useState<'manage' | 'reveal' | null>(null);
   const [profile, setProfile] = useState(initial);
+  const [tags, setTags] = useState((initial.tags ?? []).join(', '));
+  const [templates, setTemplates] = useState<SessionTemplate[]>([]);
+  useEffect(() => {
+    call<SessionTemplate[]>('session_templates')
+      .then(setTemplates)
+      .catch(() => {});
+  }, []);
   const [secretAction, setSecretAction] = useState('keep');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -31,7 +43,13 @@ export function SessionForm({
     if (secret.current) secret.current.value = '';
     try {
       const p = await call<Profile>('save_session', {
-        profile,
+        profile: {
+          ...profile,
+          tags: tags
+            .split(',')
+            .map((v) => v.trim())
+            .filter(Boolean),
+        },
         secretAction,
         secret: secretAction === 'replace' ? value : null,
       });
@@ -51,6 +69,35 @@ export function SessionForm({
     >
       <form onSubmit={(event) => void submit(event)}>
         <div className="form-grid">
+          <label className="wide">
+            공통 설정 템플릿
+            <select
+              value=""
+              onChange={(e) => {
+                const t = templates.find((t) => t.id === e.target.value);
+                if (!t) return;
+                const patch = Object.fromEntries(
+                  Object.entries(t.options).filter(([, v]) => v !== null),
+                );
+                setProfile((p) => ({
+                  ...p,
+                  ...patch,
+                  groupId:
+                    t.options.groupId === undefined || t.options.groupId === null
+                      ? p.groupId
+                      : t.options.groupId || null,
+                }));
+                if (t.options.tags) setTags(t.options.tags.join(', '));
+              }}
+            >
+              <option value="">템플릿 선택 · 암호는 복제하지 않음</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="wide">
             이름
             <input
@@ -101,6 +148,7 @@ export function SessionForm({
                   protocol: e.target.value as Profile['protocol'],
                   port: [21, 22].includes(p.port) ? (e.target.value === 'ssh' ? 22 : 21) : p.port,
                   auth: e.target.value === 'ssh' ? p.auth : 'password',
+                  jumpIds: e.target.value === 'ssh' ? p.jumpIds : [],
                 }))
               }
             >
@@ -234,11 +282,30 @@ export function SessionForm({
               <option value="">그룹 없음</option>
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
-                  {g.name}
+                  {groupPath(g.id, groups)}
                 </option>
               ))}
             </select>
           </label>
+          <label className="wide">
+            태그 (쉼표 구분)
+            <input value={tags} onChange={(e) => setTags(e.target.value)} />
+          </label>
+          <label>
+            정렬 순서
+            <input
+              type="number"
+              value={profile.sortOrder ?? 0}
+              onChange={(e) => field('sortOrder', Number(e.target.value))}
+            />
+          </label>
+          {profile.protocol === 'ssh' && (
+            <JumpEditor
+              profile={profile}
+              profiles={profiles}
+              change={(ids) => field('jumpIds', ids)}
+            />
+          )}
           <label className="checkbox">
             <input
               type="checkbox"

@@ -55,12 +55,14 @@ impl Broker {
     }
     pub fn attach(&self, label: String, target: Sink) -> Result<()> {
         let mut s = self.inner.lock().unwrap();
+        target(Event::Replay { active: true })?;
         if let Some(state) = s.state.clone() {
             target(state)?;
         }
         for event in &s.history {
             target(event.clone())?;
         }
+        target(Event::Replay { active: false })?;
         s.owner = label;
         s.target = target;
         Ok(())

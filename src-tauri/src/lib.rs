@@ -8,12 +8,19 @@ pub mod file_ops;
 pub mod ftp;
 pub mod hostkeys;
 pub mod local;
+pub mod podtree;
+pub mod session_log;
 mod maintenance;
 pub mod monitoring;
 mod rsa_auth;
+pub mod routes;
+mod session_management;
 mod session_transfer;
+mod config_includes;
 mod settings;
+pub mod snippets;
 pub mod sftp;
+pub mod transfer_queue;
 pub mod ssh;
 mod ssh_auth;
 pub mod storage;
@@ -32,6 +39,7 @@ use tauri::Manager;
 pub struct AppState {
     pub instance_lock: std::fs::File,
     pub locals: Arc<local::Locals>,
+    pub podtrees: Arc<podtree::PodTrees>,
     pub file_clipboard: std::sync::Mutex<Option<file_ops::Clipboard>>,
     pub broadcast: broadcast::Broadcast,
     pub vault: Arc<vault::Vault>,
@@ -120,6 +128,7 @@ pub fn run() {
             app.manage(AppState {
                 instance_lock,
                 locals: Arc::default(),
+                podtrees: Arc::default(),
                 file_clipboard: Default::default(),
                 broadcast: Default::default(),
                 vault,
@@ -138,10 +147,22 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            session_log::log_status,
+            session_log::log_pick,
+            session_log::log_start,
+            session_log::log_action,
+            session_log::log_auto,
+            session_log::log_auto_get,
             maintenance::recovery_list,
             maintenance::recovery_create,
             maintenance::recovery_restore,
             maintenance::diagnostics_export,
+            podtree::podtree_inspect,
+            podtree::podtree_open,
+            podtree::podtree_input,
+            podtree::podtree_resize,
+            podtree::podtree_ack,
+            podtree::podtree_close,
             local::local_targets,
             local::local_open,
             local::local_input,
@@ -161,9 +182,14 @@ pub fn run() {
             settings::config_export,
             settings::config_import,
             session_transfer::config_preview,
+            config_includes::config_include_preview,
             session_transfer::config_apply,
             monitoring::monitor_get,
             monitoring::monitor_configure,
+            session_management::session_templates,
+            session_management::template_save,
+            session_management::session_batch,
+            session_management::group_update,
             commands::sessions,
             commands::save_session,
             commands::delete_session,
@@ -183,6 +209,9 @@ pub fn run() {
             file_ops::file_clipboard,
             workspace::sftp_list,
             workspace::sftp_change,
+            workspace::transfer_batch,
+            workspace::transfer_control,
+            workspace::transfer_items,
             workspace::transfer_pick,
             workspace::transfer_drop,
             workspace::transfer_list,
@@ -195,6 +224,9 @@ pub fn run() {
             workspace::editor_pick,
             workspace::edit_list,
             workspace::edit_resolve,
+            snippets::snippet_list,
+            snippets::snippet_save,
+            snippets::snippet_send,
             commands::terminal_ack
         ])
         .build(context);
@@ -240,17 +272,27 @@ pub fn run() {
             let state = app.state::<AppState>();
             if !state.closing.swap(true, Ordering::SeqCst) {
                 api.prevent_exit();
+                state.podtrees.shutdown();
                 state.locals.shutdown();
                 state.connections.shutdown();
                 let connections = state.connections.clone();
+                let podtrees = state.podtrees.clone();
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
                     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-                        while !connections.entries.lock().unwrap().is_empty() {
+                        while !connections.entries.lock().unwrap().is_empty() || !podtrees.is_empty() {
                             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
                         }
                     })
                     .await;
+                    let logs = app.state::<AppState>().connections.logs.clone();
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        if !logs.shutdown() {
+                            rfd::MessageDialog::new().set_title("세션 로그 저장 시간 초과")
+                                .set_description("로그 저장이 3초 안에 끝나지 않았습니다. 종료 후 로그의 마지막 출력이 누락될 수 있습니다. 저장 장치 상태와 로그 파일을 확인하세요.")
+                                .set_level(rfd::MessageLevel::Warning).show();
+                        }
+                    }).await;
                     app.exit(0);
                 });
             }

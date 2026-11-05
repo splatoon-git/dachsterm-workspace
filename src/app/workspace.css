@@ -308,6 +308,12 @@ dialog select {
 .file-navigation button {
   padding-inline: 6px;
 }
+.file-navigation button:nth-child(3) {
+  grid-column: 3 / -1;
+}
+.file-navigation button:nth-child(4) {
+  grid-column: 1 / 4;
+}
 .file-clipboard {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -760,4 +766,51 @@ dialog select {
 }
 .terminal-fullscreen > .monitor {
   display: none;
+}
+
+.transfer-policy {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 12px;
+}
+.transfer-policy small {
+  color: var(--color-text-secondary);
+}
+.transfer-policy strong {
+  color: var(--color-status-warning);
+}
+.transfer-queue .transfer-item {
+  overflow-wrap: anywhere;
+}
+.transfer-queue .transfer-item label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.transfer-queue .transfer-item input[type='checkbox'] {
+  width: auto;
+}
+.transfer-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow: auto;
+}
+.transfer-results li {
+  display: grid;
+  padding: 6px 0;
+}
+.transfer-results li > span {
+  overflow-wrap: anywhere;
+}
+.transfer-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-tray:has(.transfer-queue .transfer-item) {
+  max-height: min(42vh, 400px);
 }

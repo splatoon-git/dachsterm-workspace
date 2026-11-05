@@ -10,6 +10,9 @@ export type Profile = {
   tlsCaPath: string;
   encoding: string;
   keyPath: string;
+  jumpIds?: string[];
+  tags?: string[];
+  sortOrder?: number;
   groupId: string | null;
   favorite: boolean;
   timeout: number;
@@ -17,7 +20,7 @@ export type Profile = {
   lastConnected: number | null;
   hasSecret: boolean;
 };
-export type Group = { id: string; name: string };
+export type Group = { id: string; name: string; parentId?: string | null; sortOrder?: number };
 export type Snapshot = { profiles: Profile[]; groups: Group[]; credentialWarning?: string | null };
 export const desktop = isTauri();
 export function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -36,6 +39,9 @@ export const blankProfile = (): Profile => ({
   tlsCaPath: '',
   encoding: 'utf-8',
   keyPath: '',
+  jumpIds: [],
+  tags: [],
+  sortOrder: 0,
   groupId: null,
   favorite: false,
   timeout: 15,

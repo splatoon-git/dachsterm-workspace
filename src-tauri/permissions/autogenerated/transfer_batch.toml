@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transfer-batch"
+description = "Enables the transfer_batch command without any pre-configured scope."
+commands.allow = ["transfer_batch"]
+
+[[permission]]
+identifier = "deny-transfer-batch"
+description = "Denies the transfer_batch command without any pre-configured scope."
+commands.deny = ["transfer_batch"]

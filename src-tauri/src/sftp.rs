@@ -5,15 +5,10 @@ use russh_sftp::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::{
-    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-    sync::watch,
-};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 pub fn path(value: &str) -> Result<()> {
     if value.is_empty() || value.len() > 4096 || value.contains('\0') || value.contains('\u{fffd}')
@@ -137,7 +132,7 @@ pub async fn change(
     }
     .map_err(failure)
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transfer {
     pub id: String,
@@ -149,6 +144,20 @@ pub struct Transfer {
     pub total: u64,
     pub status: String,
     pub message: String,
+    #[serde(default)]
+    pub files: usize,
+    #[serde(default)]
+    pub finished: usize,
+    #[serde(default)]
+    pub skipped: usize,
+    #[serde(default)]
+    pub current: String,
+    #[serde(default)]
+    pub current_done: u64,
+    #[serde(default)]
+    pub current_total: u64,
+    #[serde(default)]
+    pub conflict: String,
 }
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) struct Source {
@@ -164,327 +173,8 @@ pub(crate) struct Plan {
     pub(crate) destination: String,
     pub(crate) source: Option<Source>,
 }
-struct Job {
-    plan: Plan,
-    cancel: watch::Sender<bool>,
-}
-#[derive(Default)]
-pub struct Transfers {
-    jobs: Mutex<HashMap<String, Job>>,
-    store: Mutex<Option<Arc<crate::storage::Store>>>,
-}
-impl Transfers {
-    pub fn recover(&self, store: Arc<crate::storage::Store>) -> Result<()> {
-        {
-            let db = store.0.lock().unwrap();
-            let values = db
-                .prepare("SELECT value FROM settings WHERE key LIKE 'transfer:%'")
-                .map_err(crate::storage::db_error)?
-                .query_map([], |r| r.get::<_, String>(0))
-                .map_err(crate::storage::db_error)?
-                .collect::<std::result::Result<Vec<_>, _>>()
-                .map_err(crate::storage::db_error)?;
-            let mut jobs = self.jobs.lock().unwrap();
-            for value in values.into_iter().take(100) {
-                if let Ok(mut plan) = serde_json::from_str::<Plan>(&value) {
-                    if uuid::Uuid::parse_str(&plan.view.id).is_err() {
-                        continue;
-                    }
-                    plan.view.status = "paused".into();
-                    plan.view.message =
-                        "보존된 부분 파일 · 같은 서버 연결 후 이어서 전송하세요.".into();
-                    jobs.insert(
-                        plan.view.id.clone(),
-                        Job {
-                            plan,
-                            cancel: watch::channel(false).0,
-                        },
-                    );
-                }
-            }
-        }
-        *self.store.lock().unwrap() = Some(store);
-        Ok(())
-    }
-    fn persist(&self, plan: &Plan) -> Result<()> {
-        if let Some(store) = self.store.lock().unwrap().as_ref() {
-            if plan.view.status == "completed" {
-                store
-                    .0
-                    .lock()
-                    .unwrap()
-                    .execute(
-                        "DELETE FROM settings WHERE key=?",
-                        [format!("transfer:{}", plan.view.id)],
-                    )
-                    .map_err(crate::storage::db_error)?;
-            } else {
-                store.set_setting(
-                    &format!("transfer:{}", plan.view.id),
-                    &serde_json::to_string(plan).map_err(failure)?,
-                )?;
-            }
-        }
-        Ok(())
-    }
-    pub fn list(&self) -> Vec<Transfer> {
-        self.jobs
-            .lock()
-            .unwrap()
-            .values()
-            .map(|j| j.plan.view.clone())
-            .collect()
-    }
-    pub fn cancel(&self, id: &str) {
-        if let Some(job) = self.jobs.lock().unwrap().get(id) {
-            job.cancel.send_replace(true);
-        }
-    }
-    fn progress(&self, id: &str, done: u64, total: u64) {
-        if let Some(job) = self.jobs.lock().unwrap().get_mut(id) {
-            job.plan.view.done = done;
-            job.plan.view.total = total;
-        }
-    }
-    pub fn start(
-        self: &Arc<Self>,
-        connections: Arc<Connections>,
-        connection: String,
-        remote: String,
-        local: PathBuf,
-        upload: bool,
-    ) -> Result<String> {
-        path(&remote)?;
-        let c = connections.control(&connection)?;
-        let id = uuid::Uuid::new_v4().to_string();
-        let plan = Plan {
-            view: Transfer {
-                id: id.clone(),
-                connection_id: connection,
-                profile_id: c.profile.id.clone(),
-                name: remote.clone(),
-                direction: if upload { "upload" } else { "download" }.into(),
-                done: 0,
-                total: 0,
-                status: "paused".into(),
-                message: String::new(),
-            },
-            local,
-            remote,
-            upload,
-            destination: crate::editor::destination(&c.profile),
-            source: None,
-        };
-        {
-            let mut jobs = self.jobs.lock().unwrap();
-            if jobs.len() >= 100 {
-                jobs.retain(|_, j| j.plan.view.status != "completed");
-            }
-            if jobs.len() >= 100 {
-                return Err("보존된 전송이 100개입니다. 불필요한 부분 파일을 정리하세요.".into());
-            }
-            self.persist(&plan)?;
-            jobs.insert(
-                id.clone(),
-                Job {
-                    plan,
-                    cancel: watch::channel(false).0,
-                },
-            );
-        }
-        self.resume(connections, id.clone(), c.profile.id.clone(), None)?;
-        Ok(id)
-    }
-    pub fn resume(
-        self: &Arc<Self>,
-        connections: Arc<Connections>,
-        id: String,
-        profile: String,
-        connection: Option<String>,
-    ) -> Result<()> {
-        let (plan, mut cancelled, mut stopped) = {
-            let mut jobs = self.jobs.lock().unwrap();
-            if jobs
-                .values()
-                .filter(|j| j.plan.view.status == "running")
-                .count()
-                >= 4
-            {
-                return Err("동시 전송은 4개까지 가능합니다.".into());
-            }
-            let job = jobs.get_mut(&id).ok_or("전송 작업 없음")?;
-            if job.plan.view.status != "paused" {
-                return Err("이미 진행 중이거나 완료된 전송입니다.".into());
-            }
-            let connection = connection.unwrap_or_else(|| job.plan.view.connection_id.clone());
-            let c = connections.control(&connection)?;
-            if c.profile.id != profile
-                || profile != job.plan.view.profile_id
-                || crate::editor::destination(&c.profile) != job.plan.destination
-            {
-                return Err("처음 전송한 서버 세션에 연결하세요.".into());
-            }
-            connections.ready(&connection)?;
-            job.plan.view.connection_id = connection;
-            job.plan.view.status = "running".into();
-            job.plan.view.message = "부분 파일 검증 후 전송 중".into();
-            job.cancel.send_replace(false);
-            if let Err(error) = self.persist(&job.plan) {
-                job.plan.view.status = "paused".into();
-                job.plan.view.message = "복구 기록 저장 실패 · 전송을 시작하지 않았습니다.".into();
-                return Err(error);
-            }
-            (job.plan.clone(), job.cancel.subscribe(), c.stop.subscribe())
-        };
-        let jobs = self.clone();
-        tokio::spawn(async move {
-            let mut plan = plan;
-            let committing = std::sync::atomic::AtomicBool::new(false);
-            let ftp = connections
-                .control(&plan.view.connection_id)
-                .map(|c| c.profile.protocol != "ssh")
-                .unwrap_or(false);
-            let transfer_cancel = cancelled.clone();
-            let work = async {
-                let s = if ftp {
-                    None
-                } else {
-                    Some(open(&connections, &plan.view.connection_id).await?)
-                };
-                let ftp_session = if ftp {
-                    Some(connections.ftp_session(&plan.view.connection_id)?)
-                } else {
-                    None
-                };
-                let current = if let Some(ftp) = ftp_session.as_ref() {
-                    crate::ftp::transfer_source(ftp, &plan).await?
-                } else {
-                    source(s.as_ref().ok_or("SFTP 연결 없음")?, &plan).await?
-                };
-                if let Some(previous) = plan.source.as_ref() {
-                    if previous != &current {
-                        return Err(
-                            "원본의 크기 또는 수정 시각이 변경되어 이어쓰기를 중단했습니다.".into(),
-                        );
-                    }
-                } else {
-                    plan.source = Some(current);
-                    jobs.persist(&plan)?;
-                    jobs.jobs
-                        .lock()
-                        .unwrap()
-                        .get_mut(&id)
-                        .ok_or("전송 작업 없음")?
-                        .plan
-                        .source = plan.source.clone();
-                }
-                if let Some(ftp) = ftp_session.as_ref() {
-                    crate::ftp::transfer(
-                        ftp,
-                        &plan,
-                        |done, total| jobs.progress(&id, done, total),
-                        &committing,
-                        transfer_cancel,
-                    )
-                    .await
-                } else {
-                    resumed(
-                        s.as_ref().ok_or("SFTP 연결 없음")?,
-                        &plan,
-                        |done, total| jobs.progress(&id, done, total),
-                        &committing,
-                    )
-                    .await
-                }
-            };
-            tokio::pin!(work);
-            let result: Result<()> = tokio::select! {biased;r=&mut work=>r,_=cancelled.changed()=>{if committing.load(std::sync::atomic::Ordering::SeqCst){work.await}else if ftp { tokio::time::timeout(Duration::from_secs(20), &mut work).await.unwrap_or_else(|_| Err("일시 중지 · 서버 종료 응답 지연 · 부분 파일 보존됨".into())) }else{Err("일시 중지 · 부분 파일 보존됨".into())}},_=stopped.changed()=>Err("연결 종료 · 부분 파일 보존됨".into())};
-            let mut entries = jobs.jobs.lock().unwrap();
-            if let Some(job) = entries.get_mut(&id) {
-                job.plan.view.status = if result.is_ok() {
-                    "completed"
-                } else {
-                    "paused"
-                }
-                .into();
-                job.plan.view.message = result.err().unwrap_or("전송 완료".into());
-                if let Err(error) = jobs.persist(&job.plan) {
-                    job.plan.view.message =
-                        format!("{} · 복구 정보 저장 실패: {error}", job.plan.view.message);
-                }
-            }
-        });
-        Ok(())
-    }
-    pub async fn discard(
-        &self,
-        connections: &Connections,
-        id: &str,
-        connection: &str,
-    ) -> Result<()> {
-        let plan = {
-            let mut jobs = self.jobs.lock().unwrap();
-            let job = jobs.get_mut(id).ok_or("전송 작업 없음")?;
-            if matches!(job.plan.view.status.as_str(), "running" | "discarding") {
-                return Err("먼저 전송을 일시 중지하세요.".into());
-            }
-            job.plan.view.status = "discarding".into();
-            job.plan.clone()
-        };
-        let result: Result<()> = async {
-            if plan.upload {
-                let c = connections.control(connection)?;
-                if c.profile.id != plan.view.profile_id
-                    || crate::editor::destination(&c.profile) != plan.destination
-                {
-                    return Err("같은 서버에 연결한 뒤 부분 파일을 정리하세요.".into());
-                }
-                let temp = format!("{}.daxterm-{}.part", plan.remote, plan.view.id);
-                if c.profile.protocol != "ssh" {
-                    let session = connections.ftp_session(connection)?;
-                    let mut ftp = session.open().await?;
-                    if crate::ftp::exists(&mut ftp, &temp, &session.profile.encoding).await? {
-                        ftp.rm(&temp).await.map_err(|_| "FTP 부분 파일 삭제 실패")?;
-                    }
-                } else {
-                    let s = open(connections, connection).await?;
-                    if s.symlink_metadata(&temp).await.is_ok() {
-                        s.remove_file(temp).await.map_err(failure)?;
-                    }
-                }
-            } else {
-                let temp = plan
-                    .local
-                    .with_file_name(format!(".daxterm-{}.part", plan.view.id));
-                match tokio::fs::remove_file(temp).await {
-                    Ok(()) => {}
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(e) => return Err(failure(e)),
-                }
-            }
-            Ok(())
-        }
-        .await;
-        let mut jobs = self.jobs.lock().unwrap();
-        if result.is_ok() {
-            let mut done = plan;
-            done.view.status = "completed".into();
-            if let Err(error) = self.persist(&done) {
-                if let Some(job) = jobs.get_mut(id) {
-                    job.plan.view.status = "paused".into();
-                    job.plan.view.message =
-                        "부분 파일 정리됨 · 복구 기록 삭제를 다시 시도하세요.".into();
-                }
-                return Err(error);
-            }
-            jobs.remove(id);
-        } else if let Some(job) = jobs.get_mut(id) {
-            job.plan.view.status = "paused".into();
-        }
-        result
-    }
-}
-async fn source(s: &SftpSession, plan: &Plan) -> Result<Source> {
+pub use crate::transfer_queue::Transfers;
+pub(crate) async fn source(s: &SftpSession, plan: &Plan) -> Result<Source> {
     if plan.upload {
         let m = tokio::fs::metadata(&plan.local).await.map_err(failure)?;
         if !m.is_file() {
@@ -531,7 +221,7 @@ pub(crate) async fn prefix<A: tokio::io::AsyncRead + Unpin, B: tokio::io::AsyncR
     }
     Ok(())
 }
-async fn resumed(
+pub(crate) async fn resumed(
     s: &SftpSession,
     plan: &Plan,
     progress: impl Fn(u64, u64),

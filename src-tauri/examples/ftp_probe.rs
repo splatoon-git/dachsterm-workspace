@@ -1,3 +1,5 @@
+#[path = "queue/checks.rs"]
+mod queue_checks;
 use daxterm::{
     ftp,
     sftp::Transfers,
@@ -84,6 +86,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 encoding: encoding.into(),
                 key_path: String::new(),
+                jump_ids: vec![],
+                tags: vec![],
+                sort_order: 0,
                 group_id: None,
                 favorite: false,
                 timeout: 10,
@@ -105,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let id = connect(&manager, &store, profile.clone(), env("FTP_PASSWORD")).await?;
         println!("CHECK {protocol}/{encoding}: connected");
+        queue_checks::run(manager.clone(), &id, "/").await?;
         let session = manager.ftp_session(&id)?;
         let directory = format!("/한글 {}", uuid::Uuid::new_v4());
         ftp::change(&session, "mkdir", &directory, "").await?;
@@ -193,14 +199,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         assert_eq!(std::fs::read(&local)?, data);
         println!("CHECK {protocol}/{encoding}: download resumed");
+        println!("CHECK {protocol}/{encoding}: legacy copy mkdir");
         let copies = format!("{directory}/copies");
         ftp::change(&session, "mkdir", &copies, "").await?;
         let result = ftp::batch(&session, "copy", std::slice::from_ref(&remote), &copies).await?;
         assert!(result.errors.is_empty());
         let result = ftp::batch(&session, "copy", std::slice::from_ref(&remote), &copies).await?;
         assert_eq!(result.errors.len(), 1);
+        println!("CHECK {protocol}/{encoding}: legacy rename");
         let renamed = format!("{directory}/renamed.bin");
         ftp::change(&session, "rename", &remote, &renamed).await?;
+        println!("CHECK {protocol}/{encoding}: legacy delete");
         let result = ftp::batch(&session, "delete", std::slice::from_ref(&directory), "/").await?;
         assert!(result.errors.is_empty());
         manager.control(&id)?.stop.send_replace(true);
