@@ -574,6 +574,27 @@
 
 - 종료 전 확인: 변경5문서의 로컬 Markdown 링크61개 실파일 확인·문서/이번 소유 소스/검사17파일 후행공백0개. 이번 소유 추적 파일 `git diff --check` 종료0. 최종 새JS/TS 검사 도구 eslint/prettier 종료0. 보존debug/release/NSIS SHA를 다시 확인했으며 이번 보존debug 검사 프로세스 잔여0개다. 별도 작업의 소스/프로세스/산출물은 종료하거나 되돌리지 않았다.
 
+## G.8.Q1 — 서바이버 지역·적·밀도 품질 개선 (2026-11-05)
+
+- 사용자 요청: 메이저 스테이지 단위 맵 다양성/장식, 적 외형/종류/숫자 개선. 별도 진행 중인 G.8.6의 `SurvivorGame.tsx`, UI/성능/수명/설치 검증 변경과 문서의 Phase6 추가 등은 보존했다. 커밋·푸시하지 않았다.
+- 신규 제품: `src/features/games/survivor/scenery.ts`, `enemyRenderer.ts`. 수정: `renderer.ts`, `content.ts`, `enemies.ts`. 검사: 새 `scenery.test.ts`, `tests/ui/survivor-quality.spec.ts`, `tests/ui/fixtures/survivor-quality.{html,ts}`, 기존 `engine.test.ts`/`enemies.test.ts`/`stages.test.ts`의 변경된 출현 계약 기대값. 문서: roadmap/설계 및 [품질 검증](verification/survivor-quality.md).
+- 3구간 단위 숲/유적/수정 골짜기/설원4종, 지역별 기본 길/광장 구도 + 시드/회차별400소품/6랜드마크. 같은 지역3구간은 배치 유지, 재방문은 새 배치. 유한3200×3200 전장·기존 위치/드롭 보존. 지형 장식은 통과 가능, 전투 난수와 분리했다. 배경은512px 타일 최대12장/런, 적 외형은4Mi픽셀 LRU 예산으로 제한하며 테마/지역 전환 시 갱신한다.
+- 기존8종 적에 개별 실루엣·눈/표정·그림자·날갯짓/탄성/보행·왕관/갑옷/뿔·공격 느낌표를 적용했다. 새 AI 종류를 추가한 것은 아니다. 모션 줄이기에서 정적 포즈, 밝은/어두운 테마와 실제 HP바 지원. 초기 혼합 적, 이후 지역별5종 가중치, 출현1.4~5.8/s 및 일반/정예 시야 경계+반경+64~144 스폰. 보스 기존 반경/행동,240안전거리,180/2/1상한,HP/피해/보상 수식은 유지한다. 콘텐츠버전4/프로필스키마1.
+- 실행 검증: `node --max-old-space-size=1024 node_modules/vitest/vitest.mjs run src --maxWorkers=1` **40파일649개 통과**. `tsc --noEmit`, 변경 소스/검사 ESLint 및 Prettier 통과. Node 메모리 설정 후 `playwright test tests/ui/survivor-quality.spec.ts tests/ui/survivor.spec.ts --workers=1` **13개 통과**, 최종 눈동자 색 변경 후 quality2개 재실행 통과. 지역4×테마2·360/560·180적·정적/애니메이션·렌더링 상태 불변·반복 픽셀 일치와 기존 입력/저장 회귀. 캡처 `target/verification/survivor-region-*.png` 직접 확인.
+- 밀도 비교: 기존 검증 정책을 그대로 사용한 시드5개 모두3/6보스→7진입, 첫 카드11.50~13.95→4.60~9.45초, 평균처치732.4→955,7진입레벨32~34→34~38. HEAD content/enemies는 비교용 메모리 번들에서만 로드했다. `target/measure-survivor-quality{,-baseline}.mjs`, 결과 `survivor-quality-{balance,baseline}.json`. 사람의 플레이/재미/보스 난이도 검증이 아니다. 두 번째 보스6~13초 경향·레벨40 도달 시점은 추가 검토 필요.
+- 성능: RAF 없이 연속 렌더한 초기 headless 수치는 작업 적체를 포함해 프레임 성능 판정에서 제외하고 RAF에 맞춰 검사했다. 최종 Chromium180적360프레임 Canvas제출 CPU p95 정적1.7/2.0ms·애니메이션9.3ms. 실제 WebView2 소스 주입 상한부하10초에서 엔진+Canvas8.0ms/전체UI콜백5.8ms, RAF간격p95는50/33.3ms로60fps 보장이 아니다. `target/measure-survivor-quality-native.mjs`, `survivor-quality-performance-native.json`. 해당 native 부하측정은 캐시 구현 후·타일64px여유/눈동자색 보완 전 소스다. 60초/GPU/장시간 실제10판 메모리 검증으로 표시하지 않는다.
+- 최종 빌드: `$env:NODE_OPTIONS='--max-old-space-size=1024'` 및 Cargo PATH 설정 후 `node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle` 종료0(tsc-b/Vite/Rust). `target/debug/daxterm.exe` SHA256 **4e8d88da49233039077b2b19b0375e84334273901aac01488f3bae94a1e5d091**. 기존 main번들500KB 경고 유지.
+- 최종 실제 Windows: `node scripts/test-survivor-ui-native.mjs` 종료0, 위 SHA와 일치. 상태/시드 주입 없이 일반 이동·자연첫카드·정지재개·실제창닫기 저장실패차단·재시도1회정산·정상exit0/재실행정확일치·pageerror0. JSON/캡처 `target/verification/survivor-ui-native.{json,png}`. 테스트 프로세스 종료.
+- 사용자가 첨부한 적체력1조/격자탄환/장판가득 화면은 기존 `tests/native/survivor-performance.ts`의 테스트 전용 상한 부하 주입임을 설명했다. 제품이 이 fixture를 import하거나 일반 판에서 이 체력/배치를 생성하는 것은 아니다.
+- 미실행: 이 콘텐츠버전4의 release/NSIS/설치, Mac/실제OS종료절전/물리터치청취, 사람의 다중시드 난이도, 최종캐시60초/장시간전투메모리. Rust 제품·SSH/PTY 미변경으로 해당 실접속 회귀는 이번에 반복하지 않았다. 병행 G.8.6의 이전 소스/패키지 결과를 이번 버전 결과로 대체하지 않는다.
+- 남은 ID: **G.8.Q1 구현 완료**, **G.8.6의 해당 소스 실플레이/장기성능/배포 재검증과 기존 환경 대기**. 다음 첫 행동: 위 SHA debug로 새지역/밀도의 무강화 일반 입력 플레이를 기록하고, 두 번째 보스시간·레벨40도달속도를 평가한다. release 작업자는 콘텐츠버전4/최종소스 포함 여부를 확인한 뒤 새 패키지의 SHA/실행 결과를 별도로 기록한다. 다른 Phase6/기존 업무 기능 진행은 그 최신 기록을 유지한다.
+
+## G.8.Q1 로컬 커밋 요청 (2026-11-05)
+
+- 사용자 요청으로 지역·적 외형·출현 밀도 개선의 제품/검사12개와 관련 문서4개를 로컬 커밋 대상으로 묶는다. 제목은 `feat(survivor): enrich regions, enemy visuals and encounter density`이며 원격 푸시는 하지 않는다. 공유 문서의 별도 Phase6 계획·제품명/기능 검토는 작업 트리에 보존하고 제외한다.
+- 코드 변경 없이 기존 단위649개·브라우저13개/최종quality2개·타입/린트·Windows debug/실행 검증 결과를 유지한다. 이번에는 변경 목록·스테이징 범위·`git diff --cached --check`를 확인한다. 설계에 남은 콘텐츠버전3 표기는 현행4로 바로잡았다.
+- 남은 ID와 다음 첫 행동은 위 G.8.Q1 인계와 같다. G.8.6의 사람 평가·최종 소스 장기부하/배포 및 환경 대기는 그대로이며, 이 커밋으로 검증 완료로 바꾸지 않는다.
+
 ## G.8.6 로컬 커밋 요청 (2026-11-05)
 
 - 사용자 요청으로8.6의 중단 대응·장기/실환경 검증 도구와 관련 문서만 로컬 커밋 대상으로 묶는다. 제목은 `fix(survivor): pause safely after suspension and verify release`이며 원격 푸시는 하지 않는다. 별도 G.8.Q1 콘텐츠/시각 개선·Phase6 계획·기존 제품명 검토 변경은 작업 트리에 보존하고 이번 커밋에서 제외한다.

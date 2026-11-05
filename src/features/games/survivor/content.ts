@@ -1,6 +1,6 @@
 import type { AbilityId, EnemyKind, EvolutionId, SurvivorStats, WeaponId } from './types';
 
-export const SURVIVOR_CONTENT_VERSION = 3;
+export const SURVIVOR_CONTENT_VERSION = 4;
 export const TICKS_PER_SECOND = 60;
 export const FIXED_STEP = 1 / TICKS_PER_SECOND;
 export const MAX_CATCH_UP_TICKS = 5;
@@ -167,7 +167,7 @@ export function weaponParameters(
 }
 export const SLIME = { hp: 24, speed: 70, damage: 10, xp: 3, radius: 18 } as const;
 export const SPAWN = {
-  intervalTicks: 75, // Stage 1; later stages retain fractional spawn intervals.
+  intervalTicks: 60 / 1.4, // Stage 1; later stages retain fractional spawn intervals.
   minDistance: 240,
   ringMin: 600,
   ringMax: 720,
@@ -235,7 +235,7 @@ export function stageParameters(index: number) {
   const n = Math.max(0, index - 1);
   const b = Math.max(0, index / 3 - 1);
   return {
-    spawnRate: Math.min(4.8, 0.8 + 0.6 * n),
+    spawnRate: Math.min(5.8, 1.4 + 0.6 * n),
     hpScale: Math.min(20, 1 + 0.18 * n + 0.015 * n * n),
     damageScale: Math.min(3, 1 + 0.06 * n),
     xpScale: Math.min(2.5, 1 + 0.15 * n),
@@ -246,14 +246,19 @@ export function stageParameters(index: number) {
 export function stageEnemyKind(index: number, roll: number): EnemyKind {
   const weights =
     index === 1
-      ? [100, 0, 0, 0, 0]
+      ? [85, 15, 0, 0, 0]
       : index === 2
-        ? [65, 35, 0, 0, 0]
+        ? [60, 25, 15, 0, 0]
         : index === 3
-          ? [35, 35, 30, 0, 0]
+          ? [40, 30, 20, 0, 10]
           : index === 4
             ? [20, 25, 25, 30, 0]
-            : [15, 25, 20, 20, 20];
+            : [
+                [30, 20, 25, 10, 15], // Forest: soft crowds and spores.
+                [15, 25, 20, 20, 20], // Ruins: balanced mixed encounters.
+                [15, 35, 15, 25, 10], // Cavern: wings and stone.
+                [25, 15, 15, 15, 30], // Snow: charging packs.
+              ][Math.floor((index - 1) / 3) % 4];
   const kinds: EnemyKind[] = ['slime', 'bat', 'mushroom', 'golem', 'boar'];
   let sum = 0;
   for (let i = 0; i < weights.length; i++) {

@@ -70,7 +70,8 @@ describe('G.8.3 enemy patterns and shared damage', () => {
   it('skips unsafe spawn searches and keeps boss capacity separate', () => {
     const run = newSurvivor();
     run.player.x = run.player.y = 20;
-    // Degenerate RNG always proposes the top edge, which intersects the clamped view.
+    // Degenerate RNG always proposes rightwards, outside the world's right edge.
+    run.player.x = WORLD.width - run.player.radius;
     run.random.spawn = 0;
     expect(spawnEnemy(run, 'slime')).toBeNull();
     const bossRun = newSurvivor();

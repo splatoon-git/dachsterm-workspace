@@ -139,7 +139,7 @@ describe('G.8.3 continuous stages', () => {
     expect(run.stage).toEqual(initialStage(2));
     expect(run.highestReachedStage).toBe(2);
     expect(run.highestCompletedStage).toBe(1);
-    expect(run.nextSpawnTick).toBeCloseTo(run.tick + 60 / 1.4);
+    expect(run.nextSpawnTick).toBeCloseTo(run.tick + 60 / 2);
     const next = structuredClone(run);
     expect(continueSurvivorStage(run, 1)).toBe(false);
     expect(run).toEqual(next);
@@ -323,17 +323,17 @@ describe('G.8.3 continuous stages', () => {
   });
 
   it('accumulates fractional spawn intervals and never banks capped or late spawns', () => {
-    const run = fixture(2);
-    run.nextSpawnTick = 60 / 1.4;
+    const run = fixture(3);
+    run.nextSpawnTick = 60 / 2.6;
     run.bite.nextReadyTick = Infinity;
-    ticks(run, 42);
+    ticks(run, 23);
     expect(run.enemies).toHaveLength(0);
     ticks(run, 1);
     expect(run.enemies).toHaveLength(1);
-    ticks(run, 17);
-    expect(run.nextSpawnTick).toBeCloseTo(120 / 1.4);
-    ticks(run, 540);
-    expect(run.enemies).toHaveLength(14);
+    ticks(run, 22);
+    expect(run.nextSpawnTick).toBeCloseTo(120 / 2.6);
+    ticks(run, 554);
+    expect(run.enemies).toHaveLength(26);
     run.nextSpawnTick = 1;
     const count = run.enemies.length;
     ticks(run, 1);
@@ -345,7 +345,7 @@ describe('G.8.3 continuous stages', () => {
 
   it('caps scaling, retains speed and snapshots damage/XP at spawn', () => {
     expect(stageParameters(1000000)).toMatchObject({
-      spawnRate: 4.8,
+      spawnRate: 5.8,
       hpScale: 20,
       damageScale: 3,
       xpScale: 2.5,

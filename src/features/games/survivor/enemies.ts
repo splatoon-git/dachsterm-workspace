@@ -70,7 +70,21 @@ export function spawnEnemy(run: SurvivorRun, kind: EnemyKind): SurvivorEnemy | n
   const r = base.radius;
   for (let attempt = 0; attempt < SPAWN.attempts; attempt++) {
     const angle = spawnRandom(run) * Math.PI * 2;
-    const distance = SPAWN.ringMin + spawnRandom(run) * (SPAWN.ringMax - SPAWN.ringMin);
+    const radialRoll = spawnRandom(run);
+    // Ordinary crowds arrive just beyond the current viewport, not a distant circle.
+    // Keep bosses on their established ring and preserve the same RNG draw count.
+    const dx = Math.cos(angle),
+      dy = Math.sin(angle);
+    const edgeX =
+      (dx >= 0 ? camera.x + VIEW.width - run.player.x : run.player.x - camera.x) /
+      Math.max(0.0001, Math.abs(dx));
+    const edgeY =
+      (dy >= 0 ? camera.y + VIEW.height - run.player.y : run.player.y - camera.y) /
+      Math.max(0.0001, Math.abs(dy));
+    const distance =
+      kind === 'boss'
+        ? SPAWN.ringMin + radialRoll * (SPAWN.ringMax - SPAWN.ringMin)
+        : Math.min(edgeX, edgeY) + r + 64 + radialRoll * 80;
     const x = run.player.x + Math.cos(angle) * distance;
     const y = run.player.y + Math.sin(angle) * distance;
     if (x < r || x > WORLD.width - r || y < r || y > WORLD.height - r) continue;

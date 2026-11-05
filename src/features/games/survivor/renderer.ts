@@ -1,8 +1,10 @@
 import atlasUrl from '../../../assets/brand/dachshund-adventure-atlas.png';
 import type { ThemeDefinition } from '../../../themes/contract';
-import { ENEMY_RULES, VIEW, WORLD } from './content';
+import { ENEMY_RULES, VIEW } from './content';
 import { survivorCamera } from './geometry';
-import type { SurvivorEnemy, SurvivorRun } from './types';
+import { drawScenery, regionForStage } from './scenery';
+import { drawSurvivorEnemy } from './enemyRenderer';
+import type { SurvivorRun } from './types';
 
 export function loadSurvivorAtlas(redraw: () => void) {
   const image = new Image();
@@ -46,28 +48,7 @@ export function drawSurvivor(
     if (fill) ctx.fill();
     else ctx.stroke();
   };
-  // Sparse deterministic forest marks, based on world cells and seed, never combat RNG.
-  ctx.save();
-  ctx.globalAlpha = 0.16;
-  ctx.strokeStyle = t.green;
-  ctx.fillStyle = t.green;
-  for (let y = Math.floor(cam.y / 160) * 160; y < cam.y + VIEW.height + 160; y += 160) {
-    for (let x = Math.floor(cam.x / 160) * 160; x < cam.x + VIEW.width + 160; x += 160) {
-      const h = (Math.imul(x + 17, 73856093) ^ Math.imul(y + 11, 19349663) ^ run.seed) >>> 0;
-      const px = x + (h % 100),
-        py = y + ((h >>> 8) % 100);
-      ctx.beginPath();
-      ctx.moveTo(px - 6, py + 9);
-      ctx.lineTo(px, py - 8);
-      ctx.lineTo(px + 5, py + 9);
-      ctx.stroke();
-      if (h % 3 === 0) circle(px + 40, py + 30, 6, t.green, false);
-    }
-  }
-  ctx.restore();
-  ctx.strokeStyle = t.foreground;
-  ctx.lineWidth = 8;
-  ctx.strokeRect(2, 2, WORLD.width - 4, WORLD.height - 4);
+  drawScenery(ctx, run, theme, cam);
   ctx.lineWidth = 2;
   for (const drop of run.drops) {
     if (
@@ -199,61 +180,6 @@ export function drawSurvivor(
     }
     ctx.restore();
   }
-  const enemyShape = (e: SurvivorEnemy) => {
-    const { x, y, radius: r, kind } = e;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.lineWidth = kind === 'boss' ? 4 : 2;
-    ctx.fillStyle =
-      kind === 'slime' || kind === 'giantSlime'
-        ? t.green
-        : kind === 'bat'
-          ? t.magenta
-          : kind === 'mushroom'
-            ? t.red
-            : kind === 'golem'
-              ? t.brightBlack
-              : t.yellow;
-    ctx.strokeStyle = t.foreground;
-    ctx.beginPath();
-    if (kind === 'bat') {
-      ctx.moveTo(-r * 1.6, -r);
-      ctx.lineTo(-r * 0.4, 0);
-      ctx.lineTo(0, -r);
-      ctx.lineTo(r * 0.4, 0);
-      ctx.lineTo(r * 1.6, -r);
-      ctx.lineTo(r, r);
-      ctx.lineTo(-r, r);
-    } else if (kind === 'golem' || kind === 'armoredBoar') ctx.rect(-r, -r, r * 2, r * 2);
-    else if (kind === 'mushroom') {
-      ctx.arc(0, 0, r, Math.PI, 0);
-      ctx.lineTo(r * 0.35, r);
-      ctx.lineTo(-r * 0.35, r);
-    } else ctx.ellipse(0, 0, r, r * 0.85, 0, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    if (kind === 'boss' || kind === 'boar' || kind === 'armoredBoar') {
-      ctx.beginPath();
-      ctx.moveTo(-r * 0.8, -r * 0.2);
-      ctx.lineTo(-r, -r * 1.2);
-      ctx.lineTo(-r * 0.3, -r * 0.65);
-      ctx.moveTo(r * 0.8, -r * 0.2);
-      ctx.lineTo(r, -r * 1.2);
-      ctx.lineTo(r * 0.3, -r * 0.65);
-      ctx.stroke();
-    }
-    ctx.fillStyle = t.background;
-    ctx.fillRect(-r * 0.5, -4, r * 0.3, 5);
-    ctx.fillRect(r * 0.2, -4, r * 0.3, 5);
-    if (e.hp < e.maxHp || ['boss', 'giantSlime', 'armoredBoar'].includes(kind)) {
-      ctx.fillStyle = t.foreground;
-      ctx.fillRect(-r, r + 8, r * 2, 5);
-      ctx.fillStyle = t.red;
-      ctx.fillRect(-r, r + 8, (r * 2 * e.hp) / e.maxHp, 5);
-    }
-    ctx.restore();
-  };
   for (const enemy of run.enemies) {
     if (
       enemy.x >= cam.x - 120 &&
@@ -261,7 +187,7 @@ export function drawSurvivor(
       enemy.y >= cam.y - 120 &&
       enemy.y <= cam.y + VIEW.height + 120
     )
-      enemyShape(enemy);
+      drawSurvivorEnemy(ctx, enemy, run, theme, reduced);
   }
   for (const p of run.enemyProjectiles) {
     circle(p.x, p.y, p.radius + 2, t.background);
@@ -328,6 +254,21 @@ export function drawSurvivor(
   } else {
     circle(p.x, p.y, p.radius, t.blue);
   }
+  ctx.restore();
+  const region = regionForStage(run.stage.index);
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = t.background;
+  ctx.fillRect(14, VIEW.height - 58, 238, 44);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = t[region.accent];
+  ctx.fillRect(14, VIEW.height - 58, 3, 44);
+  ctx.fillStyle = t.foreground;
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(`${region.chapter + 1}지역 · ${region.name}`, 27, VIEW.height - 38);
+  ctx.font = '11px sans-serif';
+  ctx.fillText(region.subtitle, 27, VIEW.height - 22);
   ctx.restore();
   const boss = run.enemies.find((e) => e.kind === 'boss');
   if (

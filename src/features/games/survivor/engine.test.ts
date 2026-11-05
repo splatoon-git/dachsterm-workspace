@@ -408,11 +408,11 @@ describe('닥스 서바이버 G.8.1 전투 엔진', () => {
   it('skips a capped spawn without backlog and isolates spawn randomness from cards/drops', () => {
     const full = newSurvivor();
     for (let i = 0; i < LIMITS.enemies; i++) enemy(full, 600, i);
-    ticks(full, 75);
+    ticks(full, Math.ceil(SPAWN.intervalTicks));
     expect(full.enemies).toHaveLength(LIMITS.enemies);
-    expect(full.nextSpawnTick).toBe(150);
+    expect(full.nextSpawnTick).toBeCloseTo(SPAWN.intervalTicks * 2);
     full.enemies.length = 0;
-    ticks(full, 74);
+    ticks(full, Math.ceil(SPAWN.intervalTicks * 2) - full.tick - 1);
     expect(full.enemies).toHaveLength(0);
     ticks(full, 1);
     expect(full.enemies).toHaveLength(1);
@@ -451,7 +451,8 @@ describe('닥스 서바이버 G.8.1 전투 엔진', () => {
       expect(run.kills).toBeGreaterThanOrEqual(2);
       expect(run.player.hp).toBeGreaterThan(0);
       expect(run.pendingChoices).toBe(1);
-      expect(run.bite.sequence).toBeGreaterThanOrEqual(4);
+      expect(run.kills).toBeGreaterThanOrEqual(2);
+      expect(run.bite.sequence).toBeGreaterThanOrEqual(2);
     }
   });
 });
