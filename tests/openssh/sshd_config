@@ -1,0 +1,17 @@
+Port 22
+ListenAddress 0.0.0.0
+HostKey /run/probe/host
+HostKey /run/probe/host_rsa
+PasswordAuthentication yes
+PubkeyAuthentication yes
+PermitRootLogin no
+AllowUsers probe
+UsePAM yes
+KbdInteractiveAuthentication yes
+AllowTcpForwarding yes
+GatewayPorts no
+X11Forwarding no
+AllowAgentForwarding no
+PrintMotd no
+Subsystem sftp internal-sftp
+LogLevel ERROR
