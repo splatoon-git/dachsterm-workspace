@@ -1,8 +1,10 @@
-param([string]$Version = '', [switch]$Reinstall, [string]$PreviousVersion = '')
+param([string]$Version = '', [switch]$Reinstall, [string]$PreviousVersion = '', [string]$InstallerPath = '', [string]$ExpectedBinarySha256 = '')
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $Version) { $Version = (Get-Content -LiteralPath (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json).version }
 $installer = Join-Path $workspace "target\release\bundle\nsis\DaxTerm_${Version}_x64-setup.exe"
+if ($InstallerPath) { $installer = [IO.Path]::GetFullPath($InstallerPath) }
+if ($ExpectedBinarySha256 -and $ExpectedBinarySha256 -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid expected executable SHA256' }
 $target = [IO.Path]::GetFullPath((Join-Path $workspace ("target\install-smoke-" + [Guid]::NewGuid().ToString('N'))))
 if (-not $target.StartsWith($workspace + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe installation target' }
 $registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DaxTerm'
@@ -35,6 +37,7 @@ try {
   if ($registered.DisplayVersion -ne $Version -or $registered.InstallLocation.Trim('"') -ne $target) { throw 'Installed registry metadata mismatch' }
   $installedVersion = (Get-Item -LiteralPath $binary).VersionInfo.ProductVersion
   if ($installedVersion -ne $Version) { throw "Installed executable version mismatch: $installedVersion" }
+  if ($ExpectedBinarySha256 -and (Get-FileHash -LiteralPath $binary).Hash -ne $ExpectedBinarySha256) { throw 'Installed executable SHA256 mismatch' }
   Copy-Item -LiteralPath $binary -Destination (Join-Path $workspace 'target\installed-smoke.exe')
   Write-Output "PASS NSIS silent install, registry and executable version $Version"
   if ($PreviousVersion) {

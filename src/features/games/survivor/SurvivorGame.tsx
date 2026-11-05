@@ -110,12 +110,16 @@ export function SurvivorGame({
     };
     const release = (e: PointerEvent) => input.pointers.delete(e.pointerId);
     window.addEventListener('blur', pause);
+    window.addEventListener('pagehide', pause);
+    document.addEventListener('freeze', pause);
     document.addEventListener('visibilitychange', visibility);
     window.addEventListener('keyup', up);
     window.addEventListener('pointerup', release);
     window.addEventListener('pointercancel', release);
     return () => {
       window.removeEventListener('blur', pause);
+      window.removeEventListener('pagehide', pause);
+      document.removeEventListener('freeze', pause);
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('keyup', up);
       window.removeEventListener('pointerup', release);
@@ -166,7 +170,16 @@ export function SurvivorGame({
     const resize = new ResizeObserver(draw);
     resize.observe(field);
     const tick = (now: number) => {
-      if (document.hidden || !root.current?.contains(document.activeElement)) {
+      // Suspend/resume and a stalled WebView can omit blur/visibility events.
+      // Pause before advancing any catch-up ticks and discard all held input.
+      if (
+        now - last >= 1000 ||
+        document.hidden ||
+        !root.current?.contains(document.activeElement)
+      ) {
+        input.keys.clear();
+        input.pointers.clear();
+        input.held.clear();
         controller.pause();
         audio.stop();
         return;

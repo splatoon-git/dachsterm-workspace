@@ -284,3 +284,47 @@ test('focus loss pauses without stealing text focus; modified keys remain untouc
   expect(intercepted).toBe(false);
   await expect(game(page)).toHaveAttribute('data-phase', 'playing');
 });
+
+test('a long frame gap pauses before combat and saves, then resume drops held movement', async ({
+  page,
+}) => {
+  await start(page, true);
+  await page.keyboard.down('d');
+  await page.clock.runFor(250);
+  const before = await state(page);
+  await page.clock.fastForward(60_000);
+  await expect(game(page)).toHaveAttribute('data-phase', 'paused');
+  const suspended = await state(page);
+  expect(suspended.tick).toBe(before.tick);
+  expect(suspended.profile.checkpoint?.tick).toBe(before.tick);
+  expect(suspended.profile.settlements).toHaveLength(0);
+  await page.getByRole('button', { name: '계속하기', exact: true }).click();
+  await page.clock.runFor(500);
+  const resumed = await state(page);
+  expect(resumed.x).toBe(suspended.x);
+  expect(resumed.tick - suspended.tick).toBeLessThanOrEqual(30);
+  await page.keyboard.up('d');
+});
+
+test('page lifecycle suspension preserves a pending card and checkpoints without settling', async ({
+  page,
+}) => {
+  await start(page, true);
+  await page.evaluate(() => window.survivorUi.cards(2));
+  const before = await state(page);
+  await page.evaluate(() => document.dispatchEvent(new Event('freeze')));
+  await expect(game(page)).toHaveAttribute('data-phase', 'paused');
+  await page.clock.fastForward(120_000);
+  expect((await state(page)).profile.settlements).toHaveLength(0);
+  await page.getByRole('button', { name: '계속하기', exact: true }).click();
+  await expect(game(page)).toHaveAttribute('data-phase', 'choosing');
+  expect((await state(page)).choice).toBe(before.choice);
+  await page.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })),
+  );
+  await expect(game(page)).toHaveAttribute('data-phase', 'paused');
+  const after = await state(page);
+  expect(after.tick).toBe(before.tick);
+  expect(after.profile.checkpoint?.tick).toBe(before.tick);
+  expect(after.profile.settlements).toHaveLength(0);
+});

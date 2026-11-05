@@ -46,6 +46,8 @@ node scripts/run-ftp.mjs --reuse-build --native-only
 
 `npm run dev`는 브라우저 UI만 실행한다. `tauri dev`는 Windows/macOS 네이티브 앱을 실행한다. `build --debug --no-bundle`은 프런트엔드를 내장한 검사 용 실행 파일을 생성한다. Windows 설치 패키지는 `npm run tauri -- build --bundles nsis`, Mac은 Mac에서 `npm run tauri -- build --bundles app,dmg`로 생성한다. 공개 배포 전 Windows 코드 서명과 macOS Developer ID 서명·공증은 별도 자격증명/실기기 검증이 필요하다. 개인 로컬 빌드와 서명된 공개 배포를 구분한다.
 
+서바이버의 다중 시드/장기 진행, 실시간 키보드 플레이, WebView2 상한 부하·탭 수명·실제 PTY/SSH 격리 검사 명령과 배포 해시는 [G.8.6 검증 기록](docs/verification/survivor-validation.md)에 정리했다. 인공 부하·자동 키보드 검사와 사람의 플레이/실제 OS·Mac 검증을 구분한다.
+
 ## OpenSSH 실증
 
 `npm run probe`는 Rust 실증기를 빌드하고 전용 Debian OpenSSH 컨테이너를 생성한다. 호스트에서는 `127.0.0.1`의 임의 포트만 공개한다. 비밀번호·개인키·Passphrase는 실행마다 생성해 컨테이너 tmpfs와 검사 프로세스 메모리/환경에서만 전달한다. 빌드 스크립트나 프런트엔드에는 전달하지 않는다. 호스트키는 Docker 제어 경로로 얻은 공개키와 대조하며, 잘못된 키 거부를 별도로 확인한다. 이는 제품의 최초 신뢰 확인·`known_hosts` UI 구현이 아니다.
