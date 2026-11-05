@@ -1,48 +1,43 @@
 import {
   FIXED_STEP,
   INVULNERABLE_TICKS,
-  LIMITS,
   MAX_CATCH_UP_TICKS,
-  MAX_LEVEL,
   PLAYER_RADIUS,
   RECOIL_DECAY,
   RECOIL_SPEED,
-  SLIME,
   SPAWN,
   SURVIVOR_CONTENT_VERSION,
-  VIEW,
   WORLD,
-  xpToNextLevel,
 } from './content';
-import { nextRandom, seedStreams } from './random';
+import { seedStreams } from './random';
 import { initialProgression, openSurvivorChoice } from './progression';
 import { stepWeapons } from './weapons';
 import { EnemyGrid } from './spatial';
-import type {
-  Point,
-  SurvivorDrop,
-  SurvivorEnemy,
-  SurvivorInput,
-  SurvivorRun,
-  SurvivorStartOptions,
-} from './types';
+import { clamp } from './geometry';
+import { recycleEnemy, stepEnemies } from './enemies';
+import { collectSurvivorDrops, dropEnemyLoot } from './drops';
+import {
+  advanceStageClock,
+  evaluateStage,
+  endSurvivorRun,
+  initialStage,
+  resolveStageTransition,
+  spawnStageEnemies,
+} from './stages';
+import type { EnemyHit, SurvivorInput, SurvivorRun, SurvivorStartOptions } from './types';
+export { survivorCamera } from './geometry';
+export { continueSurvivorStage, finishSurvivor } from './stages';
 
 const IDLE: SurvivorInput = { moveX: 0, moveY: 0 };
 const EPSILON = 1e-12;
-const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
-const distanceSquared = (a: Point, b: Point) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
-
-// Scratch/pools are not gameplay state and never affect random draws or ordering.
-// Weak ownership lets a closed game release the entire simulation and its buffers.
-type Scratch = { grid: EnemyGrid; enemies: SurvivorEnemy[]; drops: SurvivorDrop[] };
-const scratchByRun = new WeakMap<SurvivorRun, Scratch>();
-function scratchFor(run: SurvivorRun): Scratch {
-  let scratch = scratchByRun.get(run);
-  if (!scratch) {
-    scratch = { grid: new EnemyGrid(), enemies: [], drops: [] };
-    scratchByRun.set(run, scratch);
+const grids = new WeakMap<SurvivorRun, EnemyGrid>();
+function gridFor(run: SurvivorRun): EnemyGrid {
+  let grid = grids.get(run);
+  if (!grid) {
+    grid = new EnemyGrid();
+    grids.set(run, grid);
   }
-  return scratch;
+  return grid;
 }
 
 export function newSurvivor(seed = 1, options: SurvivorStartOptions = {}): SurvivorRun {
@@ -54,6 +49,12 @@ export function newSurvivor(seed = 1, options: SurvivorStartOptions = {}): Survi
     phase: 'playing',
     pausedFrom: null,
     tick: 0,
+    stage: initialStage(),
+    highestReachedStage: 1,
+    highestCompletedStage: 0,
+    bossRewardGold: 0,
+    bossesDefeated: 0,
+    lastRewardedBossStage: 0,
     accumulator: 0,
     nextSpawnTick: SPAWN.intervalTicks,
     random: seedStreams(normalizedSeed),
@@ -69,6 +70,7 @@ export function newSurvivor(seed = 1, options: SurvivorStartOptions = {}): Survi
       invulnerableUntilTick: 0,
     },
     enemies: [],
+    enemyProjectiles: [],
     drops: [],
     bite: { nextReadyTick: 0, sequence: 0, lastAttack: null },
     weapons: [{ id: 'bite', rank: 1, evolved: false }],
@@ -89,13 +91,6 @@ export function newSurvivor(seed = 1, options: SurvivorStartOptions = {}): Survi
     pendingChoices: 0,
     lastDamage: null,
     result: null,
-  };
-}
-
-export function survivorCamera(run: SurvivorRun): Point {
-  return {
-    x: clamp(run.player.x - VIEW.width / 2, 0, WORLD.width - VIEW.width),
-    y: clamp(run.player.y - VIEW.height / 2, 0, WORLD.height - VIEW.height),
   };
 }
 
@@ -160,78 +155,25 @@ function movePlayer(run: SurvivorRun, input: SurvivorInput) {
   p.recoil.y *= RECOIL_DECAY;
 }
 
-function chasePlayer(run: SurvivorRun) {
-  for (const e of run.enemies) {
-    const dx = run.player.x - e.x;
-    const dy = run.player.y - e.y;
-    const distance = Math.hypot(dx, dy);
-    const travel = Math.min(distance, e.speed * FIXED_STEP);
-    e.x = clamp(
-      e.x + (distance ? (dx / distance) * travel : 0) + (e.recoil?.x ?? 0) * FIXED_STEP,
-      e.radius,
-      WORLD.width - e.radius,
-    );
-    e.y = clamp(
-      e.y + (distance ? (dy / distance) * travel : 0) + (e.recoil?.y ?? 0) * FIXED_STEP,
-      e.radius,
-      WORLD.height - e.radius,
-    );
-    if (e.recoil) {
-      e.recoil.x *= RECOIL_DECAY;
-      e.recoil.y *= RECOIL_DECAY;
-    }
-  }
-}
-
-function addXpDrop(run: SurvivorRun, enemy: SurvivorEnemy, scratch: Scratch) {
-  if (run.drops.length >= LIMITS.drops) {
-    let nearest = run.drops[0];
-    let distance = distanceSquared(nearest, enemy);
-    for (const drop of run.drops) {
-      const candidate = distanceSquared(drop, enemy);
-      if (candidate < distance || (candidate === distance && drop.id < nearest.id)) {
-        nearest = drop;
-        distance = candidate;
-      }
-    }
-    nearest.value += enemy.xp;
-    return;
-  }
-  const drop = scratch.drops.pop() ?? ({} as SurvivorDrop);
-  Object.assign(drop, {
-    id: run.nextEntityId++,
-    kind: 'xp',
-    x: enemy.x,
-    y: enemy.y,
-    value: enemy.xp,
-  } satisfies SurvivorDrop);
-  run.drops.push(drop);
-}
-
-function reapEnemies(run: SurvivorRun, scratch: Scratch) {
+function reapEnemies(run: SurvivorRun): boolean {
   let alive = 0;
+  let bossKilled = false;
   for (const enemy of run.enemies) {
     if (enemy.hp > 0) run.enemies[alive++] = enemy;
     else {
       run.kills++;
-      addXpDrop(run, enemy, scratch);
-      scratch.enemies.push(enemy);
+      if (enemy.kind === 'boss' && enemy.id === run.stage.bossId) bossKilled = true;
+      dropEnemyLoot(run, enemy);
+      recycleEnemy(run, enemy);
     }
   }
   run.enemies.length = alive;
+  return bossKilled;
 }
 
-function contactDamage(run: SurvivorRun, grid: EnemyGrid) {
+function damagePlayer(run: SurvivorRun, source: EnemyHit | null) {
   const p = run.player;
-  if (run.tick < p.invulnerableUntilTick) return;
-  let source: SurvivorEnemy | undefined;
-  grid.visit(p.x, p.y, p.radius + grid.maxRadius, (e) => {
-    if (e.hp <= 0 || distanceSquared(p, e) > (p.radius + e.radius) ** 2) return;
-    // One shared damage window; deterministic strongest contact wins this tick.
-    if (!source || e.damage > source.damage || (e.damage === source.damage && e.id < source.id))
-      source = e;
-  });
-  if (!source) return;
+  if (!source || run.tick < p.invulnerableUntilTick) return;
   const amount = Math.max(1, Math.round(source.damage) - p.stats.armor);
   p.hp = Math.max(0, p.hp - amount);
   p.invulnerableUntilTick = run.tick + INVULNERABLE_TICKS;
@@ -243,92 +185,27 @@ function contactDamage(run: SurvivorRun, grid: EnemyGrid) {
   p.recoil.y = (length ? dy / length : -p.facing.y) * RECOIL_SPEED;
 }
 
-function collectXp(run: SurvivorRun, scratch: Scratch) {
-  let remaining = 0;
-  let xp = 0;
-  for (const drop of run.drops) {
-    if (distanceSquared(run.player, drop) <= run.player.stats.pickupRadius ** 2) {
-      xp += drop.value;
-      scratch.drops.push(drop);
-    } else run.drops[remaining++] = drop;
+function tickSurvivor(run: SurvivorRun, input: SurvivorInput) {
+  const grid = gridFor(run);
+  run.tick++;
+  advanceStageClock(run);
+  movePlayer(run, input);
+  const hit = stepEnemies(run);
+  grid.rebuild(run.enemies);
+  stepWeapons(run, grid);
+  damagePlayer(run, hit);
+  const bossKilled = reapEnemies(run);
+  if (run.player.hp <= 0) {
+    endSurvivorRun(run, 'defeat');
+    return; // Death precedes healing, XP, stage qualification and boss rewards.
   }
-  run.drops.length = remaining;
-  if (run.level >= MAX_LEVEL) return;
-  run.xp += xp * (1 + run.player.stats.experienceBonus);
-  while (run.level < MAX_LEVEL && run.xp >= xpToNextLevel(run.level)) {
-    run.xp -= xpToNextLevel(run.level);
-    run.level++;
-    run.pendingChoices++;
-  }
-  if (run.level === MAX_LEVEL) run.xp = 0;
+  collectSurvivorDrops(run);
+  evaluateStage(run, bossKilled);
+  // Schedule this tick's spawns before choosing, so the card screen cannot skip events.
+  spawnStageEnemies(run);
   if (run.pendingChoices > 0) {
     run.phase = 'choosing';
     openSurvivorChoice(run);
   }
-}
-
-function spawnSlime(run: SurvivorRun, scratch: Scratch) {
-  if (run.tick < run.nextSpawnTick) return;
-  run.nextSpawnTick += SPAWN.intervalTicks;
-  if (run.enemies.length >= LIMITS.enemies) return;
-  const camera = survivorCamera(run);
-  const random = () => {
-    const next = nextRandom(run.random.spawn);
-    run.random.spawn = next.state;
-    return next.value;
-  };
-  for (let attempt = 0; attempt < SPAWN.attempts; attempt++) {
-    const angle = random() * Math.PI * 2;
-    const distance = SPAWN.ringMin + random() * (SPAWN.ringMax - SPAWN.ringMin);
-    const x = run.player.x + Math.cos(angle) * distance;
-    const y = run.player.y + Math.sin(angle) * distance;
-    const r = SLIME.radius;
-    if (x < r || x > WORLD.width - r || y < r || y > WORLD.height - r) continue;
-    if (
-      x + r >= camera.x &&
-      x - r <= camera.x + VIEW.width &&
-      y + r >= camera.y &&
-      y - r <= camera.y + VIEW.height
-    )
-      continue;
-    if (Math.hypot(x - run.player.x, y - run.player.y) < SPAWN.minDistance + r + run.player.radius)
-      continue;
-    const enemy = scratch.enemies.pop() ?? ({} as SurvivorEnemy);
-    Object.assign(enemy, {
-      id: run.nextEntityId++,
-      kind: 'slime',
-      x,
-      y,
-      radius: r,
-      hp: SLIME.hp,
-      maxHp: SLIME.hp,
-      speed: SLIME.speed,
-      damage: SLIME.damage,
-      xp: SLIME.xp,
-      recoil: undefined,
-      knockbackImmune: false,
-      orbitHitUntilTick: 0,
-      trailHitUntilTick: 0,
-    } satisfies SurvivorEnemy);
-    run.enemies.push(enemy);
-    return;
-  }
-}
-
-function tickSurvivor(run: SurvivorRun, input: SurvivorInput) {
-  const scratch = scratchFor(run);
-  run.tick++;
-  movePlayer(run, input);
-  chasePlayer(run);
-  scratch.grid.rebuild(run.enemies);
-  stepWeapons(run, scratch.grid);
-  contactDamage(run, scratch.grid);
-  reapEnemies(run, scratch);
-  if (run.player.hp <= 0) {
-    run.phase = 'result';
-    run.result = 'defeat';
-    return; // Death precedes pickups/level choices in the same tick.
-  }
-  collectXp(run, scratch);
-  if (run.phase === 'playing') spawnSlime(run, scratch);
+  resolveStageTransition(run);
 }

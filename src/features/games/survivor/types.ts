@@ -1,6 +1,28 @@
 export type Point = { x: number; y: number };
 export type SurvivorInput = { moveX: number; moveY: number };
-export type SurvivorPhase = 'playing' | 'choosing' | 'paused' | 'result';
+export type SurvivorPhase = 'playing' | 'choosing' | 'paused' | 'stageClear' | 'result';
+export type EnemyKind =
+  'slime' | 'bat' | 'mushroom' | 'golem' | 'boar' | 'giantSlime' | 'armoredBoar' | 'boss';
+export type EnemyAction = 'charge' | 'shoot' | 'leap';
+export type EnemyBehavior = {
+  mode: 'chase' | 'windup' | 'charge' | 'recovery';
+  action: EnemyAction;
+  untilTick: number;
+  readyTick: number;
+  direction: Point;
+  target: Point;
+};
+export type SurvivorStage = {
+  index: number;
+  phase: 'wave' | 'bossWarning' | 'boss';
+  waveTicks: number;
+  bossTicks: number;
+  warningTicks: number;
+  eliteSpawned: boolean;
+  bossSpawned: boolean;
+  bossId: number | null;
+  pendingTransition: 'bossWarning' | 'boss' | 'stageClear' | null;
+};
 
 export type SurvivorStats = {
   maxHp: number;
@@ -22,10 +44,9 @@ export type SurvivorPlayer = Point & {
   invulnerableUntilTick: number;
 };
 
-// Enemy kinds and physical drops expand in G.8.3.
 export type SurvivorEnemy = Point & {
   id: number;
-  kind: 'slime';
+  kind: EnemyKind;
   radius: number;
   hp: number;
   maxHp: number;
@@ -36,8 +57,20 @@ export type SurvivorEnemy = Point & {
   knockbackImmune?: boolean;
   orbitHitUntilTick?: number;
   trailHitUntilTick?: number;
+  damageScale?: number;
+  behavior?: EnemyBehavior;
 };
-export type SurvivorDrop = Point & { id: number; kind: 'xp'; value: number };
+export type DropKind = 'xp' | 'gold' | 'heal';
+/** Heal value counts snacks; each restores 20% of current maximum HP. */
+export type SurvivorDrop = Point & { id: number; kind: DropKind; value: number };
+export type EnemyProjectile = Point & {
+  id: number;
+  radius: number;
+  velocity: Point;
+  damage: number;
+  endTick: number;
+};
+export type EnemyHit = Point & { id: number; damage: number };
 export type BiteAttack = {
   id: number;
   tick: number;
@@ -123,12 +156,19 @@ export type SurvivorRun = {
   phase: SurvivorPhase;
   pausedFrom: 'playing' | 'choosing' | null;
   tick: number;
+  stage: SurvivorStage;
+  highestReachedStage: number;
+  highestCompletedStage: number;
+  bossRewardGold: number;
+  bossesDefeated: number;
+  lastRewardedBossStage: number;
   accumulator: number;
   nextSpawnTick: number;
   random: { spawn: number; drops: number; cards: number };
   nextEntityId: number;
   player: SurvivorPlayer;
   enemies: SurvivorEnemy[];
+  enemyProjectiles: EnemyProjectile[];
   drops: SurvivorDrop[];
   bite: { nextReadyTick: number; sequence: number; lastAttack: BiteAttack | null };
   weapons: OwnedWeapon[];
@@ -148,5 +188,5 @@ export type SurvivorRun = {
   xp: number;
   pendingChoices: number;
   lastDamage: { tick: number; amount: number } | null;
-  result: 'defeat' | null;
+  result: 'defeat' | 'retired' | 'abandoned' | null;
 };

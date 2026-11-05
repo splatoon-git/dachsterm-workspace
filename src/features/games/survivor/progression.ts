@@ -13,6 +13,7 @@ import {
   weaponParameters,
 } from './content';
 import { nextRandom } from './random';
+import { resolveStageTransition } from './stages';
 import type {
   CardEffect,
   EvolutionId,
@@ -284,7 +285,10 @@ export function chooseSurvivorCard(run: SurvivorRun, choiceId: number, cardId: s
   run.choice = null;
   run.accumulator = 0;
   if (run.pendingChoices) drawChoice(run);
-  else run.phase = 'playing';
+  else {
+    run.phase = 'playing';
+    resolveStageTransition(run);
+  }
   return true;
 }
 

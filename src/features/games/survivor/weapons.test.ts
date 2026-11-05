@@ -319,7 +319,7 @@ describe('G.8.2 여섯 무기의 전투 규칙', () => {
     });
     ticks(run, 1);
     expect(run.kills).toBe(1);
-    expect(run.drops).toHaveLength(1);
+    expect(run.drops.filter((d) => d.kind === 'xp')).toHaveLength(1);
     expect(run.drops[0].value).toBe(3);
     run.nextSpawnTick = 2;
     ticks(run, 1);

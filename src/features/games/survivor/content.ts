@@ -1,11 +1,18 @@
-import type { AbilityId, EvolutionId, SurvivorStats, WeaponId } from './types';
+import type { AbilityId, EnemyKind, EvolutionId, SurvivorStats, WeaponId } from './types';
 
-export const SURVIVOR_CONTENT_VERSION = 2;
+export const SURVIVOR_CONTENT_VERSION = 3;
 export const TICKS_PER_SECOND = 60;
 export const FIXED_STEP = 1 / TICKS_PER_SECOND;
 export const MAX_CATCH_UP_TICKS = 5;
 export const MAX_LEVEL = 40;
-export const LIMITS = { enemies: 180, drops: 250, attacks: 240 } as const;
+export const LIMITS = {
+  enemies: 180,
+  elites: 2,
+  bosses: 1,
+  enemyProjectiles: 100,
+  drops: 250,
+  attacks: 240,
+} as const;
 export const MAX_SLOTS = 4;
 export const MAX_RANK = 5;
 export const MAX_EVOLUTIONS = 2;
@@ -160,12 +167,105 @@ export function weaponParameters(
 }
 export const SLIME = { hp: 24, speed: 70, damage: 10, xp: 3, radius: 18 } as const;
 export const SPAWN = {
-  intervalTicks: 75, // Starting slime cadence only; the five-minute director is G.8.3.
+  intervalTicks: 75, // Stage 1; later stages retain fractional spawn intervals.
   minDistance: 240,
   ringMin: 600,
   ringMax: 720,
   attempts: 16,
 } as const;
+
+export const STAGE = {
+  waveTicks: 3600,
+  warningTicks: 90,
+  eliteTick: 1800,
+  bossReward: 40,
+} as const;
+export const DROP_RULES = {
+  goldChance: 0.1,
+  healChance: 0.02,
+  eliteGold: 15,
+  healFraction: 0.2,
+} as const;
+export const ENEMIES = {
+  slime: SLIME,
+  bat: { hp: 18, speed: 135, damage: 10, xp: 4, radius: 14 },
+  mushroom: { hp: 32, speed: 55, damage: 12, xp: 5, radius: 20 },
+  golem: { hp: 100, speed: 45, damage: 18, xp: 8, radius: 28 },
+  boar: { hp: 45, speed: 75, damage: 15, xp: 4, radius: 22 },
+  giantSlime: { hp: 600, speed: 55, damage: 20, xp: 40, radius: 42 },
+  armoredBoar: { hp: 1000, speed: 70, damage: 25, xp: 40, radius: 38 },
+  boss: { hp: 3000, speed: 75, damage: 25, xp: 0, radius: 48 },
+} as const;
+export const ENEMY_RULES = {
+  mushroom: {
+    range: 300,
+    trigger: 360,
+    cooldown: 180,
+    warning: 30,
+    projectileSpeed: 160,
+    damage: 10,
+  },
+  boar: { trigger: 420, cooldown: 180, warning: 42, charge: 36, speed: 300, recovery: 60 },
+  giantSlime: { trigger: 420, cooldown: 240, warning: 48, radius: 100, recovery: 48 },
+  armoredBoar: { trigger: 600, cooldown: 240, warning: 48, charge: 48, speed: 330, recovery: 72 },
+  boss: {
+    trigger: 520,
+    chargeWarning: 54,
+    charge: 54,
+    chargeSpeed: 320,
+    recovery: 72,
+    shootWarning: 48,
+    projectileSpeed: 160,
+    projectileDamage: 15,
+    spread: (Math.PI * 2) / 3,
+    leapWarning: 60,
+    leapRadius: 110,
+    leapDamage: 30,
+    leapRecovery: 90,
+    enrageTick: 5400,
+  },
+  projectileRadius: 8,
+  projectileLifetime: 180,
+} as const;
+
+export function isElite(kind: EnemyKind): boolean {
+  return kind === 'giantSlime' || kind === 'armoredBoar';
+}
+export function stageParameters(index: number) {
+  const n = Math.max(0, index - 1);
+  const b = Math.max(0, index / 3 - 1);
+  return {
+    spawnRate: Math.min(4.8, 0.8 + 0.6 * n),
+    hpScale: Math.min(20, 1 + 0.18 * n + 0.015 * n * n),
+    damageScale: Math.min(3, 1 + 0.06 * n),
+    xpScale: Math.min(2.5, 1 + 0.15 * n),
+    bossHpScale: Math.min(10, 1 + 0.6 * b),
+    bossDamageScale: Math.min(3, 1 + 0.15 * b),
+  };
+}
+export function stageEnemyKind(index: number, roll: number): EnemyKind {
+  const weights =
+    index === 1
+      ? [100, 0, 0, 0, 0]
+      : index === 2
+        ? [65, 35, 0, 0, 0]
+        : index === 3
+          ? [35, 35, 30, 0, 0]
+          : index === 4
+            ? [20, 25, 25, 30, 0]
+            : [15, 25, 20, 20, 20];
+  const kinds: EnemyKind[] = ['slime', 'bat', 'mushroom', 'golem', 'boar'];
+  let sum = 0;
+  for (let i = 0; i < weights.length; i++) {
+    sum += weights[i];
+    if (roll * 100 < sum) return kinds[i];
+  }
+  return 'boar';
+}
+export function stageElite(index: number): EnemyKind | null {
+  if (index % 2 !== 0 || index % 3 === 0) return null;
+  return index % 6 === 2 ? 'giantSlime' : 'armoredBoar';
+}
 
 export function xpToNextLevel(level: number): number {
   if (level >= MAX_LEVEL) return 0;
