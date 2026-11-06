@@ -39,7 +39,7 @@ use sha2::Digest;
 
 const DSA_COMPONENT_SIZE: usize = 20;
 
-// DaxTerm patch: public RSA verification without RustCrypto/rsa private operations.
+// DachsTerm patch: public RSA verification without RustCrypto/rsa private operations.
 // Keep SHA-1 disabled; ring validates RSA modulus/exponent and PKCS#1 padding.
 #[cfg(not(feature = "rsa"))]
 impl Verifier<Signature> for public::RsaPublicKey {

@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { createHash } from 'node:crypto';
-const binary = process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe');
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-survivor-memory-'));
+const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-memory-'));
 const server = net.createServer();
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
@@ -17,8 +17,8 @@ const app = spawn(binary, [], {
   windowsHide: true,
   env: {
     ...process.env,
-    DAXTERM_TEST_DATA_DIR: directory,
-    DAXTERM_TEST_CDP_PORT: String(port),
+    DACHSTERM_TEST_DATA_DIR: directory,
+    DACHSTERM_TEST_CDP_PORT: String(port),
     WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
   },
 });

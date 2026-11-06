@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-const root = await mkdtemp(path.join(tmpdir(), 'daxterm-ftp-native-'));
+const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-ftp-native-'));
 let app, browser, page;
 let stage = 'launch';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -17,7 +17,7 @@ async function invoke(command, args = {}) {
 async function cleanup() {
   if (
     path.dirname(root) !== path.resolve(tmpdir()) ||
-    !path.basename(root).startsWith('daxterm-ftp-native-')
+    !path.basename(root).startsWith('dachsterm-ftp-native-')
   )
     throw new Error('unsafe cleanup path');
   await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
@@ -27,10 +27,10 @@ try {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
   await new Promise((r) => server.close(r));
-  app = spawn(process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe'), [], {
+  app = spawn(process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe'), [], {
     windowsHide: true,
     stdio: 'ignore',
-    env: { ...process.env, DAXTERM_TEST_DATA_DIR: root, DAXTERM_TEST_CDP_PORT: String(port) },
+    env: { ...process.env, DACHSTERM_TEST_DATA_DIR: root, DACHSTERM_TEST_CDP_PORT: String(port) },
   });
   let endpoint;
   for (let i = 0; i < 80; i++) {
@@ -65,12 +65,12 @@ try {
     await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
     await form
       .getByLabel('포트', { exact: true })
-      .fill(process.env[protocol === 'ftp' ? 'DAXTERM_FTP_PORT' : 'DAXTERM_FTPS_PORT']);
+      .fill(process.env[protocol === 'ftp' ? 'DACHSTERM_FTP_PORT' : 'DACHSTERM_FTPS_PORT']);
     await form.getByLabel('사용자', { exact: true }).fill('fixture');
-    await form.getByLabel('비밀번호', { exact: true }).fill(process.env.DAXTERM_FTP_PASSWORD);
+    await form.getByLabel('비밀번호', { exact: true }).fill(process.env.DACHSTERM_FTP_PASSWORD);
     await form.getByLabel('인증정보 보관', { exact: true }).selectOption('replace');
     if (protocol === 'ftps')
-      await form.getByLabel('추가 CA 인증서 경로 (선택)').fill(process.env.DAXTERM_FTP_CA);
+      await form.getByLabel('추가 CA 인증서 경로 (선택)').fill(process.env.DACHSTERM_FTP_CA);
     stage = `${protocol} submit`;
     await form.getByRole('button', { name: '저장 후 연결', exact: true }).click();
     stage = `${protocol} connected`;

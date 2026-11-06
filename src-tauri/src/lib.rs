@@ -1,6 +1,7 @@
 pub mod archive;
 pub mod broadcast;
 mod commands;
+mod config_includes;
 pub mod credentials;
 pub mod editor;
 pub mod encoding;
@@ -8,22 +9,21 @@ pub mod file_ops;
 pub mod ftp;
 pub mod hostkeys;
 pub mod local;
-pub mod podtree;
-pub mod session_log;
 mod maintenance;
 pub mod monitoring;
-mod rsa_auth;
+pub mod podtree;
 pub mod routes;
+mod rsa_auth;
+pub mod session_log;
 mod session_management;
 mod session_transfer;
-mod config_includes;
 mod settings;
-pub mod snippets;
 pub mod sftp;
-pub mod transfer_queue;
+pub mod snippets;
 pub mod ssh;
 mod ssh_auth;
 pub mod storage;
+pub mod transfer_queue;
 pub mod tunnels;
 pub mod vault;
 pub mod windows;
@@ -60,10 +60,10 @@ pub fn run() {
     #[cfg(debug_assertions)]
     let context = {
         let mut context = context;
-        if let Some(directory) = std::env::var_os("DAXTERM_TEST_DATA_DIR") {
+        if let Some(directory) = std::env::var_os("DACHSTERM_TEST_DATA_DIR") {
             context.config_mut().app.windows[0].data_directory =
                 Some(PathBuf::from(directory).join("webview"));
-            if let Ok(port) = std::env::var("DAXTERM_TEST_CDP_PORT")
+            if let Ok(port) = std::env::var("DACHSTERM_TEST_CDP_PORT")
                 .unwrap_or_default()
                 .parse::<u16>()
             {
@@ -79,7 +79,7 @@ pub fn run() {
             let directory = app.path().app_data_dir()?;
             // Integration tests isolate all local state; release builds ignore this variable.
             #[cfg(debug_assertions)]
-            let directory = std::env::var_os("DAXTERM_TEST_DATA_DIR")
+            let directory = std::env::var_os("DACHSTERM_TEST_DATA_DIR")
                 .map(PathBuf::from)
                 .unwrap_or(directory);
             std::fs::create_dir_all(&directory)?;
@@ -233,8 +233,8 @@ pub fn run() {
     let app = match app {
         Ok(app) => app,
         Err(_) => {
-            rfd::MessageDialog::new().set_title("DaxTerm 시작 실패")
-                .set_description("앱을 시작할 수 없습니다. 이미 실행 중인 DaxTerm을 먼저 확인하세요. 계속 실패하면 앱 데이터 폴더의 sessions.sqlite3와 recovery 폴더를 보존하고 복구 절차를 확인하세요. 원본 데이터는 자동 초기화하지 않습니다.")
+            rfd::MessageDialog::new().set_title("DachsTerm 시작 실패")
+                .set_description("앱을 시작할 수 없습니다. 이미 실행 중인 DachsTerm을 먼저 확인하세요. 계속 실패하면 앱 데이터 폴더의 sessions.sqlite3와 recovery 폴더를 보존하고 복구 절차를 확인하세요. 원본 데이터는 자동 초기화하지 않습니다.")
                 .set_level(rfd::MessageLevel::Error).show();
             std::process::exit(1);
         }

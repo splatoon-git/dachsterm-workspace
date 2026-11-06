@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
-const binary = process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe');
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-survivor-integration-'));
-const fixture = `daxterm-survivor-${randomUUID()}`;
+const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-integration-'));
+const fixture = `dachsterm-survivor-${randomUUID()}`;
 const docker = (args) => {
   const r = spawnSync('docker', args, { encoding: 'utf8', windowsHide: true, timeout: 60000 });
   if (r.status !== 0) throw Error('Fixture operation failed');
@@ -21,7 +21,7 @@ let app,
   stage = 'fixture';
 const result = { binary, checks: [], errors: [] };
 try {
-  docker(['build', '-q', '-t', 'daxterm-openssh-probe', 'tests/openssh']);
+  docker(['build', '-q', '-t', 'dachsterm-openssh-probe', 'tests/openssh']);
   docker([
     'run',
     '-d',
@@ -29,12 +29,12 @@ try {
     '--name',
     fixture,
     '--label',
-    'app.daxterm.purpose=survivor-isolation',
+    'app.dachsterm.purpose=survivor-isolation',
     '-p',
     '127.0.0.1::22',
     '--tmpfs',
     '/run/probe:rw,noexec,nosuid,mode=0700',
-    'daxterm-openssh-probe',
+    'dachsterm-openssh-probe',
   ]);
   created = true;
   let ready = false;
@@ -65,8 +65,8 @@ try {
     windowsHide: true,
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: directory,
-      DAXTERM_TEST_CDP_PORT: String(port),
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
     },
   });

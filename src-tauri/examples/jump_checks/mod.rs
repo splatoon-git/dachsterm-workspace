@@ -54,7 +54,7 @@ async fn ready(c: &mut Client, accept: bool) -> Result<usize> {
                 c.manager
                     .control(&c.id)?
                     .auth_reply
-                    .send(daxterm::ssh::AuthReply {
+                    .send(dachsterm::ssh::AuthReply {
                         challenge,
                         responses: Zeroizing::new(
                             prompts.iter().map(|_| env("PASSWORD")).collect(),
@@ -69,7 +69,7 @@ async fn ready(c: &mut Client, accept: bool) -> Result<usize> {
     }
 }
 async fn services(c: &mut Client) -> Result<()> {
-    use daxterm::{
+    use dachsterm::{
         monitoring::Monitors,
         tunnels::{Config, Tunnels},
     };
@@ -307,12 +307,12 @@ pub async fn run() -> Result<()> {
     ready(&mut cut, true).await?;
     let mut survivor = begin(&manager, &store, &paths, agent, String::new())?;
     survivor.connected(false).await?;
-    let live_tunnels = Arc::new(daxterm::tunnels::Tunnels::default());
+    let live_tunnels = Arc::new(dachsterm::tunnels::Tunnels::default());
     live_tunnels
         .start(
             manager.clone(),
             cut.id.clone(),
-            daxterm::tunnels::Config {
+            dachsterm::tunnels::Config {
                 id: uuid::Uuid::new_v4().to_string(),
                 profile_id: end.id.clone(),
                 name: "cut".into(),

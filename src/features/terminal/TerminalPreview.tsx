@@ -20,7 +20,7 @@ export function TerminalPreview({ theme }: { theme: ThemeDefinition }) {
     terminal.loadAddon(fit);
     terminal.open(host.current!);
     instance.current = terminal;
-    terminal.writeln('DaxTerm · 터미널 미리보기');
+    terminal.writeln('DachsTerm · 터미널 미리보기');
     terminal.writeln('한글 / UTF-8  •  아직 서버에 연결되지 않았습니다.\r\n');
     for (const [code, label] of [
       [32, 'SUCCESS'],

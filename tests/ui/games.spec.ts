@@ -30,7 +30,7 @@ for (const width of [1280, 560, 360]) {
     await page.evaluate(() => window.dispatchEvent(new Event('blur')));
     await expect(dialog.getByRole('button', { name: '계속하기', exact: true })).toBeVisible();
     await expect
-      .poll(() => page.evaluate(() => Number(localStorage.getItem('daxterm.games.v1.blocks'))))
+      .poll(() => page.evaluate(() => Number(localStorage.getItem('dachsterm.games.v1.blocks'))))
       .toBeGreaterThan(0);
     await page.screenshot({ path: `test-results/games-blocks-${width}.png` });
 
@@ -86,7 +86,7 @@ for (const width of [1280, 560, 360]) {
     await expect(page.getByRole('tab', { name: '시작하기', exact: true })).toBeFocused();
     await page.reload();
     expect(
-      await page.evaluate(() => Number(localStorage.getItem('daxterm.games.v1.blocks'))),
+      await page.evaluate(() => Number(localStorage.getItem('dachsterm.games.v1.blocks'))),
     ).toBeGreaterThan(0);
   });
 }

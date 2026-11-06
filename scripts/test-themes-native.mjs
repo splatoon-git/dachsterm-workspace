@@ -7,7 +7,7 @@ import path from 'node:path';
 import net from 'node:net';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-themes-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-themes-'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let app, browser;
 async function launch() {
@@ -15,13 +15,13 @@ async function launch() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   await new Promise((resolve) => server.close(resolve));
-  app = spawn(path.resolve('target/debug/daxterm.exe'), [], {
+  app = spawn(path.resolve('target/debug/dachsterm.exe'), [], {
     stdio: 'ignore',
     windowsHide: true,
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: directory,
-      DAXTERM_TEST_CDP_PORT: String(port),
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
     },
   });
@@ -77,7 +77,7 @@ try {
     ['Solarized Dark', 'solarized-dark'],
     ['Terminal Green', 'terminal-green'],
     ['Terminal Amber', 'terminal-amber'],
-    ['DaxTerm Classic', 'pms-retro-light'],
+    ['DachsTerm Classic', 'pms-retro-light'],
   ]) {
     await page.getByRole('button', { name: '설정', exact: true }).click();
     await expect(page.getByRole('radio')).toHaveCount(12);

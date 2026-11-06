@@ -5,7 +5,7 @@ const text = { primary: '#263447', secondary: '#5F686F', onAction: '#FFFFFF', di
 const status = { success: '#376F45', info: '#286F6D', warning: '#A24E0C', error: '#B54137' };
 export const lightTheme = {
   id: 'pms-retro-light',
-  name: 'DaxTerm Classic',
+  name: 'DachsTerm Classic',
   description: '지금의 따뜻한 크림색 · 기본 테마',
   category: '기본',
   colorScheme: 'light',

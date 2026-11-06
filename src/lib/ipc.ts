@@ -25,7 +25,7 @@ export type Snapshot = { profiles: Profile[]; groups: Group[]; credentialWarning
 export const desktop = isTauri();
 export function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (!desktop)
-    return Promise.reject('실제 연결과 저장은 DaxTerm 데스크톱 앱에서 사용할 수 있습니다.');
+    return Promise.reject('실제 연결과 저장은 DachsTerm 데스크톱 앱에서 사용할 수 있습니다.');
   return invoke<T>(command, args);
 }
 export const blankProfile = (): Profile => ({

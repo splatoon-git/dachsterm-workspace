@@ -15,8 +15,8 @@
 
 ### 앱이 시작되지 않을 때
 
-1. 기존 DaxTerm 창/프로세스가 있는지 먼저 확인하고 정상 종료한다. 잠금 파일 자체를 지워 실행 중인 보호를 우회하지 않는다.
-2. `%APPDATA%\app.daxterm.desktop`을 확인한다(Tauri 앱 데이터 위치). **앱을 완전히 종료한 뒤** `sessions.sqlite3`와 `-wal`/`-shm`, `recovery`, `edits`, `known_hosts`를 포함한 폴더 전체를 별도 위치에 보존한다. DB 파일 하나만 실행 중 복사하지 않는다.
+1. 기존 DachsTerm 창/프로세스가 있는지 먼저 확인하고 정상 종료한다. 잠금 파일 자체를 지워 실행 중인 보호를 우회하지 않는다.
+2. `%APPDATA%\app.dachsterm.desktop`을 확인한다(Tauri 앱 데이터 위치). **앱을 완전히 종료한 뒤** `sessions.sqlite3`와 `-wal`/`-shm`, `recovery`, `edits`, `known_hosts`를 포함한 폴더 전체를 별도 위치에 보존한다. DB 파일 하나만 실행 중 복사하지 않는다.
 3. 손상 DB를 덮어쓰지 않는다. 별도 Windows 사용자/테스트 환경의 새 앱에서 보존한 `recovery/*.json`을 가져와 설정을 복구하고 인증정보를 다시 입력한다. SSH 호스트 지문을 다시 검증한다. 원래 OS 자격 증명과 마스터 설정이 없는 다른 PC로 암호가 복원되지는 않는다.
 4. 미업로드 수정본은 `edits`에서 별도로 보존·대조한다. 자동 삭제하지 않는다. 이전 앱의 DB 형식이 다르면 설치 파일만 되돌려 복구됐다고 판단하지 않는다.
 
@@ -49,7 +49,7 @@ node scripts/run-phase1.mjs --stress-minutes 5
 
 - 자동 검사는 실패 즉시 중단한다. Cargo 감사에 미해결 항목이 있으면 게이트 전체는 실패다. 서명 옵션은 유효한 Authenticode가 없는 설치본을 공개용으로 승인하지 않는다.
 - GitHub Actions 정의는 Windows 정적/단위/UI 검사를 실행한다. 이 작업 공간은 Git 저장소/연결된 원격 저장소가 없어 원격 CI가 실행됐다는 의미는 아니다. Docker Linux fixture의 실접속은 로컬 `-Native` 단계로 구분한다.
-- 기존 실행 앱을 덮어쓰지 않으려면 `CARGO_TARGET_DIR`로 검사 빌드 폴더를 분리한다. SSH/FTP wrapper가 같은 경로의 앱과 probe를 사용한다. 단독 maintenance 검사는 해당 경로의 실행 파일을 `DAXTERM_TEST_BINARY`로 지정한다. `--skip-app-build`는 이미 검증 대상 앱을 빌드했을 때 SSH 예제만 재빌드하고 실행한다.
+- 기존 실행 앱을 덮어쓰지 않으려면 `CARGO_TARGET_DIR`로 검사 빌드 폴더를 분리한다. SSH/FTP wrapper가 같은 경로의 앱과 probe를 사용한다. 단독 maintenance 검사는 해당 경로의 실행 파일을 `DACHSTERM_TEST_BINARY`로 지정한다. `--skip-app-build`는 이미 검증 대상 앱을 빌드했을 때 SSH 예제만 재빌드하고 실행한다.
 - SSH stress는 실제 제품 엔진의 연결/1MiB 출력/종료를 최소30회·지정 시간 반복한다. 10회마다 프로세스 private bytes/handle 수를 기록하고 첫 샘플 대비 +96MiB/+128 상한을 적용한다. `target/verification/ssh-stress.json`에 시간·횟수·수치를 남긴다. WebView2나 실제 절전·24시간 검사 결과를 대신하지 않는다.
 - 설치 검사는 기존 사용자 설치가 있으면 중단한다. 선택적 `-Reinstall`은 같은 버전 덮어설치와 테스트 파일 보존을 검사한다. 실제 이전 버전에서의 데이터 이행은 별도 수동 검증이다.
 - `scripts/test-installer.ps1 -PreviousVersion 0.5.0 -Version 0.5.1`은 테스트 전용 경로의 이전 설치본을 새 설치본으로 교체하고 버전/일반 파일 보존을 검사한다. 실제 사용자 데이터에 테스트 세션이나 암호를 주입하지 않으므로 이 검사도 전체 데이터 이행 성공을 뜻하지 않는다.
@@ -60,7 +60,7 @@ node scripts/run-phase1.mjs --stress-minutes 5
 
 - `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`(29개), `npm run build`, `npm run test:ui -- --workers=2`(20개) 통과. 초기 4-worker 실행에서 테마 순회 검사 1건이 전체 시간 제한에 걸렸으며, 2-worker 전체 실행은 통과했다. 검사 내용을 생략하거나 assertion을 완화하지 않았다.
 - `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`(앱 23개+실증 1개) 통과. DB 삭제 실패/이행 rollback/손상 원본 보존/파일 잠금/복구본 및 진단의 민감 값 제외를 검사했다. 중간 PDB 링크 실패는 재실행으로 통과했고, 기본 앱 EXE 사용 중 빌드 실패는 별도 `target/windows-hardening` 빌드로 분리했다.
-- `node scripts/test-maintenance-native.mjs`(해당 DAXTERM_TEST_BINARY 지정): 실제 Windows WebView2 복구본 생성→세션 삭제→새 ID로 가져오기→잘못된 경로 거부→재시작 후 유지, 560px 넘침 검사 통과. `test-results-native/maintenance.png`, `maintenance-narrow.png` 시각 확인 자료. 초기 테스트가 테마 상태 텍스트까지 선택하던 locator 오류를 복구 영역으로 한정해 수정했다.
+- `node scripts/test-maintenance-native.mjs`(해당 DACHSTERM_TEST_BINARY 지정): 실제 Windows WebView2 복구본 생성→세션 삭제→새 ID로 가져오기→잘못된 경로 거부→재시작 후 유지, 560px 넘침 검사 통과. `test-results-native/maintenance.png`, `maintenance-narrow.png` 시각 확인 자료. 초기 테스트가 테마 상태 텍스트까지 선택하던 locator 오류를 복구 영역으로 한정해 수정했다.
 - `node scripts/run-ftp.mjs --reuse-build --native`(해당 CARGO_TARGET_DIR 지정): 실제 FTP/FTPS/CP949 32MiB 재개/바이트 일치·미신뢰 CA 거부, Windows FTP/FTPS 폼·파일 작업·좁은 창 검사 통과. 수정한 PEM 파서 포함.
 - `npm audit --audit-level=low`: 0건. `cargo audit --deny warnings`: 취약점1/경고5로 실패. `node scripts/audit-windows.mjs`: Windows 해당 취약점1, Windows 밖 경고5로 실패. `scripts/verify-windows.ps1`은 앞선 정적/단위/UI 검사를 통과한 뒤 이 보안 게이트에서 의도대로 중단되었으며 전체 성공으로 기록하지 않는다.
 - `node scripts/generate-notices.mjs`: Windows Cargo 및 npm runtime 426개 항목, 원문 누락0. 설치 리소스에 포함. 공개 배포 권리와 라이선스 의무의 검토는 별도다.

@@ -26,14 +26,14 @@
 
 ## 실행 결과
 
-- `cargo test -p daxterm --lib -- --test-threads=1`: 최종 전체 54개 통과. 경로/계층, 스키마 이행, 트랜잭션 롤백, 템플릿/병합/비밀 참조 유지, Include 승인/순환/이탈, 오래된 호스트키 응답의 다음 홉 승인 차단 포함. `cargo clippy -p daxterm --all-targets -- -D warnings` 통과.
+- `cargo test -p dachsterm --lib -- --test-threads=1`: 최종 전체 54개 통과. 경로/계층, 스키마 이행, 트랜잭션 롤백, 템플릿/병합/비밀 참조 유지, Include 승인/순환/이탈, 오래된 호스트키 응답의 다음 홉 승인 차단 포함. `cargo clippy -p dachsterm --all-targets -- -D warnings` 통과.
 - `node scripts/run-phase1.mjs --jumps`: 실제 Docker OpenSSH에서 1홉/2홉, 각각 최초 호스트키, 암호+RSA SHA-2+MFA와 OS agent, PTY 한글/SFTP/외부 편집 왕복, Local/Remote/SOCKS5 왕복·모니터링 통과. 중간 바이트 브리지를 실제 종료해 종속 터널 정리·다른 직접 연결 격리·새 셸 재접속을 확인했다. 첫/중간/최종 변경 호스트키·잘못된 암호·MFA 취소·포워딩 handshake timeout과 연결/포워딩 맵 정리도 통과했다. 모든 fixture 인증정보/키/파일은 임시 환경에서 제거했다.
 - `vitest run src/features/sessions --maxWorkers=1`: 3개 통과. 계층 검색·의존 선택·순환 미리보기.
 - Playwright `session-transfer.spec.ts`, `session-manager.spec.ts`: 각 4개 통과. 500세션 복합 검색/선택·명시적 필드 미리보기, 360/560/1280px overflow·키보드, 기존 가져오기 실패/재시도/취소. UI fixture 검증은 실제 SSH 검증과 구분한다.
 - `tsc --noEmit`, 소유 프런트 소스 ESLint, Windows debug Tauri 빌드 통과. 기존 번들 크기 경고는 유지한다.
 - 실제 WebView2에서 두 번째 홉의 신뢰 승인 실패를 발견했다. `trust_host`의 단일 응답 상태를 홉별로 초기화하고 challenge를 추가했으며, 이전 IPC 응답이 새 프롬프트를 지우지 않게 수정했다. 수정 후 최종 `node scripts/run-phase1.mjs --native --jumps --reuse-build` 종료0: 경유 암호 입력·두 host:port 승인·실제 PTY, v3 참조 재매핑·그룹·일괄 수정 미리보기/적용·템플릿·비밀 제외 복구 내보내기·재시작 복원 통과. pageErrors0. OS 파일 대화상자의 직접 조작은 이 검사에 포함하지 않는다.
 - 직전 빌드의 `node scripts/run-phase1.mjs --native --session-transfer --reuse-build` 종료0: 기존 v2 가져오기/롤백·직접 연결 신뢰 거절/잘못된 암호·일회용 암호·저장 동의/OS 보관함 재사용·보관함 잠금 저장 실패·복구 정리 통과.
-- 최종 검증 EXE는 `target/verification/phase64-65/daxterm-debug.exe`, SHA256 `74E4B3566DF94481B8B87117C194A704BAB741552DFF6A51A1979327806C3304`. 실행 시 `DAXTERM_TEST_BINARY`로 지정했다. 결과/화면은 `target/verification/session-management-native.{json,png}`, 내보내기 결과는 `session-v3-export.json`. 이후 소스 변경은 Rust 서식 정리다. 기존 release/설치본을 이 결과로 대체하지 않는다.
+- 최종 검증 EXE는 `target/verification/phase64-65/daxterm-debug.exe`, SHA256 `74E4B3566DF94481B8B87117C194A704BAB741552DFF6A51A1979327806C3304`. 실행 시 `DACHSTERM_TEST_BINARY`로 지정했다. 결과/화면은 `target/verification/session-management-native.{json,png}`, 내보내기 결과는 `session-v3-export.json`. 이후 소스 변경은 Rust 서식 정리다. 기존 release/설치본을 이 결과로 대체하지 않는다.
 
 ## 별도 대기
 

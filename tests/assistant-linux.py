@@ -6,7 +6,7 @@ hook_check = subprocess.run(['bash','-c','source /tmp/guide-hook.sh; cat /etc/ho
 assert '\x1b' not in hook_check.stdout, 'wrapper polluted redirected output'
 preserve = subprocess.run(['bash','-c',"cat() { printf custom; }; source /tmp/guide-hook.sh >/dev/null; cat"],capture_output=True,text=True,check=True)
 assert preserve.stdout == 'custom', 'existing function was overwritten'
-with tempfile.TemporaryDirectory(prefix='daxterm-guide-') as directory:
+with tempfile.TemporaryDirectory(prefix='dachsterm-guide-') as directory:
     root = pathlib.Path(directory)
     log = root / '한글 로그.txt'
     log.write_text("before\nalpha\nbeta\nalpha beta\na.b\naxb\nit's\nafter\n")

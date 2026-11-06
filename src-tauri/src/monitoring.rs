@@ -58,7 +58,7 @@ struct Raw {
     time: Instant,
 }
 fn parse(text: &str) -> Result<Raw> {
-    let sections: Vec<_> = text.split("\nDAXTERM_SECTION\n").collect();
+    let sections: Vec<_> = text.split("\nDACHSTERM_SECTION\n").collect();
     if sections.len() != 5 {
         return Err("Linux /proc 지표를 읽을 수 없습니다.".into());
     }
@@ -185,7 +185,7 @@ async fn collect(connections: &Connections, id: &str) -> Result<Raw> {
             .channel_open_session()
             .await
             .map_err(|_| "수집 채널 생성 실패")?;
-        channel.exec(true,"LC_ALL=C; export LC_ALL; cat /proc/stat; printf '\\nDAXTERM_SECTION\\n'; cat /proc/meminfo; printf '\\nDAXTERM_SECTION\\n'; cat /proc/net/dev; printf '\\nDAXTERM_SECTION\\n'; cat /proc/loadavg; printf '\\nDAXTERM_SECTION\\n'; df -Pk").await.map_err(|_|"수집 명령 실패")?;
+        channel.exec(true,"LC_ALL=C; export LC_ALL; cat /proc/stat; printf '\\nDACHSTERM_SECTION\\n'; cat /proc/meminfo; printf '\\nDACHSTERM_SECTION\\n'; cat /proc/net/dev; printf '\\nDACHSTERM_SECTION\\n'; cat /proc/loadavg; printf '\\nDACHSTERM_SECTION\\n'; df -Pk").await.map_err(|_|"수집 명령 실패")?;
         let mut bytes = Vec::new();
         let mut exit = None;
         while let Some(message) = channel.wait().await {

@@ -864,7 +864,7 @@ impl<'a> Backend<'a> {
             let path = if ready {
                 p.remote.clone()
             } else {
-                format!("{}.daxterm-{}.part", p.remote, p.view.id)
+                format!("{}.dachsterm-{}.part", p.remote, p.view.id)
             };
             self.remote_guard(&path, false).await?;
             if let Some(m) = self.remote_meta(&path).await? {
@@ -882,7 +882,7 @@ impl<'a> Backend<'a> {
                 p.local.clone()
             } else {
                 p.local
-                    .with_file_name(format!(".daxterm-{}.part", p.view.id))
+                    .with_file_name(format!(".dachsterm-{}.part", p.view.id))
             };
             local_guard(&path).await?;
             if let Some(m) = local_meta(&path).await? {
@@ -943,7 +943,7 @@ impl<'a> Backend<'a> {
         local_guard(&n.local).await?;
         self.remote_guard(&n.remote, true).await?;
         let target = self.target(n).await?;
-        let backup = format!("{}.daxterm-{}.backup", n.remote, n.plan.view.id);
+        let backup = format!("{}.dachsterm-{}.backup", n.remote, n.plan.view.id);
         let recovering_backup = if self.ftp.is_some() && n.plan.upload && n.target.is_some() {
             let m = self.remote_meta(&backup).await?;
             if m.as_ref().is_some_and(|m| m.link || m.directory)
@@ -1033,7 +1033,7 @@ impl<'a> Backend<'a> {
         if self.ftp.is_none() || !n.plan.upload || n.target.is_none() {
             return Ok(());
         }
-        let backup = format!("{}.daxterm-{}.backup", n.remote, n.plan.view.id);
+        let backup = format!("{}.dachsterm-{}.backup", n.remote, n.plan.view.id);
         self.remote_guard(&backup, true).await?;
         if let Some(m) = self.remote_meta(&backup).await? {
             if m.directory || m.link || m.source != n.target {
@@ -1080,11 +1080,11 @@ fn staging(n: &mut Node, legacy: bool) {
     }
     if n.plan.upload {
         let parent = n.remote.rsplit_once('/').unwrap().0;
-        n.plan.remote = format!("{parent}/.daxterm-{}.ready", n.plan.view.id);
+        n.plan.remote = format!("{parent}/.dachsterm-{}.ready", n.plan.view.id);
     } else {
         n.plan.local = n
             .local
-            .with_file_name(format!(".daxterm-{}.ready", n.plan.view.id));
+            .with_file_name(format!(".dachsterm-{}.ready", n.plan.view.id));
     }
 }
 impl Transfers {
@@ -1267,7 +1267,7 @@ impl Transfers {
                     } else if r.policy == "rename" {
                         let old_local = n.local.clone();
                         let old_remote = n.remote.clone();
-                        let suffix = format!(" (DaxTerm {})", &n.plan.view.id[..8]);
+                        let suffix = format!(" (DachsTerm {})", &n.plan.view.id[..8]);
                         if n.plan.upload {
                             n.remote = format!("{}{suffix}", n.remote);
                         } else {
@@ -1344,7 +1344,7 @@ impl Transfers {
                     if !ready {
                         if n.plan.upload {
                             b.remote_guard(
-                                &format!("{}.daxterm-{}.part", n.plan.remote, n.plan.view.id),
+                                &format!("{}.dachsterm-{}.part", n.plan.remote, n.plan.view.id),
                                 true,
                             )
                             .await?;
@@ -1352,7 +1352,7 @@ impl Transfers {
                             local_guard(
                                 &n.plan
                                     .local
-                                    .with_file_name(format!(".daxterm-{}.part", n.plan.view.id)),
+                                    .with_file_name(format!(".dachsterm-{}.part", n.plan.view.id)),
                             )
                             .await?;
                         }
@@ -1467,7 +1467,7 @@ impl Transfers {
                             let mut paths = vec![
                                 n.plan
                                     .local
-                                    .with_file_name(format!(".daxterm-{}.part", n.plan.view.id)),
+                                    .with_file_name(format!(".dachsterm-{}.part", n.plan.view.id)),
                             ];
                             if !r.legacy {
                                 paths.push(n.plan.local.clone());

@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-transfer-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-transfer-'));
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 let app, browser, page;
 let stage = 'launch';
@@ -17,10 +17,14 @@ async function launch() {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
   await new Promise((r) => server.close(r));
-  app = spawn(process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe'), [], {
+  app = spawn(process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe'), [], {
     windowsHide: true,
     stdio: 'ignore',
-    env: { ...process.env, DAXTERM_TEST_DATA_DIR: directory, DAXTERM_TEST_CDP_PORT: String(port) },
+    env: {
+      ...process.env,
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
+    },
   });
   let endpoint;
   for (let i = 0; i < 120; i++) {
@@ -64,7 +68,7 @@ const make = (name) => ({
   id: name,
   name,
   host: '127.0.0.1',
-  port: Number(process.env.DAXTERM_PROBE_PORT),
+  port: Number(process.env.DACHSTERM_PROBE_PORT),
   username: 'probe',
   auth: 'password',
   protocol: 'ssh',
@@ -79,7 +83,7 @@ const make = (name) => ({
   hasSecret: false,
 });
 const bundle = {
-  format: 'daxterm.sessions',
+  format: 'dachsterm.sessions',
   version: 2,
   profiles: ['저장 동의', '이번만', '실패 암호', '신뢰 취소'].map(make),
   groups: [{ id: 'import-group', name: '가져온 세션' }],
@@ -110,7 +114,7 @@ try {
   assert.equal((await invoke('sessions')).profiles.length, 4);
   await page.reload();
   stage = 'host trust rejection does not save';
-  await open('신뢰 취소', true, process.env.DAXTERM_PROBE_PASSWORD);
+  await open('신뢰 취소', true, process.env.DACHSTERM_PROBE_PASSWORD);
   await expect(page.getByRole('alert', { name: '최초 호스트키 확인' })).toBeVisible();
   await page.getByRole('button', { name: '거부', exact: true }).click();
   await expect(pane().locator('.connection-message')).toContainText(/거부|취소|종료/);
@@ -130,7 +134,7 @@ try {
   );
   await close('실패 암호');
   stage = 'successful one-time password stays unsaved';
-  await open('이번만', false, process.env.DAXTERM_PROBE_PASSWORD);
+  await open('이번만', false, process.env.DACHSTERM_PROBE_PASSWORD);
   await expect(pane().locator('.connection-message')).toContainText('연결됨');
   assert.equal(
     (await invoke('sessions')).profiles.find((p) => p.name === '이번만').hasSecret,
@@ -138,7 +142,7 @@ try {
   );
   await close('이번만');
   stage = 'successful consent saves credential';
-  await open('저장 동의', true, process.env.DAXTERM_PROBE_PASSWORD);
+  await open('저장 동의', true, process.env.DACHSTERM_PROBE_PASSWORD);
   await expect(pane().locator('.connection-message')).toContainText('암호를 보안 저장소에 저장');
   assert.equal(
     (await invoke('sessions')).profiles.find((p) => p.name === '저장 동의').hasSecret,
@@ -149,7 +153,7 @@ try {
   const recoveryFiles = await readdir(path.join(directory, 'recovery'));
   for (const file of recoveryFiles.filter((s) => s.endsWith('.json'))) {
     const data = await readFile(path.join(directory, 'recovery', file), 'utf8');
-    assert(!data.includes(process.env.DAXTERM_PROBE_PASSWORD));
+    assert(!data.includes(process.env.DACHSTERM_PROBE_PASSWORD));
     const parsed = JSON.parse(data);
     assert.equal(parsed.version, 3);
     assert(parsed.profiles.every((p) => !p.hasSecret));
@@ -170,7 +174,7 @@ try {
   });
   await invoke('vault_lock');
   stage = 'locked vault reports save failure without dropping connection';
-  await open('이번만', true, process.env.DAXTERM_PROBE_PASSWORD);
+  await open('이번만', true, process.env.DACHSTERM_PROBE_PASSWORD);
   await expect(pane().locator('.connection-message')).toContainText('암호 저장에 실패');
   assert.equal(
     (await invoke('sessions')).profiles.find((p) => p.name === '이번만').hasSecret,
@@ -190,7 +194,7 @@ try {
   for (const p of (await invoke('sessions')).profiles) await invoke('delete_session', { id: p.id });
   assert.equal((await invoke('sessions')).profiles.length, 0);
   const db = await readFile(path.join(directory, 'sessions.sqlite3'));
-  assert(!db.includes(Buffer.from(process.env.DAXTERM_PROBE_PASSWORD)));
+  assert(!db.includes(Buffer.from(process.env.DACHSTERM_PROBE_PASSWORD)));
   console.log(
     'PASS I.1 real WebView2: v2 import/rollback, trust rejection, wrong password, one-time use, consent after login, OS credential reuse after restart, locked-vault save failure, secret-free recovery and cleanup',
   );

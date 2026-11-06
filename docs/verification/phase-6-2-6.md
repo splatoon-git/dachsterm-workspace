@@ -11,20 +11,20 @@
 - SQLite `settings/snippets_v1`: revision 비교로 다른 창의 저장 충돌을 거부한다. 최대200개·본문16KiB·총1MiB·대상32개. 저장 오류/손상 시 원본을 보존한다. 인증정보 저장 기능이 아니며 저장 전 비밀정보가 없다는 확인을 요구한다. 개인키 헤더를 거부하지만 임의 문자열의 비밀 여부를 자동 판별한다고 보장하지 않는다. 서버 내부 sudo 등 PTY 암호 입력 상태도 자동 판별하지 않으므로 최종 터미널 상태를 확인한다.
 - **도구 → 기본 명령·로그 필터**는 오프라인 기본 명령26개와 필터7개를 제공한다. 명령 텍스트만 복사하고 강조 마크업/설명/마지막 Enter를 포함하지 않는다. 복사 실패를 알린다. GNU/Linux 도구 범위·작은따옴표 인용·실시간 버퍼링·로그 회전·Ctrl+C를 안내한다.
 - 터미널 아래 **조작표**는 vi/vim/less/tail/cat을 직접 선택·고정하거나 끌 수 있다. 터미널 위에 겹치지 않고 자체 스크롤을 사용한다. 키를 서버로 보내거나 가로채지 않으며 현재 vi 모드를 추정하지 않는다. 탭/연결마다 별도 상태다.
-- 자동 조작표는 기본 꺼짐. **실행 알림 사용**을 켜고 명령 모음의 Bash 연동 코드를 직접 검토·실행한 세션만 지원한다. 현재 셸에 알려진 프로그램의 wrapper와 prompt 종료 알림을 추가하며 기존 별칭/함수가 있으면 적용을 취소한다. 설정 파일은 변경하지 않는다. 프로그램 식별자만 OSC777(`DaxTerm;program;vi` 등, `DaxTerm;end`)로 보내고 명령 인자·이력·키를 수집하지 않는다. 알려지지 않은 프로그램/임의 메타데이터는 무시한다. 수신 알림은 안내용이며 인증된 프로세스 식별 증명이 아니다.
+- 자동 조작표는 기본 꺼짐. **실행 알림 사용**을 켜고 명령 모음의 Bash 연동 코드를 직접 검토·실행한 세션만 지원한다. 현재 셸에 알려진 프로그램의 wrapper와 prompt 종료 알림을 추가하며 기존 별칭/함수가 있으면 적용을 취소한다. 설정 파일은 변경하지 않는다. 프로그램 식별자만 OSC777(`DachsTerm;program;vi` 등, `DachsTerm;end`)로 보내고 명령 인자·이력·키를 수집하지 않는다. 알려지지 않은 프로그램/임의 메타데이터는 무시한다. 수신 알림은 안내용이며 인증된 프로세스 식별 증명이 아니다.
 - Bash wrapper는 터미널 표준 입출력에만 알림을 쓴다. 파이프/리다이렉션 결과에 제어문자를 넣지 않는다. `command vim`으로 wrapper를 우회하거나 파이프/백그라운드/중첩 실행에서는 수동 고정을 사용한다. shell 종료로 연동을 해제하며 UI의 끄기는 화면 알림을 끈다. zsh/fish/PowerShell 자동 감지는 제공하지 않고 수동 조작표를 사용한다.
 
 ## 실제 검증
 
 | 검사 | 명령/방법 | 최종 결과 |
 |---|---|---|
-| Rust 저장·전송·기존 회귀 | `cargo test -p daxterm --lib --locked` | 56개 통과 |
+| Rust 저장·전송·기존 회귀 | `cargo test -p dachsterm --lib --locked` | 56개 통과 |
 | 프런트 단위 | `node --max-old-space-size=1024 node_modules/vitest/vitest.mjs run src --maxWorkers=1` | 42파일656개 통과 |
 | 브라우저 UI | `node node_modules/@playwright/test/cli.js test --config tests/assistant.config.ts --workers=1` | 5개 통과 |
 | 정적 검사 | TypeScript, src 전체 및 추가 검사 파일 ESLint, 관련 Prettier/rustfmt | 통과 |
-| Rust lint | `cargo clippy -p daxterm --all-targets --locked -- -D warnings` | 통과 |
+| Rust lint | `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` | 통과 |
 | 내장 앱 빌드 | `node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle` | 통과, 기존 큰 번들 경고/Windows 하드링크 캐시 복사 경고 |
-| 실제 Windows | 고정 EXE를 `DAXTERM_TEST_BINARY`로 지정하고 `node scripts/test-assistant-native.mjs` | 7개 시나리오 묶음, 종료0, pageErrors0 |
+| 실제 Windows | 고정 EXE를 `DACHSTERM_TEST_BINARY`로 지정하고 `node scripts/test-assistant-native.mjs` | 7개 시나리오 묶음, 종료0, pageErrors0 |
 
 실제 검사는 임시 앱 데이터/WebView2 프로필, 동적 루프백 포트의 일회용 OpenSSH 컨테이너와 실제 PowerShell/Ubuntu WSL을 사용했다. 테스트 인증정보는 결과·문서·프로필에 저장하지 않았으며 컨테이너를 종료/삭제했다.
 

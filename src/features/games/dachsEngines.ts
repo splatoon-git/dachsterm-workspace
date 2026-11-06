@@ -1,6 +1,6 @@
-export const DAX_HEIGHT = 360;
+export const DACHS_HEIGHT = 360;
 export const SNACK_SECONDS = 45;
-export const SNACK_FLOOR = DAX_HEIGHT - 35;
+export const SNACK_FLOOR = DACHS_HEIGHT - 35;
 const clamp = (x: number, width: number) => Math.max(44, Math.min(width - 44, x));
 export type SnackInput = { direction: number; target: number | null };
 export type Treat = {
@@ -134,7 +134,7 @@ function snackFrame(
     });
     s.spawn = 0.58 - s.elapsed * 0.005;
   }
-  const catchY = DAX_HEIGHT - 77;
+  const catchY = DACHS_HEIGHT - 77;
   s.items = s.items.filter((item) => {
     const oldY = item.y;
     item.y += item.speed * dt;
@@ -167,7 +167,7 @@ function snackFrame(
       return false;
     }
     if (oldY < catchY && item.y >= catchY && item.kind !== 'onion') s.combo = 0;
-    return item.y < DAX_HEIGHT + 25;
+    return item.y < DACHS_HEIGHT + 25;
   });
   s.effects = s.effects.slice(-12);
   s.over = s.lives === 0 || s.elapsed >= SNACK_SECONDS;

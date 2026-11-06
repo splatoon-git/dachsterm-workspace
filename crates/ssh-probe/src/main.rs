@@ -53,7 +53,7 @@ impl client::Handler for PinnedHost {
     }
 }
 fn value(key: &str) -> Result<String> {
-    std::env::var(format!("DAXTERM_PROBE_{key}"))
+    std::env::var(format!("DACHSTERM_PROBE_{key}"))
         .map_err(|_| anyhow::anyhow!("missing fixture input"))
 }
 async fn connect(pin: Vec<u8>) -> Result<(Session, mpsc::Receiver<Channel<client::Msg>>)> {
@@ -262,7 +262,7 @@ async fn concurrent_transfer(pin: &[u8]) -> Result<()> {
     Ok(())
 }
 async fn roundtrip(stream: &mut (impl AsyncReadExt + AsyncWriteExt + Unpin)) -> Result<()> {
-    let payload = b"daxterm-forward-roundtrip";
+    let payload = b"dachsterm-forward-roundtrip";
     stream.write_all(payload).await?;
     let mut result = vec![0; payload.len()];
     stream.read_exact(&mut result).await?;

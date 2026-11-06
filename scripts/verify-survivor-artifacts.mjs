@@ -4,12 +4,10 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 const root = path.resolve('target/verification/survivor-g86-artifacts');
-const files = [
-  'daxterm-debug.exe',
-  'daxterm-release.exe',
-  'daxterm-nsis-payload.exe',
-  'DaxTerm_0.5.1_x64-setup.exe',
-];
+// Archived evidence keeps its original filenames and hashes across product renames.
+const archive = JSON.parse(await readFile(path.join(root, 'manifest.json'), 'utf8'));
+const files = archive.files.map((file) => path.basename(file.path));
+assert.equal(files.length, 4, 'Expected debug, release, NSIS payload and installer artifacts');
 const buffers = await Promise.all(files.map((file) => readFile(path.join(root, file))));
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const patched = Buffer.from(buffers[1]);

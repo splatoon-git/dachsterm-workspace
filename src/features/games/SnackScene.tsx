@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { DaxSprite } from './DaxSprite';
+import { DachsSprite } from './DachsSprite';
 import {
-  DAX_HEIGHT,
+  DACHS_HEIGHT,
   SNACK_FLOOR,
   SNACK_SECONDS,
   snackMotion,
   type Snack,
   type Treat,
-} from './daxEngines';
+} from './dachsEngines';
 
 export function TreatShape({ kind }: { kind: Treat['kind'] }) {
   if (kind === 'star')
@@ -19,7 +19,7 @@ export function TreatShape({ kind }: { kind: Treat['kind'] }) {
     );
   if (kind === 'onion')
     return (
-      <g className="dax-onion">
+      <g className="dachs-onion">
         <path d="M0 -16 Q-5 -9 -10 -5 C-27 15 27 15 10 -5 Q5 -9 0 -16Z" />
         <path d="M0 -16 Q-9 3 0 11 Q9 3 0 -16 M0 -16 L-4 -23 M0 -16 L5 -22" />
       </g>
@@ -84,7 +84,7 @@ export function SnackScene({
   return (
     <>
       <svg
-        viewBox={`0 0 ${width} ${DAX_HEIGHT}`}
+        viewBox={`0 0 ${width} ${DACHS_HEIGHT}`}
         role="img"
         aria-label="간식과 별은 받고 양파는 피하세요"
         data-reduced-motion={reduced}
@@ -153,7 +153,7 @@ export function SnackScene({
           <g
             transform={`translate(${reduced ? 0 : chew * 1.5},${reduced ? 0 : -hop}) rotate(${reduced ? 0 : lean}) scale(1,${reduced ? 1 : 1 - Math.abs(chew) * 0.035})`}
           >
-            <DaxSprite frame={frame} className="snack-sprite" />
+            <DachsSprite frame={frame} className="snack-sprite" />
           </g>
           {motion === 'eat' && (
             <g className="snack-crumbs" opacity={s.reaction / 0.32}>
@@ -219,7 +219,7 @@ export function SnackScene({
                 ? '오늘의 간식 기록'
                 : phase === 'paused'
                   ? 'TAKE A PAUSE'
-                  : 'DAX’S SNACK TIME'}
+                  : 'DACHS’S SNACK TIME'}
             </span>
             <h3>
               {s.over

@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "DaxTerm Session Exchange v3",
+  "title": "DachsTerm Session Exchange v3",
   "description": "Portable connection metadata. No passwords, private key contents, credential references, or host trust. Runtime validation additionally checks UTF-8 byte lengths and ID references.",
   "type": "object",
   "additionalProperties": false,
   "required": ["format", "version", "profiles", "groups", "tunnels"],
   "properties": {
     "format": {
-      "const": "daxterm.sessions"
+      "const": "dachsterm.sessions"
     },
     "version": {
       "const": 3

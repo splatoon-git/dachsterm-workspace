@@ -35,13 +35,13 @@ FTP RFC에는 원자적 no-replace rename이 없다. 다른 클라이언트가 �
 
 ## 실행한 검증
 
-- `cargo test -p daxterm --lib --locked`: 54개 통과. 이 중 큐5개는 경로/예약명/링크 조상 거부, 상태/순서/저장 실패, 재시작 비자동 실행/완료 보존, 미지원 기록 보존을 검사한다. 다른 테스트 수는 공유 트리 시점의 결과다.
+- `cargo test -p dachsterm --lib --locked`: 54개 통과. 이 중 큐5개는 경로/예약명/링크 조상 거부, 상태/순서/저장 실패, 재시작 비자동 실행/완료 보존, 미지원 기록 보존을 검사한다. 다른 테스트 수는 공유 트리 시점의 결과다.
 - `node --max-old-space-size=1024 node_modules/vitest/vitest.mjs run src --maxWorkers=1`: 41파일652개 통과.
 - TypeScript, 변경 TS/JS ESLint/Prettier, Rust lib clippy `-D warnings`, Windows Tauri debug 빌드 통과. Vite의 기존 큰 메인 번들 경고는 남는다.
 - `node scripts/run-ftp.mjs`: 실제 FTP/FTPS/CP949 모두 종료0. 중첩/빈 폴더/한글·공백/같은 이름·24작은파일 내용 왕복, 건너뛰기/이름 변경/명시적 업·다운 덮어쓰기, 64MiB 중지/영속 복구/재개, 다른 프로필 거부, 동시2/순서/묶음취소/재시도, 링크거부/정리, 탐색 중지/10,001개 입력 상한/원본 변경 거부. 기존32MiB 업·다운 재개 및 파일작업 회귀도 통과.
 - 실제 OpenSSH의 동일 큐 시나리오와 권한 거부, 최대128MiB로 사전 제한한 컨테이너 전용 `/dev/shm`의 실제 ENOSPC 검사를 통과했다. 부분 파일 정리 후 제한 tmpfs 폴더도 제거했다. `node scripts/run-phase1.mjs` 최종 실행도 큐 정리·기존128MiB 재개·인증/호스트키/터널/편집/모니터링·접속 종료를 포함해 종료0이다.
 - `playwright test --config tests/queue.config.ts --workers=1`: 360/800px 2개 통과. 키보드·상태·묶음별 정확한 ID·새 연결 ID로 재개·순서·파일 결과·가로 넘침 없음. `target/verification/transfer-queue-{360,800}.png` 확인.
-- Windows WebView2 + 실제 FTPS: `DAXTERM_TEST_BINARY=<보존 debug> node scripts/run-ftp.mjs --reuse-build --queue-native-only` 종료0. 256MiB 전송 중 앱 프로세스 트리 강제 종료, SQLite 큐 복구/비자동 실행, 새 인증/새 연결 ID, 제품 UI 버튼으로 재개, 완료 파일 수정 시각 유지, 전체 SHA-256 일치, 빈/중첩 폴더 포함6항목 완료, pageerror0. 임시 암호는 저장하지 않고 재시작 때 다시 입력했다. 파일 선택/드롭은 IPC 경로로 주입했으며 물리 OS 조작 검증으로 세지 않는다.
+- Windows WebView2 + 실제 FTPS: `DACHSTERM_TEST_BINARY=<보존 debug> node scripts/run-ftp.mjs --reuse-build --queue-native-only` 종료0. 256MiB 전송 중 앱 프로세스 트리 강제 종료, SQLite 큐 복구/비자동 실행, 새 인증/새 연결 ID, 제품 UI 버튼으로 재개, 완료 파일 수정 시각 유지, 전체 SHA-256 일치, 빈/중첩 폴더 포함6항목 완료, pageerror0. 임시 암호는 저장하지 않고 재시작 때 다시 입력했다. 파일 선택/드롭은 IPC 경로로 주입했으며 물리 OS 조작 검증으로 세지 않는다.
 
 프로토콜 공통 검사는 `src-tauri/examples/queue/checks.rs`, 실제 앱 검사는 `scripts/test-transfer-queue-native.mjs`에 있다. 임시 서버/앱은 검사 종료 후 정리한다. 빌드 해시와 네이티브 결과는 `target/verification/transfer-queue-native/result.json`, 보존 실행 파일은 `target/verification/transfer-queue-artifacts/daxterm-debug.exe`다. 공유 `target/debug`는 다른 작업이 바꿀 수 있다.
 

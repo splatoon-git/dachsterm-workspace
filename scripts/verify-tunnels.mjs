@@ -40,7 +40,7 @@ async function echo(port, socks = false) {
       );
       assert.equal((await read(10))[1], 0);
     }
-    const payload = Buffer.from('DAXTERM_TUNNEL_UI_ROUNDTRIP');
+    const payload = Buffer.from('DACHSTERM_TUNNEL_UI_ROUNDTRIP');
     socket.write(payload);
     assert.deepEqual(await read(payload.length), payload);
   } finally {

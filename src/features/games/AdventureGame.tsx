@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DaxSprite } from './DaxSprite';
+import { DachsSprite } from './DachsSprite';
 import { RoundControls, Stats, useBest, useRound, useBoardWidth, useFrame } from './shared';
 import {
   ADVENTURE_FLOOR as FLOOR,
@@ -22,7 +22,7 @@ import {
 } from './AdventureWorld';
 import { useAdventureAudio } from './adventureAudio';
 
-export function DaxAdventureGame({ active }: { active: boolean }) {
+export function DachsAdventureGame({ active }: { active: boolean }) {
   const [state, setState] = useState(() => newAdventure(randomAdventureSeed()));
   const [seedText, setSeedText] = useState(String(state.level.seed));
   const level = state.level;
@@ -116,7 +116,7 @@ export function DaxAdventureGame({ active }: { active: boolean }) {
   };
   return (
     <section
-      className="game-play dax-play adventure-play"
+      className="game-play dachs-play adventure-play"
       data-biome={level.biome}
       onBlurCapture={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget)) {
@@ -193,7 +193,7 @@ export function DaxAdventureGame({ active }: { active: boolean }) {
       </Stats>
       <div
         ref={board}
-        className="game-board dax-board adventure-board"
+        className="game-board dachs-board adventure-board"
         tabIndex={0}
         role="group"
         aria-label="닥스의 모험 게임판"
@@ -346,7 +346,7 @@ export function DaxAdventureGame({ active }: { active: boolean }) {
                 <g
                   transform={`translate(${motion === 'bite' ? 10 : 0},${-bounce}) rotate(${lean}) scale(${motion === 'bite' ? '1.16,0.86' : running ? `1,${1 - Math.abs(stride) * 0.035}` : '1,1'})`}
                 >
-                  <DaxSprite frame={sprite} className="adventure-sprite" />
+                  <DachsSprite frame={sprite} className="adventure-sprite" />
                 </g>
                 {state.attack > 0 && (
                   <g className="adventure-bite">
@@ -467,12 +467,12 @@ export function DaxAdventureGame({ active }: { active: boolean }) {
           )}
         </svg>
       </div>
-      <p className="dax-help">
+      <p className="dachs-help">
         ← → / A D 이동 · ↑ / W 점프 · Space 물기 · 공중 ↓ / S 밟기 · P 정지/재개 · M 소리
         <br />
         {level.hint} 적 위로 내려오면 자동 밟기 +75점 · 쉼터에서 체력 +1
       </p>
-      <div className="game-actions dax-touch-controls adventure-controls">
+      <div className="game-actions dachs-touch-controls adventure-controls">
         {([-1, 1] as const).map((direction) => (
           <button
             key={direction}

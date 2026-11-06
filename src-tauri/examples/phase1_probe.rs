@@ -3,7 +3,7 @@ mod queue_checks;
 // Runs the actual product engine against the ephemeral OpenSSH fixture. No secret output.
 mod jump_checks;
 mod workspace_checks;
-use daxterm::{
+use dachsterm::{
     credentials, hostkeys,
     ssh::{Connections, Event, Input},
     storage::{Profile, Store},
@@ -13,7 +13,7 @@ use tokio::{sync::mpsc, time::timeout};
 use zeroize::Zeroizing;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn env(name: &str) -> String {
-    std::env::var(format!("DAXTERM_PROBE_{name}")).expect("fixture input missing")
+    std::env::var(format!("DACHSTERM_PROBE_{name}")).expect("fixture input missing")
 }
 struct Client {
     id: String,
@@ -160,7 +160,7 @@ fn base() -> Profile {
     }
 }
 fn stress_seconds() -> u64 {
-    std::env::var("DAXTERM_PROBE_STRESS_SECONDS")
+    std::env::var("DACHSTERM_PROBE_STRESS_SECONDS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(0)
@@ -269,7 +269,7 @@ async fn stress(
     Ok(())
 }
 async fn run() -> Result<()> {
-    if std::env::var_os("DAXTERM_PROBE_JUMPS").is_some() {
+    if std::env::var_os("DACHSTERM_PROBE_JUMPS").is_some() {
         return jump_checks::run().await;
     }
     let dir = tempfile::tempdir()?;
@@ -330,7 +330,7 @@ async fn run() -> Result<()> {
             );
         }
     }
-    let vault = daxterm::vault::Vault::default();
+    let vault = dachsterm::vault::Vault::default();
     let master = Zeroizing::new(uuid::Uuid::new_v4().to_string());
     store.0.lock().unwrap().execute_batch("CREATE TRIGGER vault_rollback BEFORE UPDATE OF secret_ref ON profiles BEGIN SELECT RAISE(ABORT,'test rollback'); END;")?;
     assert!(vault.configure(&store, None, &master).is_err());
@@ -456,7 +456,7 @@ async fn run() -> Result<()> {
                 manager
                     .control(&client.id)?
                     .auth_reply
-                    .send(daxterm::ssh::AuthReply {
+                    .send(dachsterm::ssh::AuthReply {
                         challenge,
                         responses: Zeroizing::new(responses),
                     })

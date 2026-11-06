@@ -19,7 +19,7 @@ test('every theme applies to the existing terminal and persists across reload', 
     await page.getByRole('radio', { name: theme.name, exact: true }).check();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.id);
     await expect(page.locator('html')).toHaveCSS('color-scheme', theme.colorScheme);
-    expect(await page.evaluate(() => localStorage.getItem('daxterm.theme'))).toBe(theme.id);
+    expect(await page.evaluate(() => localStorage.getItem('dachsterm.theme'))).toBe(theme.id);
     await page.getByRole('button', { name: '대화상자 닫기', exact: true }).click();
     const values = await page.locator('.xterm-scrollable-element').evaluate((element) => ({
       terminal: getComputedStyle(element).backgroundColor,
@@ -60,7 +60,7 @@ test('theme synchronizes across open windows, new windows and storage removal', 
   const fresh = await context.newPage();
   await fresh.goto('/');
   await expect(fresh.locator('html')).toHaveAttribute('data-theme', 'dracula');
-  await other.evaluate(() => localStorage.setItem('daxterm.theme', 'removed-theme'));
+  await other.evaluate(() => localStorage.setItem('dachsterm.theme', 'removed-theme'));
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'pms-retro-light');
   await page.getByRole('radio', { name: 'Nord', exact: true }).check();
   await expect(other.locator('html')).toHaveAttribute('data-theme', 'nord');
@@ -76,7 +76,7 @@ for (const width of [1280, 560, 360]) {
     await page.goto('/');
     await page.getByRole('button', { name: '설정', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '워크스페이스 설정' });
-    await expect(page.getByRole('radio', { name: 'DaxTerm Classic', exact: true })).toBeFocused();
+    await expect(page.getByRole('radio', { name: 'DachsTerm Classic', exact: true })).toBeFocused();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('radio', { name: 'GitHub White', exact: true })).toBeChecked();
     expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);

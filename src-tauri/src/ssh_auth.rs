@@ -133,8 +133,8 @@ pub async fn agent(session: &mut client::Handle<Host>, user: &str) -> Result<cli
 #[cfg(windows)]
 fn agent_pipe() -> String {
     #[cfg(debug_assertions)]
-    if let Ok(pipe) = std::env::var("DAXTERM_TEST_AGENT_PIPE")
-        && pipe.starts_with(r"\\.\pipe\daxterm-agent-")
+    if let Ok(pipe) = std::env::var("DACHSTERM_TEST_AGENT_PIPE")
+        && pipe.starts_with(r"\\.\pipe\dachsterm-agent-")
     {
         return pipe;
     }

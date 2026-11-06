@@ -1,10 +1,14 @@
-# DaxTerm
+# DachsTerm
 
 **0.5.1** · Windows 11 / macOS용 로컬 SSH 작업 공간. SSH·SFTP·FTP/FTPS·외부 편집, 분할 터미널·독립 창·멀티 입력, Local/Remote/SOCKS5 터널과 Linux 리소스 모니터링을 제공한다. 기존 크림색을 기본으로 하는 공통 토큰 기반 테마 12개와 장모 크림 닥스훈트 마스코트를 사용한다. **현재 릴리스 검증 중이며 Mac 실기기 결과는 없다.** 완료/미검증 범위는 [진행 기록](docs/progress.md)에서 구분한다.
 
-## 개발 환경
+## 프로젝트 이름과 저장소
 
-세션 이관은 설정의 **세션 가져오기·내보내기**에서 지원한다. 자체 JSON v2/기존 v1, PuTTY `.reg`, MobaXterm SSH 북마크, OpenSSH `config`를 미리보고 선택해 추가한다. 제품별 기본 접속 정보만 변환하며 전체 설정 호환은 [지원표와 JSON 규약](docs/session-transfer.md)을 따른다. 첫 접속 인증창에서 암호 저장을 선택하면 로그인 성공 후 보안 저장소에 보관하고 다음 접속에 사용한다. OTP는 저장하지 않는다.
+제품명은 **DachsTerm**, 마스코트의 영문 이름은 **Dachs**다. 패키지는 `dachsterm`, Windows 실행 파일은 `dachsterm.exe`, 앱 ID와 OS 보안 저장소 서비스명은 `app.dachsterm.desktop`이다. 소스는 [splatoon-git/dachsterm-workspace](https://github.com/splatoon-git/dachsterm-workspace)에서 관리한다. 2026-11-06 개명 시 기존 개발 데이터의 이전·호환은 제공하지 않으며 새 저장 공간에서 시작한다. 이전 데이터는 자동 삭제하지 않는다. 과거 검증 기록의 산출물 경로·해시는 당시 이름을 유지한다.
+
+세션 이관은 설정의 **세션 가져오기·내보내기**에서 지원한다. 자체 JSON v3(기존 v1·v2 읽기 지원), PuTTY `.reg`, MobaXterm SSH 북마크, OpenSSH `config`를 미리보고 선택해 추가한다. 제품별 기본 접속 정보만 변환하며 전체 설정 호환은 [지원표와 JSON 규약](docs/session-transfer.md)을 따른다. 첫 접속 인증창에서 암호 저장을 선택하면 로그인 성공 후 보안 저장소에 보관하고 다음 접속에 사용한다. OTP는 저장하지 않는다.
+
+## 개발 환경
 
 - Node 24 이상, npm. `package-lock.json`으로 프런트엔드 버전 고정.
 - Rust 1.99.1 (`rust-toolchain.toml`), `Cargo.lock` 포함.
@@ -44,7 +48,7 @@ npm run probe:ftp
 node scripts/run-ftp.mjs --reuse-build --native-only
 ```
 
-`npm run dev`는 브라우저 UI만 실행한다. `tauri dev`는 Windows/macOS 네이티브 앱을 실행한다. `build --debug --no-bundle`은 프런트엔드를 내장한 검사 용 실행 파일을 생성한다. Windows 설치 패키지는 `npm run tauri -- build --bundles nsis`, Mac은 Mac에서 `npm run tauri -- build --bundles app,dmg`로 생성한다. 공개 배포 전 Windows 코드 서명과 macOS Developer ID 서명·공증은 별도 자격증명/실기기 검증이 필요하다. 개인 로컬 빌드와 서명된 공개 배포를 구분한다.
+`npm run dev`는 브라우저 UI만 실행한다. `tauri dev`는 Windows/macOS 네이티브 앱을 실행한다. `build --debug --no-bundle`은 프런트엔드를 내장한 검사 용 실행 파일을 생성한다. Windows에서 `npm run tauri -- build --bundles nsis`를 실행하면 `target/release/dachsterm.exe`와 `target/release/bundle/nsis/DachsTerm_0.5.1_x64-setup.exe`가 생성된다. macOS에서는 `npm run tauri -- build --bundles app,dmg`로 앱과 DMG를 생성한다. 공개 배포 전 Windows 코드 서명과 macOS Developer ID 서명·공증은 별도 자격증명/실기기 검증이 필요하다. 개인 로컬 빌드와 서명된 공개 배포를 구분한다.
 
 서바이버의 다중 시드/장기 진행, 실시간 키보드 플레이, WebView2 상한 부하·탭 수명·실제 PTY/SSH 격리 검사 명령과 배포 해시는 [G.8.6 검증 기록](docs/verification/survivor-validation.md)에 정리했다. 인공 부하·자동 키보드 검사와 사람의 플레이/실제 OS·Mac 검증을 구분한다.
 
@@ -54,9 +58,9 @@ node scripts/run-ftp.mjs --reuse-build --native-only
 
 `npm run probe:phase1`은 이름을 호환성 때문에 유지하며 Phase 2~4 검사도 포함한다. SFTP 바이너리/한글/공백 왕복·권한·외부 편집 충돌/원자적 교체·CP949 변환, 실제 Local/Remote/SOCKS5 왕복, Linux 지표, 128MiB 업로드 중 취소를 검사한다. 앱이 사용하는 `src-tauri/src/ssh.rs`와 저장소를 직접 검증한다. 비밀번호·ring RSA SHA-2(일반/암호화 OpenSSH·PEM·암호화 PKCS8)·agent·키+PAM MFA·일반/암호화 Ed25519, 호스트키 거부·변경·폐기, 5개 연결, PTY·UTF-8·resize, 흐름 제어·취소·재접속, 실제 OS 저장소를 검사한다. 개인키 파일 읽기는 실행 중 생성한 임시 디렉터리에서 검증하고 종료 시 삭제한다.
 
-`npm run test:native`는 **Windows 전용**이며, 내장 자산 앱을 빌드한 뒤 같은 실제 OpenSSH에 네이티브 WebView2 UI로 접속한다. 테스트 데이터와 WebView 프로필은 임시 디렉터리로 분리한다. 디버그 빌드에서만 `DAXTERM_TEST_DATA_DIR`와 `DAXTERM_TEST_CDP_PORT`를 지원하며, 릴리스 빌드는 무시한다. 한글은 xterm composition 이벤트를 자동 재현한다. 실제 Windows IME 키 조합 검증과는 구분한다. 네이티브 테스트의 스크린샷은 `test-results-native/`에 생성된다.
+`npm run test:native`는 **Windows 전용**이며, 내장 자산 앱을 빌드한 뒤 같은 실제 OpenSSH에 네이티브 WebView2 UI로 접속한다. 테스트 데이터와 WebView 프로필은 임시 디렉터리로 분리한다. 디버그 빌드에서만 `DACHSTERM_TEST_DATA_DIR`와 `DACHSTERM_TEST_CDP_PORT`를 지원하며, 릴리스 빌드는 무시한다. 한글은 xterm composition 이벤트를 자동 재현한다. 실제 Windows IME 키 조합 검증과는 구분한다. 네이티브 테스트의 스크린샷은 `test-results-native/`에 생성된다.
 
-검사 종료 시 컨테이너와 테스트 파일·키를 삭제한다. 강제 프로세스 종료 등으로 남았는지 확인하려면 `docker ps -a --filter label=app.daxterm.purpose=phase0-probe` 또는 `phase1-probe`를 사용한다. 남은 전용 컨테이너만 개별 ID로 정리한다. 다른 컨테이너나 볼륨은 삭제하지 않는다. 테스트 이미지에는 사용자 인증정보가 들어 있지 않다.
+검사 종료 시 컨테이너와 테스트 파일·키를 삭제한다. 강제 프로세스 종료 등으로 남았는지 확인하려면 `docker ps -a --filter label=app.dachsterm.purpose=phase0-probe` 또는 `phase1-probe`를 사용한다. 남은 전용 컨테이너만 개별 ID로 정리한다. 다른 컨테이너나 볼륨은 삭제하지 않는다. 테스트 이미지에는 사용자 인증정보가 들어 있지 않다.
 
 ## 로컬 터미널과 탐색 (U.1)
 
@@ -89,9 +93,9 @@ node scripts/run-ftp.mjs --reuse-build --native-only
 
 세션·그룹은 Tauri 앱 데이터 디렉터리의 `sessions.sqlite3`, 최초 신뢰 키는 같은 위치의 `known_hosts`에 저장한다. 사용자 `~/.ssh/known_hosts`도 읽으며 수정하지 않는다. SQLite에는 비밀정보 대신 OS 저장소 참조 ID만 저장한다. 세션 복제는 비밀정보를 복제하지 않으며, 세션 삭제는 해당 OS 항목도 삭제한다. 저장 대상이 바뀌면 기존 인증정보의 명시적인 삭제/교체가 필요하다.
 
-동시 연결은 최대 32개, 출력은 연결당 32KiB 한 프레임만 미확인 상태로 보낸다. 렌더링 응답이 30초 동안 없으면 연결을 종료한다. 분리 창에는 최근 2MiB 출력만 재생하며, 전체 세션의 영구 로그가 아니다. 한 창만 입력·resize·ACK를 소유한다. 독립 창을 닫으면 해당 SSH 연결과 종속 작업이 종료된다. KeepAlive는 5~300초, 접속·인증 타임아웃은 5~120초다. 호스트키 확인에는 별도 120초를 제공한다. UTF-8 입력·TUI를 쓰려면 서버 셸도 UTF-8 로케일이어야 한다. 호스트 CA 인증서 검증, GSSAPI/Kerberos, 점프 호스트와 agent forwarding은 제공하지 않는다. keyboard-interactive/키 인증 후 MFA와 OS SSH agent는 지원한다. 추가 인증 질문에는 응답당 120초를 제공하고 응답은 저장하지 않는다.
+동시 연결은 최대 32개, 출력은 연결당 32KiB 한 프레임만 미확인 상태로 보낸다. 렌더링 응답이 30초 동안 없으면 연결을 종료한다. 분리 창에는 최근 2MiB 출력만 재생하며, 전체 세션의 영구 로그가 아니다. 한 창만 입력·resize·ACK를 소유한다. 독립 창을 닫으면 해당 SSH 연결과 종속 작업이 종료된다. KeepAlive는 5~300초, 접속·인증 타임아웃은 5~120초다. 호스트키 확인에는 별도 120초를 제공한다. UTF-8 입력·TUI를 쓰려면 서버 셸도 UTF-8 로케일이어야 한다. 경유 연결은 SSH 점프 호스트를 최대 4홉까지 지원한다. 호스트 CA 인증서 검증, GSSAPI/Kerberos, agent forwarding은 지원 범위에서 제외한다. keyboard-interactive/키 인증 후 MFA와 OS SSH agent는 지원한다. 추가 인증 질문에는 응답당 120초를 제공하고 응답은 저장하지 않는다.
 
-Windows 산출물: `target/release/bundle/nsis/DaxTerm_0.5.1_x64-setup.exe`. 설치·실행·정상 종료·제거 검사는 `scripts/test-installer.ps1`로 수행하며, 기존 DaxTerm 설치가 있으면 중단한다. 서명되지 않은 개인 검증 빌드다. Mac·물리 IME·실제 OS 드롭/GUI 편집기 조작·절전/장시간 검증은 남아 있다.
+Windows 설치·실행·정상 종료·제거 검사는 `scripts/test-installer.ps1`로 수행하며, 기존 DachsTerm 설치가 있으면 중단한다. 서명되지 않은 개인 검증 빌드다. Mac·물리 IME·실제 OS 드롭/GUI 편집기 조작·절전/장시간 검증은 남아 있다.
 
 ## 서버별 비밀번호와 마스터 패스워드
 
@@ -114,7 +118,7 @@ Windows 산출물: `target/release/bundle/nsis/DaxTerm_0.5.1_x64-setup.exe`. 설
 - SSH 서버에서 ZIP/TAR/TAR.GZ 압축과 해제 지원. Python3와 Linux `renameat2`가 필요하다. ZIP 파일명 CP949/CP932/GBK/Big5 선택은 Python3.11 이상. 절대/상위 경로, 링크·장치, 중복 항목, 20,000항목/설정된 해제 크기 초과를 거부하며 새 대상에만 확정한다.
 - **외부 편집**은 파일 선택 → 편집. VS Code(`code`), Cursor(`cursor`), Sublime(`subl`) 또는 실행 파일 절대 경로, JSON 인자 배열을 지정한다. 셸 문자열로 실행하지 않는다. Windows 별칭은 설치된 실제 EXE를 찾는다. macOS에서 CLI가 PATH에 없다면 앱 번들의 실행 파일 절대 경로를 지정한다.
 - 파일 내용 인코딩은 별도 옵션이다. 기본 **원본 바이트 유지**는 편집기에서 인코딩을 선택한다. 명시적 인코딩 옵션은 로컬 UTF-8 작업 파일로 변환하고 저장 시 선택한 원래 인코딩으로 되돌린다. 잘못된 입력/표현 불가 문자는 업로드하지 않는다. 파일 자동 인코딩 추측은 하지 않는다. 외부 편집 파일은 32MiB까지다.
-- 기본은 **저장 후 업로드 확인**, 선택적으로 **자동 업로드** 또는 **수동 업로드**를 지정한다. 확인 취소와 업로드 취소는 로컬 수정본을 보존한다. 편집기 자체의 자동 저장 기능과 DaxTerm의 자동 업로드 설정은 별개다. 2초 저장 감지 + 350ms 안정 구간을 사용한다. 원격 SHA-256이 편집 시작 시점과 다르면 덮어쓰기/다시 받기/다른 이름 저장을 선택한다. 다시 받기는 로컬 수정본 `.bak`를 남긴다. 서버가 `posix-rename@openssh.com`을 지원할 때만 기존 파일을 원자적으로 교체한다. 미지원 서버에는 다른 이름 저장을 사용한다. 파일 모드를 유지하지만 ACL/xattr/소유자 전체 복제는 보장하지 않는다. 검사~rename 사이 다른 쓰기 경쟁은 SFTP만으로 제거할 수 없다.
+- 기본은 **저장 후 업로드 확인**, 선택적으로 **자동 업로드** 또는 **수동 업로드**를 지정한다. 확인 취소와 업로드 취소는 로컬 수정본을 보존한다. 편집기 자체의 자동 저장 기능과 DachsTerm의 자동 업로드 설정은 별개다. 2초 저장 감지 + 350ms 안정 구간을 사용한다. 원격 SHA-256이 편집 시작 시점과 다르면 덮어쓰기/다시 받기/다른 이름 저장을 선택한다. 다시 받기는 로컬 수정본 `.bak`를 남긴다. 서버가 `posix-rename@openssh.com`을 지원할 때만 기존 파일을 원자적으로 교체한다. 미지원 서버에는 다른 이름 저장을 사용한다. 파일 모드를 유지하지만 ACL/xattr/소유자 전체 복제는 보장하지 않는다. 검사~rename 사이 다른 쓰기 경쟁은 SFTP만으로 제거할 수 없다.
 - 작업 파일은 앱 데이터 `edits/<UUID>/working.<확장자>`에 저장한다. Windows 사용자 전용 ACL/macOS 0700 디렉터리를 적용한다. 실패/충돌/종료 시 복구본을 자동 삭제하지 않는다. 같은 세션·접속 대상에 다시 연결한 후 재시도한다. **동기화된 파일 정리**는 업로드가 끝난 파일만 삭제하며, 미업로드 수정본/백업이 있으면 보존한다.
 
 인코딩 매핑은 [WHATWG Encoding Standard](https://encoding.spec.whatwg.org/)와 [encoding_rs](https://docs.rs/encoding_rs/latest/encoding_rs/)를 따른다. CP949 선택은 WHATWG EUC-KR의 Unified Hangul Code 매핑을 사용한다.
@@ -144,7 +148,7 @@ Windows 산출물: `target/release/bundle/nsis/DaxTerm_0.5.1_x64-setup.exe`. 설
 
 FTP RFC에는 원자적 no-replace rename이 없으므로 확인~rename 사이에 다른 클라이언트가 대상 이름을 생성하는 경쟁을 완전히 막을 수 없다. 서버 간 FTP 복사, implicit FTPS, Active FTP, FXP는 제공하지 않는다. 갑작스러운 네트워크 단절 후 서버가 부분 파일을 아직 잡고 있으면 정리될 때까지 기다린 후 재개한다. 폴더 재귀 업/다운로드와 영속 전송 큐를 지원한다. 시간/달력 예약은 제공하지 않는다. 링크/junction을 따라가지 않으며 탐색/기록 상한과 재개·덮어쓰기·검증 범위는 [폴더 전송·큐 기록](docs/verification/phase-6-1.md)을 따른다.
 
-FTP 검증은 Python 가상환경에 `scripts/ftp-fixture-requirements.txt`를 설치한 후 실행한다. Windows 기본 경로는 `.tools/ftp-fixture/Scripts/python.exe`; `DAXTERM_FTP_PYTHON`으로 변경할 수 있다. 각 실행은 임시 자격 증명/CA와 loopback 서버를 만들고 종료 후 제거한다. native 검사는 먼저 디버그 앱 빌드가 필요하다.
+FTP 검증은 Python 가상환경에 `scripts/ftp-fixture-requirements.txt`를 설치한 후 실행한다. Windows 기본 경로는 `.tools/ftp-fixture/Scripts/python.exe`; `DACHSTERM_FTP_PYTHON`으로 변경할 수 있다. 각 실행은 임시 자격 증명/CA와 loopback 서버를 만들고 종료 후 제거한다. native 검사는 먼저 디버그 앱 빌드가 필요하다.
 
 [MobaXterm 공식 기능](https://mobaxterm.mobatek.net/features.html)·[설명서](https://mobaxterm.mobatek.net/documentation.html)의 파일 브라우저/외부 편집/멀티 실행 흐름을 참고했다. X 서버·RDP/VNC·매크로 등 전체 제품 복제가 목표는 아니다.
 
@@ -161,13 +165,13 @@ FTP 검증은 Python 가상환경에 `scripts/ftp-fixture-requirements.txt`를 �
 
 상단 **설정 → 테마 선택**에서 미리보기 카드를 선택한다. 별도의 저장 버튼 없이 현재 창과 열린 터미널에 반영되고, 다음 실행에도 복원된다. 같은 origin의 다른 창에도 저장 변경을 전달한다.
 
-- 기본: **DaxTerm Classic** — 현재 크림색 화면과 기존 저장 ID 유지.
+- 기본: **DachsTerm Classic** — 현재 크림색 화면과 기존 저장 ID 유지.
 - 화이트: **GitHub White**, **Solarized Light**.
 - 다크: **GitHub Dark**, **Dracula**, **Nord**, **Catppuccin Mocha**.
 - 레트로: **Gruvbox Light**, **Gruvbox Dark**.
 - 터미널: **Solarized Dark**, **Terminal Green**, **Terminal Amber**. 초록/앰버 콘솔은 고정폭 UI와 작은 모서리를 사용한다.
 
-공식 팔레트를 참고한 DaxTerm용 변형이며 작은 글자와 TUI 대비를 위해 일부 색상을 조정했다. 참고 출처·검증·제한은 [테마 검증 기록](docs/verification/themes.md)에 정리했다.
+공식 팔레트를 참고한 DachsTerm용 변형이며 작은 글자와 TUI 대비를 위해 일부 색상을 조정했다. 참고 출처·검증·제한은 [테마 검증 기록](docs/verification/themes.md)에 정리했다.
 
 - `src/themes/contract.ts`: 타입 계약. 필수 토큰 누락은 TypeScript 오류.
 - `presets/light.ts`: 기존 크림색 기본 테마. PMS에서는 색상만 참고. `presets/collection.ts`와 `create.ts`: 추가 11개 정의.

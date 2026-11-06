@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DAX_HEIGHT,
+  DACHS_HEIGHT,
   newSnack,
   stepSnack,
   snackMotion,
   resizeSnack,
   type Treat,
-} from './daxEngines';
+} from './dachsEngines';
 const idle = { direction: 0, target: null };
 const treat = (id: number, kind: Treat['kind']): Treat => ({
   id,
   kind,
   x: 300,
-  y: DAX_HEIGHT - 78,
+  y: DACHS_HEIGHT - 78,
   speed: 120,
 });
 
@@ -26,7 +26,7 @@ describe('닥스의 간식 타임', () => {
     expect(next.score).toBe(40);
     expect(next.lives).toBe(2);
     expect(next.items).toHaveLength(0);
-    expect(original.items[0].y).toBe(DAX_HEIGHT - 78);
+    expect(original.items[0].y).toBe(DACHS_HEIGHT - 78);
     expect(
       stepSnack({ ...next, shield: 0, lives: 1, items: [treat(5, 'onion')] }, 0.02, 600, idle).over,
     ).toBe(true);

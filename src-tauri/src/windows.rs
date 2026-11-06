@@ -108,7 +108,7 @@ pub async fn detach_terminal(
     let url = format!("index.html?detached={id}");
     let builder =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
-            .title(format!("{} — DaxTerm", profile.name))
+            .title(format!("{} — DachsTerm", profile.name))
             .inner_size(1000.0, 700.0)
             .min_inner_size(560.0, 480.0);
     // WebView2 requires the same environment options for windows sharing a user data folder.

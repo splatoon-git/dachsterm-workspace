@@ -12,11 +12,11 @@
 #
 # Press ? inside for the full key list.
 
-VERSION="2.4.0-daxterm.1"
+VERSION="2.4.0-dachsterm.1"
 umask 077
 export LESSSECURE=1
-DAXTERM_STAGE=${BASH_SOURCE[0]%/*}
-readonly DAXTERM_STAGE
+DACHSTERM_STAGE=${BASH_SOURCE[0]%/*}
+readonly DACHSTERM_STAGE
 
 NS="" INTERVAL=5 TAIL=500 GROUP="node,ns" ASCII=0 COLOR=1 LANG_OPT=auto BELL=0 READONLY=0 SORT=name WIDE=0 TOPON=1 DETAIL=1
 AI_ON=1 AI_INTERVAL=10 AI_PID="" AI_DIR="" AI_LAST=0 AI_STATUS="starting" AI_STAMP=0
@@ -69,7 +69,7 @@ EOF
 }
 
 # ~/.podtreerc: simple key=value lines (not sourced)
-if [[ -z ${DAXTERM_EMBEDDED:-} && -r ~/.podtreerc ]]; then
+if [[ -z ${DACHSTERM_EMBEDDED:-} && -r ~/.podtreerc ]]; then
     while IFS='=' read -r k v; do
         k=${k//[[:space:]]/}; v=${v#"${v%%[![:space:]]*}"}; v=${v%"${v##*[![:space:]]}"}
         case $k in
@@ -113,9 +113,9 @@ command -v "$KUBECTL" >/dev/null 2>&1 || { echo "podtree.sh: kubectl not found i
 [[ -t 0 && -t 1 ]] || { echo "podtree.sh: needs an interactive terminal" >&2; exit 1; }
 kc() {
     if ((READONLY)); then
-        case $1 in get|describe|logs|top|config|auth) ;; *) echo 'DaxTerm: read-only action blocked' >&2; return 126 ;; esac
+        case $1 in get|describe|logs|top|config|auth) ;; *) echo 'DachsTerm: read-only action blocked' >&2; return 126 ;; esac
         # Raw proxy requests can reach application endpoints; disable them in query mode.
-        local arg; for arg in "$@"; do [[ $arg == --raw* ]] && { echo 'DaxTerm: raw API disabled in query mode' >&2; return 126; }; done
+        local arg; for arg in "$@"; do [[ $arg == --raw* ]] && { echo 'DachsTerm: raw API disabled in query mode' >&2; return 126; }; done
     fi
     "$KUBECTL" "${KARGS[@]}" "$@"
 }
@@ -178,14 +178,14 @@ leave_screen() {
     # Shells, pagers, and the caller must get their original terminal settings back.
     if [[ -n $TTY_STATE ]]; then stty "$TTY_STATE" 2>/dev/null; TTY_STATE=""; fi
 }
-daxterm_kill_children() {
+dachsterm_kill_children() {
     local parent=$1 child
     local children; children=$(ps -eo pid=,ppid= | awk -v p="$parent" '$2==p {print $1}')
-    for child in $children; do daxterm_kill_children "$child"; kill -TERM "$child" 2>/dev/null; done
+    for child in $children; do dachsterm_kill_children "$child"; kill -TERM "$child" 2>/dev/null; done
 }
-cleanup() { trap '' HUP TERM INT; daxterm_kill_children "$$"; stop_producers; [[ -n $FETCH_PID ]] && kill "$FETCH_PID" 2>/dev/null; [[ -n $AI_PID ]] && ai_stop; leave_screen; rm -rf "$TMP";
-    if [[ ${DAXTERM_EMBEDDED:-} == 1 && $DAXTERM_STAGE == /*/daxterm-podtree.* ]]; then
-        rm -f -- "$DAXTERM_STAGE/podtree.sh"; rmdir -- "$DAXTERM_STAGE" 2>/dev/null
+cleanup() { trap '' HUP TERM INT; dachsterm_kill_children "$$"; stop_producers; [[ -n $FETCH_PID ]] && kill "$FETCH_PID" 2>/dev/null; [[ -n $AI_PID ]] && ai_stop; leave_screen; rm -rf "$TMP";
+    if [[ ${DACHSTERM_EMBEDDED:-} == 1 && $DACHSTERM_STAGE == /*/dachsterm-podtree.* ]]; then
+        rm -f -- "$DACHSTERM_STAGE/podtree.sh"; rmdir -- "$DACHSTERM_STAGE" 2>/dev/null
     fi
 }
 trap cleanup EXIT
@@ -3207,7 +3207,7 @@ confirm() {   # confirm PROMPT -> 0 on y/Y
     [[ $k == y || $k == Y ]]
 }
 pick_namespace() {
-    [[ ${DAXTERM_EMBEDDED:-} == 1 ]] && { MSG="DaxTerm: context/namespace fixed; open a new tab to change"; return; }
+    [[ ${DACHSTERM_EMBEDDED:-} == 1 ]] && { MSG="DachsTerm: context/namespace fixed; open a new tab to change"; return; }
     local x list=()
     t all_ns; list=("$S")
     while IFS= read -r x; do list+=("${x#namespace/}"); done < <(kc get ns -o name 2>/dev/null)
@@ -3218,7 +3218,7 @@ pick_namespace() {
     ai_reset; fetch_sync
 }
 pick_context() {
-    [[ ${DAXTERM_EMBEDDED:-} == 1 ]] && { MSG="DaxTerm: context/namespace fixed; open a new tab to change"; return; }
+    [[ ${DACHSTERM_EMBEDDED:-} == 1 ]] && { MSG="DachsTerm: context/namespace fixed; open a new tab to change"; return; }
     local x list=() a=() i
     while IFS= read -r x; do list+=("$x"); done < <(kc config get-contexts -o name 2>/dev/null)
     ((${#list[@]})) || return

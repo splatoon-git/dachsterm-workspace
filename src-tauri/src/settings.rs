@@ -91,7 +91,7 @@ pub async fn config_export(state: State<'_, AppState>) -> Result<bool> {
         export(&state.store)?
     };
     let Some(file) = rfd::AsyncFileDialog::new()
-        .set_file_name("daxterm-sessions.json")
+        .set_file_name("dachsterm-sessions.json")
         .add_filter("JSON", &["json"])
         .save_file()
         .await
@@ -113,7 +113,7 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
         .filter(|c| snapshot.profiles.iter().any(|p| p.id == c.profile_id))
         .collect();
     let data = serde_json::to_vec_pretty(&Bundle {
-        format: Some("daxterm.sessions".into()),
+        format: Some("dachsterm.sessions".into()),
         version: 3,
         templates: crate::session_management::templates(store)?,
         profiles: snapshot.profiles,
@@ -152,7 +152,7 @@ pub fn import(store: &Store, data: &[u8]) -> Result<usize> {
 pub(crate) fn validate_bundle(bundle: &Bundle) -> Result<()> {
     if !matches!(
         (bundle.version, bundle.format.as_deref()),
-        (1, None) | (2 | 3, Some("daxterm.sessions"))
+        (1, None) | (2 | 3, Some("dachsterm.sessions"))
     ) || bundle.profiles.len() > 500
         || bundle.groups.len() > 100
         || bundle.tunnels.len() > 128
@@ -421,7 +421,7 @@ mod tests {
             },
         };
         let bundle = Bundle {
-            format: Some("daxterm.sessions".into()),
+            format: Some("dachsterm.sessions".into()),
             version: 3,
             profiles: vec![p],
             groups: vec![
@@ -535,7 +535,7 @@ mod tests {
         let mut p = crate::storage::tests::profile();
         p.id = "session".into();
         let base = Bundle {
-            format: Some("daxterm.sessions".into()),
+            format: Some("dachsterm.sessions".into()),
             version: 2,
             profiles: vec![p],
             groups: vec![],

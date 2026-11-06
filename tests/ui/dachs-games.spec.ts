@@ -16,7 +16,9 @@ async function openGame(page: Page, name: string) {
 }
 
 for (const width of [1280, 560, 360]) {
-  test(`Dax games integrate, pause, jump, retain records and fit ${width}px`, async ({ page }) => {
+  test(`Dachs games integrate, pause, jump, retain records and fit ${width}px`, async ({
+    page,
+  }) => {
     test.setTimeout(60000);
     await page.setViewportSize({ width, height: 900 });
     await page.addInitScript(() => {
@@ -26,6 +28,7 @@ for (const width of [1280, 560, 360]) {
     const snack = await openGame(page, '닥스의 간식 타임');
     const snackBoard = snack.getByRole('group', { name: '닥스의 간식 타임 게임판' });
     await expect(snackBoard).toBeVisible();
+    await expect(snack.getByText('DACHS’S SNACK TIME', { exact: true })).toBeVisible();
     await page.clock.install();
     await page.clock.pauseAt(new Date(Date.now() + 1000));
     await snack.getByRole('button', { name: '게임 시작', exact: true }).click();
@@ -66,7 +69,7 @@ for (const width of [1280, 560, 360]) {
     await page.clock.runFor(30);
     await expect(board).toHaveAttribute('data-motion', 'bite');
     await expect(adventure.locator('.adventure-bite')).toBeVisible();
-    await page.screenshot({ path: `test-results/dax-adventure-${width}.png` });
+    await page.screenshot({ path: `test-results/dachs-adventure-${width}.png` });
     await page.clock.runFor(700);
     await expect(board).toHaveAttribute('data-y', '0');
     await expect(adventure.getByRole('status')).toHaveText('플레이 중');
@@ -84,7 +87,7 @@ for (const width of [1280, 560, 360]) {
     await snackBoard.click();
     await page.clock.runFor(43000);
     await expect(snack.getByRole('status')).toContainText('45초 간식 사냥 완료');
-    await page.screenshot({ path: `test-results/dax-snack-${width}.png` });
+    await page.screenshot({ path: `test-results/dachs-snack-${width}.png` });
     await page.keyboard.press('Escape');
     await page.clock.runFor(50);
     await expect(page.getByRole('tab', { name: '시작하기', exact: true })).toBeFocused();
@@ -100,15 +103,15 @@ for (const width of [1280, 560, 360]) {
     await expect(page.locator('#game-panel-snack')).toHaveCount(1);
     await page.reload();
     expect(
-      await page.evaluate(() => Number(localStorage.getItem('daxterm.games.v1.snack'))),
+      await page.evaluate(() => Number(localStorage.getItem('dachsterm.games.v1.snack'))),
     ).toBeGreaterThan(0);
     expect(
-      await page.evaluate(() => Number(localStorage.getItem('daxterm.games.v1.adventure'))),
+      await page.evaluate(() => Number(localStorage.getItem('dachsterm.games.v1.adventure'))),
     ).toBeGreaterThan(0);
   });
 }
 
-test('Dax games follow theme, retain terminal instance, pause on blur and support touch', async ({
+test('Dachs games follow theme, retain terminal instance, pause on blur and support touch', async ({
   page,
 }) => {
   await page.goto('/');
@@ -143,7 +146,7 @@ test('Dax games follow theme, retain terminal instance, pause on blur and suppor
         (e) => getComputedStyle(e).color === getComputedStyle(e.closest('.game-terminal')!).color,
       ),
   ).toBe(true);
-  await page.screenshot({ path: 'test-results/dax-dark.png' });
+  await page.screenshot({ path: 'test-results/dachs-dark.png' });
   await adventure.getByRole('group', { name: '닥스의 모험 게임판' }).focus();
   await page.keyboard.press('Escape');
   await expect(terminal).toBeVisible();
@@ -210,5 +213,5 @@ test('adventure scrolls in both directions and defeats a monster with a timed bi
   await page.keyboard.up('a');
   expect(Number(await board.getAttribute('data-camera'))).toBeLessThan(camera);
   await page.keyboard.press('p');
-  await page.screenshot({ path: 'test-results/dax-adventure-stage.png' });
+  await page.screenshot({ path: 'test-results/dachs-adventure-stage.png' });
 });

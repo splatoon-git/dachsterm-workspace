@@ -90,15 +90,15 @@ export function SessionTransfer({
     <section className="settings-data session-transfer" aria-label="세션 가져오기와 내보내기">
       <h3>세션 가져오기 · 내보내기</h3>
       <p className="muted">
-        DaxTerm JSON으로 세션·계층·태그·경유·템플릿·터널을 보관합니다. 외부 형식의 지원·제외 필드는
-        변환 보고서에서 확인하세요. 암호와 개인키 내용은 포함하지 않습니다.
+        DachsTerm JSON으로 세션·계층·태그·경유·템플릿·터널을 보관합니다. 외부 형식의 지원·제외
+        필드는 변환 보고서에서 확인하세요. 암호와 개인키 내용은 포함하지 않습니다.
       </p>
       <div className="transfer-options">
         <label>
           가져올 형식
           <select value={format} disabled={busy} onChange={(e) => setFormat(e.target.value)}>
             <option value="auto">자동 감지</option>
-            <option value="daxterm">DaxTerm JSON (v1 / v2 / v3)</option>
+            <option value="dachsterm">DachsTerm JSON (v1 / v2 / v3)</option>
             <option value="putty">PuTTY (.reg)</option>
             <option value="mobaxterm">MobaXterm (.mxtsessions / .ini)</option>
             <option value="openssh">OpenSSH (config)</option>
@@ -125,7 +125,7 @@ export function SessionTransfer({
             setMessage('');
             try {
               if (await call<boolean>('config_export'))
-                setMessage('DaxTerm JSON 파일을 저장했습니다.');
+                setMessage('DachsTerm JSON 파일을 저장했습니다.');
             } catch (e) {
               setError(errorText(e));
             } finally {

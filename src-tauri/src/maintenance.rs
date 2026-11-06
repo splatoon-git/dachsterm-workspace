@@ -23,7 +23,7 @@ pub fn instance_lock(directory: &Path) -> Result<File> {
         .truncate(false)
         .open(directory.join("instance.lock"))
         .map_err(|_| "앱 데이터 잠금 파일을 열 수 없습니다.")?;
-    file.try_lock().map_err(|_| "같은 데이터 폴더를 사용하는 DaxTerm이 이미 실행 중입니다. 기존 창을 사용하거나 앱을 종료한 뒤 다시 실행하세요.")?;
+    file.try_lock().map_err(|_| "같은 데이터 폴더를 사용하는 DachsTerm이 이미 실행 중입니다. 기존 창을 사용하거나 앱을 종료한 뒤 다시 실행하세요.")?;
     Ok(file)
 }
 
@@ -206,7 +206,7 @@ pub async fn diagnostics_export(state: State<'_, AppState>) -> Result<bool> {
     report.tunnels = state.tunnels.list().len();
     let data = serde_json::to_vec_pretty(&report).map_err(|_| "진단 생성 실패")?;
     let Some(file) = rfd::AsyncFileDialog::new()
-        .set_file_name("daxterm-diagnostics.json")
+        .set_file_name("dachsterm-diagnostics.json")
         .add_filter("JSON", &["json"])
         .save_file()
         .await

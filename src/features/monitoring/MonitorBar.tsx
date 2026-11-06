@@ -103,8 +103,8 @@ export function MonitorBar({ session }: { session: TerminalSession }) {
         if (!data) {
           await call('monitor_configure', {
             id,
-            enabled: localStorage.getItem('daxterm.monitor') !== 'false',
-            interval: Number(localStorage.getItem('daxterm.interval')) || 5,
+            enabled: localStorage.getItem('dachsterm.monitor') !== 'false',
+            interval: Number(localStorage.getItem('dachsterm.interval')) || 5,
             interface: 'all',
           });
           data = await call<Monitor | null>('monitor_get', { id });
@@ -134,8 +134,8 @@ export function MonitorBar({ session }: { session: TerminalSession }) {
   async function configure(enabled: boolean, interval: number, network: string) {
     try {
       await call('monitor_configure', { id, enabled, interval, interface: network });
-      localStorage.setItem('daxterm.monitor', String(enabled));
-      localStorage.setItem('daxterm.interval', String(interval));
+      localStorage.setItem('dachsterm.monitor', String(enabled));
+      localStorage.setItem('dachsterm.interval', String(interval));
       setError('');
     } catch (e) {
       setError(errorText(e));

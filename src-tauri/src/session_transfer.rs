@@ -20,7 +20,7 @@ impl Preview {
     fn new() -> Self {
         Self {
             bundle: Bundle {
-                format: Some("daxterm.sessions".into()),
+                format: Some("dachsterm.sessions".into()),
                 version: 3,
                 profiles: vec![],
                 groups: vec![],
@@ -148,7 +148,7 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
     }
     let format = if format == "auto" {
         if text.trim_start().starts_with('{') {
-            "daxterm"
+            "dachsterm"
         } else if text.starts_with("Windows Registry Editor Version 5.00")
             || text.starts_with("REGEDIT4")
         {
@@ -172,9 +172,9 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
         format
     };
     let mut result = match format {
-        "daxterm" => {
+        "dachsterm" => {
             let bundle: Bundle =
-                serde_json::from_str(&text).map_err(|_| "DaxTerm JSON 스키마 오류")?;
+                serde_json::from_str(&text).map_err(|_| "DachsTerm JSON 스키마 오류")?;
             crate::settings::validate_bundle(&bundle)?;
             Preview {
                 bundle,
@@ -195,7 +195,7 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
     for c in &mut result.bundle.tunnels {
         c.auto_start = false;
     }
-    if format != "daxterm" {
+    if format != "dachsterm" {
         result.warn("외부 형식의 지원 범위는 아래 보고서를 확인하세요. 자동 명령·호스트키 신뢰·암호·개인키 내용은 이전하지 않습니다. 터널 자동 시작은 꺼집니다. 적용 전 접속 대상을 확인하세요.");
     }
     Ok(result)
@@ -238,7 +238,7 @@ pub fn config_apply(
     if data.len() > crate::maintenance::MAX_CONFIG_BYTES {
         return Err("설정 파일은 2MiB 이하여야 합니다.".into());
     }
-    let bundle: Bundle = serde_json::from_str(&data).map_err(|_| "DaxTerm JSON 스키마 오류")?;
+    let bundle: Bundle = serde_json::from_str(&data).map_err(|_| "DachsTerm JSON 스키마 오류")?;
     crate::settings::validate_bundle(&bundle)?;
     let _guard = state.mutation.lock().unwrap();
     crate::maintenance::snapshot(&state.store, &state.directory)?;
@@ -1004,7 +1004,7 @@ mod tests {
         let exported = crate::settings::export(&store).unwrap();
         let p = parse(&exported, "auto", "utf-8").unwrap();
         assert_eq!(p.bundle.version, 3);
-        assert_eq!(p.bundle.format.as_deref(), Some("daxterm.sessions"));
+        assert_eq!(p.bundle.format.as_deref(), Some("dachsterm.sessions"));
         assert_eq!(p.bundle.profiles[0].host, "lab.example");
     }
 }

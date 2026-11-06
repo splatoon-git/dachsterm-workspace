@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
-const name = `daxterm-probe-${randomUUID()}`;
+const name = `dachsterm-probe-${randomUUID()}`;
 const env = {
   ...process.env,
   PATH: `${path.join(homedir(), '.cargo', 'bin')}${path.delimiter}${process.env.PATH}`,
@@ -23,8 +23,8 @@ async function run(command, args, options = {}) {
 }
 let created = false;
 try {
-  await run('cargo', ['build', '--locked', '-p', 'daxterm-ssh-probe']);
-  await run('docker', ['build', '-t', 'daxterm-openssh-probe', 'tests/openssh']);
+  await run('cargo', ['build', '--locked', '-p', 'dachsterm-ssh-probe']);
+  await run('docker', ['build', '-t', 'dachsterm-openssh-probe', 'tests/openssh']);
   capture([
     'run',
     '-d',
@@ -32,12 +32,12 @@ try {
     '--name',
     name,
     '--label',
-    'app.daxterm.purpose=phase0-probe',
+    'app.dachsterm.purpose=phase0-probe',
     '-p',
     '127.0.0.1::22',
     '--tmpfs',
     '/run/probe:rw,noexec,nosuid,mode=0700',
-    'daxterm-openssh-probe',
+    'dachsterm-openssh-probe',
   ]);
   created = true;
   let ready = false;
@@ -52,7 +52,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (!ready) throw new Error('OpenSSH fixture startup timeout');
-  env.DAXTERM_PROBE_PORT = capture(['port', name, '22/tcp']).split(':').at(-1);
+  env.DACHSTERM_PROBE_PORT = capture(['port', name, '22/tcp']).split(':').at(-1);
   for (const [key, file] of [
     ['PASSWORD', 'password'],
     ['PASSPHRASE', 'passphrase'],
@@ -61,13 +61,13 @@ try {
     ['HOST_KEY', 'host.pub'],
     ['RSA_HOST_KEY', 'host_rsa.pub'],
   ])
-    env[`DAXTERM_PROBE_${key}`] = capture(['exec', name, 'cat', `/run/probe/${file}`]);
+    env[`DACHSTERM_PROBE_${key}`] = capture(['exec', name, 'cat', `/run/probe/${file}`]);
   // Secrets exist only in the ephemeral fixture and this process/child environment; never print them.
   await run(
     path.resolve(
       'target',
       'debug',
-      `daxterm-ssh-probe${process.platform === 'win32' ? '.exe' : ''}`,
+      `dachsterm-ssh-probe${process.platform === 'win32' ? '.exe' : ''}`,
     ),
     [],
     { timeout: 180_000 },
@@ -80,5 +80,5 @@ try {
     capture(['rm', '-f', name]);
     console.log('PASS fixture removed (keys, credentials and remote files destroyed)');
   }
-  for (const key of Object.keys(env)) if (key.startsWith('DAXTERM_PROBE_')) delete env[key];
+  for (const key of Object.keys(env)) if (key.startsWith('DACHSTERM_PROBE_')) delete env[key];
 }

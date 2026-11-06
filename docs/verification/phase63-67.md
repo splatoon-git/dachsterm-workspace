@@ -27,9 +27,9 @@
 ## 재현
 
 1. WSL Ubuntu에 Bash4+, kind, kubectl, Docker 및 고정 kind/busybox 이미지를 준비한다. `bash scripts/setup-phase63-67.sh`는 이름이 같은 기존 클러스터가 있으면 생성에서 실패하며 기본 kubeconfig를 변경하지 않는다.
-2. `node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle` (Cargo PATH, Node 메모리1GiB 설정). 독립 보존본을 `DAXTERM_TEST_BINARY`에 지정한다.
+2. `node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle` (Cargo PATH, Node 메모리1GiB 설정). 독립 보존본을 `DACHSTERM_TEST_BINARY`에 지정한다.
 3. `node scripts/test-phase63-67-native.mjs`. 결과 `target/verification/phase63-67-native.json`, UI캡처. 테스트가 만든 OpenSSH 컨테이너/앱은 finally에서 종료한다. 실패 중 인증 대화 내용은 출력하지 않는다.
-4. 테스트 후 WSL에서 `kind delete cluster --name daxterm-podtree-check`, `/tmp/daxterm-podtree-check.config`만 제거한다. 사용자 kubeconfig와 다른 컨테이너는 유지한다.
+4. 테스트 후 WSL에서 `kind delete cluster --name dachsterm-podtree-check`, `/tmp/dachsterm-podtree-check.config`만 제거한다. 사용자 kubeconfig와 다른 컨테이너는 유지한다.
 
 ## 미검증
 

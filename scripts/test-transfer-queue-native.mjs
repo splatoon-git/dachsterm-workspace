@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
-const root = await mkdtemp(path.join(tmpdir(), 'daxterm-queue-native-'));
+const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-queue-native-'));
 const evidence = path.resolve('target/verification/transfer-queue-native');
 await mkdir(evidence, { recursive: true });
-const binary = process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe');
+const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let app,
   browser,
@@ -39,8 +39,8 @@ async function launch() {
     stdio: ['ignore', 'ignore', 'pipe'],
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: root,
-      DAXTERM_TEST_CDP_PORT: String(port),
+      DACHSTERM_TEST_DATA_DIR: root,
+      DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
     },
   });
@@ -93,11 +93,11 @@ try {
   await form.getByLabel('이름', { exact: true }).fill('Queue native fixture');
   await form.getByLabel('프로토콜').selectOption('ftps');
   await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
-  await form.getByLabel('포트', { exact: true }).fill(process.env.DAXTERM_FTPS_PORT);
+  await form.getByLabel('포트', { exact: true }).fill(process.env.DACHSTERM_FTPS_PORT);
   await form.getByLabel('사용자', { exact: true }).fill('fixture');
-  await form.getByLabel('비밀번호', { exact: true }).fill(process.env.DAXTERM_FTP_PASSWORD);
+  await form.getByLabel('비밀번호', { exact: true }).fill(process.env.DACHSTERM_FTP_PASSWORD);
   await form.getByLabel('인증정보 보관', { exact: true }).selectOption('forget');
-  await form.getByLabel('추가 CA 인증서 경로 (선택)').fill(process.env.DAXTERM_FTP_CA);
+  await form.getByLabel('추가 CA 인증서 경로 (선택)').fill(process.env.DACHSTERM_FTP_CA);
   await form.getByRole('button', { name: '저장 후 연결', exact: true }).click();
   let pane = page.locator('.pane-cell:not([hidden]) .ftp-pane');
   await expect(pane.getByRole('status')).toContainText('연결됨');
@@ -139,7 +139,7 @@ try {
   assert.equal((await invoke('transfer_list')).find((t) => t.id === job).done, before);
   await page.locator('.profile-target').filter({ hasText: 'Queue native fixture' }).dblclick();
   const auth = page.getByRole('dialog', { name: 'Queue native fixture 인증' });
-  await auth.getByLabel('비밀번호', { exact: true }).fill(process.env.DAXTERM_FTP_PASSWORD);
+  await auth.getByLabel('비밀번호', { exact: true }).fill(process.env.DACHSTERM_FTP_PASSWORD);
   await auth.getByRole('button', { name: '연결', exact: true }).click();
   pane = page.locator('.pane-cell:not([hidden]) .ftp-pane');
   await expect(pane.getByRole('status')).toContainText('연결됨');
@@ -163,7 +163,7 @@ try {
     finalListing.entries.find((e) => e.name === '00-completed.txt').modified,
     originalTime,
   );
-  const remoteHome = path.join(process.env.DAXTERM_FTP_ROOT, 'home', '한글 큐');
+  const remoteHome = path.join(process.env.DACHSTERM_FTP_ROOT, 'home', '한글 큐');
   assert.equal(
     await hash(path.join(source, '01-large.bin')),
     await hash(path.join(remoteHome, '01-large.bin')),
@@ -228,7 +228,7 @@ try {
   const absolute = path.resolve(root);
   if (
     path.dirname(absolute) !== path.resolve(tmpdir()) ||
-    !path.basename(absolute).startsWith('daxterm-queue-native-')
+    !path.basename(absolute).startsWith('dachsterm-queue-native-')
   ) {
     console.error('unsafe fixture cleanup');
     process.exitCode = 1;

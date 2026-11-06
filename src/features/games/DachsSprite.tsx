@@ -1,10 +1,10 @@
 import atlas from '../../assets/brand/dachshund-adventure-atlas.png';
 
 /** The shared G.4 atlas: idle, two run strides, jump, bite, hurt. */
-export function DaxSprite({ frame, className = '' }: { frame: number; className?: string }) {
+export function DachsSprite({ frame, className = '' }: { frame: number; className?: string }) {
   return (
     <svg
-      className={`dax-sprite ${className}`}
+      className={`dachs-sprite ${className}`}
       aria-hidden="true"
       x="-55"
       y="-84"
@@ -13,7 +13,7 @@ export function DaxSprite({ frame, className = '' }: { frame: number; className?
       viewBox={`${(frame % 3) * 512} ${Math.floor(frame / 3) * 512} 512 512`}
       overflow="hidden"
     >
-      <image className="dax-mascot" href={atlas} width="1536" height="1024" />
+      <image className="dachs-mascot" href={atlas} width="1536" height="1024" />
     </svg>
   );
 }

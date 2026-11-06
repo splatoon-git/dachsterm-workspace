@@ -9,10 +9,10 @@ import net from 'node:net';
 import assert from 'node:assert/strict';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-native-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-native-'));
 const screenshots = path.resolve('test-results-native');
 await mkdir(screenshots, { recursive: true });
-const probe = (key) => process.env[`DAXTERM_PROBE_${key}`];
+const probe = (key) => process.env[`DACHSTERM_PROBE_${key}`];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let app,
   browser,
@@ -28,13 +28,13 @@ async function port() {
 }
 async function launch() {
   const debugPort = await port();
-  app = spawn(process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe'), [], {
+  app = spawn(process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe'), [], {
     stdio: 'ignore',
     windowsHide: true,
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: directory,
-      DAXTERM_TEST_CDP_PORT: String(debugPort),
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(debugPort),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort} --remote-debugging-address=127.0.0.1`,
     },
@@ -200,7 +200,7 @@ try {
   stage = 'U3 tunnel visual editor and real forwarding';
   await verifyTunnels({ page, invoke, docker, probe, screenshots });
   stage = 'S1 terminal and authentication basics';
-  if (process.env.DAXTERM_UI_REGRESSION_ONLY === '1')
+  if (process.env.DACHSTERM_UI_REGRESSION_ONLY === '1')
     console.log('SKIP S1 parallel authentication/terminal-basics extension (UI regression only)');
   else
     await verifyTerminalBasics({
@@ -533,8 +533,8 @@ try {
   await page.screenshot({ path: path.join(screenshots, 'htop.png') });
   await page.keyboard.press('q');
   await sleep(250);
-  await command("vi -c 'set showmode' /tmp/daxterm-native.txt");
-  await output('daxterm-native.txt');
+  await command("vi -c 'set showmode' /tmp/dachsterm-native.txt");
+  await output('dachsterm-native.txt');
   await page.keyboard.press('i');
   await output('INSERT');
   await typeInput('한글 편집 확인');
@@ -543,10 +543,10 @@ try {
   await page.keyboard.press('Escape');
   await page.keyboard.type(':wq');
   await page.keyboard.press('Enter');
-  await command('cat /tmp/daxterm-native.txt');
+  await command('cat /tmp/dachsterm-native.txt');
   await output('한글 편집 확인');
   assert.equal(
-    docker(['exec', probe('CONTAINER'), 'cat', '/tmp/daxterm-native.txt']).trim(),
+    docker(['exec', probe('CONTAINER'), 'cat', '/tmp/dachsterm-native.txt']).trim(),
     '한글 편집 확인',
   );
   console.log('PASS native search/font/scrollback/resize / top/htop/vim Korean editing');
@@ -582,14 +582,14 @@ try {
   await mainPage.getByRole('button', { name: '설정', exact: true }).click();
   await mainPage.getByRole('radio', { name: /Terminal Green/ }).check();
   await expect
-    .poll(() => detachedPage.evaluate(() => localStorage.getItem('daxterm.theme')))
+    .poll(() => detachedPage.evaluate(() => localStorage.getItem('dachsterm.theme')))
     .toBe('terminal-green');
   await expect
     .poll(() => detachedPage.evaluate(() => document.documentElement.dataset.theme))
     .toBe(await mainPage.evaluate(() => document.documentElement.dataset.theme));
   await command("printf 'THEME_KEEP_CONNECTION\\n'");
   await output('THEME_KEEP_CONNECTION');
-  await mainPage.getByRole('radio', { name: /DaxTerm Classic/ }).check();
+  await mainPage.getByRole('radio', { name: /DachsTerm Classic/ }).check();
   await mainPage.keyboard.press('Escape');
   console.log('PASS native SSH detached window theme synchronization without disconnect');
 
@@ -773,7 +773,7 @@ try {
   await invoke('delete_session', { id: p.id });
   console.log('PASS native changed-host-key blocks connection with no override button');
   console.log(
-    process.env.DAXTERM_UI_REGRESSION_ONLY === '1'
+    process.env.DACHSTERM_UI_REGRESSION_ONLY === '1'
       ? 'PASS Windows UI/native regression (S1 extension explicitly omitted)'
       : 'PASS all Phase 1 Windows native integration checks',
   );
@@ -827,7 +827,7 @@ try {
   // Only the temporary directory created above can be removed.
   if (
     path.dirname(directory) === path.resolve(tmpdir()) &&
-    path.basename(directory).startsWith('daxterm-native-')
+    path.basename(directory).startsWith('dachsterm-native-')
   ) {
     await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
   } else {

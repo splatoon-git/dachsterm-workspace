@@ -71,7 +71,7 @@ pub async fn run(connections: &Connections, id: &str, request: Request) -> Resul
     tokio::time::timeout(std::time::Duration::from_secs(600), work)
         .await
         .map_err(
-            |_| "압축 작업 시간 초과. 서버의 작업 상태와 .daxterm-archive 임시 폴더를 확인하세요.",
+            |_| "압축 작업 시간 초과. 서버의 작업 상태와 .dachsterm-archive 임시 폴더를 확인하세요.",
         )?
 }
 #[tauri::command]

@@ -1,7 +1,7 @@
 # G.8.5 — 서바이버 화면·입력·종료 검증
 
 - 날짜: 2026-11-05 / Windows, Chromium 및 실제 Tauri WebView2.
-- 범위: 게임 목록과 탭 수명, Canvas/HUD, 카드·구간 통과·결과, 입력·테마·음향, 종료 저장. 설계는 [닥스의 서바이버](../design/dax-survivor.md), 진행 정본은 [progress](../progress.md)다.
+- 범위: 게임 목록과 탭 수명, Canvas/HUD, 카드·구간 통과·결과, 입력·테마·음향, 종료 저장. 설계는 [닥스의 서바이버](../design/dachs-survivor.md), 진행 정본은 [progress](../progress.md)다.
 - **G.8.5 구현/해당 범위 검증 완료**. G.8.6의 첫 두 보스 일반 입력 클리어·밸런스·성능·실제 PTY/SSH·배포 검증을 대신하지 않는다.
 
 ## 구현
@@ -23,7 +23,7 @@ Node 명령에는 메모리 제한 `--max-old-space-size=1024`를 적용했다. 
 | `node --max-old-space-size=1024 node_modules/typescript/bin/tsc --noEmit` | 종료0 |
 | `node --max-old-space-size=1024 node_modules/eslint/bin/eslint.js .` | 종료0 |
 | `node --max-old-space-size=1024 node_modules/vitest/vitest.mjs run src --maxWorkers=1` | 12파일 / 209개 통과 |
-| `node node_modules/@playwright/test/cli.js test tests/ui/survivor.spec.ts tests/ui/survivor-profile.spec.ts tests/ui/games.spec.ts tests/ui/dax-games.spec.ts --workers=1` | 26개 통과 (당시 신규 UI7 + 기존 회귀19) |
+| `node node_modules/@playwright/test/cli.js test tests/ui/survivor.spec.ts tests/ui/survivor-profile.spec.ts tests/ui/games.spec.ts tests/ui/dachs-games.spec.ts --workers=1` | 26개 통과 (당시 신규 UI7 + 기존 회귀19) |
 | 최종 `node node_modules/@playwright/test/cli.js test tests/ui/survivor.spec.ts --workers=1` | 9개 통과 (상태 보존/외부 포커스2개 추가). 위 실행과 합쳐 **고유28개** |
 | `npm run build` 및 `node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle` | 종료0, 최신 frontend 내장 debug 실행 파일 생성. 기존 main 번들500KB 경고 유지 |
 | `node scripts/test-survivor-ui-native.mjs` | 실제 WebView2 검증 종료0, 아래 내용 참조 |

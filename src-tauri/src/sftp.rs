@@ -234,7 +234,7 @@ pub(crate) async fn resumed(
         if s.symlink_metadata(&plan.remote).await.is_ok() {
             return Err("대상 파일이 이미 있습니다. 기존 파일에는 이어쓰지 않습니다.".into());
         }
-        let temp = format!("{}.daxterm-{}.part", plan.remote, plan.view.id);
+        let temp = format!("{}.dachsterm-{}.part", plan.remote, plan.view.id);
         let existing = s.symlink_metadata(&temp).await;
         let offset = match existing {
             Ok(m) => {
@@ -302,7 +302,7 @@ pub(crate) async fn resumed(
         }
         let temp = plan
             .local
-            .with_file_name(format!(".daxterm-{}.part", plan.view.id));
+            .with_file_name(format!(".dachsterm-{}.part", plan.view.id));
         let exists = tokio::fs::symlink_metadata(&temp).await;
         let offset = match &exists {
             Ok(m) => {

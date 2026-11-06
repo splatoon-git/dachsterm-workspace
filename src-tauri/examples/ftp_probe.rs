@@ -1,6 +1,6 @@
 #[path = "queue/checks.rs"]
 mod queue_checks;
-use daxterm::{
+use dachsterm::{
     ftp,
     sftp::Transfers,
     ssh::{Connections, Event},
@@ -10,7 +10,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::{sleep, timeout};
 use zeroize::Zeroizing;
 fn env(name: &str) -> String {
-    std::env::var(format!("DAXTERM_{name}")).expect("FTP fixture environment missing")
+    std::env::var(format!("DACHSTERM_{name}")).expect("FTP fixture environment missing")
 }
 async fn connect(
     manager: &Arc<Connections>,
@@ -47,7 +47,7 @@ async fn connect(
 async fn settled(
     transfers: &Transfers,
     id: &str,
-) -> Result<daxterm::sftp::Transfer, Box<dyn std::error::Error>> {
+) -> Result<dachsterm::sftp::Transfer, Box<dyn std::error::Error>> {
     timeout(Duration::from_secs(60), async {
         loop {
             let t = transfers.list().into_iter().find(|t| t.id == id).unwrap();

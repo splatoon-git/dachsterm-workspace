@@ -4,7 +4,7 @@ import type { GameId } from './catalog';
 export function useBest(id: GameId, score: number, lower = false) {
   const [best, setBest] = useState(() => {
     try {
-      const value = Number(localStorage.getItem(`daxterm.games.v1.${id}`));
+      const value = Number(localStorage.getItem(`dachsterm.games.v1.${id}`));
       return Number.isSafeInteger(value) && value >= 0 ? value : 0;
     } catch {
       return 0;
@@ -13,7 +13,7 @@ export function useBest(id: GameId, score: number, lower = false) {
   if (score > 0 && (lower ? best === 0 || score < best : score > best)) setBest(score);
   useEffect(() => {
     try {
-      localStorage.setItem(`daxterm.games.v1.${id}`, String(best));
+      localStorage.setItem(`dachsterm.games.v1.${id}`, String(best));
     } catch {
       /* Games work without storage. */
     }

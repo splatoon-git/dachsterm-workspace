@@ -11,7 +11,7 @@ const defaults: TerminalPreferences = {
   followDirectory: true,
   backspace: 'del',
 };
-const key = 'daxterm.terminalPreferences';
+const key = 'dachsterm.terminalPreferences';
 function read(): TerminalPreferences {
   try {
     const saved = JSON.parse(localStorage.getItem(key) ?? '{}');
@@ -76,4 +76,4 @@ export const needsPasteConfirmation = (text: string) =>
   });
 
 // A session-only prompt hook. No dotfiles or server settings are written.
-export const directoryHook = `if [ -n "$BASH_VERSION" ]; then eval '__daxterm_cwd() { printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; }; [[ ";\${PROMPT_COMMAND[*]};" == *"__daxterm_cwd"* ]] || PROMPT_COMMAND+=(__daxterm_cwd)'; elif [ -n "$ZSH_VERSION" ]; then eval '__daxterm_cwd() { printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; }; (( \${precmd_functions[(Ie)__daxterm_cwd]} )) || precmd_functions+=(__daxterm_cwd)'; else printf '%s\\n' 'DaxTerm: 이 셸은 OSC 7 경로 알림을 별도로 설정해야 합니다.'; fi`;
+export const directoryHook = `if [ -n "$BASH_VERSION" ]; then eval '__dachsterm_cwd() { printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; }; [[ ";\${PROMPT_COMMAND[*]};" == *"__dachsterm_cwd"* ]] || PROMPT_COMMAND+=(__dachsterm_cwd)'; elif [ -n "$ZSH_VERSION" ]; then eval '__dachsterm_cwd() { printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; }; (( \${precmd_functions[(Ie)__dachsterm_cwd]} )) || precmd_functions+=(__dachsterm_cwd)'; else printf '%s\\n' 'DachsTerm: 이 셸은 OSC 7 경로 알림을 별도로 설정해야 합니다.'; fi`;

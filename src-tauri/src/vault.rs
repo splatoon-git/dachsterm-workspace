@@ -17,7 +17,7 @@ use std::{
 use tauri::Manager;
 use zeroize::Zeroizing;
 const SETTING: &str = "master-vault-v1";
-const WRAP_AAD: &[u8] = b"DaxTerm master key v1 Argon2id m32768 t3 p1";
+const WRAP_AAD: &[u8] = b"DachsTerm master key v1 Argon2id m32768 t3 p1";
 const TTL: Duration = Duration::from_secs(300);
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

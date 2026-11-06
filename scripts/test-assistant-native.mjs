@@ -7,9 +7,9 @@ import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
 import { commands, guideHook } from '../src/features/terminal/guideData.ts';
-const binary = process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe');
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-assistant-'));
-const fixture = `daxterm-assistant-${randomUUID()}`;
+const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-assistant-'));
+const fixture = `dachsterm-assistant-${randomUUID()}`;
 const result = { checks: [], pageErrors: 0 };
 let app,
   browser,
@@ -36,8 +36,8 @@ async function launch() {
     windowsHide: true,
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: directory,
-      DAXTERM_TEST_CDP_PORT: String(port),
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
     },
   });
@@ -93,12 +93,12 @@ try {
     '--name',
     fixture,
     '--label',
-    'app.daxterm.purpose=assistant-verification',
+    'app.dachsterm.purpose=assistant-verification',
     '-p',
     '127.0.0.1::22',
     '--tmpfs',
     '/run/probe:rw,noexec,nosuid,mode=0700',
-    'daxterm-openssh-probe',
+    'dachsterm-openssh-probe',
   ]);
   created = true;
   for (let i = 0; i < 80; i++) {
@@ -318,8 +318,8 @@ try {
     mobile: false,
   });
   await page.evaluate(() => {
-    localStorage.setItem('daxterm.theme', 'github-dark');
-    window.dispatchEvent(new StorageEvent('storage', { key: 'daxterm.theme' }));
+    localStorage.setItem('dachsterm.theme', 'github-dark');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'dachsterm.theme' }));
   });
   await tools('기본 명령·로그 필터');
   await mkdir('target/verification', { recursive: true });

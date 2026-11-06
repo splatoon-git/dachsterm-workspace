@@ -26,7 +26,7 @@ def run(request):
     if os.path.basename(target) in ("", ".", "..") or os.path.lexists(target): raise ValueError("target exists or invalid")
     limit=request.get("limitMb",2048)*1024*1024
     if not 1024*1024<=limit<=16*1024**3: raise ValueError("size limit must be 1-16384 MiB")
-    stage=tempfile.mkdtemp(prefix=".daxterm-archive-",dir=os.path.dirname(target))
+    stage=tempfile.mkdtemp(prefix=".dachsterm-archive-",dir=os.path.dirname(target))
     os.chmod(stage,0o700)
     total=0
     try:
@@ -117,7 +117,7 @@ def run(request):
         return {"ok":True,"target":target}
     finally:
         # The only recursive cleanup target is our mkdtemp child, never a request path.
-        if os.path.dirname(stage)==os.path.dirname(target) and os.path.basename(stage).startswith(".daxterm-archive-"):
+        if os.path.dirname(stage)==os.path.dirname(target) and os.path.basename(stage).startswith(".dachsterm-archive-"):
             shutil.rmtree(stage)
 
 try:

@@ -1,6 +1,6 @@
 # U.3 — 설정 이해도·버튼 일관성
 
-- 요청일: 2026-11-05. 첨부된 DaxTerm/MobaXterm 화면을 상호작용 참고로 사용했다. 기존 크림색 기본 테마·공통 토큰·독립 UI를 유지한다.
+- 요청일: 2026-11-05. 첨부된 DachsTerm/MobaXterm 화면을 상호작용 참고로 사용했다. 기존 크림색 기본 테마·공통 토큰·독립 UI를 유지한다.
 - 범위: 공통 액션 크기/강조 단계와 터널 설정·목록. 다른 Phase의 완료 상태나 보안·포워딩 엔진 계약을 변경하지 않는다.
 
 ## 점검 결과와 수정
@@ -27,7 +27,7 @@
 - `npm test`: 실행 당시 32개 통과. 병행 게임 모듈의 이후 추가 검사는 해당 작업 기록을 따른다.
 - `npm run typecheck`, 변경 파일 Prettier 검사, `cargo fmt --all -- --check`: 통과.
 - 최초 `npm run lint`: 통과. 후속 전체 lint에서 병행 작업의 `scripts/test-session-transfer-native.mjs` 미사용 변수 오류가 한 번 발생했다. 해당 작업 수정 후 최종 `npm run lint` 종료0, U.3 변경 파일 대상 ESLint도 종료0.
-- 최초 네이티브 빌드는 병행 게임 수정의 `./DaxGames` 파일 생성 전 누락으로 실패했다. 파일 생성 후 및 최종 CSS 정리 후 `npm run tauri -- build --debug --no-bundle` 모두 종료0. 실행 경로는 `src-tauri/target/windows-hardening/debug/daxterm.exe`. 기존 500KB 번들 경고는 유지된다.
+- 최초 네이티브 빌드는 병행 게임 수정의 `./DachsGames` 파일 생성 전 누락으로 실패했다. 파일 생성 후 및 최종 CSS 정리 후 `npm run tauri -- build --debug --no-bundle` 모두 종료0. 실행 경로는 `src-tauri/target/windows-hardening/debug/daxterm.exe`. 기존 500KB 번들 경고는 유지된다.
 - 시각 검토: `test-results/tunnel-local-1280.png`와 `tunnel-list-360.png`를 직접 확인했다. 설명/노드/버튼/단일 열 목록과 테마 적용을 확인했다. 나머지 폭/Remote 캡처는 같은 디렉터리에 생성된다.
 
 ## Windows 실제 검사

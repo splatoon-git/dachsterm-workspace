@@ -388,7 +388,7 @@ impl Editors {
             if *cancelled.borrow() { return Err("cancelled".into()); }
             let metadata = s.metadata(&target).await.ok();
             {let mut entries=self.entries.lock().unwrap();if let Some(active)=entries.get_mut(id){active.status="uploading".into();active.message="수정본 업로드 중".into();}}
-            let temp = format!("{target}.daxterm-{}.part", uuid::Uuid::new_v4());
+            let temp = format!("{target}.dachsterm-{}.part", uuid::Uuid::new_v4());
             let upload = async {
                 let mut file = s
                     .open_with_flags_and_attributes(

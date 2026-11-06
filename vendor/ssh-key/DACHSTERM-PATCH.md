@@ -1,4 +1,4 @@
-# DaxTerm RSA public-verification patch
+# DachsTerm RSA public-verification patch
 
 Base: RustCrypto `ssh-key` 0.7.0-rc.11 from crates.io, Apache-2.0 OR MIT.
 Upstream source: https://github.com/RustCrypto/SSH

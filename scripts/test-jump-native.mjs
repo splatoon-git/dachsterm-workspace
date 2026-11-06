@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-jump-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-jump-'));
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 let app, browser, page;
 let stage = 'launch';
@@ -17,10 +17,14 @@ async function launch() {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
   await new Promise((r) => server.close(r));
-  app = spawn(process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe'), [], {
+  app = spawn(process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe'), [], {
     windowsHide: true,
     stdio: 'ignore',
-    env: { ...process.env, DAXTERM_TEST_DATA_DIR: directory, DAXTERM_TEST_CDP_PORT: String(port) },
+    env: {
+      ...process.env,
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
+    },
   });
   let endpoint;
   for (let i = 0; i < 120; i++) {
@@ -82,10 +86,10 @@ const make = (name, port) => ({
   tags: ['prod'],
   sortOrder: 0,
 });
-const root = make('경유 서버', Number(process.env.DAXTERM_PROBE_PORT));
+const root = make('경유 서버', Number(process.env.DACHSTERM_PROBE_PORT));
 const target = { ...make('최종 서버', 22), jumpIds: [root.id] };
 const bundle = {
-  format: 'daxterm.sessions',
+  format: 'dachsterm.sessions',
   version: 3,
   profiles: [root, target],
   groups: [
@@ -119,7 +123,7 @@ try {
   stage = 'native two independent trust prompts and hop authentication';
   await page.locator('.profile-target').filter({ hasText: target.name }).dblclick();
   const auth = page.getByRole('dialog', { name: `${target.name} 인증` });
-  await auth.getByLabel('비밀번호', { exact: true }).fill(process.env.DAXTERM_PROBE_PASSWORD);
+  await auth.getByLabel('비밀번호', { exact: true }).fill(process.env.DACHSTERM_PROBE_PASSWORD);
   await auth.getByRole('button', { name: '연결', exact: true }).click();
   stage = 'hop authentication prompt';
   // The hop secret prompt happens before negotiation; answer it through the actual UI.
@@ -127,7 +131,7 @@ try {
   await page
     .getByRole('form', { name: '서버 추가 인증' })
     .locator('input')
-    .fill(process.env.DAXTERM_PROBE_PASSWORD);
+    .fill(process.env.DACHSTERM_PROBE_PASSWORD);
   await page.getByRole('button', { name: '인증 응답', exact: true }).click();
   for (let i = 0; i < 2; i++) {
     stage = `host trust ${i + 1}`;
@@ -192,7 +196,7 @@ try {
   let newest;
   for (const file of files) {
     const data = await readFile(path.join(directory, 'recovery', file), 'utf8');
-    assert(!data.includes(process.env.DAXTERM_PROBE_PASSWORD));
+    assert(!data.includes(process.env.DACHSTERM_PROBE_PASSWORD));
     const b = JSON.parse(data);
     assert.equal(b.version, 3);
     assert(b.profiles.every((p) => !p.hasSecret));
@@ -211,7 +215,7 @@ try {
   await page.getByRole('region', { name: '고급 세션 관리' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'target/verification/session-management-native.png' });
   assert.equal(pageErrors, 0);
-  const binary = process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe');
+  const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
   await writeFile(
     'target/verification/session-management-native.json',
     JSON.stringify(

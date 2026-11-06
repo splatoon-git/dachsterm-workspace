@@ -1,7 +1,7 @@
 use crate::storage::Result;
 use zeroize::Zeroizing;
 fn entry(id: &str) -> Result<keyring::Entry> {
-    keyring::Entry::new("app.daxterm.desktop", id)
+    keyring::Entry::new("app.dachsterm.desktop", id)
         .map_err(|_| "OS 보안 저장소를 사용할 수 없습니다. 저장 없이 연결할 수 있습니다.".into())
 }
 pub fn get(id: &str) -> Result<Zeroizing<String>> {

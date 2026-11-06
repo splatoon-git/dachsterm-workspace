@@ -7,7 +7,7 @@ import path from 'node:path';
 import net from 'node:net';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-local-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-local-'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let app, browser;
 async function launch() {
@@ -15,13 +15,13 @@ async function launch() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   await new Promise((resolve) => server.close(resolve));
-  app = spawn(path.resolve('target/debug/daxterm.exe'), [], {
+  app = spawn(path.resolve('target/debug/dachsterm.exe'), [], {
     stdio: 'ignore',
     windowsHide: true,
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: directory,
-      DAXTERM_TEST_CDP_PORT: String(port),
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
     },
   });
@@ -93,7 +93,7 @@ try {
   await expect(pane.locator('.xterm-accessibility-tree')).toContainText('PS C:', {
     timeout: 15000,
   });
-  await command(pane, "Write-Output ('DAX' + 'LOCAL_OK')", 'DAXLOCAL_OK');
+  await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');
   await command(pane, 'Write-Output ([char]0xD55C + [string][char]0xAE00)', '한글');
   await command(pane, "Write-Output ('LOCAL' + 'PID:' + $PID)", 'LOCALPID:');
   const localPid = Number(
@@ -147,7 +147,7 @@ try {
     .click();
   const cmd = page.getByRole('region', { name: '명령 프롬프트 터미널', exact: true });
   await expect(cmd.locator('.xterm-accessibility-tree')).toContainText('>', { timeout: 15000 });
-  await command(cmd, 'echo DAX^CMD_OK', 'DAXCMD_OK');
+  await command(cmd, 'echo DACHSTERM^CMD_OK', 'DACHSTERMCMD_OK');
   await page.getByRole('button', { name: '좌우', exact: true }).click();
   await expect(pane).toBeVisible();
   await expect(cmd).toBeVisible();
@@ -176,7 +176,7 @@ try {
     await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
       timeout: 15000,
     });
-    await command(linux, "printf 'DAX%s\\n' WSL_OK", 'DAXWSL_OK');
+    await command(linux, "printf 'DACHSTERM%s\\n' WSL_OK", 'DACHSTERMWSL_OK');
     await command(linux, 'exit', '');
     await expect(linux.locator('.connection-message')).toContainText('종료', { timeout: 15000 });
     await page.screenshot({ path: 'test-results-native/local-wsl.png' });

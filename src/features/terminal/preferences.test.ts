@@ -30,7 +30,7 @@ describe('terminal paths and clipboard safety', () => {
       followDirectory: false,
       backspace: 'bs',
     });
-    expect(JSON.parse(localStorage.getItem('daxterm.terminalPreferences')!)).toEqual({
+    expect(JSON.parse(localStorage.getItem('dachsterm.terminalPreferences')!)).toEqual({
       copyOnSelect: false,
       rightClickPaste: false,
       followDirectory: false,

@@ -3,24 +3,24 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-const root = await mkdtemp(path.join(tmpdir(), 'daxterm-ftp-'));
+const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-ftp-'));
 const targetRoot = path.resolve(process.env.CARGO_TARGET_DIR ?? 'target');
 const python =
-  process.env.DAXTERM_FTP_PYTHON || path.resolve('.tools/ftp-fixture/Scripts/python.exe');
+  process.env.DACHSTERM_FTP_PYTHON || path.resolve('.tools/ftp-fixture/Scripts/python.exe');
 const env = {
   ...process.env,
   PATH: `${process.env.USERPROFILE}\\.cargo\\bin;${process.env.PATH}`,
-  DAXTERM_FTP_ROOT: root,
-  DAXTERM_TEST_BINARY:
-    process.env.DAXTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', 'daxterm.exe'),
-  DAXTERM_FTP_PASSWORD: randomBytes(32).toString('base64url'),
+  DACHSTERM_FTP_ROOT: root,
+  DACHSTERM_TEST_BINARY:
+    process.env.DACHSTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', 'dachsterm.exe'),
+  DACHSTERM_FTP_PASSWORD: randomBytes(32).toString('base64url'),
 };
 let fixture;
 async function cleanup() {
   const absolute = path.resolve(root);
   if (
     path.dirname(absolute) !== path.resolve(tmpdir()) ||
-    !path.basename(absolute).startsWith('daxterm-ftp-')
+    !path.basename(absolute).startsWith('dachsterm-ftp-')
   )
     throw new Error('unsafe FTP cleanup path');
   await rm(absolute, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
@@ -48,7 +48,7 @@ async function run(command, args, extra = {}) {
 }
 try {
   if (!process.argv.includes('--reuse-build'))
-    await run('cargo', ['build', '-p', 'daxterm', '--example', 'ftp_probe', '--locked']);
+    await run('cargo', ['build', '-p', 'dachsterm', '--example', 'ftp_probe', '--locked']);
   fixture = spawn(python, ['scripts/ftp-fixture.py'], {
     env,
     stdio: ['ignore', 'pipe', 'ignore'],
@@ -75,10 +75,10 @@ try {
     });
   });
   const connectionEnv = {
-    DAXTERM_FTP_PORT: String(info.ports.ftp),
-    DAXTERM_FTPS_PORT: String(info.ports.ftps),
-    DAXTERM_FTP_LEGACY_PORT: String(info.ports.legacy),
-    DAXTERM_FTP_CA: info.ca,
+    DACHSTERM_FTP_PORT: String(info.ports.ftp),
+    DACHSTERM_FTPS_PORT: String(info.ports.ftps),
+    DACHSTERM_FTP_LEGACY_PORT: String(info.ports.legacy),
+    DACHSTERM_FTP_CA: info.ca,
   };
   if (!process.argv.includes('--native-only') && !process.argv.includes('--queue-native-only'))
     await run(path.join(targetRoot, 'debug/examples/ftp_probe.exe'), [], connectionEnv);

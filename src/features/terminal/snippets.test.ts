@@ -22,9 +22,14 @@ describe('snippet literal expansion and metadata boundaries', () => {
     expect(matchesSnippet(s, '운영 windows')).toBe(false);
   });
   it('accepts only explicit allowlisted metadata, with no arguments', () => {
-    expect(programMetadata('DaxTerm;program;vim')).toBe('vim');
-    expect(programMetadata('DaxTerm;end')).toBe(null);
-    for (const value of ['vim secret', 'DaxTerm;program;vim file', 'DaxTerm;program;sudo', '133;C'])
+    expect(programMetadata('DachsTerm;program;vim')).toBe('vim');
+    expect(programMetadata('DachsTerm;end')).toBe(null);
+    for (const value of [
+      'vim secret',
+      'DachsTerm;program;vim file',
+      'DachsTerm;program;sudo',
+      '133;C',
+    ])
       expect(programMetadata(value)).toBeUndefined();
   });
   it('keeps catalog copy text plain and without a trailing Enter', () => {

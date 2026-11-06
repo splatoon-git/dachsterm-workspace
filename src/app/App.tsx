@@ -78,7 +78,7 @@ function Tab({
     <div
       className={`session-tab ${active ? 'selected' : ''}`}
       draggable
-      onDragStart={(e) => e.dataTransfer.setData('text/daxterm-tab', session.tabId)}
+      onDragStart={(e) => e.dataTransfer.setData('text/dachsterm-tab', session.tabId)}
     >
       <button role="tab" aria-selected={active} onClick={select}>
         {session.profile.name}
@@ -113,10 +113,10 @@ export function App() {
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(
-    () => window.innerWidth > 700 && localStorage.getItem('daxterm.sidebar') !== 'false',
+    () => window.innerWidth > 700 && localStorage.getItem('dachsterm.sidebar') !== 'false',
   );
   const [sidebarView, setSidebarView] = useState<'connections' | 'files'>(() =>
-    localStorage.getItem('daxterm.sidebarView') === 'files' ? 'files' : 'connections',
+    localStorage.getItem('dachsterm.sidebarView') === 'files' ? 'files' : 'connections',
   );
   const closeDrawer = () => {
     if (window.innerWidth <= 700) setSidebarOpen(false);
@@ -147,10 +147,10 @@ export function App() {
     void refreshLocal();
   }, [refreshLocal]);
   useEffect(() => {
-    localStorage.setItem('daxterm.sidebar', String(sidebarOpen));
+    localStorage.setItem('dachsterm.sidebar', String(sidebarOpen));
   }, [sidebarOpen]);
   useEffect(() => {
-    localStorage.setItem('daxterm.sidebarView', sidebarView);
+    localStorage.setItem('dachsterm.sidebarView', sidebarView);
   }, [sidebarView]);
   const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
   const [zoomed, setZoomed] = useState(false);
@@ -233,7 +233,7 @@ export function App() {
   const [tabs, setTabs] = useState<TerminalSession[]>([]);
   const [active, setActive] = useState('');
   const [preview, setPreview] = useState(false);
-  const [layout, setLayout] = useState(() => localStorage.getItem('daxterm.layout') ?? 'single');
+  const [layout, setLayout] = useState(() => localStorage.getItem('dachsterm.layout') ?? 'single');
   async function changeLayout(next: string) {
     try {
       if (desktop) await call('broadcast_set', { ids: [] });
@@ -245,12 +245,12 @@ export function App() {
     }
   }
   const [leftWidth, setLeftWidth] = useState(() =>
-    Math.max(280, Math.min(420, Number(localStorage.getItem('daxterm.leftWidth')) || 304)),
+    Math.max(280, Math.min(420, Number(localStorage.getItem('dachsterm.leftWidth')) || 304)),
   );
   const [split, setSplit] = useState(50);
   useEffect(() => {
-    localStorage.setItem('daxterm.layout', layout);
-    localStorage.setItem('daxterm.leftWidth', String(leftWidth));
+    localStorage.setItem('dachsterm.layout', layout);
+    localStorage.setItem('dachsterm.leftWidth', String(leftWidth));
   }, [layout, leftWidth]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
@@ -439,7 +439,7 @@ export function App() {
       <header className="toolbar">
         <div className="brand">
           <img src={face} alt="" width="32" height="32" />
-          <strong>DaxTerm</strong>
+          <strong>DachsTerm</strong>
           <span className="phase-badge">DESKTOP</span>
         </div>
         <div className="tools">
@@ -799,7 +799,7 @@ export function App() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
-              const id = e.dataTransfer.getData('text/daxterm-tab');
+              const id = e.dataTransfer.getData('text/dachsterm-tab');
               const t = tabs.find((t) => t.tabId === id);
               if (t) {
                 setTabs([t, ...tabs.filter((v) => v !== t)]);
@@ -1102,7 +1102,7 @@ export function App() {
             연결 없음
           </span>
         )}
-        <span>DaxTerm · 로컬</span>
+        <span>DachsTerm · 로컬</span>
       </footer>
       {snippetsOpen && (
         <SnippetDialog

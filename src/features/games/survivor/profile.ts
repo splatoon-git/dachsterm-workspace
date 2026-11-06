@@ -1,7 +1,7 @@
 import { STAGE } from './content';
 import type { SurvivorRun, SurvivorStartOptions } from './types';
 
-export const PROFILE_KEY = 'daxterm.games.survivor.v1';
+export const PROFILE_KEY = 'dachsterm.games.survivor.v1';
 export const GOLD_CAP = 9_999_999;
 export const FIRST_BOSS_GOLD = 30;
 export const UPGRADES = {

@@ -1,4 +1,4 @@
-use daxterm::{editor::Editors, sftp, ssh::Connections};
+use dachsterm::{editor::Editors, sftp, ssh::Connections};
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 pub async fn files(
@@ -6,7 +6,7 @@ pub async fn files(
     id: &str,
     profile: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let root = format!("/tmp/daxterm-{} 한글", uuid::Uuid::new_v4());
+    let root = format!("/tmp/dachsterm-{} 한글", uuid::Uuid::new_v4());
     sftp::change(&manager, id, "mkdir", &root, "").await?;
     let local = tempfile::tempdir()?;
     let source = local.path().join("source.txt");
@@ -67,7 +67,7 @@ pub async fn files(
             profile.into(),
             remote.clone(),
             &local.path().join("edits"),
-            "daxterm-nonexistent-editor",
+            "dachsterm-nonexistent-editor",
             &[],
             "original",
         )
@@ -105,7 +105,7 @@ pub async fn files(
         0o640
     );
     let legacy = format!("{root}/legacy.txt");
-    let legacy_bytes = daxterm::encoding::encode("한글 원본\r\n", "euc-kr")?;
+    let legacy_bytes = dachsterm::encoding::encode("한글 원본\r\n", "euc-kr")?;
     let mut file = s.create(&legacy).await?;
     file.write_all(&legacy_bytes).await?;
     file.shutdown().await?;
@@ -116,7 +116,7 @@ pub async fn files(
             profile.into(),
             legacy.clone(),
             &local.path().join("edits"),
-            "daxterm-nonexistent-editor",
+            "dachsterm-nonexistent-editor",
             &[],
             "euc-kr",
         )
@@ -134,14 +134,14 @@ pub async fn files(
     editor.sync(&manager, &edit.id, "retry", None).await?;
     assert_eq!(
         s.read(&legacy).await?,
-        daxterm::encoding::encode("한글 수정\r\n", "euc-kr")?
+        dachsterm::encoding::encode("한글 수정\r\n", "euc-kr")?
     );
     editor.set_mode(&edit.id, "auto").await?;
     std::fs::write(&edit.local, "자동 저장")?;
     editor.sync(&manager, &edit.id, "auto", None).await?;
     assert_eq!(
         s.read(&legacy).await?,
-        daxterm::encoding::encode("자동 저장", "euc-kr")?
+        dachsterm::encoding::encode("자동 저장", "euc-kr")?
     );
     editor.set_mode(&edit.id, "manual").await?;
     std::fs::write(&edit.local, "수동 저장")?;
@@ -157,12 +157,12 @@ pub async fn files(
     );
     assert_eq!(
         s.read(&legacy).await?,
-        daxterm::encoding::encode("자동 저장", "euc-kr")?
+        dachsterm::encoding::encode("자동 저장", "euc-kr")?
     );
     editor.sync(&manager, &edit.id, "retry", None).await?;
     assert_eq!(
         s.read(&legacy).await?,
-        daxterm::encoding::encode("수동 저장", "euc-kr")?
+        dachsterm::encoding::encode("수동 저장", "euc-kr")?
     );
     std::fs::write(&edit.local, vec![b'A'; 32 * 1024 * 1024])?;
     let upload = editor.sync(&manager, &edit.id, "retry", None);
@@ -184,7 +184,7 @@ pub async fn files(
     assert!(result.is_err());
     assert_eq!(
         s.read(&legacy).await?,
-        daxterm::encoding::encode("수동 저장", "euc-kr")?
+        dachsterm::encoding::encode("수동 저장", "euc-kr")?
     );
     assert!(edit.local.exists());
     assert!(
@@ -203,7 +203,7 @@ pub async fn files(
     );
     let copied_dir = format!("{root}/copies");
     sftp::change(&manager, id, "mkdir", &copied_dir, "").await?;
-    let result = daxterm::file_ops::batch(
+    let result = dachsterm::file_ops::batch(
         &manager,
         id,
         id,
@@ -218,7 +218,7 @@ pub async fn files(
         s.read(format!("{copied_dir}/공백 파일.txt")).await?,
         b"local revision"
     );
-    let duplicate = daxterm::file_ops::batch(
+    let duplicate = dachsterm::file_ops::batch(
         &manager,
         id,
         id,
@@ -228,7 +228,7 @@ pub async fn files(
     )
     .await?;
     assert_eq!(duplicate.errors.len(), 1);
-    let recursive = daxterm::file_ops::batch(
+    let recursive = dachsterm::file_ops::batch(
         &manager,
         id,
         id,
@@ -242,7 +242,7 @@ pub async fn files(
         s.try_exists(format!("{copied_dir} 복사 1/공백 파일.txt"))
             .await?
     );
-    let moved = daxterm::file_ops::batch(
+    let moved = dachsterm::file_ops::batch(
         &manager,
         id,
         id,
@@ -252,7 +252,7 @@ pub async fn files(
     )
     .await?;
     assert_eq!(moved.errors.len(), 1);
-    let inside = daxterm::file_ops::batch(
+    let inside = dachsterm::file_ops::batch(
         &manager,
         id,
         id,
@@ -265,10 +265,10 @@ pub async fn files(
     for format in ["zip", "tar", "tar.gz"] {
         let archive = format!("{root}/bundle.{format}");
         let output = format!("{root}/extract-{format}");
-        daxterm::archive::run(
+        dachsterm::archive::run(
             &manager,
             id,
-            daxterm::archive::Request {
+            dachsterm::archive::Request {
                 operation: "compress".into(),
                 paths: vec![copied_dir.clone()],
                 target: archive.clone(),
@@ -278,10 +278,10 @@ pub async fn files(
             },
         )
         .await?;
-        daxterm::archive::run(
+        dachsterm::archive::run(
             &manager,
             id,
-            daxterm::archive::Request {
+            dachsterm::archive::Request {
                 operation: "extract".into(),
                 paths: vec![archive.clone()],
                 target: output.clone(),
@@ -296,10 +296,10 @@ pub async fn files(
             b"local revision"
         );
         assert!(
-            daxterm::archive::run(
+            dachsterm::archive::run(
                 &manager,
                 id,
-                daxterm::archive::Request {
+                dachsterm::archive::Request {
                     operation: "extract".into(),
                     paths: vec![archive],
                     target: output,
@@ -317,7 +317,7 @@ pub async fn files(
         for (index,payload) in ["UEsDBBQAAAAAAAAAIQAMfn/YBAAAAAQAAAANAAAALi4vZXNjYXBlLnR4dHRlc3RQSwECFAAUAAAAAAAAACEADH5/2AQAAAAEAAAADQAAAAAAAAAAAAAAgAEAAAAALi4vZXNjYXBlLnR4dFBLBQYAAAAAAQABADsAAAAvAAAAAAA=","UEsDBBQAAAAAAAAAIQAMfn/YBAAAAAQAAAANAAAAL2Fic29sdXRlLnR4dHRlc3RQSwECFAAUAAAAAAAAACEADH5/2AQAAAAEAAAADQAAAAAAAAAAAAAAgAEAAAAAL2Fic29sdXRlLnR4dFBLBQYAAAAAAQABADsAAAAvAAAAAAA=","UEsDBBQAAAAAAAAAIQBASv+xDQAAAA0AAAAEAAAAbGluay4uLy4uL291dHNpZGVQSwECFAAUAAAAAAAAACEAQEr/sQ0AAAANAAAABAAAAAAAAAAAAAAA/6EAAAAAbGlua1BLBQYAAAAAAQABADIAAAAvAAAAAAA="].into_iter().enumerate() {
         let bad=format!("{root}/unsafe-{index}.zip");let target=format!("{root}/rejected-{index}");
         let mut file=s.create(&bad).await?;file.write_all(&base64::engine::general_purpose::STANDARD.decode(payload)?).await?;file.shutdown().await?;
-        assert!(daxterm::archive::run(&manager,id,daxterm::archive::Request{operation:"extract".into(),paths:vec![bad],target:target.clone(),format:"zip".into(),encoding:"auto".into(),limit_mb:2}).await.is_err());
+        assert!(dachsterm::archive::run(&manager,id,dachsterm::archive::Request{operation:"extract".into(),paths:vec![bad],target:target.clone(),format:"zip".into(),encoding:"auto".into(),limit_mb:2}).await.is_err());
         assert!(!s.try_exists(target).await?);
     }
     }
@@ -327,7 +327,7 @@ pub async fn files(
     let renamed = format!("{root}/renamed.txt");
     sftp::change(&manager, id, "rename", &remote, &renamed).await?;
     sftp::change(&manager, id, "delete", &renamed, "").await?;
-    let removed = daxterm::file_ops::batch(
+    let removed = dachsterm::file_ops::batch(
         &manager,
         id,
         id,
@@ -351,7 +351,7 @@ pub async fn services(
     id: &str,
     profile: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use daxterm::{
+    use dachsterm::{
         monitoring::Monitors,
         sftp::Transfers,
         tunnels::{Config, Tunnels},
@@ -512,7 +512,7 @@ pub async fn services(
     assert!(job.done < job.total);
     let s = sftp::open(&manager, id).await?;
     assert!(!s.try_exists(&remote).await?);
-    let staging = format!("{remote}.daxterm-{}.part", job.id);
+    let staging = format!("{remote}.dachsterm-{}.part", job.id);
     assert!(s.try_exists(&staging).await?);
     // Mutate a committed prefix byte; resume must reject, never append to it.
     let mut part = s

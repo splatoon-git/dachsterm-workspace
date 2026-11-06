@@ -31,7 +31,7 @@ export function ThemePicker() {
                   <i />
                   <i />
                   <i />
-                  <span>DaxTerm</span>
+                  <span>DachsTerm</span>
                 </div>
                 <div className="theme-mini-workspace">
                   <div className="theme-mini-sidebar">

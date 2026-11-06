@@ -20,8 +20,8 @@ const bundle = await build({
 const code = (Array.isArray(bundle) ? bundle : [bundle])
   .flatMap((result) => result.output)
   .find((item) => item.type === 'chunk').code;
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-survivor-profile-'));
-const binary = process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe');
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-profile-'));
+const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 let app, browser;
 async function launch() {
   const server = net.createServer();
@@ -33,8 +33,8 @@ async function launch() {
     windowsHide: true,
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: directory,
-      DAXTERM_TEST_CDP_PORT: String(port),
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
     },
   });

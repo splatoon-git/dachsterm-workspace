@@ -60,7 +60,7 @@ for (const [width, theme] of [
 ] as const) {
   test(`tunnel direction, keyboard and control alignment at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.addInitScript((id) => localStorage.setItem('daxterm.theme', id), theme);
+    await page.addInitScript((id) => localStorage.setItem('dachsterm.theme', id), theme);
     await page.goto('/tests/ui/fixtures/tunnels.html');
     await page.getByRole('button', { name: '새 터널', exact: true }).click();
     const local = page.getByRole('radio', { name: /로컬 포워딩/ });

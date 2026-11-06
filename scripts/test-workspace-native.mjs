@@ -7,7 +7,7 @@ import path from 'node:path';
 import net from 'node:net';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-workspace-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-workspace-'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let app, browser;
 async function launch() {
@@ -15,13 +15,13 @@ async function launch() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   await new Promise((resolve) => server.close(resolve));
-  app = spawn(path.resolve('target/debug/daxterm.exe'), [], {
+  app = spawn(path.resolve('target/debug/dachsterm.exe'), [], {
     stdio: 'ignore',
     windowsHide: true,
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: directory,
-      DAXTERM_TEST_CDP_PORT: String(port),
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
     },
   });
@@ -94,17 +94,17 @@ try {
     await input.focus();
     await input.evaluate((e, marker) => {
       const data = new DataTransfer();
-      data.setData('text/plain', `echo DAX^${marker}`);
+      data.setData('text/plain', `echo DACHSTERM^${marker}`);
       e.dispatchEvent(
         new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
       );
     }, marker);
     await input.press('Enter');
-    await expect(pane(id).locator('.xterm-accessibility-tree')).toContainText(`DAX${marker}`);
+    await expect(pane(id).locator('.xterm-accessibility-tree')).toContainText(`DACHSTERM${marker}`);
   }
   await command(ids[0], 'ALL_OK');
   for (const id of ids)
-    await expect(pane(id).locator('.xterm-accessibility-tree')).toContainText('DAXALL_OK');
+    await expect(pane(id).locator('.xterm-accessibility-tree')).toContainText('DACHSTERMALL_OK');
   await inputMode.selectOption('selected');
   const dialog = page.getByRole('dialog', { name: '멀티 입력 대상' });
   await dialog
@@ -115,11 +115,15 @@ try {
   await dialog.getByRole('button', { name: '선택한 2개에 입력 전달' }).click();
   await expect(dialog).not.toBeVisible();
   await command(ids[0], 'SOME_OK');
-  await expect(pane(ids[1]).locator('.xterm-accessibility-tree')).toContainText('DAXSOME_OK');
-  await expect(pane(ids[2]).locator('.xterm-accessibility-tree')).not.toContainText('DAXSOME_OK');
+  await expect(pane(ids[1]).locator('.xterm-accessibility-tree')).toContainText('DACHSTERMSOME_OK');
+  await expect(pane(ids[2]).locator('.xterm-accessibility-tree')).not.toContainText(
+    'DACHSTERMSOME_OK',
+  );
   await command(ids[2], 'OUTSIDE_OK');
   for (const id of ids.slice(0, 2))
-    await expect(pane(id).locator('.xterm-accessibility-tree')).not.toContainText('DAXOUTSIDE_OK');
+    await expect(pane(id).locator('.xterm-accessibility-tree')).not.toContainText(
+      'DACHSTERMOUTSIDE_OK',
+    );
   const handle = page.getByRole('separator', { name: '사이드바 너비' });
   const rect = await handle.boundingBox();
   await page.mouse.move(rect.x + 2, rect.y + 80);

@@ -1,8 +1,8 @@
 [package]
-name = "daxterm"
+name = "dachsterm"
 version = "0.5.1"
 edition = "2024"
-default-run = "daxterm"
+default-run = "dachsterm"
 
 [build-dependencies]
 tauri-build = { version = "=2.7.4", features = [] }

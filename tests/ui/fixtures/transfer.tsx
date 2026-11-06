@@ -43,7 +43,7 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         };
         return {
           bundle: {
-            format: 'daxterm.sessions',
+            format: 'dachsterm.sessions',
             version: 2,
             profiles: [
               p,

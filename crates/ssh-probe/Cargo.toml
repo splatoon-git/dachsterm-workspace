@@ -1,5 +1,5 @@
 [package]
-name = "daxterm-ssh-probe"
+name = "dachsterm-ssh-probe"
 version = "0.1.0"
 edition = "2024"
 

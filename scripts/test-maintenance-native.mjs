@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-maintenance-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-maintenance-'));
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let app, browser, page;
 let stage = 'launch';
@@ -15,10 +15,14 @@ async function launch() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   await new Promise((resolve) => server.close(resolve));
-  app = spawn(process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe'), [], {
+  app = spawn(process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe'), [], {
     windowsHide: true,
     stdio: 'ignore',
-    env: { ...process.env, DAXTERM_TEST_DATA_DIR: directory, DAXTERM_TEST_CDP_PORT: String(port) },
+    env: {
+      ...process.env,
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
+    },
   });
   let endpoint;
   for (let i = 0; i < 120; i++) {
@@ -95,7 +99,16 @@ try {
     await readFile(path.join(directory, 'recovery', `${list[0].id}.json`), 'utf8'),
   );
   assert.equal(data.profiles[0].hasSecret, false);
-  assert.deepEqual(Object.keys(data).sort(), ['groups', 'profiles', 'tunnels', 'version']);
+  assert.equal(data.format, 'dachsterm.sessions');
+  assert.equal(data.version, 3);
+  assert.deepEqual(Object.keys(data).sort(), [
+    'format',
+    'groups',
+    'profiles',
+    'templates',
+    'tunnels',
+    'version',
+  ]);
   stage = 'delete and restore';
   await invoke('delete_session', { id: p.id });
   assert.equal((await invoke('sessions')).profiles.length, 0);
@@ -135,7 +148,7 @@ try {
   await stop();
   if (
     path.dirname(directory) === path.resolve(tmpdir()) &&
-    path.basename(directory).startsWith('daxterm-maintenance-')
+    path.basename(directory).startsWith('dachsterm-maintenance-')
   ) {
     await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
   }

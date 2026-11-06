@@ -153,10 +153,10 @@
   width: 24px;
   height: 24px;
 }
-.snack-play > .dax-help {
+.snack-play > .dachs-help {
   opacity: 0.75;
 }
-.snack-play .dax-touch-controls button {
+.snack-play .dachs-touch-controls button {
   flex: 1;
   max-width: 160px;
 }

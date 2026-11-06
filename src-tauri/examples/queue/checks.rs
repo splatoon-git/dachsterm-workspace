@@ -1,4 +1,4 @@
-use daxterm::{
+use dachsterm::{
     sftp::{self, Transfers},
     ssh::Connections,
     storage::Store,
@@ -130,7 +130,7 @@ pub async fn run(
     )?;
     completed(&q, &rename).await?;
     let renamed = q.items(&rename, 0)?;
-    assert!(renamed[0].name.contains("(DaxTerm "));
+    assert!(renamed[0].name.contains("(DachsTerm "));
     println!("PASS queue skip/rename/explicit overwrite retains original until commit");
 
     let large = local.path().join("large.bin");
@@ -328,7 +328,7 @@ pub async fn run(
             capacity > 0 && capacity <= 128 * 1024 * 1024,
             "bounded fixture tmpfs required"
         );
-        let disk_root = format!("/dev/shm/daxterm-{}", uuid::Uuid::new_v4());
+        let disk_root = format!("/dev/shm/dachsterm-{}", uuid::Uuid::new_v4());
         s.create_dir(&disk_root).await?;
         let large = local.path().join("disk-full.bin");
         std::fs::File::create(&large)?.set_len(capacity + 1024 * 1024)?;
@@ -343,7 +343,7 @@ pub async fn run(
     }
     // Only this fixture's explicitly named tree is removed.
     if manager.control(connection)?.profile.protocol == "ssh" {
-        daxterm::file_ops::batch(
+        dachsterm::file_ops::batch(
             &manager,
             connection,
             connection,
@@ -353,7 +353,7 @@ pub async fn run(
         )
         .await?;
     } else {
-        daxterm::ftp::batch(
+        dachsterm::ftp::batch(
             &*manager.ftp_session(connection)?,
             "delete",
             std::slice::from_ref(&remote),

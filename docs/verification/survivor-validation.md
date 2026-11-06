@@ -1,6 +1,6 @@
 # G.8.6 — 서바이버 밸런스·성능·실환경 검증
 
-- 날짜: 2026-11-05, Windows / WebView2. 범위 정본은 [로드맵 G.8](../roadmap.md), 규칙은 [설계 §11~12](../design/dax-survivor.md), 이어할 위치는 [progress](../progress.md)다.
+- 날짜: 2026-11-05, Windows / WebView2. 범위 정본은 [로드맵 G.8](../roadmap.md), 규칙은 [설계 §11~12](../design/dachs-survivor.md), 이어할 위치는 [progress](../progress.md)다.
 - 구현: 절전/정체 후 긴 프레임 간격, `pagehide`, `freeze`에서 전투를 정지하고 입력을 비우며 체크포인트를 저장한다. 네이티브 종료의 기존 정산/실패 차단 계약은 유지한다.
 - 자동 명령 시뮬레이션, 실제 내장 제품의 키보드 플레이, 인공 부하를 주입한 소스 프로브를 구분한다. 사람의 재미 평가나 Mac/실제 OS 종료·절전을 자동 검사로 대체하지 않는다.
 
@@ -10,7 +10,7 @@ Node에는 `--max-old-space-size=1024` 또는 PowerShell `$env:NODE_OPTIONS='--m
 
 ```text
 node node_modules/vitest/vitest.mjs run src --maxWorkers=1
-node node_modules/@playwright/test/cli.js test tests/ui/survivor.spec.ts tests/ui/survivor-profile.spec.ts tests/ui/games.spec.ts tests/ui/dax-games.spec.ts --workers=1
+node node_modules/@playwright/test/cli.js test tests/ui/survivor.spec.ts tests/ui/survivor-profile.spec.ts tests/ui/games.spec.ts tests/ui/dachs-games.spec.ts --workers=1
 node scripts/measure-survivor-balance.mjs
 node scripts/play-survivor-native.mjs
 node scripts/measure-survivor-native.mjs
@@ -19,7 +19,7 @@ node scripts/test-survivor-integration-native.mjs
 node scripts/test-survivor-ui-native.mjs
 ```
 
-결과 JSON과 캡처는 Git에서 제외한 `target/verification/survivor-*`에 남긴다. 이번8.6의 최종 JSON/설치 결과는 공유 경로 덮어쓰기와 구분해 **`target/verification/survivor-g86-artifacts/evidence/`**에도 보존했다. 성능 프로브는 `DAXTERM_VERIFICATION_DIR`로 출력 폴더를 지정할 수 있다. 제품 번들에는 `tests/native`의 정책·상한 부하·상태 제어를 연결하지 않는다. SSH 검사는 localhost 임의 포트의 전용 Docker OpenSSH를 사용하고 최초 호스트키 지문을 컨테이너 공개키와 대조한다. 인증정보는 메모리·컨테이너 tmpfs에서만 처리하고 오류의 locator trace를 출력하지 않는다. 종료 때 컨테이너를 제거한다.
+결과 JSON과 캡처는 Git에서 제외한 `target/verification/survivor-*`에 남긴다. 이번8.6의 최종 JSON/설치 결과는 공유 경로 덮어쓰기와 구분해 **`target/verification/survivor-g86-artifacts/evidence/`**에도 보존했다. 성능 프로브는 `DACHSTERM_VERIFICATION_DIR`로 출력 폴더를 지정할 수 있다. 제품 번들에는 `tests/native`의 정책·상한 부하·상태 제어를 연결하지 않는다. SSH 검사는 localhost 임의 포트의 전용 Docker OpenSSH를 사용하고 최초 호스트키 지문을 컨테이너 공개키와 대조한다. 인증정보는 메모리·컨테이너 tmpfs에서만 처리하고 오류의 locator trace를 출력하지 않는다. 종료 때 컨테이너를 제거한다.
 
 ## 밸런스와 장기 진행
 
@@ -79,13 +79,13 @@ node scripts/test-survivor-ui-native.mjs
 
 8.6의 `tauri build --debug --no-bundle`, `tauri build --bundles nsis`가 모두 종료0이었다. 프런트엔드 tsc-b/Vite 포함이며 기존 main 번들500KB 경고는 유지한다. 별도 병행 작업이 content/enemies/renderer/scenery 및 검사를 변경하기 시작해, 기존 HEAD `da01f5c`에 이번8.6 소유 파일만 반영한 **`target/verification/g86-source` 스냅샷**을 만들었다. 콘텐츠 버전3/전투 수치는 유지한 검사다. 이후 병행 작업의 버전/수치/시각 변경에 이 결과를 그대로 적용하지 않는다.
 
-실행 파일이 다른 빌드로 바뀌지 않도록 아래를 `target/verification/survivor-g86-artifacts/`에 복사 보존했다. 전체 경로·크기·해시는 같은 폴더 `manifest.json`에 있다. 재검사 시 `DAXTERM_TEST_BINARY`로 보존 debug 파일을 지정할 수 있다.
+실행 파일이 다른 빌드로 바뀌지 않도록 아래를 `target/verification/survivor-g86-artifacts/`에 복사 보존했다. 전체 경로·크기·해시는 같은 폴더 `manifest.json`에 있다. 재검사 시 `DACHSTERM_TEST_BINARY`로 보존 debug 파일을 지정할 수 있다.
 
 | 파일 | SHA256 |
 |---|---|
-| daxterm-debug.exe | `5bce56589788e9f6be1197a96ca178dfd5662933e5f7d965623ce03c46fb2c66` |
-| daxterm-release.exe | `baaa170867457c00159f94d1b316b0a6d0849930cb779bea2f13e3def39acbc0` |
-| daxterm-nsis-payload.exe | `c2cbfe04065df67236fa3a11bb227fb9b00ff486f31e6111e4c532cedd7d0b23` |
+| dachsterm-debug.exe | `5bce56589788e9f6be1197a96ca178dfd5662933e5f7d965623ce03c46fb2c66` |
+| dachsterm-release.exe | `baaa170867457c00159f94d1b316b0a6d0849930cb779bea2f13e3def39acbc0` |
+| dachsterm-nsis-payload.exe | `c2cbfe04065df67236fa3a11bb227fb9b00ff486f31e6111e4c532cedd7d0b23` |
 | DaxTerm_0.5.1_x64-setup.exe | `fbc6bb6c92945048f8e8c9195fe968bce6357fc12b37b30b2be66bec37eb7c18` |
 
 **설치 EXE와 단독 release의 해시는 다르다.** 최초 예상 해시 비교는 실패했다. 두 파일을 실제 바이트 비교한 결과 길이28,689,408바이트가 같고 차이는23,527,274~23,527,276의3바이트뿐이었다. `__TAURI_BUNDLE_TYPE_VAR_UNK`가 NSIS용 `...NSS`로 바뀐다. 로컬 `tauri-utils-2.10.2/src/platform.rs`의 bundle-type marker 및 빌드의 bundle type patch 로그와 일치한다. `verify-survivor-artifacts.mjs`가 그 marker만 치환한 메모리 사본과 설치 payload 전체 일치를 검사하며 실행 파일을 수정하지 않는다. 같은 스크립트로5개 native 결과의 debug SHA 일치도 확인한다. 단독 EXE 해시를 설치 payload의 예상 해시로 사용하지 않는다.

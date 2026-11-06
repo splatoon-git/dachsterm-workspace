@@ -105,7 +105,7 @@ async fn copy(
     if dest.symlink_metadata(target).await.is_ok() {
         return Err("대상 항목이 이미 있습니다.".into());
     }
-    let staging = format!("{target}.daxterm-{}.part", uuid::Uuid::new_v4());
+    let staging = format!("{target}.dachsterm-{}.part", uuid::Uuid::new_v4());
     let mut created: Vec<(String, bool)> = Vec::new();
     let result: Result<()> = async {
         for node in nodes {

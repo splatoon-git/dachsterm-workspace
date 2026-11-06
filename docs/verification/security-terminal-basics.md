@@ -6,7 +6,7 @@
 
 - [RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071.html)은 수정 버전이 없는 상태다. 두 workspace manifest에서 russh의 `rsa` feature를 제거하여 해당 패키지가 Cargo.lock에 남지 않게 했다. 감사 무시 목록은 추가하지 않았다.
 - `src-tauri/src/rsa_auth.rs`: OpenSSH 일반/암호화, PKCS#1 PEM, PKCS#8 일반/암호화 키를 파싱하고 ring 0.17.14에 서명을 맡긴다. 누락된 CRT 지수만 crypto-bigint의 공개 모듈러스 크기/상수시간 나머지 API로 계산한다. 키 원문·중간 버퍼는 Zeroizing, 키 파일 읽기는1MiB 상한이다. RSA2048~8192비트, SHA256/512만 허용한다. SHA512 거부 시 SHA256으로 재시도하며 SHA1로 낮추지 않는다.
-- russh의 호스트 검증은 ssh-key를 사용하므로 feature 제거만 하면 RSA 서버 호스트키도 사라진다. `vendor/ssh-key`에0.7.0-rc.11의 소스/라이선스를 보존하고 공개 RSA 검증만 ring에 연결했다. 변경점/유지보수 기준은 `vendor/ssh-key/DAXTERM-PATCH.md`. 자체 RSA 패딩·지수승 알고리즘을 구현하지 않았다. 업그레이드 때 패치 재검토가 필요하다.
+- russh의 호스트 검증은 ssh-key를 사용하므로 feature 제거만 하면 RSA 서버 호스트키도 사라진다. `vendor/ssh-key`에0.7.0-rc.11의 소스/라이선스를 보존하고 공개 RSA 검증만 ring에 연결했다. 변경점/유지보수 기준은 `vendor/ssh-key/DACHSTERM-PATCH.md`. 자체 RSA 패딩·지수승 알고리즘을 구현하지 않았다. 업그레이드 때 패치 재검토가 필요하다.
 - `ssh_auth.rs`: Windows OpenSSH named pipe 또는 Unix SSH_AUTH_SOCK, 최대5회 키 시도, 가능한 경우 session binding, agent forwarding 없음. agent 사용자 인증서 identity 경로도 있지만 CA 실서버/하드웨어 agent 조합은 미검증이다.
 - keyboard-interactive 전용 모드와 password/key/agent의 partial-success 뒤 추가 인증. 질문 최대16개/12회, 응답당120초, 요청·전송30초. 응답은 연결 소유 창의 전용 IPC/1개 큐로 전달하고 DB·로그·복구본에 저장하지 않는다. 취소 시 해당 연결 종료. UI와 native 명령 모두 추가 인증 답변 저장을 거부한다.
 

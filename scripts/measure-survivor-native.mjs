@@ -23,10 +23,10 @@ const bundle = await build({
 const code = (Array.isArray(bundle) ? bundle : [bundle])
   .flatMap((r) => r.output)
   .find((o) => o.type === 'chunk').code;
-const binary = process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe');
-const evidenceDirectory = process.env.DAXTERM_VERIFICATION_DIR ?? 'target/verification';
+const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
+const evidenceDirectory = process.env.DACHSTERM_VERIFICATION_DIR ?? 'target/verification';
 const seconds = process.argv.includes('--smoke') ? 2 : 60;
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-survivor-perf-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-perf-'));
 const server = net.createServer();
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
@@ -36,8 +36,8 @@ const app = spawn(binary, [], {
   windowsHide: true,
   env: {
     ...process.env,
-    DAXTERM_TEST_DATA_DIR: directory,
-    DAXTERM_TEST_CDP_PORT: String(port),
+    DACHSTERM_TEST_DATA_DIR: directory,
+    DACHSTERM_TEST_CDP_PORT: String(port),
     WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
   },
 });

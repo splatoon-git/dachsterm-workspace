@@ -2,23 +2,23 @@ param([string]$Version = '', [switch]$Reinstall, [string]$PreviousVersion = '', 
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $Version) { $Version = (Get-Content -LiteralPath (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json).version }
-$installer = Join-Path $workspace "target\release\bundle\nsis\DaxTerm_${Version}_x64-setup.exe"
+$installer = Join-Path $workspace "target\release\bundle\nsis\DachsTerm_${Version}_x64-setup.exe"
 if ($InstallerPath) { $installer = [IO.Path]::GetFullPath($InstallerPath) }
 if ($ExpectedBinarySha256 -and $ExpectedBinarySha256 -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid expected executable SHA256' }
 $target = [IO.Path]::GetFullPath((Join-Path $workspace ("target\install-smoke-" + [Guid]::NewGuid().ToString('N'))))
 if (-not $target.StartsWith($workspace + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe installation target' }
-$registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DaxTerm'
-foreach ($key in @($registry, 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DaxTerm', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\DaxTerm')) {
-  if (Test-Path -LiteralPath $key) { throw 'Existing DaxTerm installation: isolated install test skipped' }
+$registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DachsTerm'
+foreach ($key in @($registry, 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DachsTerm', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\DachsTerm')) {
+  if (Test-Path -LiteralPath $key) { throw 'Existing DachsTerm installation: isolated install test skipped' }
 }
-if (Get-Process daxterm -ErrorAction SilentlyContinue) { throw 'Close test-owned app processes before installer validation' }
+if (Get-Process dachsterm -ErrorAction SilentlyContinue) { throw 'Close test-owned app processes before installer validation' }
 if (-not (Test-Path -LiteralPath $installer)) { throw 'Installer is missing' }
 $appProcess = $null
 $installed = $false
 try {
   if ($PreviousVersion) {
     if ($PreviousVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid previous version' }
-    $previousInstaller = Join-Path $workspace "target\release\bundle\nsis\DaxTerm_${PreviousVersion}_x64-setup.exe"
+    $previousInstaller = Join-Path $workspace "target\release\bundle\nsis\DachsTerm_${PreviousVersion}_x64-setup.exe"
     if (-not (Test-Path -LiteralPath $previousInstaller)) { throw 'Previous installer is missing' }
     $previous = Start-Process -FilePath $previousInstaller -ArgumentList @('/S', "/D=$target") -WindowStyle Hidden -PassThru
     if (-not $previous.WaitForExit(60000) -or $previous.ExitCode -ne 0) { throw 'Previous installer failed' }
@@ -29,7 +29,7 @@ try {
   $setup = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$target") -WindowStyle Hidden -PassThru
   if (-not $setup.WaitForExit(60000)) { throw 'Installer timeout' }
   if ($setup.ExitCode -ne 0) { throw "Installer failed: $($setup.ExitCode)" }
-  $binary = Join-Path $target 'daxterm.exe'
+  $binary = Join-Path $target 'dachsterm.exe'
   if (-not (Test-Path -LiteralPath $binary)) { throw 'Installed binary is missing' }
   if (-not (Test-Path -LiteralPath (Join-Path $target 'THIRD_PARTY_NOTICES.txt'))) { throw 'Third-party notices are missing from the installation' }
   $installed = $true
@@ -37,6 +37,7 @@ try {
   if ($registered.DisplayVersion -ne $Version -or $registered.InstallLocation.Trim('"') -ne $target) { throw 'Installed registry metadata mismatch' }
   $installedVersion = (Get-Item -LiteralPath $binary).VersionInfo.ProductVersion
   if ($installedVersion -ne $Version) { throw "Installed executable version mismatch: $installedVersion" }
+  if ((Get-Item -LiteralPath $binary).VersionInfo.ProductName -ne 'DachsTerm') { throw 'Installed executable product name mismatch' }
   if ($ExpectedBinarySha256 -and (Get-FileHash -LiteralPath $binary).Hash -ne $ExpectedBinarySha256) { throw 'Installed executable SHA256 mismatch' }
   Copy-Item -LiteralPath $binary -Destination (Join-Path $workspace 'target\installed-smoke.exe')
   Write-Output "PASS NSIS silent install, registry and executable version $Version"
@@ -75,7 +76,7 @@ try {
     $uninstaller = Join-Path $target 'uninstall.exe'
     $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/S', "_?=$target") -WindowStyle Hidden -PassThru
     if (-not $remove.WaitForExit(60000)) { Write-Error 'Uninstaller timeout' }
-    if ($remove.ExitCode -ne 0 -or (Test-Path -LiteralPath (Join-Path $target 'daxterm.exe')) -or (Test-Path -LiteralPath $registry)) { Write-Error 'Uninstall validation failed' }
+    if ($remove.ExitCode -ne 0 -or (Test-Path -LiteralPath (Join-Path $target 'dachsterm.exe')) -or (Test-Path -LiteralPath $registry)) { Write-Error 'Uninstall validation failed' }
     else { Write-Output 'PASS uninstall removes test installation and registration; application data retained' }
   }
 }

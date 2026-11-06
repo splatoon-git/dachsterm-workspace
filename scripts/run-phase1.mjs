@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-const name = `daxterm-probe-${randomUUID()}`;
+const name = `dachsterm-probe-${randomUUID()}`;
 const native = process.argv.includes('--native');
 const reuseBuild = process.argv.includes('--reuse-build');
 const targetRoot = path.resolve(process.env.CARGO_TARGET_DIR ?? 'target');
@@ -14,11 +14,11 @@ if (!Number.isInteger(stressMinutes) || stressMinutes < 0 || stressMinutes > 144
 const env = {
   ...process.env,
   PATH: `${path.join(homedir(), '.cargo', 'bin')}${path.delimiter}${process.env.PATH}`,
-  DAXTERM_PROBE_STRESS_SECONDS: String(stressMinutes * 60),
-  DAXTERM_TEST_BINARY:
-    process.env.DAXTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', 'daxterm.exe'),
+  DACHSTERM_PROBE_STRESS_SECONDS: String(stressMinutes * 60),
+  DACHSTERM_TEST_BINARY:
+    process.env.DACHSTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', 'dachsterm.exe'),
 };
-if (process.argv.includes('--jumps')) env.DAXTERM_PROBE_JUMPS = '1';
+if (process.argv.includes('--jumps')) env.DACHSTERM_PROBE_JUMPS = '1';
 function capture(args) {
   const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 30_000 });
   if (result.status !== 0) throw new Error(`Docker operation failed: ${args[0]}`);
@@ -45,8 +45,8 @@ try {
       '--no-bundle',
     ]);
   if (!reuseBuild)
-    await run('cargo', ['build', '--locked', '-p', 'daxterm', '--example', 'phase1_probe']);
-  await run('docker', ['build', '-t', 'daxterm-openssh-probe', 'tests/openssh']);
+    await run('cargo', ['build', '--locked', '-p', 'dachsterm', '--example', 'phase1_probe']);
+  await run('docker', ['build', '-t', 'dachsterm-openssh-probe', 'tests/openssh']);
   capture([
     'run',
     '-d',
@@ -54,7 +54,7 @@ try {
     '--name',
     name,
     '--label',
-    'app.daxterm.purpose=phase1-probe',
+    'app.dachsterm.purpose=phase1-probe',
     '-p',
     '127.0.0.1::22',
     '-p',
@@ -63,10 +63,10 @@ try {
     '127.0.0.1::2223',
     '--tmpfs',
     '/run/probe:rw,noexec,nosuid,mode=0700',
-    'daxterm-openssh-probe',
+    'dachsterm-openssh-probe',
   ]);
   created = true;
-  if (process.argv.includes('--jumps')) env.DAXTERM_PROBE_CONTAINER = name;
+  if (process.argv.includes('--jumps')) env.DACHSTERM_PROBE_CONTAINER = name;
   let ready = false;
   for (let i = 0; i < 60; i++) {
     const result = spawnSync('docker', ['exec', name, 'test', '-f', '/run/probe/ready'], {
@@ -79,10 +79,10 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (!ready) throw new Error('OpenSSH fixture startup timeout');
-  env.DAXTERM_PROBE_PORT = capture(['port', name, '22/tcp']).split(':').at(-1);
-  env.DAXTERM_PROBE_MFA_PORT = capture(['port', name, '2223/tcp']).split(':').at(-1);
+  env.DACHSTERM_PROBE_PORT = capture(['port', name, '22/tcp']).split(':').at(-1);
+  env.DACHSTERM_PROBE_MFA_PORT = capture(['port', name, '2223/tcp']).split(':').at(-1);
   if (process.platform === 'win32') {
-    env.DAXTERM_TEST_AGENT_PIPE = `\\\\.\\pipe\\daxterm-agent-${randomUUID()}`;
+    env.DACHSTERM_TEST_AGENT_PIPE = `\\\\.\\pipe\\dachsterm-agent-${randomUUID()}`;
     const agentPort = Number(capture(['port', name, '2222/tcp']).split(':').at(-1));
     agentBridge = net.createServer((client) => {
       const remote = net.connect(agentPort, '127.0.0.1');
@@ -98,7 +98,7 @@ try {
     });
     await new Promise((resolve, reject) => {
       agentBridge.once('error', reject);
-      agentBridge.listen(env.DAXTERM_TEST_AGENT_PIPE, resolve);
+      agentBridge.listen(env.DACHSTERM_TEST_AGENT_PIPE, resolve);
     });
   }
   for (const [key, file] of [
@@ -113,7 +113,7 @@ try {
     ['HOST_KEY', 'host.pub'],
     ['RSA_HOST_KEY', 'host_rsa.pub'],
   ])
-    env[`DAXTERM_PROBE_${key}`] = capture(['exec', name, 'cat', `/run/probe/${file}`]);
+    env[`DACHSTERM_PROBE_${key}`] = capture(['exec', name, 'cat', `/run/probe/${file}`]);
   // Secrets exist only in the ephemeral fixture and this process/child environment; never print them.
   if (!reuseBuild)
     await run(
@@ -127,7 +127,7 @@ try {
       { timeout: (360 + stressMinutes * 60) * 1000 },
     );
   if (native) {
-    env.DAXTERM_PROBE_CONTAINER = name;
+    env.DACHSTERM_PROBE_CONTAINER = name;
     await run(
       process.execPath,
       [
@@ -150,5 +150,5 @@ try {
     capture(['rm', '-f', name]);
     console.log('PASS fixture removed (keys, credentials and remote files destroyed)');
   }
-  for (const key of Object.keys(env)) if (key.startsWith('DAXTERM_PROBE_')) delete env[key];
+  for (const key of Object.keys(env)) if (key.startsWith('DACHSTERM_PROBE_')) delete env[key];
 }

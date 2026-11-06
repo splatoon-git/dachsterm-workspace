@@ -248,12 +248,12 @@ pub async fn podtree_inspect(
     let context = context.unwrap_or_default();
     name(&context, true)?;
     let script = format!(
-        "{DEPS} printf 'DAX_CONTEXTS\\n'; kubectl config get-contexts -o name 2>/dev/null || exit 12; printf 'DAX_CURRENT\\n'; kubectl config current-context 2>/dev/null || :; printf 'DAX_NAMESPACES\\n'; {}",
+        "{DEPS} printf 'DACHSTERM_CONTEXTS\\n'; kubectl config get-contexts -o name 2>/dev/null || exit 12; printf 'DACHSTERM_CURRENT\\n'; kubectl config current-context 2>/dev/null || :; printf 'DACHSTERM_NAMESPACES\\n'; {}",
         if context.is_empty() {
             String::new()
         } else {
             format!(
-                "kubectl --context {} --request-timeout=8s get namespaces -o 'jsonpath={{range .items[*]}}{{.metadata.name}}{{\"\\n\"}}{{end}}' 2>/dev/null || printf 'DAX_NAMESPACE_DENIED\\n'",
+                "kubectl --context {} --request-timeout=8s get namespaces -o 'jsonpath={{range .items[*]}}{{.metadata.name}}{{\"\\n\"}}{{end}}' 2>/dev/null || printf 'DACHSTERM_NAMESPACE_DENIED\\n'",
                 quote(&context)
             )
         }
@@ -267,7 +267,7 @@ pub async fn podtree_inspect(
         warning: String::new(),
     };
     for line in out.lines() {
-        match line {"DAX_CONTEXTS"|"DAX_CURRENT"|"DAX_NAMESPACES"=>mode=line,"DAX_NAMESPACE_DENIED"=>result.warning="namespace 목록 권한이 없거나 클러스터에 연결할 수 없습니다. 허용된 namespace를 직접 입력할 수 있습니다.".into(),s if name(s,false).is_ok()=>match mode {"DAX_CONTEXTS"=>result.contexts.push(s.into()),"DAX_CURRENT"=>result.current=s.into(),"DAX_NAMESPACES"=>result.namespaces.push(s.into()),_=>{}},_=>{}}
+        match line {"DACHSTERM_CONTEXTS"|"DACHSTERM_CURRENT"|"DACHSTERM_NAMESPACES"=>mode=line,"DACHSTERM_NAMESPACE_DENIED"=>result.warning="namespace 목록 권한이 없거나 클러스터에 연결할 수 없습니다. 허용된 namespace를 직접 입력할 수 있습니다.".into(),s if name(s,false).is_ok()=>match mode {"DACHSTERM_CONTEXTS"=>result.contexts.push(s.into()),"DACHSTERM_CURRENT"=>result.current=s.into(),"DACHSTERM_NAMESPACES"=>result.namespaces.push(s.into()),_=>{}},_=>{}}
     }
     Ok(result)
 }
@@ -276,7 +276,7 @@ async fn stage(state: &AppState, launch: &Launch) -> Result<(String, String)> {
     name(&launch.namespace, true)?;
     // stdin contains only a bundled public script, never kubeconfig or authentication material.
     let script = format!(
-        "{DEPS} kubectl config get-contexts -o name 2>/dev/null | grep -Fx -- {} >/dev/null || exit 12; umask 077; d=$(mktemp -d \"${{TMPDIR:-/tmp}}/daxterm-podtree.XXXXXXXX\") || exit; trap 'rm -f -- \"$d/podtree.sh\"; rmdir -- \"$d\"' EXIT; cat >\"$d/podtree.sh\" || exit; chmod 600 \"$d/podtree.sh\" || exit; printf '%s\\n' \"$d\"; trap - EXIT",
+        "{DEPS} kubectl config get-contexts -o name 2>/dev/null | grep -Fx -- {} >/dev/null || exit 12; umask 077; d=$(mktemp -d \"${{TMPDIR:-/tmp}}/dachsterm-podtree.XXXXXXXX\") || exit; trap 'rm -f -- \"$d/podtree.sh\"; rmdir -- \"$d\"' EXIT; cat >\"$d/podtree.sh\" || exit; chmod 600 \"$d/podtree.sh\" || exit; printf '%s\\n' \"$d\"; trap - EXIT",
         quote(&launch.context)
     );
     let path = execute(state, &launch.location, &script, SCRIPT.as_bytes())
@@ -288,13 +288,13 @@ async fn stage(state: &AppState, launch: &Launch) -> Result<(String, String)> {
             .rsplit('/')
             .next()
             .unwrap_or_default()
-            .starts_with("daxterm-podtree.")
+            .starts_with("dachsterm-podtree.")
         || path.chars().any(char::is_control)
     {
         return Err("PodTree 임시 경로 확인 실패".into());
     }
     let command = format!(
-        "export DAXTERM_EMBEDDED=1 KUBECTL=kubectl; exec bash {} --context {} -n {} {}",
+        "export DACHSTERM_EMBEDDED=1 KUBECTL=kubectl; exec bash {} --context {} -n {} {}",
         quote(&format!("{path}/podtree.sh")),
         quote(&launch.context),
         quote(&launch.namespace),

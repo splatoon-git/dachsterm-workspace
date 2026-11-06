@@ -1,6 +1,6 @@
 import { getTheme } from './registry';
 
-export const themeStorageKey = 'daxterm.theme';
+export const themeStorageKey = 'dachsterm.theme';
 function readTheme() {
   try {
     return getTheme(localStorage.getItem(themeStorageKey));

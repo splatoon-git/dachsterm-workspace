@@ -65,7 +65,7 @@ export function PodTreeDialog({
   return (
     <Dialog title="PodTree 열기" close={close}>
       <p>
-        PodTree 2.4.0 · DaxTerm 조회 모드 보완판. 선택 위치의 Bash 4+와 kubectl 설정/RBAC를
+        PodTree 2.4.0 · DachsTerm 조회 모드 보완판. 선택 위치의 Bash 4+와 kubectl 설정/RBAC를
         사용합니다. 도구·디버그 이미지를 설치하거나 전역 context를 변경하지 않습니다.
       </p>
       <div className="terminal-preferences">

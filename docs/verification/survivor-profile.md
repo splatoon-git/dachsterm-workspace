@@ -1,7 +1,7 @@
 # G.8.4 영구 성장·저장 검증
 
 - 날짜: 2026-11-05. 범위: G.8.4만. 게임 탭/전투 화면 연결은 G.8.5, 실제 플레이/밸런스/성능/최종 산출물은 G.8.6이다.
-- 정본: [설계 §7/§10](../design/dax-survivor.md), [진행 현황](../progress.md), [로드맵](../roadmap.md).
+- 정본: [설계 §7/§10](../design/dachs-survivor.md), [진행 현황](../progress.md), [로드맵](../roadmap.md).
 - 파일: `src/features/games/survivor/{profile.ts,profileStore.ts,session.ts,SurvivorHub.tsx,hub.css,profile.test.ts}`, `tests/ui/survivor-profile.spec.ts`, `tests/ui/fixtures/survivor-profile.{html,tsx}`, `tests/native/survivor-profile.ts`, `scripts/test-survivor-profile-native.mjs`.
 - 기존 G.8.1~G.8.3 전투 엔진·다른 게임·카탈로그·App·Rust/IPC·패키지 의존성은 변경하지 않았다. 기존 `useBest`를 영구 잔액에 사용하지 않는다.
 

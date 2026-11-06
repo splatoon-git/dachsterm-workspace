@@ -1,7 +1,7 @@
 export type GuideProgram = 'vi' | 'vim' | 'less' | 'tail' | 'cat';
 export function programMetadata(value: string): GuideProgram | null | undefined {
-  if (value === 'DaxTerm;end') return null;
-  const match = /^DaxTerm;program;(vi|vim|less|tail|cat)$/.exec(value);
+  if (value === 'DachsTerm;end') return null;
+  const match = /^DachsTerm;program;(vi|vim|less|tail|cat)$/.exec(value);
   return match ? (match[1] as GuideProgram) : undefined;
 }
 export type CommandExample = { group: string; title: string; command: string; note?: string };
@@ -193,34 +193,34 @@ export const guideKeys: Record<GuideProgram, [string, string][]> = {
 // Explicit opt-in wrappers, session only. Do not inspect history, keystrokes or arguments.
 // Refuse aliases/functions so user customizations are never silently replaced.
 export const guideHook = `if [ -n "$BASH_VERSION" ]; then
-  __dax_guide_install() {
+  __dachsterm_guide_install() {
     local p
-    for p in vi vim less tail cat __dax_guide_prompt; do
-      case "$(type -t "$p")" in function|alias) printf '%s\\n' "DaxTerm: $p 별칭/함수가 있어 연동을 취소했습니다."; return 1;; esac
+    for p in vi vim less tail cat __dachsterm_guide_prompt; do
+      case "$(type -t "$p")" in function|alias) printf '%s\\n' "DachsTerm: $p 별칭/함수가 있어 연동을 취소했습니다."; return 1;; esac
     done
 ${(['vi', 'vim', 'less', 'tail', 'cat'] as const)
   .map(
     (p) => `    ${p}() {
-      local __dax_rc=0 __dax_notify=0
+      local __dachsterm_rc=0 __dachsterm_notify=0
       if [ -t 0 ] && [ -t 1 ]; then
-        printf '\\033]777;DaxTerm;program;${p}\\007'
-        __dax_notify=1
+        printf '\\033]777;DachsTerm;program;${p}\\007'
+        __dachsterm_notify=1
       fi
-      command ${p} "$@" || __dax_rc=$?
-      if [ "$__dax_notify" = 1 ]; then printf '\\033]777;DaxTerm;end\\007'; fi
-      return "$__dax_rc"
+      command ${p} "$@" || __dachsterm_rc=$?
+      if [ "$__dachsterm_notify" = 1 ]; then printf '\\033]777;DachsTerm;end\\007'; fi
+      return "$__dachsterm_rc"
     }`,
   )
   .join('\n')}
-    __dax_guide_prompt() { printf '\\033]777;DaxTerm;end\\007'; }
+    __dachsterm_guide_prompt() { printf '\\033]777;DachsTerm;end\\007'; }
     if declare -p PROMPT_COMMAND 2>/dev/null | command grep -q '^declare -a'; then
-      PROMPT_COMMAND+=(__dax_guide_prompt)
+      PROMPT_COMMAND+=(__dachsterm_guide_prompt)
     else
-      PROMPT_COMMAND="\${PROMPT_COMMAND:+$PROMPT_COMMAND; }__dax_guide_prompt"
+      PROMPT_COMMAND="\${PROMPT_COMMAND:+$PROMPT_COMMAND; }__dachsterm_guide_prompt"
     fi
   }
-  __dax_guide_install
-  unset -f __dax_guide_install
+  __dachsterm_guide_install
+  unset -f __dachsterm_guide_install
 else
-  printf '%s\\n' 'DaxTerm: Bash에서만 지원합니다. 수동 조작표를 사용하세요.'
+  printf '%s\\n' 'DachsTerm: Bash에서만 지원합니다. 수동 조작표를 사용하세요.'
 fi`;

@@ -8,21 +8,25 @@ import path from 'node:path';
 import net from 'node:net';
 
 if (process.platform !== 'win32') throw new Error('This smoke test requires Windows WebView2.');
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-games-'));
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-games-'));
 const server = net.createServer();
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const port = server.address().port;
 await new Promise((resolve) => server.close(resolve));
-const app = spawn(process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe'), [], {
-  stdio: 'ignore',
-  windowsHide: true,
-  env: {
-    ...process.env,
-    DAXTERM_TEST_DATA_DIR: directory,
-    DAXTERM_TEST_CDP_PORT: String(port),
-    WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
+const app = spawn(
+  process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe'),
+  [],
+  {
+    stdio: 'ignore',
+    windowsHide: true,
+    env: {
+      ...process.env,
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
+      WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
+    },
   },
-});
+);
 let browser;
 try {
   let endpoint;
@@ -148,7 +152,7 @@ try {
   await page.reload();
   await expect(launcher).toBeVisible();
   await expect
-    .poll(() => page.evaluate(() => Number(localStorage.getItem('daxterm.games.v1.blocks'))))
+    .poll(() => page.evaluate(() => Number(localStorage.getItem('dachsterm.games.v1.blocks'))))
     .toBeGreaterThan(0);
   // Actual local PTY: the game keys must not be delivered to Read-Host.
   await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();

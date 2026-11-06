@@ -39,17 +39,17 @@ export function TerminalPane({
   const [query, setQuery] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fontSize, setFontSize] = useState(
-    () => Number(localStorage.getItem('daxterm.fontSize')) || 14,
+    () => Number(localStorage.getItem('dachsterm.fontSize')) || 14,
   );
   const [scrollback, setScrollback] = useState(
-    () => Number(localStorage.getItem('daxterm.scrollback')) || 5000,
+    () => Number(localStorage.getItem('dachsterm.scrollback')) || 5000,
   );
   const [paste, setPaste] = useState<{ id: string; text: string } | null>(null);
   const preferences = useTerminalPreferences();
   useEffect(() => {
     const update = (e: StorageEvent) => {
-      if (e.key === 'daxterm.fontSize') setFontSize(Number(e.newValue) || 14);
-      if (e.key === 'daxterm.scrollback') setScrollback(Number(e.newValue) || 5000);
+      if (e.key === 'dachsterm.fontSize') setFontSize(Number(e.newValue) || 14);
+      if (e.key === 'dachsterm.scrollback') setScrollback(Number(e.newValue) || 5000);
     };
     window.addEventListener('storage', update);
     return () => window.removeEventListener('storage', update);
@@ -297,7 +297,7 @@ export function TerminalPane({
                 value={fontSize}
                 onChange={(e) => {
                   setFontSize(Number(e.target.value));
-                  localStorage.setItem('daxterm.fontSize', e.target.value);
+                  localStorage.setItem('dachsterm.fontSize', e.target.value);
                 }}
               >
                 {[12, 14, 16, 18, 20, 24].map((n) => (
@@ -312,7 +312,7 @@ export function TerminalPane({
                 value={scrollback}
                 onChange={(e) => {
                   setScrollback(Number(e.target.value));
-                  localStorage.setItem('daxterm.scrollback', e.target.value);
+                  localStorage.setItem('dachsterm.scrollback', e.target.value);
                 }}
               >
                 {[1000, 5000, 10000].map((n) => (

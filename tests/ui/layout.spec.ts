@@ -63,8 +63,10 @@ test('replacement theme updates existing UI and terminal without component chang
     theme.color.surface.panel = '#E0F1E5';
     theme.terminal.background = '#D5E4F0';
     themes.push(theme);
-    localStorage.setItem('daxterm.theme', theme.id);
-    window.dispatchEvent(new StorageEvent('storage', { key: 'daxterm.theme', newValue: theme.id }));
+    localStorage.setItem('dachsterm.theme', theme.id);
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'dachsterm.theme', newValue: theme.id }),
+    );
   });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'test-only');
   await expect(page.locator('.toolbar')).toHaveCSS('background-color', 'rgb(224, 241, 229)');

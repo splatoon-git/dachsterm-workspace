@@ -1,12 +1,14 @@
 # 세션 교환 포맷과 외부 설정 가져오기 — I.1 / Phase 6.4·6.5
 
-2026-11-05 사용자 요청. DaxTerm의 공개 교환 규약을 버전 있는 JSON으로 고정하고 프로그램별 읽기 어댑터로 변환한다. 여러 프로그램이 이미 합의한 업계 표준이라는 뜻은 아니다. 다른 제품이 DaxTerm JSON을 직접 읽는다고 주장하지 않는다.
+2026-11-05 사용자 요청. DachsTerm의 공개 교환 규약을 버전 있는 JSON으로 고정하고 프로그램별 읽기 어댑터로 변환한다. 여러 프로그램이 이미 합의한 업계 표준이라는 뜻은 아니다. 다른 제품이 DachsTerm JSON을 직접 읽는다고 주장하지 않는다.
+
+2026-11-06 제품명 확정으로 명시적 JSON format은 `dachsterm.sessions`를 사용한다. 사용자 요청에 따라 이전 브랜드의 format을 자동 변환하거나 호환하지 않는다.
 
 ## 사용
 
 설정 → 세션 가져오기·내보내기 → 형식/파일 인코딩 → 파일 선택·미리보기 → 가져올 항목 선택/빠진 사용자명 입력 → 세션 추가. 기본은 새 ID 추가이며 선택 해제는 건너뛰기다. 같은 접속 대상은 미리보기에서 명시적으로 병합할 수 있다. 병합 기준은 프로토콜·호스트·포트·계정·인증·키·CA가 같아야 하며 저장 암호는 유지한다. 저장 암호가 있는 경유 관계 변경은 병합에서 거부한다. 자동 접속하지 않는다. 변경 전에 기존 설정 복구본을 만든다.
 
-PuTTY는 `HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions`를 레지스트리 편집기에서 `.reg` 파일로 내보낸다. DaxTerm은 그 파일을 텍스트로 읽으며 레지스트리에 실행/등록하지 않는다. MobaXterm은 왼쪽 세션 목록의 우클릭 내보내기 `.mxtsessions` 또는 `MobaXterm.ini`를 사용한다. OpenSSH는 `config` 파일을 선택한다. UTF-16 BOM을 자동 처리하며 UTF-8, CP949, Windows-1252를 선택할 수 있다. 글자가 깨지면 적용 전에 인코딩을 바꿔 다시 선택한다.
+PuTTY는 `HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions`를 레지스트리 편집기에서 `.reg` 파일로 내보낸다. DachsTerm은 그 파일을 텍스트로 읽으며 레지스트리에 실행/등록하지 않는다. MobaXterm은 왼쪽 세션 목록의 우클릭 내보내기 `.mxtsessions` 또는 `MobaXterm.ini`를 사용한다. OpenSSH는 `config` 파일을 선택한다. UTF-16 BOM을 자동 처리하며 UTF-8, CP949, Windows-1252를 선택할 수 있다. 글자가 깨지면 적용 전에 인코딩을 바꿔 다시 선택한다.
 
 현재 지원표와 검증 결과는 [Phase 6.4/6.5 기록](verification/phase-6-jump-sessions.md)을 따른다. OpenSSH ProxyJump·승인한 Include·루프백 터널, MobaXterm 계층·키·게이트웨이, PuTTY 키·루프백 터널을 제한적으로 변환한다. 지원하지 않는 접속 조건을 직접 연결로 묵시적으로 바꾸지 않는다. 원본 파일은 실행하거나 수정하지 않는다. 제품 버전이 파일에 없으면 확인 불가로 보고한다. 실제 제품별 내보내기 fixture 대기는 구현 검사와 구분한다.
 
@@ -20,11 +22,11 @@ v1/v2 읽기는 유지한다. 알 수 없는 버전/필드, 자기 참조·순�
 
 ## JSON v2 읽기 호환 예제
 
-기존 파일의 [v2 JSON Schema](session-format.v2.schema.json)를 보존한다. `format: "daxterm.sessions"`, `version: 2`, `profiles`, `groups`, `tunnels`가 최상위 필드다. v1은 format 없는 version1을 계속 읽는다. 알 수 없는 필드/미래 버전은 거부하며 자동 초기화하지 않는다. v2 파일을 구버전 DaxTerm에서 읽을 수 있다고 보장하지 않는다.
+기존 파일의 [v2 JSON Schema](session-format.v2.schema.json)를 보존한다. `format: "dachsterm.sessions"`, `version: 2`, `profiles`, `groups`, `tunnels`가 최상위 필드다. v1은 format 없는 version1을 계속 읽는다. 알 수 없는 필드/미래 버전은 거부하며 자동 초기화하지 않는다. v2 파일을 구버전 DachsTerm에서 읽을 수 있다고 보장하지 않는다.
 
 ```json
 {
-  "format": "daxterm.sessions",
+  "format": "dachsterm.sessions",
   "version": 2,
   "profiles": [{
     "id": "example-session",

@@ -8,7 +8,7 @@ import {
   resizeSnack,
   type SnackInput,
   snackMotion,
-} from './daxEngines';
+} from './dachsEngines';
 import {
   RoundControls,
   Stats,
@@ -19,7 +19,7 @@ import {
   useFrame,
 } from './shared';
 
-export function DaxSnackGame({ active }: { active: boolean }) {
+export function DachsSnackGame({ active }: { active: boolean }) {
   const [state, setState] = useState(newSnack);
   const { board, ...round } = useRound(active);
   const actualWidth = useBoardWidth(board);
@@ -76,7 +76,7 @@ export function DaxSnackGame({ active }: { active: boolean }) {
   };
   return (
     <section
-      className="game-play dax-play snack-play"
+      className="game-play dachs-play snack-play"
       onBlurCapture={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget)) {
           clear();
@@ -131,7 +131,7 @@ export function DaxSnackGame({ active }: { active: boolean }) {
       </div>
       <div
         ref={board}
-        className="game-board dax-board snack-board"
+        className="game-board dachs-board snack-board"
         data-x={Math.round(state.x)}
         data-motion={snackMotion(state)}
         data-facing={state.facing}
@@ -182,12 +182,12 @@ export function DaxSnackGame({ active }: { active: boolean }) {
           </span>
         ))}
       </div>
-      <p className="dax-help">
+      <p className="dachs-help">
         ← → / A D / 드래그로 이동 · P 일시정지
         <br />
         놓친 간식은 감점 없이 연속 기록만 초기화돼요.
       </p>
-      <div className="game-actions dax-touch-controls">
+      <div className="game-actions dachs-touch-controls">
         {([-1, 1] as const).map((direction) => (
           <button
             key={direction}

@@ -95,15 +95,15 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
   const [operation, setOperation] = useState('');
   const [value, setValue] = useState('');
   const [uploadMode, setUploadMode] = useState(
-    () => localStorage.getItem('daxterm.uploadMode') ?? 'ask',
+    () => localStorage.getItem('dachsterm.uploadMode') ?? 'ask',
   );
   const requestId = useRef(0);
   const panel = useRef<HTMLElement>(null);
   const [fileEncoding, setFileEncoding] = useState('original');
   const [editorArgs, setEditorArgs] = useState(
-    () => localStorage.getItem('daxterm.editorArgs') ?? '[]',
+    () => localStorage.getItem('dachsterm.editorArgs') ?? '[]',
   );
-  const [editor, setEditor] = useState(() => localStorage.getItem('daxterm.editor') ?? 'code');
+  const [editor, setEditor] = useState(() => localStorage.getItem('dachsterm.editor') ?? 'code');
   const load = useCallback(
     async (next: string) => {
       const request = ++requestId.current;
@@ -847,8 +847,8 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               void (async () => {
                 let ok: boolean;
                 if (operation === 'edit') {
-                  localStorage.setItem('daxterm.editor', editor);
-                  localStorage.setItem('daxterm.uploadMode', uploadMode);
+                  localStorage.setItem('dachsterm.editor', editor);
+                  localStorage.setItem('dachsterm.uploadMode', uploadMode);
                   let args: unknown;
                   try {
                     args = JSON.parse(editorArgs);
@@ -858,7 +858,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                     setError('편집기 인자는 JSON 문자열 배열이어야 합니다.');
                     return;
                   }
-                  localStorage.setItem('daxterm.editorArgs', editorArgs);
+                  localStorage.setItem('dachsterm.editorArgs', editorArgs);
                   ok = await run('edit_start', {
                     id,
                     profileId: session.profile.id,

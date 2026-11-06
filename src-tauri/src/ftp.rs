@@ -316,7 +316,7 @@ pub(crate) async fn transfer(
         if exists(&mut ftp, &plan.remote, &session.profile.encoding).await? {
             return Err("FTP 대상 파일이 이미 있습니다. 기존 파일에는 이어쓰지 않습니다.".into());
         }
-        let temp = format!("{}.daxterm-{}.part", plan.remote, plan.view.id);
+        let temp = format!("{}.dachsterm-{}.part", plan.remote, plan.view.id);
         let offset = if exists(&mut ftp, &temp, &session.profile.encoding).await? {
             ftp.size(&temp).await.map_err(failure)? as u64
         } else {
@@ -385,7 +385,7 @@ pub(crate) async fn transfer(
         }
         let temp = plan
             .local
-            .with_file_name(format!(".daxterm-{}.part", plan.view.id));
+            .with_file_name(format!(".dachsterm-{}.part", plan.view.id));
         let metadata = tokio::fs::symlink_metadata(&temp).await;
         let offset = match &metadata {
             Ok(m) => {
@@ -577,7 +577,7 @@ pub async fn batch(
             if exists(&mut ftp, &target, &session.profile.encoding).await? {
                 return Err("대상 항목이 이미 있습니다.".into());
             }
-            let staging = format!("{target}.daxterm-{}.part", uuid::Uuid::new_v4());
+            let staging = format!("{target}.dachsterm-{}.part", uuid::Uuid::new_v4());
             let mut created = Vec::new();
             let copied: Result<()> = async {
                 for (source, relative, entry) in &nodes {

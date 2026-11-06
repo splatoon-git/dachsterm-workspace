@@ -53,36 +53,36 @@
 .game-play {
   max-width: 620px;
 }
-.dax-board {
+.dachs-board {
   display: block;
   width: 100%;
   padding: 0;
   overflow: hidden;
   touch-action: none;
 }
-.dax-board > svg {
+.dachs-board > svg {
   display: block;
   width: 100%;
 }
-.dax-ground {
+.dachs-ground {
   fill: none;
   stroke: var(--game-line);
   stroke-width: 1;
 }
-.dax-onion {
+.dachs-onion {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
 }
-.dax-obstacle {
+.dachs-obstacle {
   fill: currentColor;
 }
-.dax-help {
+.dachs-help {
   font-size: 12px;
   line-height: 1.8;
   margin: 12px 0;
 }
-.dax-touch-controls button {
+.dachs-touch-controls button {
   min-width: 70px;
   min-height: 44px;
   touch-action: none;

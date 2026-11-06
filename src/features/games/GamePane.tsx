@@ -17,8 +17,8 @@ import {
   type Direction,
 } from './engines';
 import { useBest, useRound, Stats, RoundControls, phaseText } from './shared';
-import { DaxSnackGame } from './DaxGames';
-import { DaxAdventureGame } from './AdventureGame';
+import { DachsSnackGame } from './DachsGames';
+import { DachsAdventureGame } from './AdventureGame';
 import { SurvivorGame, type SurvivorCloseRegistration } from './survivor/SurvivorGame';
 import './games.css';
 
@@ -442,9 +442,9 @@ export default function GamePane({
       ) : game === 'tiles' ? (
         <TilesGame />
       ) : game === 'snack' ? (
-        <DaxSnackGame active={active} />
+        <DachsSnackGame active={active} />
       ) : game === 'adventure' ? (
-        <DaxAdventureGame active={active} />
+        <DachsAdventureGame active={active} />
       ) : game === 'survivor' ? (
         <SurvivorGame active={active} registerClose={registerSurvivorClose} />
       ) : (

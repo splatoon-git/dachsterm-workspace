@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type {} from './fixtures/survivor-profile';
 
 const fixture = '/tests/ui/fixtures/survivor-profile.html';
-const key = 'daxterm.games.survivor.v1';
+const key = 'dachsterm.games.survivor.v1';
 
 for (const width of [360, 560, 1280]) {
   test(`hub purchases, key repeat, refund and persisted preferences at ${width}px`, async ({

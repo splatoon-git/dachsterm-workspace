@@ -2,11 +2,11 @@ PodTree embedded component notice
 
 Upstream: podtree.sh 2.4.0, supplied by the user.
 Author attribution retained from the source: 김태동 (rilak0514@metabuild.co.kr).
-DaxTerm variant: 2.4.0-daxterm.1.
+DachsTerm variant: 2.4.0-dachsterm.1.
 On 2026-11-05, the user confirmed authorship or permission to include,
-modify and distribute the supplied code in DaxTerm. No separate public
+modify and distribute the supplied code in DachsTerm. No separate public
 open-source license was supplied or inferred.
 
-DaxTerm changes include fixed execution scope, stricter query-mode guards,
+DachsTerm changes include fixed execution scope, stricter query-mode guards,
 secure pager mode, action confirmations, input handling and process cleanup.
 Exact source/embedded SHA-256 values are recorded in the bundled manifest.

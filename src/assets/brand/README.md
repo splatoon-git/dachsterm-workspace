@@ -1,4 +1,4 @@
-# DaxTerm 마스코트
+# DachsTerm 마스코트
 
 기존 `lh-dachs/assets/source`의 투명 PNG 두 개를 그대로 반입했다. 원본의 외형·화풍·크림색은 변경하지 않는다. 런타임 및 아이콘 재생성은 이 저장소의 원본만 사용한다.
 
@@ -12,4 +12,4 @@
 
 > Use case: stylized-concept. Asset type: production sprite atlas for a side-scrolling game. Reference image 1 is the character identity and rendering style reference, not an image to reproduce in a sitting pose. Create ONE transparent PNG sprite sheet, exactly 3 columns by 2 rows of equal sized cells, 1536x1024 canvas. SIX full-body poses of the SAME long-haired cream dachshund facing RIGHT in side profile, keeping its beautiful cream coat, long floppy silky ears, long low dachshund body, short legs, gentle dark eyes, and painterly detailed original style. No clothes or accessories. Keep identical scale across all cells, body fills about 80% of each cell width, paws on common baseline 85% down each cell. Each pose entirely within its cell, with ample transparent spacing. Row1 col1: idle STANDING on four short legs in right-facing side profile. Row1 col2: run stride with front legs reaching forward and rear legs backward, ears trailing. Row1 col3: run opposite stride legs tucked under body. Row2 col1: jump airborne front paws tucked, ears floating. Row2 col2: playful bite attack, head lunging forward, open jaws with small teeth, legs braced. Row2 col3: hurt recoil slightly crouched backwards, ears lifted, no injury or blood. Clean consistent professional game animation atlas. Genuinely transparent background, no backgrounds, no ground, no shadows, no panels, no text, no labels, no grid lines, no extra characters.
 
-G.5 간식 타임도 같은 atlas와 `DaxSprite.tsx`를 공유한다. 물기 포즈는 간식 씹기, 점프 포즈는 별 획득 반응으로 재사용하며 별도 이미지 생성/수정은 없다.
+G.5 간식 타임도 같은 atlas와 `DachsSprite.tsx`를 공유한다. 물기 포즈는 간식 씹기, 점프 포즈는 별 획득 반응으로 재사용하며 별도 이미지 생성/수정은 없다.

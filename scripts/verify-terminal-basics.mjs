@@ -113,7 +113,7 @@ export async function verifyTerminalBasics({
   await page.keyboard.press('Enter');
   await output('LEGACY_BS_OK');
   const saved = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('daxterm.terminalPreferences')),
+    JSON.parse(localStorage.getItem('dachsterm.terminalPreferences')),
   );
   assert.deepEqual(saved, {
     copyOnSelect: false,

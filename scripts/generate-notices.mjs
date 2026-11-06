@@ -43,7 +43,7 @@ items.sort((a, b) =>
 );
 const records = [];
 const notices = [
-  'DaxTerm third-party notices',
+  'DachsTerm third-party notices',
   'Generated from locked Windows dependency metadata. Includes build dependencies; inclusion does not imply every component is shipped.',
   'Project branding and application licensing are managed separately.',
   '',

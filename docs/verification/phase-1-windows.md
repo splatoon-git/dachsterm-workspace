@@ -32,7 +32,7 @@
 | `npm run test:native` | 종료 코드 0. 내장 자산 앱 빌드 + 제품 엔진 + 실제 Windows WebView2 통합 검증 통과 |
 | `node scripts/run-phase1.mjs --native --reuse-build` | 실행 파일을 재사용하는 네이티브 진단 모드. 개발 중 사용, 최종 결과는 위 전체 명령 기준 |
 
-`test:native` 내부에서 `cargo build --locked -p daxterm --example phase1_probe`와 `tauri build --debug --no-bundle`을 실행했다. 설치 패키지 검증은 아니다. 프런트엔드·Rust 검사 결과를 Mock SSH 성공으로 대신하지 않았다.
+`test:native` 내부에서 `cargo build --locked -p dachsterm --example phase1_probe`와 `tauri build --debug --no-bundle`을 실행했다. 설치 패키지 검증은 아니다. 프런트엔드·Rust 검사 결과를 Mock SSH 성공으로 대신하지 않았다.
 
 ## 실제 제품 엔진
 

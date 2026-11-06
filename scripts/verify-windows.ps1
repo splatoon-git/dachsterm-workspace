@@ -28,7 +28,7 @@ if ($Native) {
 if ($Package) {
   Invoke-Check 'npm.cmd' @('run', 'tauri', '--', 'build', '--bundles', 'nsis')
   $version = (Get-Content -LiteralPath (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json).version
-  $installer = Join-Path $workspace "target\release\bundle\nsis\DaxTerm_${version}_x64-setup.exe"
+  $installer = Join-Path $workspace "target\release\bundle\nsis\DachsTerm_${version}_x64-setup.exe"
   $signature = Get-AuthenticodeSignature -LiteralPath $installer
   if ($RequireSigned -and $signature.Status -ne 'Valid') { throw 'Public release refused: valid Authenticode signature required' }
   $manifest = [ordered]@{ version = $version; sha256 = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash; signature = $signature.Status.ToString(); publicReleaseApproved = $false; manualVerification = 'docs/verification/windows-release-checklist.md' }

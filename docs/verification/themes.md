@@ -8,11 +8,11 @@
 
 ## 제공 테마와 참고 자료
 
-공식 포트 인증이나 원본 팔레트의 완전한 복제는 아니다. 아래 자료의 색상 방향을 참고해 DaxTerm의 의미 토큰/컨트롤/차트/ANSI로 매핑했다. 외부 사이트/폰트/CDN에 런타임 의존하지 않는다.
+공식 포트 인증이나 원본 팔레트의 완전한 복제는 아니다. 아래 자료의 색상 방향을 참고해 DachsTerm의 의미 토큰/컨트롤/차트/ANSI로 매핑했다. 외부 사이트/폰트/CDN에 런타임 의존하지 않는다.
 
 | 테마 | 참고 자료와 구현 방향 |
 |---|---|
-| DaxTerm Classic | 기존 `pms-retro-light`의 크림색 표면·블루/머스터드와 마스코트 보존 |
+| DachsTerm Classic | 기존 `pms-retro-light`의 크림색 표면·블루/머스터드와 마스코트 보존 |
 | GitHub White / Dark | [GitHub Primer 색상 사용](https://primer-docs-preview.github.com/product/getting-started/foundations/color-usage/): 화이트/흑연색 표면, 블루 액션 |
 | Dracula | [공식 색상/ANSI 명세](https://spec.draculatheme.com/): 보랏빛 배경, 퍼플/핑크/민트 |
 | Nord | [공식 팔레트](https://www.nordtheme.com/docs/colors-and-palettes/): Polar Night/Snow Storm/Frost/Aurora 계열 |
@@ -24,10 +24,10 @@
 ## 구현
 
 - `src/themes/contract.ts`: 설명·분류·light/dark color-scheme 추가. 기존 의미 토큰 계약 유지.
-- `presets/light.ts`: 이름을 DaxTerm Classic으로 변경하되 ID·기본값·크림색 표면 유지. 선택 배경 위 보조 텍스트가 4.495:1이던 미세한 부족을 보완하기 위해 `#606970` → `#5F686F`로만 보정. 기존 ANSI 값은 유지.
+- `presets/light.ts`: 이름을 DachsTerm Classic으로 변경하되 ID·기본값·크림색 표면 유지. 선택 배경 위 보조 텍스트가 4.495:1이던 미세한 부족을 보완하기 위해 `#606970` → `#5F686F`로만 보정. 기존 ANSI 값은 유지.
 - `presets/create.ts`, `collection.ts`, `registry.ts`: 추가 11개 팔레트. CSS 변수/터미널/차트가 동일한 정의를 사용한다. 컴포넌트의 테마 ID 조건 분기는 없다.
 - `ThemePicker.tsx`, `picker.css`: 미리보기 카드, 선택 표시, 네이티브 radio 키보드 이동, 현재 테마/자동 저장 상태. 3열/2열/1열 반응형 배치.
-- `store.ts`, `useTheme.ts`, `main.tsx`: 동일 창 구독 알림, 다른 창 storage 변경 반영, 시작 전 토큰 적용, 저장 실패 알림, 알 수 없는 ID/삭제 시 기본 복귀. 저장 키 `daxterm.theme` 유지. `adapters/css.ts`는 브라우저 기본 컨트롤에 color-scheme도 반영한다.
+- `store.ts`, `useTheme.ts`, `main.tsx`: 동일 창 구독 알림, 다른 창 storage 변경 반영, 시작 전 토큰 적용, 저장 실패 알림, 알 수 없는 ID/삭제 시 기본 복귀. 저장 키 `dachsterm.theme` 유지. `adapters/css.ts`는 브라우저 기본 컨트롤에 color-scheme도 반영한다.
 - `App.tsx`: 워크스페이스 설정에 선택 UI 연결. 기존 JSON 설정 백업과 배치 설정 유지. 로컬 테마 설정은 세션 JSON 내보내기에 포함하지 않는다.
 - `Dialog.tsx`: 선택한 radio 우선 포커스, DOM 제거 전 닫기/기존 실행 버튼으로 포커스 복귀. 테마 선택 중 터미널을 재생성하거나 연결을 재시작하지 않는다.
 
