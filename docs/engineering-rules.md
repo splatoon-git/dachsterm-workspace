@@ -101,3 +101,19 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 ## 10. 줄바꿈
 
 저장소 기준은 LF다. 새 파일과 수정 파일을 LF로 저장하고, 파일 안에 CRLF를 섞지 않는다. `.sh`, `.py`는 `.gitattributes`가 LF를 요구한다.
+
+## 11. Windows·macOS 공통
+
+두 OS 모두 출시 대상이다. 현재 어긋난 부분과 작업 ID는 [macos-readiness](verification/macos-readiness.md)에 있다.
+
+- `#[cfg(windows)]`를 추가하면 다른 OS의 동작도 같은 변경에서 구현한다. 지원하지 않으면 사용자에게 보이는 오류를 반환한다.
+- 외부 프로그램을 이름만으로 실행하지 않는다. Finder로 실행한 앱의 `PATH`는 `/usr/bin:/bin:/usr/sbin:/sbin`뿐이라 Homebrew·`/usr/local/bin` 도구를 찾지 못한다. 터미널에서 띄운 `tauri dev`에서는 이 문제가 드러나지 않으므로, 외부 프로그램 실행은 패키지된 앱으로 확인한다.
+- `/bin/bash`를 Bash 4 이상으로 가정하지 않는다. macOS 기본은 3.2다.
+- `.exe`, `npm.cmd`, `powershell` 같은 이름을 공용 경로에 하드코딩하지 않는다. 제품 코드는 `cfg`로, 스크립트는 `process.platform`으로 분기한다.
+- macOS의 로컬 파일 이름은 NFD 한글일 수 있다. 원격 이름을 만들거나 파일 이름을 비교하는 코드는 정규화를 고려한다.
+- 단축키는 `ctrlKey || metaKey`로 처리하고, 터미널에 그대로 전달할 `Ctrl+키` 입력과 구분한다.
+- 새 Web API는 WKWebView 지원을 확인하고, 없을 때의 동작을 구현한다(`navigator.locks` 사용부 참고). Chromium 전용 CSS에 기능을 의존하지 않는다.
+- 글꼴 스택에는 두 OS의 글꼴을 모두 넣는다.
+- 네이티브 의존성을 추가할 때는 macOS 빌드를 함께 확인한다.
+- macOS CI는 빌드와 자동 테스트만 확인한다. 실기기 항목(Keychain, IME, 파일 대화상자, 설치)의 통과로 기록하지 않는다.
+- `[자동]` `macos.yml`의 `verify-macos.sh`.

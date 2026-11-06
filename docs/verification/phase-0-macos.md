@@ -5,7 +5,7 @@
 ## 첫 실행
 
 1. 프로젝트를 Mac 로컬 디렉터리로 복사/체크아웃한다. `node_modules`, `target`, `dist`는 복사하지 않는다.
-2. Xcode Command Line Tools, Node 24+, Rustup, Docker의 Linux 엔진을 준비한다.
+2. Xcode Command Line Tools, Node 24+, Rustup, OpenSSL(`brew install openssl@3`, [M.1](macos-readiness.md)), Docker의 Linux 엔진을 준비한다.
 3. `npm ci`, `npm run icons`, `npm run build`.
 4. `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`.
 5. `npm run tauri -- dev`: 창·마스코트·키보드 포커스·최소 창 너비·한글 미리보기를 확인한다.

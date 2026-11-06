@@ -1,0 +1,32 @@
+name: macOS verification
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Locked dependencies
+        run: npm ci
+      - name: Browser runtime
+        run: npx playwright install chromium
+      - name: Rust toolchain
+        run: rustup show
+      - name: Automated macOS gates and app bundle
+        run: bash scripts/verify-macos.sh --package
+      - name: Test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-ui-results
+          path: test-results
+          retention-days: 7
