@@ -21,7 +21,7 @@ export function drawSurvivor(
   atlas: HTMLImageElement,
   reduced: boolean,
 ) {
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) return;
   const width = Math.max(1, Math.round(canvas.clientWidth * Math.min(2, devicePixelRatio || 1)));
   const height = Math.round((width * VIEW.height) / VIEW.width);
@@ -31,14 +31,14 @@ export function drawSurvivor(
   }
   const t = theme.terminal;
   const cam = survivorCamera(run);
-  ctx.setTransform(width / VIEW.width, 0, 0, height / VIEW.height, 0, 0);
+  const scaleX = width / VIEW.width;
+  const scaleY = height / VIEW.height;
+  ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
   ctx.fillStyle = t.background;
   ctx.fillRect(0, 0, VIEW.width, VIEW.height);
   ctx.save();
-  if (!reduced && run.lastDamage && run.tick - run.lastDamage.tick < 10) {
-    ctx.translate(Math.sin(run.tick * 3) * 2, Math.cos(run.tick * 2) * 2);
-  }
-  ctx.translate(-cam.x, -cam.y);
+  // Align the whole world to one backing pixel grid; keep hit feedback on the player.
+  ctx.setTransform(scaleX, 0, 0, scaleY, -Math.round(cam.x * scaleX), -Math.round(cam.y * scaleY));
   ctx.lineWidth = 2;
   const circle = (x: number, y: number, r: number, color: string, fill = true) => {
     ctx.beginPath();
@@ -65,7 +65,10 @@ export function drawSurvivor(
       ctx.lineTo(drop.x + 5, drop.y);
       ctx.lineTo(drop.x, drop.y + 6);
       ctx.lineTo(drop.x - 5, drop.y);
+      ctx.closePath();
       ctx.fill();
+      ctx.fillStyle = t.background;
+      ctx.fillRect(drop.x - 1, drop.y - 3, 2, 3);
     } else if (drop.kind === 'gold') {
       circle(drop.x, drop.y, 7, t.yellow);
       ctx.strokeStyle = t.background;
@@ -232,7 +235,7 @@ export function drawSurvivor(
     ? 5
     : bite && run.tick - bite.tick < 10
       ? 4
-      : reduced
+      : reduced || !p.moving
         ? 0
         : 1 + (Math.floor(run.tick / 10) % 2);
   if (atlas.complete && atlas.naturalWidth) {
@@ -253,6 +256,17 @@ export function drawSurvivor(
     ctx.restore();
   } else {
     circle(p.x, p.y, p.radius, t.blue);
+  }
+  const hit = run.lastDamage;
+  if (hit && run.tick - hit.tick < 28) {
+    const rise = reduced ? 0 : (run.tick - hit.tick) * 0.5;
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = t.background;
+    ctx.fillStyle = t.red;
+    ctx.strokeText(`−${hit.amount}`, p.x, p.y - 52 - rise);
+    ctx.fillText(`−${hit.amount}`, p.x, p.y - 52 - rise);
   }
   ctx.restore();
   const region = regionForStage(run.stage.index);

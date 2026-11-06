@@ -76,6 +76,7 @@ export function SurvivorGame({
     canvas = useRef<HTMLCanvasElement>(null),
     panel = useRef<HTMLDivElement>(null);
   const previousActive = useRef(active);
+  const atlasRef = useRef<HTMLImageElement | null>(null);
   const run = controller.inHub ? null : controller.session.run;
   const phase = run?.phase ?? 'hub',
     choiceId = run?.choice?.id;
@@ -166,7 +167,8 @@ export function SurvivorGame({
     const draw = () => {
       if (!stopped) drawSurvivor(field, current, theme, atlas, reduced);
     };
-    const atlas = loadSurvivorAtlas(draw);
+    const atlas = (atlasRef.current ??= loadSurvivorAtlas(draw));
+    atlas.onload = draw;
     const resize = new ResizeObserver(draw);
     resize.observe(field);
     const tick = (now: number) => {
@@ -440,7 +442,9 @@ export function SurvivorGame({
             )}
             {phase !== 'playing' && (
               <div
-                className="survivor-panel"
+                className={
+                  phase === 'choosing' ? 'survivor-panel survivor-choice' : 'survivor-panel'
+                }
                 ref={panel}
                 role="group"
                 aria-label={
@@ -455,18 +459,25 @@ export function SurvivorGame({
               >
                 {phase === 'choosing' && run.choice && (
                   <>
-                    <h2>레벨 {run.level} · 성장을 선택하세요</h2>
-                    <p>전투가 멈췄습니다. 방향키로 이동 · 1/2/3 또는 Enter로 선택</p>
+                    <header className="survivor-choice-heading">
+                      <h2>레벨 {run.level} · 성장 선택</h2>
+                      <span>
+                        {run.pendingChoices > 1
+                          ? `남은 선택 ${run.pendingChoices}회`
+                          : '전투 일시정지'}
+                      </span>
+                    </header>
                     <div className="survivor-cards" key={run.choice.id}>
                       {run.choice.cards.map((card, i) => (
                         <button
                           className="survivor-card"
+                          data-kind={card.kind}
                           key={card.id}
                           onClick={() => choose(card.id)}
                           disabled={controller.saveFailed}
                         >
                           <small>
-                            {i + 1} ·{' '}
+                            <kbd>{i + 1}</kbd>{' '}
                             {
                               {
                                 weapon: '무기',
@@ -477,29 +488,46 @@ export function SurvivorGame({
                             }
                           </small>
                           <strong>{card.name}</strong>
-                          <span>
-                            {card.fromRank} → {card.toRank}
-                          </span>
-                          {card.effects.map((effect) => (
-                            <span key={effect.label}>
-                              {effect.label} {effect.before}
-                              {effect.unit} → {effect.after}
-                              {effect.unit}
+                          {(card.kind === 'weapon' || card.kind === 'ability') && (
+                            <span>
+                              {card.fromRank
+                                ? `랭크 ${card.fromRank} → ${card.toRank}`
+                                : '신규 · 랭크 1'}
                             </span>
-                          ))}
+                          )}
+                          <span className="survivor-card-stats">
+                            {card.effects.map((effect) => (
+                              <span key={effect.label}>
+                                {effect.label}{' '}
+                                <b>
+                                  {(card.fromRank > 0 ||
+                                    card.kind === 'reward' ||
+                                    effect.before !== 0) &&
+                                    `${Number(effect.before.toFixed(2))}${effect.unit} → `}
+                                  {Number(effect.after.toFixed(2))}
+                                  {effect.unit}
+                                </b>
+                              </span>
+                            ))}
+                          </span>
                           {card.kind === 'evolution' && (
                             <span>조건 달성: 누적 3분 · 무기 5 · 대응 능력 3</span>
                           )}
                         </button>
                       ))}
                     </div>
-                    <button
-                      disabled={controller.saveFailed || !run.rerolls}
-                      onClick={() => controller.reroll(choiceId!)}
-                    >
-                      다시 뽑기 (R) · {run.rerolls}회
-                    </button>
-                    <p>일부 카드가 다시 나올 수 있습니다. 남은 선택 {run.pendingChoices}회</p>
+                    <div className="survivor-choice-footer">
+                      <span>
+                        방향키로 이동 · 1/2/3 또는 Enter로 선택
+                        <small>다시 뽑으면 같은 카드가 나올 수 있습니다.</small>
+                      </span>
+                      <button
+                        disabled={controller.saveFailed || !run.rerolls}
+                        onClick={() => controller.reroll(choiceId!)}
+                      >
+                        다시 뽑기 (R) · {run.rerolls}회
+                      </button>
+                    </div>
                   </>
                 )}
                 {phase === 'paused' && (

@@ -40,6 +40,7 @@ export type SurvivorPlayer = Point & {
   hp: number;
   stats: SurvivorStats;
   facing: Point;
+  moving: boolean;
   recoil: Point;
   invulnerableUntilTick: number;
 };

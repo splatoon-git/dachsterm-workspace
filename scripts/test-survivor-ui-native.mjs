@@ -8,8 +8,8 @@ import path from 'node:path';
 import net from 'node:net';
 
 if (process.platform !== 'win32') throw Error('Windows WebView2 required.');
-const directory = await mkdtemp(path.join(tmpdir(), 'daxterm-survivor-ui-'));
-const binary = process.env.DAXTERM_TEST_BINARY ?? path.resolve('target/debug/daxterm.exe');
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-ui-'));
+const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 let app, browser;
 const errors = [];
 async function launch() {
@@ -22,8 +22,8 @@ async function launch() {
     windowsHide: true,
     env: {
       ...process.env,
-      DAXTERM_TEST_DATA_DIR: directory,
-      DAXTERM_TEST_CDP_PORT: String(port),
+      DACHSTERM_TEST_DATA_DIR: directory,
+      DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
     },
   });
@@ -76,6 +76,7 @@ try {
     field = game.locator('canvas');
   await expect(game).toHaveAttribute('data-phase', 'playing');
   await expect(field).toBeFocused();
+  const fieldBefore = await field.boundingBox();
   const x = Number(await field.getAttribute('data-x'));
   await page.keyboard.down('d');
   await page.waitForTimeout(250);
@@ -84,6 +85,11 @@ try {
   // Normal stationary auto-attacks earn the first choice; no seed or state manipulation.
   await expect(game).toHaveAttribute('data-phase', 'choosing', { timeout: 35000 });
   await expect(page.locator('.survivor-card').first()).toBeFocused();
+  const sheet = await page.getByRole('group', { name: '성장 카드 선택' }).boundingBox();
+  expect(await field.boundingBox()).toEqual(fieldBefore);
+  expect(sheet.y).toBeGreaterThan(fieldBefore.y + 8);
+  expect(sheet.width).toBeLessThan(fieldBefore.width);
+  await expect(page.locator('.survivor-card-stats').first()).toBeVisible();
   const offer = await page.locator('.survivor-cards').innerText();
   await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: '닥스의 서바이버', exact: true }).click();
@@ -94,6 +100,7 @@ try {
   await page.screenshot({ path: 'target/verification/survivor-ui-native.png' });
   await page.keyboard.press('1');
   await expect(game).toHaveAttribute('data-phase', 'playing');
+  await expect(field).toBeFocused();
   await page.keyboard.press('p');
   const frozenTick = await field.getAttribute('data-tick');
   await page.waitForTimeout(300);
@@ -104,7 +111,7 @@ try {
       Storage.prototype.setItem = setItem;
     };
     Storage.prototype.setItem = function (key, value) {
-      if (key === 'daxterm.games.survivor.v1') throw Error('Native test write failure');
+      if (key === 'dachsterm.games.survivor.v1') throw Error('Native test write failure');
       setItem.call(this, key, value);
     };
   });
@@ -115,7 +122,7 @@ try {
   await page.evaluate(() => window.restoreSurvivorWrites());
   await page.getByRole('button', { name: '저장 재시도', exact: true }).click();
   const saved = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('daxterm.games.survivor.v1')),
+    JSON.parse(localStorage.getItem('dachsterm.games.survivor.v1')),
   );
   expect(saved.checkpoint).toBe(null);
   expect(saved.settlements).toHaveLength(1);
@@ -125,7 +132,7 @@ try {
   page = await launch();
   await expect(page.getByRole('button', { name: '새 도전 시작', exact: true })).toBeEnabled();
   const recovered = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('daxterm.games.survivor.v1')),
+    JSON.parse(localStorage.getItem('dachsterm.games.survivor.v1')),
   );
   expect(recovered).toEqual(saved);
   await nativeClose(page);
@@ -137,6 +144,7 @@ try {
       .update(await readFile(binary))
       .digest('hex'),
     normalInputFirstChoice: true,
+    choiceOverField: true,
     choicePauseResume: true,
     movement: true,
     failedNativeClosePrevented: true,

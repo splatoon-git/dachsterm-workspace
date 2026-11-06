@@ -42,12 +42,14 @@
 .survivor-field {
   position: relative;
   border: 1px solid var(--game-line);
+  border-radius: var(--radius-medium);
 }
 .survivor-field canvas {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
   touch-action: none;
+  border-radius: inherit;
 }
 .survivor-boss,
 .survivor-warning {
@@ -65,16 +67,20 @@
 }
 .survivor-panel {
   position: absolute;
+  z-index: 1;
   inset: 0;
-  margin: 0;
+  margin: auto;
+  width: min(500px, calc(100% - 24px));
+  height: fit-content;
+  max-height: calc(100% - 20px);
+  box-sizing: border-box;
   border: 1px solid var(--game-line);
+  border-radius: var(--radius-medium);
   background: var(--terminal-background);
+  box-shadow: 0 4px 24px color-mix(in srgb, var(--terminal-foreground) 20%, transparent);
   padding: 20px;
   overflow: auto;
   scroll-margin: 12px;
-}
-.survivor-field:has(.survivor-panel) {
-  min-height: min(560px, 70vh);
 }
 .survivor-field:has(.survivor-panel) canvas {
   pointer-events: none;
@@ -86,21 +92,79 @@
 .survivor-panel > button {
   margin: 4px 8px 4px 0;
 }
+.survivor-choice {
+  inset: auto 0 clamp(8px, 2cqw, 20px);
+  width: min(680px, calc(100% - 32px));
+  padding: 12px 16px;
+  line-height: 1.4;
+  overscroll-behavior: contain;
+}
+.survivor-choice-heading,
+.survivor-choice-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.survivor-choice-heading h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.survivor-choice-heading > span,
+.survivor-choice-footer {
+  font-size: 12px;
+}
+.survivor-choice-footer small {
+  display: block;
+}
 .survivor-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 16px 0;
+  gap: 8px;
+  margin: 10px 0;
 }
 .survivor-cards .survivor-card {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: 8px;
+  gap: 3px;
   text-align: left;
-  padding: 18px;
-  border: 1px solid var(--terminal-blue);
+  padding: 9px 12px;
+  --card-ink: var(--terminal-blue);
+  background: color-mix(in srgb, var(--card-ink) 5%, var(--terminal-background));
+  border: 1px solid var(--game-line);
+  border-top: 3px solid var(--card-ink);
+}
+.survivor-card[data-kind='ability'] {
+  --card-ink: var(--terminal-green);
+}
+.survivor-card[data-kind='reward'],
+.survivor-card[data-kind='evolution'] {
+  --card-ink: var(--terminal-yellow);
+}
+.survivor-card small {
+  color: var(--card-ink);
+  font-weight: 600;
+}
+.survivor-card kbd {
+  margin: 0 3px 0 0;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+}
+.survivor-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 3px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.survivor-card-stats b {
+  font-weight: 500;
+  white-space: nowrap;
 }
 .survivor-card strong {
   font-size: 18px;
@@ -152,6 +216,10 @@
   margin: 12px 0;
 }
 @container (max-width: 760px) {
+  .survivor-choice {
+    inset: 52% 0 auto;
+    max-height: min(55dvh, 360px);
+  }
   .survivor-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -165,6 +233,13 @@
   }
   .survivor-panel {
     padding: 12px;
+  }
+  /* A short 16:9 field still shows the scene above the sheet. Long card
+     descriptions scroll inside it, without pushing the field or HUD. */
+  .survivor-choice {
+    inset: 54% 0 auto;
+    width: calc(100% - 16px);
+    max-height: min(50dvh, 360px);
   }
   .survivor-hud {
     font-size: 12px;

@@ -10,6 +10,7 @@ declare global {
   interface Window {
     survivorQuality: {
       ready: () => boolean;
+      checkMovingTerrain: () => { returnsToScene: boolean; stableOnHit: boolean };
       draw: (
         stage: number,
         dark?: boolean,
@@ -21,6 +22,25 @@ declare global {
 }
 window.survivorQuality = {
   ready: () => atlas.complete && atlas.naturalWidth > 0,
+  checkMovingTerrain() {
+    const run = newSurvivor(42);
+    const draw = () => drawSurvivor(canvas, run, getTheme(), atlas, false);
+    // This strip contains only terrain, outside the player and hit readout.
+    const terrain = () => canvas.getContext('2d')!.getImageData(0, 0, canvas.width, 70).data;
+    draw();
+    const start = canvas.toDataURL();
+    for (const x of [1610.25, 1968.5, 2830.75, 1600]) {
+      run.player.x = x;
+      draw();
+    }
+    const returnsToScene = canvas.toDataURL() === start;
+    const before = terrain();
+    run.tick = 5;
+    run.lastDamage = { tick: 4, amount: 7 };
+    draw();
+    const after = terrain();
+    return { returnsToScene, stableOnHit: before.every((value, i) => value === after[i]) };
+  },
   async draw(stage, dark = false, dense = false, reduced = true) {
     const run = newSurvivor(42);
     run.stage.index = stage;

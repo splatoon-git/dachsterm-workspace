@@ -35,6 +35,8 @@ for (const width of [360, 560, 1280])
   test(`survivor cards, stage and result fit ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await start(page);
+    const field = page.locator('.survivor-field');
+    const fieldBefore = await field.boundingBox();
     if (width === 560) await page.evaluate(() => window.survivorUi.dark());
     await page.evaluate(() => window.survivorUi.battle());
     await expect(game(page)).toHaveAttribute('data-phase', 'paused');
@@ -46,6 +48,10 @@ for (const width of [360, 560, 1280])
     const cards = page.locator('.survivor-card');
     await expect(cards).toHaveCount(3);
     await expect(cards.first()).toBeFocused();
+    expect(await field.boundingBox()).toEqual(fieldBefore);
+    const sheet = await page.getByRole('group', { name: '성장 카드 선택' }).boundingBox();
+    expect(sheet!.y - fieldBefore!.y).toBeGreaterThan(8);
+    expect(sheet!.width).toBeLessThan(fieldBefore!.width);
     await page.keyboard.press('ArrowRight');
     await expect(cards.nth(1)).toBeFocused();
     expect(await game(page).evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
@@ -68,6 +74,8 @@ for (const width of [360, 560, 1280])
     });
     await page.keyboard.press('Enter');
     await expect(game(page)).toHaveAttribute('data-phase', 'playing');
+    await expect(field.locator('canvas')).toBeFocused();
+    expect(await field.boundingBox()).toEqual(fieldBefore);
     await page.evaluate(() => window.survivorUi.clear(3));
     await expect(page.getByRole('button', { name: '다음 스테이지 4', exact: true })).toBeFocused();
     await page.getByRole('button', { name: '정산하고 쉼터로', exact: true }).focus();
@@ -219,7 +227,7 @@ test('production catalog retains terminal, Esc pauses, tab close failure cancels
       },
     });
     Storage.prototype.setItem = function (k, v) {
-      if (k === 'daxterm.games.survivor.v1') throw Error('test quota');
+      if (k === 'dachsterm.games.survivor.v1') throw Error('test quota');
       original.call(this, k, v);
     };
   });

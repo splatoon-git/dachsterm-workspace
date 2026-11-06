@@ -66,6 +66,7 @@ export function newSurvivor(seed = 1, options: SurvivorStartOptions = {}): Survi
       hp: start.stats.maxHp,
       stats: start.stats,
       facing: { x: 1, y: 0 },
+      moving: false,
       recoil: { x: 0, y: 0 },
       invulnerableUntilTick: 0,
     },
@@ -132,6 +133,7 @@ function movePlayer(run: SurvivorRun, input: SurvivorInput) {
   let dx = Number.isFinite(input.moveX) ? clamp(input.moveX, -1, 1) : 0;
   let dy = Number.isFinite(input.moveY) ? clamp(input.moveY, -1, 1) : 0;
   const magnitude = Math.hypot(dx, dy);
+  p.moving = magnitude > 0;
   if (magnitude > 1) {
     dx /= magnitude;
     dy /= magnitude;

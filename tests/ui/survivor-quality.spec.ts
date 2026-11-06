@@ -1,5 +1,16 @@
 import { expect, test } from '@playwright/test';
 
+test('camera travel clears old pixels and taking damage keeps terrain anchored', async ({
+  page,
+}) => {
+  await page.goto('/tests/ui/fixtures/survivor-quality.html');
+  await page.waitForFunction(() => window.survivorQuality?.ready());
+  expect(await page.evaluate(() => window.survivorQuality.checkMovingTerrain())).toEqual({
+    returnsToScene: true,
+    stableOnHit: true,
+  });
+});
+
 test('four regions render distinctly, preserve run state and fit both themes', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));

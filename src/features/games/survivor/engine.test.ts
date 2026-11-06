@@ -82,8 +82,9 @@ describe('닥스 서바이버 G.8.1 전투 엔진', () => {
       const run = ticks(newSurvivor(), 60, { moveX, moveY });
       expect(Math.hypot(run.player.x - 1600, run.player.y - 1600)).toBeCloseTo(210, 8);
       const before = structuredClone(run.player);
+      expect(before.moving).toBe(true);
       ticks(run, 1);
-      expect(run.player).toEqual(before);
+      expect(run.player).toEqual({ ...before, moving: false });
     }
     const analog = ticks(newSurvivor(), 60, { moveX: 0.5, moveY: 0 });
     expect(analog.player.x).toBeCloseTo(1705);

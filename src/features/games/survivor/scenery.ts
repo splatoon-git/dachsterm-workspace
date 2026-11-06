@@ -66,6 +66,10 @@ function paintScenery(
   }
   const t = theme.terminal;
   const accent = t[map.accent];
+  // Bake opaque inks into the tile. Overlapping branches and crossing paths
+  // then retain one silhouette instead of showing the layers underneath.
+  const ink = (color: string, percent: number) =>
+    `color-mix(in srgb, ${color} ${percent}%, ${t.background})`;
   const visible = (x: number, y: number, margin = 130) =>
     x >= cam.x - margin &&
     x <= cam.x + viewport.width + margin &&
@@ -78,13 +82,12 @@ function paintScenery(
     ctx.fill();
   };
   ctx.save();
-  ctx.fillStyle = accent;
-  ctx.globalAlpha = map.biome === 3 ? 0.08 : 0.12;
+  ctx.fillStyle = ink(accent, map.biome === 3 ? 9 : 16);
   ctx.fillRect(cam.x, cam.y, viewport.width, viewport.height);
   // Wide, quiet paths establish direction without introducing hidden collision walls.
   ctx.lineCap = 'round';
+  ctx.beginPath();
   for (let route = 0; route < 3; route++) {
-    ctx.beginPath();
     if (map.biome === 1) {
       if (route === 0) ctx.ellipse(1600, 1600, 360, 240, 0, 0, Math.PI * 2);
       else if (route === 1) {
@@ -124,28 +127,14 @@ function paintScenery(
       ctx.moveTo(0, 2600);
       ctx.bezierCurveTo(1200, 2100, 2200, 2900 + map.bend, 3200, 950);
     }
-    ctx.globalAlpha = 0.1;
-    ctx.lineWidth = map.biome === 2 ? 44 : 100;
-    ctx.strokeStyle = t.foreground;
-    ctx.stroke();
-    ctx.globalAlpha = map.biome === 2 ? 0.12 : 0.24;
-    ctx.lineWidth = map.biome === 2 ? 30 : 86;
-    ctx.strokeStyle =
-      map.biome === 3
-        ? t.white
-        : map.biome === 2
-          ? t.cyan
-          : map.biome === 1
-            ? t.brightBlack
-            : t.yellow;
-    ctx.stroke();
-    ctx.globalAlpha = 0.12;
-    ctx.lineWidth = 2;
-    ctx.setLineDash(map.biome === 1 ? [24, 6] : [4, 18]);
-    ctx.strokeStyle = t.foreground;
-    ctx.stroke();
-    ctx.setLineDash([]);
   }
+  const pathColor = [t.yellow, t.brightBlack, t.cyan, t.blue][map.biome];
+  ctx.lineWidth = map.biome === 2 ? 38 : 88;
+  ctx.strokeStyle = ink(pathColor, 29);
+  ctx.stroke();
+  ctx.lineWidth -= 4;
+  ctx.strokeStyle = ink(pathColor, map.biome === 3 ? 4 : 18);
+  ctx.stroke();
   for (
     let gy = Math.floor((cam.y - 64) / 72);
     gy <= Math.ceil((cam.y + viewport.height + 64) / 72);
@@ -160,8 +149,6 @@ function paintScenery(
       if (h % 5 < 2) continue;
       const x = gx * 72 + (h % 52),
         y = gy * 72 + ((h >>> 8) % 52);
-      ctx.globalAlpha = 0.08;
-      oval(x, y, 12 + (h % 29), 4 + (h % 7), accent);
       ctx.globalAlpha = 0.26;
       ctx.strokeStyle = accent;
       ctx.lineWidth = 1.5;
@@ -202,31 +189,49 @@ function paintScenery(
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.scale(p.scale, p.scale);
-    ctx.globalAlpha = 0.09;
-    oval(4, 12, 34, 12, t.foreground);
-    ctx.globalAlpha = 0.48;
-    if (p.variant < 3 && (map.biome === 0 || map.biome === 3)) {
-      // Layered fern/pine clusters, open enough to keep silhouettes readable.
-      ctx.fillStyle = t.yellow;
+    ctx.globalAlpha = 1;
+    if (p.variant === 1 && map.biome === 0) {
+      ctx.fillStyle = ink(t.yellow, 65);
       ctx.fillRect(-3, -10, 6, 25);
-      for (let tier = 0; tier < 3; tier++) {
-        ctx.globalAlpha = 0.28 + tier * 0.09;
-        ctx.fillStyle = map.biome === 3 ? t.cyan : t.green;
-        ctx.beginPath();
-        ctx.moveTo(0, -48 + tier * 17);
-        ctx.lineTo(28 - tier * 3, 4 + tier * 7);
-        ctx.quadraticCurveTo(0, 14 + tier * 7, -28 + tier * 3, 4 + tier * 7);
-        ctx.closePath();
-        ctx.fill();
-        if (map.biome === 3) {
-          ctx.globalAlpha = 0.55;
-          oval(0, -15 + tier * 16, 16, 4, t.white);
-        }
-      }
+      const canopy = ink(t.green, 53);
+      oval(-10, -13, 16, 14, canopy);
+      oval(12, -13, 14, 13, canopy);
+      oval(0, -25, 18, 17, canopy);
+      oval(-6, -29, 11, 8, ink(t.green, 40));
+    } else if (p.variant < 3 && (map.biome === 0 || map.biome === 3)) {
+      const leaf = map.biome === 3 ? t.cyan : t.green;
+      ctx.fillStyle = ink(t.yellow, 64);
+      ctx.fillRect(-3, 0, 6, 16);
+      ctx.beginPath();
+      ctx.moveTo(-2, -44);
+      ctx.lineTo(14, -20);
+      ctx.lineTo(9, -21);
+      ctx.lineTo(21, -5);
+      ctx.lineTo(15, -6);
+      ctx.lineTo(25, 8);
+      ctx.quadraticCurveTo(1, 15, -24, 8);
+      ctx.lineTo(-15, -7);
+      ctx.lineTo(-20, -5);
+      ctx.lineTo(-9, -22);
+      ctx.lineTo(-14, -19);
+      ctx.closePath();
+      ctx.fillStyle = ink(leaf, 56);
+      ctx.fill();
+      ctx.fillStyle = ink(leaf, map.biome === 3 ? 14 : 40);
+      ctx.beginPath();
+      ctx.moveTo(-2, -44);
+      ctx.lineTo(2, -18);
+      ctx.lineTo(-4, -21);
+      ctx.lineTo(-2, -10);
+      ctx.lineTo(-9, -16);
+      ctx.lineTo(-20, -5);
+      ctx.lineTo(-9, -22);
+      ctx.lineTo(-14, -19);
+      ctx.closePath();
+      ctx.fill();
     } else if (map.biome === 2 && p.variant < 4) {
       for (let i = -1; i <= 1; i++) {
-        ctx.fillStyle = i === 0 ? t.magenta : t.cyan;
-        ctx.globalAlpha = 0.34;
+        ctx.fillStyle = ink(i === 0 ? t.magenta : t.cyan, i === 0 ? 52 : 36);
         ctx.beginPath();
         ctx.moveTo(i * 17 - 10, 10);
         ctx.lineTo(i * 17 - 10, -15);
@@ -243,27 +248,41 @@ function paintScenery(
         ctx.stroke();
       }
     } else if (map.biome === 1 || p.variant === 4) {
-      ctx.fillStyle = t.brightBlack;
-      ctx.globalAlpha = 0.25;
-      ctx.fillRect(-22, -12, 42, 25);
-      ctx.fillRect(-14, -23, 32, 12);
-      ctx.strokeStyle = t.foreground;
+      ctx.fillStyle = ink(t.brightBlack, 40);
+      ctx.beginPath();
+      ctx.moveTo(-23, 9);
+      ctx.lineTo(-18, -11);
+      ctx.lineTo(-6, -19);
+      ctx.lineTo(13, -16);
+      ctx.lineTo(23, 2);
+      ctx.lineTo(14, 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = ink(t.brightBlack, 25);
+      ctx.beginPath();
+      ctx.moveTo(-18, -11);
+      ctx.lineTo(-6, -19);
+      ctx.lineTo(13, -16);
+      ctx.lineTo(4, -6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = ink(t.foreground, 60);
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(-16, -9);
       ctx.lineTo(4, -9);
       ctx.lineTo(-2, 5);
       ctx.stroke();
-      ctx.globalAlpha = 0.35;
-      oval(-17, 12, 17, 6, accent);
+      oval(-14, 11, 12, 4, ink(accent, 54));
     } else {
       for (let i = 0; i < 5; i++) {
         const x = Math.cos(i * 2.4) * 20,
           y = Math.sin(i * 2.4) * 11;
-        ctx.globalAlpha = 0.45;
-        oval(x, y, 5, 3, p.variant === 5 ? t.yellow : t.magenta);
-        ctx.globalAlpha = 0.8;
-        oval(x, y - 1, 1.5, 1.5, t.white);
+        const petal = ink(p.variant === 5 ? t.yellow : t.magenta, 52);
+        oval(x - 2, y, 3, 2, petal);
+        oval(x + 2, y, 3, 2, petal);
+        oval(x, y - 2, 2, 3, petal);
+        oval(x, y, 1.5, 1.5, t.background);
       }
     }
     ctx.restore();
@@ -272,24 +291,27 @@ function paintScenery(
     if (!visible(p.x, p.y, 150)) continue;
     ctx.save();
     ctx.translate(p.x, p.y);
-    ctx.globalAlpha = 0.09;
-    oval(0, 10, 105, 65, t.foreground);
-    ctx.globalAlpha = 0.24;
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 92, 54, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([12, 10]);
-    ctx.lineWidth = 12;
-    ctx.strokeStyle = t.brightBlack;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 75, 43, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 0.42;
+    ctx.globalAlpha = 1;
+    oval(0, 4, 80, 42, ink(map.biome === 0 ? t.yellow : accent, 21));
     if (map.biome === 0 || map.biome === 3) {
       // Abandoned camp: log seats, a cold stone firepit and trail marker.
+      if (p.variant !== 0) {
+        ctx.fillStyle = ink(t.yellow, 58);
+        ctx.beginPath();
+        ctx.moveTo(-49, -18);
+        ctx.lineTo(-28, -50);
+        ctx.lineTo(-3, -45);
+        ctx.lineTo(14, -15);
+        ctx.lineTo(-12, -12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = ink(t.foreground, 57);
+        ctx.beginPath();
+        ctx.moveTo(-14, -13);
+        ctx.lineTo(-3, -38);
+        ctx.lineTo(9, -15);
+        ctx.fill();
+      }
       ctx.lineWidth = 10;
       ctx.lineCap = 'round';
       ctx.strokeStyle = t.yellow;
@@ -334,15 +356,8 @@ function paintScenery(
       }
       oval(0, 0, 9, 6, accent);
     }
-    // Different site markings retain recognizable authored composition across seeds.
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 2;
-    for (let i = 0; i <= p.variant; i++) {
-      ctx.beginPath();
-      ctx.moveTo(-10 + i * 10, 65);
-      ctx.lineTo(-10 + i * 10, 73);
-      ctx.stroke();
-    }
+    for (let i = 0; i <= p.variant; i++)
+      oval(-16 + i * 13, 36 - (i % 2) * 3, 4, 2, ink(t.brightBlack, 46));
     ctx.restore();
   }
   ctx.globalAlpha = 0.45;
