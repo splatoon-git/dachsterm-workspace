@@ -12,6 +12,10 @@ export function groupPath(id: string | null | undefined, groups: Group[]): strin
   }
   return names.join(' / ');
 }
+/** 경유 경로, 인코딩, CA처럼 연결 동작을 바꾸는 값은 고급 옵션에 접어 두지 않는다. */
+export function hasConnectionOverrides(p: Profile) {
+  return (p.jumpIds?.length ?? 0) > 0 || (p.encoding ?? 'utf-8') !== 'utf-8' || !!p.tlsCaPath;
+}
 export function inGroup(p: Profile, id: string, groups: Group[]) {
   let current = p.groupId;
   const seen = new Set<string>();

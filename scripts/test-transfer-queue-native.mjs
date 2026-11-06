@@ -97,6 +97,7 @@ try {
   await form.getByLabel('사용자', { exact: true }).fill('fixture');
   await form.getByLabel('비밀번호', { exact: true }).fill(process.env.DACHSTERM_FTP_PASSWORD);
   await form.getByLabel('인증정보 보관', { exact: true }).selectOption('forget');
+  await form.locator('summary', { hasText: '고급 옵션' }).click();
   await form.getByLabel('추가 CA 인증서 경로 (선택)').fill(process.env.DACHSTERM_FTP_CA);
   await form.getByRole('button', { name: '저장 후 연결', exact: true }).click();
   let pane = page.locator('.pane-cell:not([hidden]) .ftp-pane');

@@ -451,6 +451,7 @@ try {
   await cpform.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
   await cpform.getByLabel('포트', { exact: true }).fill(sshPort);
   await cpform.getByLabel('사용자', { exact: true }).fill('probe');
+  await cpform.locator('summary', { hasText: '고급 옵션' }).click();
   await cpform.getByLabel('터미널 인코딩').selectOption('euc-kr');
   await cpform
     .getByLabel('비밀번호', { exact: true })

@@ -1,0 +1,60 @@
+.session-advanced {
+  min-width: 0;
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+  padding-top: var(--space-md);
+}
+.session-advanced > summary {
+  cursor: pointer;
+  font-size: var(--font-small);
+  font-weight: 600;
+}
+.session-advanced > summary small {
+  margin-left: var(--space-sm);
+  font-weight: 400;
+}
+.session-advanced[open] > summary {
+  margin-bottom: var(--space-md);
+}
+.session-advanced .checkbox input {
+  margin: 0;
+}
+.session-advanced fieldset {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-medium);
+  padding: var(--space-md);
+}
+.session-advanced legend {
+  padding-inline: var(--space-xs);
+  font-size: var(--font-small);
+  font-weight: 600;
+}
+.session-advanced fieldset ol {
+  margin: 0;
+  padding-left: var(--space-lg);
+  font-size: var(--font-small);
+}
+.session-advanced fieldset ol:empty {
+  display: none;
+}
+.session-advanced fieldset li {
+  display: list-item;
+  margin-bottom: var(--space-xs);
+}
+.session-advanced fieldset li button {
+  margin-left: var(--space-sm);
+}
+.session-advanced fieldset > p {
+  margin: 0;
+}
+.session-vault > p {
+  margin: 0;
+}
+.session-vault > .form-actions {
+  justify-content: flex-start;
+  margin-top: var(--space-sm);
+}

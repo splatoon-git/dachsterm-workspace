@@ -209,6 +209,7 @@ try {
   await form.getByLabel('사용자', { exact: true }).fill('probe');
   await form.getByLabel('비밀번호', { exact: true }).fill(probe('PASSWORD'));
   await form.getByLabel('인증정보 보관', { exact: true }).selectOption('replace');
+  await form.locator('summary', { hasText: '고급 옵션' }).click();
   await form.getByLabel('그룹', { exact: true }).selectOption({ label: '개발' });
   await form.getByLabel('즐겨찾기', { exact: true }).check();
   await form.getByLabel('KeepAlive (초)', { exact: true }).fill('5');
@@ -480,6 +481,7 @@ try {
 
   stage = 'legacy terminal encoding';
   await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
+  await page.getByRole('dialog').locator('summary', { hasText: '고급 옵션' }).click();
   await page.getByRole('dialog').getByLabel('터미널 인코딩').selectOption('euc-kr');
   await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
   await connectNewTab();
@@ -692,6 +694,7 @@ try {
   await vaultDialog.getByRole('button', { name: '대화상자 닫기' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '대화상자 닫기' }).click();
   await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
+  await page.getByRole('dialog').locator('summary', { hasText: '고급 옵션' }).click();
   await page.getByRole('button', { name: '저장된 암호 보기', exact: true }).click();
   vaultDialog = page.getByRole('dialog').last();
   await vaultDialog

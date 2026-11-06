@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { blankProfile } from '../../lib/ipc';
-import { groupPath, importSelection, inGroup, matchesSession, routeNames } from './model';
+import {
+  groupPath,
+  hasConnectionOverrides,
+  importSelection,
+  inGroup,
+  matchesSession,
+  routeNames,
+} from './model';
+
+describe('session form advanced section', () => {
+  it('stays closed for defaults and opens for values that change the connection', () => {
+    expect(hasConnectionOverrides(blankProfile())).toBe(false);
+    expect(hasConnectionOverrides({ ...blankProfile(), timeout: 60, tags: ['prod'] })).toBe(false);
+    expect(hasConnectionOverrides({ ...blankProfile(), jumpIds: ['jump'] })).toBe(true);
+    expect(hasConnectionOverrides({ ...blankProfile(), encoding: 'euc-kr' })).toBe(true);
+    expect(hasConnectionOverrides({ ...blankProfile(), tlsCaPath: 'ca.pem' })).toBe(true);
+  });
+});
 
 describe('session hierarchy and selection', () => {
   const groups = [
