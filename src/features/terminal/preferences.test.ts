@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import {
+  clampFontSize,
   directoryFromOsc,
+  fontSizeChoices,
+  maxFontSize,
+  minFontSize,
   needsPasteConfirmation,
   saveTerminalDisplay,
   saveTerminalPreferences,
@@ -40,6 +44,16 @@ describe('terminal paths and clipboard safety', () => {
     expect(terminalDisplay()).toEqual({ fontSize: 18, scrollback: 1000 });
     expect(localStorage.getItem('dachsterm.fontSize')).toBe('18');
     expect(localStorage.getItem('dachsterm.scrollback')).toBe('1000');
+  });
+  it('offers the current font size even when it is not a preset', () => {
+    expect(fontSizeChoices(14)).toEqual([12, 14, 16, 18, 20, 24]);
+    expect(fontSizeChoices(15)).toEqual([12, 14, 15, 16, 18, 20, 24]);
+    expect(fontSizeChoices(8)).toEqual([8, 12, 14, 16, 18, 20, 24]);
+  });
+  it('limits font sizes to the supported range', () => {
+    expect(clampFontSize(minFontSize - 1)).toBe(minFontSize);
+    expect(clampFontSize(maxFontSize + 500)).toBe(maxFontSize);
+    expect(clampFontSize(14.4)).toBe(14);
   });
   it('persists explicit on/off choices and backspace compatibility', () => {
     saveTerminalPreferences({

@@ -31,10 +31,20 @@ const notify = () => listeners.forEach((fn) => fn());
 export type TerminalDisplay = { fontSize: number; scrollback: number };
 const fontSizeKey = 'dachsterm.fontSize';
 const scrollbackKey = 'dachsterm.scrollback';
+export const minFontSize = 8;
+export const maxFontSize = 32;
+export const clampFontSize = (size: number) =>
+  Math.min(maxFontSize, Math.max(minFontSize, Math.round(size)));
+const fontSizePresets = [12, 14, 16, 18, 20, 24];
+// Ctrl/Cmd+wheel can reach sizes between presets, and a select must still show the current one.
+export const fontSizeChoices = (current: number) =>
+  fontSizePresets.includes(current)
+    ? fontSizePresets
+    : [...fontSizePresets, current].sort((a, b) => a - b);
 function readDisplay(): TerminalDisplay {
   try {
     return {
-      fontSize: Number(localStorage.getItem(fontSizeKey)) || 14,
+      fontSize: clampFontSize(Number(localStorage.getItem(fontSizeKey)) || 14),
       scrollback: Number(localStorage.getItem(scrollbackKey)) || 5000,
     };
   } catch {

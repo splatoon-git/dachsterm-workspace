@@ -8,7 +8,9 @@ import { Icon } from '../../components/Icon';
 import { SessionLog } from './SessionLog';
 import { ProgramGuide } from './CommandGuide';
 import { AuthenticationPrompt } from './AuthenticationPrompt';
+import { attachFontSizeWheel } from './fontWheel';
 import {
+  fontSizeChoices,
   needsPasteConfirmation,
   saveTerminalDisplay,
   saveTerminalPreferences,
@@ -60,9 +62,13 @@ export function TerminalPane({
       }
     };
     element.addEventListener('paste', intercept, true);
+    const detachWheel = attachFontSizeWheel(element, () =>
+      session.notice('터미널 설정을 저장하지 못했습니다.'),
+    );
     return () => {
       observer.disconnect();
       element.removeEventListener('paste', intercept, true);
+      detachWheel();
     };
   }, [session]);
   useEffect(() => {
@@ -141,14 +147,19 @@ export function TerminalPane({
   }, [session, theme]);
   useEffect(() => {
     session.configure(fontSize, scrollback);
-    if (active) {
-      fitTerminal(session);
-      // Visibility is shared by all split panes; keyboard ownership is not.
-      // Keep focus in a pane's search/select controls when the user chooses them.
-      if (focused && !host.current?.closest('.terminal-pane')?.contains(document.activeElement))
-        session.terminal.focus();
-    }
-  }, [session, active, focused, fontSize, scrollback]);
+    if (active) fitTerminal(session);
+  }, [session, active, fontSize, scrollback]);
+  useEffect(() => {
+    // Visibility is shared by all split panes; keyboard ownership is not.
+    // Keep focus in a pane's search/select controls when the user chooses them.
+    // Separate from the effect above: changing the font size must not move focus.
+    if (
+      active &&
+      focused &&
+      !host.current?.closest('.terminal-pane')?.contains(document.activeElement)
+    )
+      session.terminal.focus();
+  }, [session, active, focused]);
   const ended = ['closed', 'error'].includes(state.status);
   async function pasteClipboard() {
     const id = session.connectionId;
@@ -292,7 +303,7 @@ export function TerminalPane({
                   }
                 }}
               >
-                {[12, 14, 16, 18, 20, 24].map((n) => (
+                {fontSizeChoices(fontSize).map((n) => (
                   <option key={n}>{n}</option>
                 ))}
               </select>
@@ -318,8 +329,9 @@ export function TerminalPane({
           </div>
           <p className="muted">
             마우스·키 설정은 열린 터미널과 새 창에도 적용됩니다. Ctrl/Cmd+Shift+C/V, Shift+Insert를
-            사용할 수 있습니다. 마우스를 사용하는 TUI에서는 Shift+드래그/우클릭으로
-            선택·붙여넣기합니다. 방향키·Home/End·Delete·Tab·Ctrl+C는 터미널 표준 모드를 따릅니다.
+            사용할 수 있고, Ctrl/Cmd+스크롤로 글꼴 크기를 바꿉니다. 마우스를 사용하는 TUI에서는
+            Shift+드래그/우클릭으로 선택·붙여넣기합니다. 방향키·Home/End·Delete·Tab·Ctrl+C는 터미널
+            표준 모드를 따릅니다.
           </p>
         </Dialog>
       )}
