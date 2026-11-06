@@ -2,11 +2,28 @@
 
 Mac 빌드와 동작의 현재 상태, 남은 작업 ID의 정본이다. 항목별 실기기 체크리스트는 [Phase 0](phase-0-macos.md), [Phase 1](phase-1-macos.md), [Phase 2~5](phase-2-5-macos.md)에 있다.
 
-- 기록일: 2026-11-06 / 대상: `9536b28`
-- **Mac에서 실행한 결과는 아직 없다.** 아래 내용은 Windows에서 한 교차 타입 검사와 코드 읽기의 결과다.
-- `macos.yml`은 추가했으나 아직 실행되지 않았다.
+- 기록일: 2026-11-06 / 대상: `0b3dc2b`
+- **macOS CI 첫 실행 통과**(실행 `42162935907`, `macos-26-arm64`). 빌드와 자동 테스트만 확인한 것이다.
+- **실기기에서 앱을 실행한 결과는 아직 없다.** CI는 앱을 띄우지 않으며, Keychain·IME·파일 대화상자·실제 SSH 접속은 실행되지 않았다.
 
-## 확인한 것
+## CI에서 확인한 것
+
+같은 커밋의 Windows 실행(`42162935824`)도 통과했다.
+
+| 항목 | macOS | Windows |
+|---|---|---|
+| Vitest | 18파일 231개 통과 | 231개 통과 |
+| Playwright (Chromium) | 87개 통과 | 87개 통과 |
+| `cargo test --workspace` (앱 / ssh-probe) | 55개 / 1개 통과 | 56개 / 1개 통과 |
+| `cargo clippy --workspace --all-targets -D warnings` | 통과 | 통과 |
+| C 컴파일과 링크 (`ring`, SQLite, `libssh2`) | 통과 | 통과 |
+| 앱 번들 | debug `DachsTerm.app` 81.85MiB 생성 | 이 실행에서는 생성하지 않음 |
+
+Rust 테스트 차이 1개는 Windows 전용 `local::tests::wsl_unicode_names`다. Playwright는 Mac에서도 Chromium으로 실행된다. WKWebView 동작을 검증한 것이 아니다.
+
+통과해도 M.1~M.11은 그대로 남는다. 이 게이트는 해당 경로를 실행하지 않는다. M.1은 러너에 OpenSSL이 있어 CI에서 드러나지 않고, M.2의 `refuses_link_ancestor`는 예상대로 통과했으며, M.3·M.4는 Finder로 실행한 앱에서만 나타난다.
+
+## 교차 검사와 코드 읽기로 확인한 것
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
@@ -16,7 +33,7 @@ Mac 빌드와 동작의 현재 상태, 남은 작업 ID의 정본이다. 항목�
 | 번들 입력 | 존재 | `icon.icns`, `targets: all`, `keyring`의 `apple-native` |
 | UI 테스트 기준 이미지 | 없음 | `toHaveScreenshot` 미사용. OS별 이미지 차이로 실패할 일이 없다 |
 
-위 Rust 검사는 C 컴파일러를 빈 파일만 만드는 스텁으로 바꿔 실행했다. Rust 타입 검사 결과일 뿐이며 **C 컴파일(`ring`, SQLite, `libssh2`), 링크, 번들 생성, 테스트 실행은 검증하지 않았다.** 첫 `macos.yml` 실행이 이를 확인한다.
+위 Rust 검사는 Windows에서 C 컴파일러를 빈 파일만 만드는 스텁으로 바꿔 실행했다. C 컴파일, 링크, 번들 생성, 테스트 실행은 이후 CI 실행으로 확인했다.
 
 ## 작업 목록
 
@@ -57,9 +74,8 @@ Mac 빌드와 동작의 현재 상태, 남은 작업 ID의 정본이다. 항목�
 
 ## 다음 첫 행동
 
-1. `macos.yml`을 포함해 푸시하고 첫 실행 결과로 C 컴파일·링크·테스트·`.app` 생성을 확인한다. 결과를 이 문서에 적는다.
-2. M.2~M.4를 수정한다. 터미널에서 실행하면 재현되지 않으므로 패키지된 앱으로 확인한다.
-3. MacBook에서 `mac-verify` 스킬로 실기기 검증을 시작한다.
+1. M.2~M.4를 수정한다. M.3, M.4는 터미널에서 실행하면 재현되지 않으므로 패키지된 앱으로 확인한다.
+2. MacBook에서 `mac-verify` 스킬로 실기기 검증을 시작한다.
 
 ## 참고
 

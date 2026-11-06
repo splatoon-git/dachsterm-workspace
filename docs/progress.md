@@ -1,7 +1,7 @@
 # DachsTerm 구현 진행 현황
 
 - 마지막 갱신: 2026-11-06
-- **macOS 준비 점검(5.2 선행)** — Mac 실행 결과는 아직 없다. Windows 교차 검사로 앱 크레이트의 Rust 코드는 `aarch64-apple-darwin`에서 clippy `-D warnings`를 통과했다(C 컴파일·링크·테스트는 미검증, 미커밋 문서 변경만 있는 `9536b28` 기준). Mac 게이트 `scripts/verify-macos.sh`와 `macos.yml`을 추가했으나 아직 실행 전이다. 남은 ID: M.1~M.11. 다음 첫 행동: `macos.yml`을 푸시해 첫 결과를 확인하고 M.2~M.4를 수정한다. [macOS 준비 상태](verification/macos-readiness.md) 참조.
+- **macOS 준비 점검(5.2 선행)** — `macos.yml` 첫 실행 통과(`0b3dc2b`, 실행 `42162935907`): Vitest 231, Playwright 87, Rust 55+1, clippy, debug `.app` 생성. 빌드와 자동 테스트만 확인했으며 **실기기 실행 결과는 아직 없다.** 남은 ID: M.1~M.11. 다음 첫 행동: M.2~M.4를 수정하고 MacBook에서 `mac-verify`로 검증한다. [macOS 준비 상태](verification/macos-readiness.md) 참조.
 - **N.2 이름 변경** — 작업 폴더와 GitHub 저장소는 `dachsterm-workspace`, 제품은 `DachsTerm`, 마스코트는 `Dachs`로 통일했다. 게임 화면·코드·CSS·테스트와 설계 문서 파일명을 갱신했다. 현재 상태는 이 문서 하단 N.2 기록을 따른다. README는 소개·설치·지원 범위로 줄이고 사용법은 [사용 안내서](user-guide.md), 개발·검사는 [개발 가이드](development.md)로 분리했다.
 - **N.1 제품명·내부 식별자 DachsTerm 전환 구현·Windows 검증 완료 / SSH·Mac 재검증 대기**: 데이터 이전 없이 npm/Rust/실행 파일·앱 ID·저장 키·JSON 규약·보안 저장소·암호화 AAD·셸 알림·테스트/문서를 통일했다. 단위656(사본 포함 추정, 실측 226은 하단 구조 검토 참조)+57개/UI86개, 실제 로컬PTY/WSL·테마·OS 암호보관/재시작·복구·FTP/FTPS/CP949·새 NSIS 설치/재설치/실행/제거 통과. [개명 검증](verification/rename.md) 및 하단 N.1이 최신 상태다. 과거 산출물 경로/해시와 실제 폴더/GitHub 주소는 보존한다.
 - **6.2 스니펫·6.6 기본 명령/로그 필터/조작표 구현·Windows 실제 통합 검증 완료**: SQLite 스니펫·최종 대상/본문 확인·브로드캐스트 격리, 기본 명령26/필터7·복사·수동/Bash 실행 알림 조작표. 실제 SSH/PowerShell/WSL·독립 창·재시작7개 시나리오 묶음 통과, pageErrors0. [검증 기록](verification/phase-6-2-6.md)과 하단 최종 기록 참조. 물리IME/Mac 및 최신 release/설치본 대기이며 Phase6 전체 환경 검증 완료는 아니다.
