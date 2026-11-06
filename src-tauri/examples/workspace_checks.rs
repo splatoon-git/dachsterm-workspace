@@ -531,7 +531,7 @@ pub async fn services(
         while transfers
             .list()
             .iter()
-            .any(|j| j.id == job.id && j.status == "running")
+            .any(|j| j.id == job.id && matches!(j.status.as_str(), "queued" | "running"))
         {
             sleep(Duration::from_millis(20)).await;
         }
@@ -555,10 +555,11 @@ pub async fn services(
         Some(id.into()),
     )?;
     timeout(Duration::from_secs(60), async {
+        // resume() leaves the job queued, and a queued job has not finished yet.
         while transfers
             .list()
             .iter()
-            .any(|j| j.id == job.id && j.status == "running")
+            .any(|j| j.id == job.id && matches!(j.status.as_str(), "queued" | "running"))
         {
             sleep(Duration::from_millis(20)).await;
         }
@@ -600,10 +601,11 @@ pub async fn services(
     assert!(!download.exists());
     transfers.resume(manager.clone(), down.clone(), profile, Some(id.into()))?;
     timeout(Duration::from_secs(60), async {
+        // resume() leaves the job queued, and a queued job has not finished yet.
         while transfers
             .list()
             .iter()
-            .any(|j| j.id == down && j.status == "running")
+            .any(|j| j.id == down && matches!(j.status.as_str(), "queued" | "running"))
         {
             sleep(Duration::from_millis(20)).await;
         }
