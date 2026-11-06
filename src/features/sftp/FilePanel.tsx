@@ -1,22 +1,25 @@
 import { TransferQueue, type Transfer } from './TransferQueue';
 import { PermissionEditor } from './PermissionEditor';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { call, desktop, errorText } from '../../lib/ipc';
 import { TerminalSession } from '../terminal/session';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
-import { directoryHook, useTerminalPreferences } from '../terminal/preferences';
+import { selectionAfterClick, withoutNested, type FileEntry } from './fileList';
+import {
+  FileAction,
+  fileMenuPosition,
+  FilePathBar,
+  FileTreeRow,
+  useFileMenuFocus,
+  useFileTree,
+  type FileMenuPosition,
+} from './fileTree';
+import { FollowControl, useDirectoryFollow } from './follow';
 type FileClipboard = { sourceId: string; operation: 'copy' | 'move'; paths: string[] };
 type BatchOutcome = { completed: string[]; errors: string[] };
-type Entry = {
-  name: string;
-  directory: boolean;
-  symlink: boolean;
-  size: number | null;
-  modified: number | null;
-  permissions: number | null;
-};
+type Entry = FileEntry;
 type Listing = { path: string; entries: Entry[] };
 type Edit = {
   uploadMode: string;
@@ -27,14 +30,6 @@ type Edit = {
   status: string;
   message: string;
 };
-export const bytes = (n: number | null) =>
-  n === null
-    ? '—'
-    : n < 1024
-      ? `${n} B`
-      : n < 1048576
-        ? `${(n / 1024).toFixed(1)} KB`
-        : `${(n / 1048576).toFixed(1)} MB`;
 export function FilePanel({ session }: { session?: TerminalSession }) {
   if (!session)
     return (
@@ -64,9 +59,6 @@ export function FilePanel({ session }: { session?: TerminalSession }) {
   return <ConnectedFiles key={session.connectionId} session={session} />;
 }
 function ConnectedFiles({ session }: { session: TerminalSession }) {
-  const preferences = useTerminalPreferences();
-  const [follow, setFollow] = useState(session.followDirectory ?? preferences.followDirectory);
-  const lastDirectory = useRef<string | null>(null);
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const id = session.connectionId;
   const isFtp = !!session.profile.protocol && session.profile.protocol !== 'ssh';
@@ -76,8 +68,8 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
   const [selected, setSelected] = useState<Entry | null>(null);
   const [selection, setSelection] = useState<string[]>([]);
   const [clipboard, setClipboard] = useState<FileClipboard | null>(null);
-  const [context, setContext] = useState<{ x: number; y: number } | null>(null);
-  const menu = useRef<HTMLDivElement>(null);
+  const [context, setContext] = useState<FileMenuPosition | null>(null);
+  const menu = useFileMenuFocus(context, () => setContext(null));
   const anchor = useRef('');
   const [filter, setFilter] = useState('');
   const [sort, setSort] = useState('name');
@@ -91,7 +83,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
   const [conflict, setConflict] = useState('skip');
   const [pendingDrop, setPendingDrop] = useState<string[]>([]);
   const [edits, setEdits] = useState<Edit[]>([]);
-  const [trayOpen, setTrayOpen] = useState(true);
+  const [trayChoice, setTrayChoice] = useState<boolean | null>(null);
   const [operation, setOperation] = useState('');
   const [value, setValue] = useState('');
   const [uploadMode, setUploadMode] = useState(
@@ -116,33 +108,20 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
         setPath(data.path);
         setSelected(null);
         setSelection([]);
-        setContext(null);
       } catch (e) {
         if (request === requestId.current) setError(errorText(e));
       } finally {
         if (request === requestId.current) setBusy(false);
       }
     },
-    [id],
+    [id, setError],
   );
   useEffect(() => {
     // Synchronize the remote filesystem when the SSH state becomes ready.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (state.status === 'connected') void load('.');
   }, [state.status, load]);
-  useEffect(() => {
-    if (
-      !isFtp &&
-      follow &&
-      !working &&
-      state.status === 'connected' &&
-      state.directory &&
-      state.directory !== lastDirectory.current
-    ) {
-      lastDirectory.current = state.directory;
-      void load(state.directory);
-    }
-  }, [follow, isFtp, load, state.directory, state.status, working]);
+  const { follow, setFollow } = useDirectoryFollow(session, load, isFtp || working);
   useEffect(() => {
     if (!desktop) return;
     let alive = true;
@@ -193,44 +172,31 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
       off?.();
     };
   }, [id, listing.path, state.status]);
-  useEffect(() => {
-    if (!context) return;
-    menu.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    const outside = (event: PointerEvent) => {
-      if (!menu.current?.contains(event.target as Node)) setContext(null);
-    };
-    window.addEventListener('pointerdown', outside);
-    return () => window.removeEventListener('pointerdown', outside);
-  }, [context]);
-  const visible = listing.entries
-    .filter(
-      (e) =>
-        (hidden || !e.name.startsWith('.')) &&
-        e.name.toLocaleLowerCase().includes(filter.toLocaleLowerCase()),
-    )
-    .sort(
-      (a, b) =>
-        Number(b.directory) - Number(a.directory) ||
-        (sort === 'size'
-          ? (b.size ?? 0) - (a.size ?? 0)
-          : sort === 'date'
-            ? (b.modified ?? 0) - (a.modified ?? 0)
-            : a.name.localeCompare(b.name)),
-    );
-  const selectedPaths = selection.map((name) => `${listing.path.replace(/\/$/, '')}/${name}`);
+  const view = useMemo(() => ({ showHidden: hidden, filter, sort }), [hidden, filter, sort]);
+  const listFolder = useCallback(
+    (folder: string) => call<Listing>('sftp_list', { id, path: folder }),
+    [id],
+  );
+  const { rows: visible, toggle } = useFileTree(listing, view, listFolder);
+  const selectedPaths = withoutNested(selection).map(
+    (name) => `${listing.path.replace(/\/$/, '')}/${name}`,
+  );
+  // Past transfers stay out of the way. Unfinished work opens the tray until the user closes it.
+  const trayOpen =
+    trayChoice ??
+    (edits.some((e) => e.profileId === session.profile.id) ||
+      transfers.some((t) => t.profileId === session.profile.id && t.status !== 'completed'));
   function choose(entry: Entry, event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
     setSelected(entry);
-    if (event.shiftKey && anchor.current) {
-      const a = visible.findIndex((e) => e.name === anchor.current),
-        b = visible.findIndex((e) => e.name === entry.name);
-      setSelection(
-        visible.slice(Math.min(a < 0 ? b : a, b), Math.max(a, b) + 1).map((e) => e.name),
-      );
-    } else if (event.ctrlKey || event.metaKey)
-      setSelection((names) =>
-        names.includes(entry.name) ? names.filter((n) => n !== entry.name) : [...names, entry.name],
-      );
-    else setSelection([entry.name]);
+    setSelection(
+      selectionAfterClick(
+        visible.map((e) => e.name),
+        selection,
+        entry.name,
+        anchor.current,
+        event,
+      ),
+    );
     anchor.current = entry.name;
   }
   async function copySelection(operation: 'copy' | 'move') {
@@ -347,80 +313,48 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
       onKeyDown={fileKey}
       aria-busy={working}
     >
-      <div className="panel-title">
-        <h2>
-          <Icon name="folder" /> 원격 파일
-        </h2>
-        <span className="protocol">{isFtp ? session.profile.protocol.toUpperCase() : 'SFTP'}</span>
-      </div>
       <div
-        className="file-server"
+        className="file-header"
         title={`${session.profile.name} · ${session.profile.username}@${session.profile.host}`}
       >
         <span className={`status-dot ${state.status === 'connected' ? 'online' : ''}`} />
-        {session.profile.name} · {session.profile.host}
+        <span className="file-header-name">
+          {session.profile.name} · {session.profile.host}
+        </span>
+        <span className="protocol">{isFtp ? session.profile.protocol.toUpperCase() : 'SFTP'}</span>
       </div>
-      <form
-        className="path-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void load(path);
-        }}
-      >
-        <input aria-label="원격 경로" value={path} onChange={(e) => setPath(e.target.value)} />
-        <button aria-label="경로 이동" disabled={busy}>
-          <Icon name="arrow" size={16} />
-        </button>
-      </form>
-      {!isFtp && (
-        <div className="file-follow">
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={follow}
-              onChange={(e) => {
-                lastDirectory.current = null;
-                session.setFollowDirectory(e.target.checked);
-                setFollow(e.target.checked);
-              }}
-            />
-            터미널 경로 따라가기
-          </label>
-          {follow && !state.directory && (
-            <>
-              <small>셸 경로 알림 대기 · Bash/Zsh에서 연결 가능</small>
-              <button
-                aria-label="셸 경로 알림 연결"
-                disabled={state.status !== 'connected'}
-                title="현재 셸의 프롬프트에 경로 알림을 추가합니다. 서버 설정 파일은 변경하지 않습니다. 명령 실행 중에는 완료 후 누르세요."
-                onClick={() => {
-                  session.send(directoryHook + '\r');
-                  session.terminal.focus();
-                }}
-              >
-                연결
-              </button>
-            </>
-          )}
-        </div>
-      )}
-      <div className="file-toolbar file-navigation" role="group" aria-label="폴더 및 전송">
-        <button title="상위 폴더" onClick={() => void load(`${listing.path}/..`)}>
-          ↑
-        </button>
-        <button aria-label="파일 새로 고침" onClick={() => void load(listing.path)}>
-          <Icon name="refresh" size={15} />
-        </button>
-        <button
+      <FilePathBar
+        label="원격 경로"
+        value={path}
+        busy={busy}
+        change={setPath}
+        submit={() => void load(path)}
+      />
+      <div className="file-actions" role="group" aria-label="파일 작업">
+        <FileAction label="상위 폴더" icon="up" onClick={() => void load(`${listing.path}/..`)} />
+        <FileAction label="파일 새로 고침" icon="refresh" onClick={() => void load(listing.path)} />
+        <span className="file-actions-gap" />
+        <FileAction
+          label="폴더"
+          icon="folderPlus"
           onClick={() => {
             setOperation('mkdir');
             setValue('');
           }}
-        >
-          <Icon name="plus" size={14} />
-          폴더
-        </button>
-        <button
+        />
+        <FileAction
+          label="새 파일"
+          icon="filePlus"
+          disabled={working}
+          onClick={() => {
+            setOperation('newfile');
+            setValue('');
+          }}
+        />
+        <span className="file-actions-gap" />
+        <FileAction
+          label="파일 업로드"
+          icon="upload"
           onClick={() =>
             void run('transfer_batch', {
               id,
@@ -430,11 +364,10 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               conflict,
             })
           }
-        >
-          <Icon name="upload" size={14} />
-          파일 업로드
-        </button>
-        <button
+        />
+        <FileAction
+          label="폴더 업로드"
+          icon="uploadFolder"
           onClick={() =>
             void run('transfer_batch', {
               id,
@@ -444,32 +377,53 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               conflict,
             })
           }
-        >
-          폴더 업로드
-        </button>
+        />
+        <span className="file-actions-gap" />
+        <FileAction
+          label="복사"
+          icon="copy"
+          disabled={!selection.length || working}
+          onClick={() => void copySelection('copy')}
+        />
+        <FileAction
+          label="잘라내기"
+          icon="cut"
+          disabled={!selection.length || working}
+          onClick={() => void copySelection('move')}
+        />
+        <FileAction
+          label="붙여넣기"
+          icon="paste"
+          disabled={!clipboard || working}
+          onClick={() => void paste()}
+        />
       </div>
-      <label className="transfer-policy">
-        새 전송 묶음의 동명 파일
-        <select
-          aria-label="전송 충돌 정책"
-          value={conflict}
-          onChange={(e) => setConflict(e.target.value)}
-        >
-          <option value="skip">건너뛰기</option>
-          <option value="rename">이름 변경</option>
-          <option value="overwrite">덮어쓰기 (선택 전체)</option>
+      <div className="file-filter">
+        <input
+          aria-label="파일 이름 검색"
+          placeholder="파일 찾기…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <select aria-label="파일 정렬" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="name">이름순</option>
+          <option value="date">최근 수정순</option>
+          <option value="size">큰 파일순</option>
         </select>
-        <small>같은 이름의 폴더는 합칩니다. 기존 다른 파일은 보존합니다.</small>
-        {conflict === 'overwrite' && (
-          <strong>다음에 선택한 파일·폴더 전체의 동명 파일을 교체합니다.</strong>
-        )}
-      </label>
+      </div>
+      <div className="file-options">
+        {!isFtp && <FollowControl session={session} follow={follow} setFollow={setFollow} />}
+        <label>
+          <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
+          숨김 파일 표시
+        </label>
+      </div>
       {pendingDrop.length > 0 && (
         <div className="transfer-policy" role="group" aria-label="드롭 전송 확인">
           <strong>
             {pendingDrop.length}개 파일·폴더 → {listing.path}
           </strong>
-          <span>위 충돌 정책을 드롭한 전체에 적용합니다.</span>
+          <span>전송 및 편집의 충돌 정책을 드롭한 전체에 적용합니다.</span>
           <button
             onClick={async () => {
               if (
@@ -489,73 +443,18 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
           <button onClick={() => setPendingDrop([])}>취소</button>
         </div>
       )}
-      <div className="file-toolbar file-clipboard" role="group" aria-label="파일 및 클립보드">
-        <button
-          disabled={working}
-          onClick={() => {
-            setOperation('newfile');
-            setValue('');
-          }}
-        >
-          새 파일
-        </button>
-        <button disabled={!selection.length || working} onClick={() => void copySelection('copy')}>
-          복사
-        </button>
-        <button disabled={!selection.length || working} onClick={() => void copySelection('move')}>
-          잘라내기
-        </button>
-        <button disabled={!clipboard || working} onClick={() => void paste()}>
-          붙여넣기
-        </button>
-      </div>
-      {clipboard && (
-        <div className="encoding-note">
-          {clipboard.operation === 'copy' ? '복사' : '이동'} 대기 · {clipboard.paths.length}개 항목
-        </div>
-      )}
-      <div className="file-filter">
-        <input
-          aria-label="파일 이름 검색"
-          placeholder="파일 찾기…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        <select aria-label="파일 정렬" value={sort} onChange={(e) => setSort(e.target.value)}>
-          <option value="name">이름순</option>
-          <option value="date">최근 수정순</option>
-          <option value="size">큰 파일순</option>
-        </select>
-      </div>
-      <label className="hidden-toggle">
-        <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
-        숨김 파일 표시
-      </label>
       {error && (
         <div role="alert" className="inline-error">
           {error}
         </div>
       )}
-      <div className="encoding-note">
-        파일명 {isFtp ? session.profile.encoding : 'UTF-8'} · 전송 내용은 원본 바이트 유지
-        {isFtp && (
-          <span>
-            {' '}
-            · 패시브(PASV) 모드 / Binary
-            {session.profile.protocol === 'ftp' ? ' · TLS 없음' : ' · TLS 인증서 검증'}
-          </span>
-        )}
-      </div>
       <div className="file-list" aria-busy={busy}>
-        <div className="file-columns">
-          <span>이름</span>
-          <span>크기</span>
-        </div>
         {visible.map((e) => (
-          <button
+          <FileTreeRow
             key={e.name}
-            className={`file-row ${selection.includes(e.name) ? 'selected' : ''}`}
-            aria-pressed={selection.includes(e.name)}
+            row={e}
+            selected={selection.includes(e.name)}
+            toggle={() => toggle(e.name)}
             disabled={working}
             onClick={(event) => choose(e, event)}
             onContextMenu={(event) => {
@@ -564,10 +463,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                 setSelected(e);
                 setSelection([e.name]);
               }
-              setContext({
-                x: Math.min(event.clientX, window.innerWidth - 210),
-                y: Math.min(event.clientY, window.innerHeight - 330),
-              });
+              setContext(fileMenuPosition(event));
             }}
             onDoubleClick={() => {
               if (e.directory || e.symlink) void load(`${listing.path}/${e.name}`);
@@ -578,14 +474,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               }
             }}
             title={`${e.modified ? new Date(e.modified * 1000).toLocaleString() : '시각 없음'} · 권한 ${e.permissions?.toString(8).slice(-3) ?? '—'}`}
-          >
-            <Icon name={e.directory ? 'folder' : 'file'} size={17} />
-            <span>
-              {e.name}
-              {e.symlink ? ' ↗' : ''}
-            </span>
-            <small>{e.directory ? '폴더' : bytes(e.size)}</small>
-          </button>
+          />
         ))}
         {!busy && !visible.length && (
           <p className="muted file-list-empty">
@@ -597,89 +486,88 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
           </p>
         )}
       </div>
-      {selected && selection.length > 0 ? (
-        <div className="file-selection">
-          <strong>{selection.length > 1 ? `${selection.length}개 선택` : selected.name}</strong>
-          <small>
-            {selected.modified ? new Date(selected.modified * 1000).toLocaleString() : ''} ·{' '}
-            {selected.permissions?.toString(8).slice(-3)}
-          </small>
-          <div className="file-toolbar">
-            <button
-              disabled={working}
-              onClick={() =>
-                void run('transfer_batch', {
-                  id,
-                  path: listing.path,
-                  mode: 'download',
-                  paths: selection.map((name) => `${listing.path.replace(/\/$/, '')}/${name}`),
-                  conflict,
-                })
-              }
-            >
-              선택 다운로드
-            </button>
-            {selection.length === 1 && !selected.directory && (
-              <>
-                <button
-                  onClick={() => void run('transfer_pick', { id, path: target, upload: false })}
-                >
-                  다운로드
-                </button>
-                <button
-                  disabled={isFtp}
-                  title={isFtp ? '외부 편집은 SSH/SFTP 연결에서 지원합니다.' : undefined}
-                  onClick={() => setOperation('edit')}
-                >
-                  편집
-                </button>
-              </>
-            )}
-            <button
-              disabled={selection.length !== 1 || working}
-              onClick={() => {
-                setValue(selected.name);
-                setOperation('rename');
-              }}
-            >
-              이름
-            </button>
-            <button
-              disabled={working}
-              onClick={() => {
-                setValue(selected.permissions?.toString(8).slice(-3) ?? '644');
-                setOperation('chmod');
-              }}
-            >
-              권한
-            </button>
-            <button
-              disabled={isFtp || !selection.length || working}
-              onClick={() => archive('compress')}
-            >
-              압축
-            </button>
-            <button
-              disabled={isFtp || selection.length !== 1 || selected.directory || working}
-              onClick={() => archive('extract')}
-            >
-              압축 해제
-            </button>
-            <button disabled={!selection.length || working} onClick={() => setOperation('delete')}>
-              삭제
-            </button>
-          </div>
+      <div className="file-selection">
+        <div className="file-selection-info">
+          <strong>
+            {selection.length > 1
+              ? `${selection.length}개 선택`
+              : selection.length
+                ? selected?.name
+                : '파일을 선택하세요'}
+          </strong>
+          {selection.length === 1 && selected && (
+            <small>
+              {selected.modified ? new Date(selected.modified * 1000).toLocaleDateString() : ''}{' '}
+              {selected.permissions?.toString(8).slice(-3)}
+            </small>
+          )}
         </div>
-      ) : (
-        <div className="file-selection file-selection-empty">
-          <strong>파일을 선택하세요</strong>
-          <small>Ctrl/Cmd로 여러 항목 선택 · 더블클릭으로 열기</small>
+        <div className="file-actions" role="group" aria-label="선택 항목 작업">
+          <FileAction
+            label="다운로드"
+            icon="download"
+            disabled={!selection.length || working}
+            onClick={() =>
+              void (selection.length === 1 && !selected?.directory
+                ? run('transfer_pick', { id, path: target, upload: false })
+                : run('transfer_batch', {
+                    id,
+                    path: listing.path,
+                    mode: 'download',
+                    paths: selectedPaths,
+                    conflict,
+                  }))
+            }
+          />
+          <FileAction
+            label="편집"
+            icon="edit"
+            disabled={isFtp || selection.length !== 1 || selected?.directory}
+            title={isFtp ? '외부 편집은 SSH/SFTP 연결에서 지원합니다.' : '편집'}
+            onClick={() => setOperation('edit')}
+          />
+          <FileAction
+            label="이름"
+            icon="rename"
+            disabled={selection.length !== 1 || working}
+            onClick={() => {
+              setValue(selected?.name ?? '');
+              setOperation('rename');
+            }}
+          />
+          <FileAction
+            label="권한"
+            icon="lock"
+            disabled={!selection.length || working}
+            onClick={() => {
+              setValue(selected?.permissions?.toString(8).slice(-3) ?? '644');
+              setOperation('chmod');
+            }}
+          />
+          <FileAction
+            label="압축"
+            icon="archive"
+            disabled={isFtp || !selection.length || working}
+            onClick={() => archive('compress')}
+          />
+          <FileAction
+            label="압축 해제"
+            icon="extract"
+            disabled={isFtp || selection.length !== 1 || selected?.directory || working}
+            onClick={() => archive('extract')}
+          />
+          <FileAction
+            label="삭제"
+            icon="trash"
+            disabled={!selection.length || working}
+            onClick={() => setOperation('delete')}
+          />
         </div>
-      )}
+      </div>
       <details
         className="transfer-tray"
         open={trayOpen}
-        onToggle={(e) => setTrayOpen(e.currentTarget.open)}
+        onToggle={(e) => setTrayChoice(e.currentTarget.open)}
       >
         <summary className="tray-heading">
           <span>전송 및 편집</span>
@@ -691,6 +579,32 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
             진행 중
           </small>
         </summary>
+        <label className="transfer-policy">
+          새 전송 묶음의 동명 파일
+          <select
+            aria-label="전송 충돌 정책"
+            value={conflict}
+            onChange={(e) => setConflict(e.target.value)}
+          >
+            <option value="skip">건너뛰기</option>
+            <option value="rename">이름 변경</option>
+            <option value="overwrite">덮어쓰기 (선택 전체)</option>
+          </select>
+          <small>같은 이름의 폴더는 합칩니다. 기존 다른 파일은 보존합니다.</small>
+          {conflict === 'overwrite' && (
+            <strong>다음에 선택한 파일·폴더 전체의 동명 파일을 교체합니다.</strong>
+          )}
+        </label>
+        <div className="encoding-note">
+          파일명 {isFtp ? session.profile.encoding : 'UTF-8'} · 전송 내용은 원본 바이트 유지
+          {isFtp && (
+            <span>
+              {' '}
+              · 패시브(PASV) 모드 / Binary
+              {session.profile.protocol === 'ftp' ? ' · TLS 없음' : ' · TLS 인증서 검증'}
+            </span>
+          )}
+        </div>
         <TransferQueue
           transfers={transfers.filter((t) => t.profileId === session.profile.id)}
           connectionId={id}
@@ -769,7 +683,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
           파일 작업 중… 완료된 항목은 유지됩니다.
         </p>
       )}
-      {context && (
+      {context && selection.length > 0 && (
         <div
           ref={menu}
           role="menu"

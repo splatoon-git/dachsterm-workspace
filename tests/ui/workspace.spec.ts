@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 for (const width of [1280, 800, 560, 360]) {
-  test(`unified left sidebar, shortcuts and persistent view at ${width}px`, async ({ page }) => {
+  test(`unified left sidebar, shortcuts and restart view at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 820 });
     await page.goto('/');
     const toggle = page.getByRole('button', { name: '사이드바', exact: true });
@@ -11,7 +11,7 @@ for (const width of [1280, 800, 560, 360]) {
       await toggle.click();
     }
     const connections = page.getByRole('tab', { name: '연결', exact: true });
-    const files = page.getByRole('tab', { name: '원격 파일', exact: true });
+    const files = page.getByRole('tab', { name: '파일', exact: true });
     await connections.focus();
     await page.keyboard.press('ArrowRight');
     await expect(files).toBeFocused();
@@ -33,7 +33,8 @@ for (const width of [1280, 800, 560, 360]) {
     }
     await page.reload();
     if (width <= 700) await toggle.click();
-    await expect(files).toHaveAttribute('aria-selected', 'true');
+    // No tab survives a restart, so the empty file view must not be what opens.
+    await expect(connections).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Control+Shift+F');
     await expect(page.getByRole('searchbox')).toBeFocused();
     await page.getByRole('searchbox').fill('missing-server');
@@ -62,7 +63,7 @@ test('switching the sidebar preserves the existing terminal renderer', async ({ 
   const terminal = page.locator('.xterm');
   await expect(terminal).toBeVisible();
   await terminal.evaluate((e) => e.setAttribute('data-instance', 'original'));
-  await page.getByRole('tab', { name: '원격 파일', exact: true }).click();
+  await page.getByRole('tab', { name: '파일', exact: true }).click();
   await page.getByRole('tab', { name: '연결', exact: true }).click();
   await page.getByRole('button', { name: '사이드바', exact: true }).click();
   await expect(terminal).toHaveAttribute('data-instance', 'original');

@@ -178,12 +178,15 @@ async function connected() {
   await command('stty -echo');
   await sleep(150);
 }
+// A server connection switches the sidebar to its files.
+const showConnections = () => page.getByRole('tab', { name: '연결', exact: true }).click();
 // The click returns before the tab exists because connecting first awaits vault_status.
 // Until then pane() is the previous connected tab, so connected() alone would pass early.
 async function connectNewTab() {
   const tabs = page.locator('.tab-strip').getByRole('tab');
   const count = await tabs.count();
   const previousId = await pane().getAttribute('data-connection-id');
+  await showConnections();
   await page.locator('.profile-card').getByRole('button', { name: '연결', exact: true }).click();
   await expect(tabs).toHaveCount(count + 1);
   await expect.poll(() => pane().getAttribute('data-connection-id')).not.toBe(previousId);
@@ -342,6 +345,7 @@ try {
     'PASS native selected broadcast delivered to two shells only, disconnect stops group',
   );
   stage = 'selective multi input';
+  await showConnections();
   await page.locator('.local-targets').getByTitle('명령 프롬프트 새 터미널 열기').click();
   const mixedLocal = page.getByRole('region', { name: '명령 프롬프트 터미널', exact: true });
   await expect(mixedLocal.locator('.connection-message')).toContainText('로컬 ·');
@@ -371,7 +375,7 @@ try {
   console.log('PASS native mixed local/SSH input in both directions and local close resets group');
   await page.getByRole('button', { name: '단일', exact: true }).click();
   stage = 'workspace SFTP and monitoring';
-  await page.getByRole('tab', { name: '원격 파일', exact: true }).click();
+  await page.getByRole('tab', { name: '파일', exact: true }).click();
   const workspaceId = await pane().getAttribute('data-connection-id');
   const listing = await invoke('sftp_list', { id: workspaceId, path: '.' });
   assert(listing.path.startsWith('/'));
@@ -465,10 +469,20 @@ try {
     })
     .toBe('automatic saved revision');
   await page.screenshot({ path: path.join(screenshots, 'files-editor.png') });
+  const { panelScrolls, treeShare, toolbarRows } = await files.evaluate((panel) => ({
+    panelScrolls: panel.scrollHeight > panel.clientHeight,
+    treeShare: panel.querySelector('.file-list').offsetHeight / panel.clientHeight,
+    toolbarRows: new Set(
+      [...panel.querySelector('.file-actions').querySelectorAll('button')].map((b) => b.offsetTop),
+    ).size,
+  }));
+  assert(!panelScrolls, 'The panel must not scroll as a whole while the tray is open');
+  assert(treeShare > 0.25, `Tree share with the tray open: ${treeShare}`);
+  assert.equal(toolbarRows, 1);
   const preservedPath = await files.getByLabel('원격 경로').inputValue();
   await page.getByRole('tab', { name: '연결', exact: true }).click();
   await expect(files).toBeHidden();
-  await page.getByRole('tab', { name: '원격 파일', exact: true }).click();
+  await page.getByRole('tab', { name: '파일', exact: true }).click();
   await expect(files.getByLabel('원격 경로')).toHaveValue(preservedPath);
   await expect(edited).toBeVisible();
   const fileBounds = await files.boundingBox();
@@ -480,6 +494,7 @@ try {
   );
 
   stage = 'legacy terminal encoding';
+  await showConnections();
   await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
   await page.getByRole('dialog').locator('summary', { hasText: '고급 옵션' }).click();
   await page.getByRole('dialog').getByLabel('터미널 인코딩').selectOption('euc-kr');
@@ -495,6 +510,7 @@ try {
   await page.keyboard.press('Enter');
   await output('c7d1b1db0a');
   await page.getByRole('button', { name: 'OpenSSH 테스트 탭 닫기', exact: true }).last().click();
+  await showConnections();
   await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
   await page.getByRole('dialog').getByLabel('터미널 인코딩').selectOption('utf-8');
   await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
@@ -693,6 +709,7 @@ try {
   assert.equal((await invoke('vault_status')).enabled, true);
   await vaultDialog.getByRole('button', { name: '대화상자 닫기' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '대화상자 닫기' }).click();
+  await showConnections();
   await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
   await page.getByRole('dialog').locator('summary', { hasText: '고급 옵션' }).click();
   await page.getByRole('button', { name: '저장된 암호 보기', exact: true }).click();
@@ -766,6 +783,7 @@ try {
   stage = 'bad authentication';
   await pane().getByRole('button', { name: '연결 종료', exact: true }).click();
   await expect(pane().getByRole('button', { name: '재접속', exact: true })).toBeVisible();
+  await showConnections();
   await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
   await page
     .getByRole('dialog')
@@ -777,6 +795,7 @@ try {
   await page.getByLabel('세션 검색', { exact: true }).fill('missing');
   await expect(page.locator('.profile-card')).toHaveCount(0);
   await page.getByLabel('세션 검색', { exact: true }).fill('OpenSSH');
+  await showConnections();
   await page.locator('.profile-actions summary').click();
   await page.getByRole('button', { name: '복제', exact: true }).click();
   await expect(page.locator('.profile-card')).toHaveCount(2);

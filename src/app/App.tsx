@@ -40,7 +40,7 @@ import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import type { CSSProperties } from 'react';
-import { FilePanel } from '../features/sftp/FilePanel';
+import { SidebarFiles } from '../features/sftp/SidebarFiles';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
 import { ToolbarMenu } from '../components/ToolbarMenu';
@@ -117,11 +117,15 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth > 700 && localStorage.getItem('dachsterm.sidebar') !== 'false',
   );
-  const [sidebarView, setSidebarView] = useState<'connections' | 'files'>(() =>
-    localStorage.getItem('dachsterm.sidebarView') === 'files' ? 'files' : 'connections',
-  );
+  // No tab survives a restart, so the file view would open empty.
+  const [sidebarView, setSidebarView] = useState<'connections' | 'files'>('connections');
   const closeDrawer = () => {
     if (window.innerWidth <= 700) setSidebarOpen(false);
+  };
+  // A new SSH connection shows its files, but a drawer must not cover a narrow window's terminal.
+  const revealFiles = () => {
+    setSidebarView('files');
+    if (window.innerWidth > 700) setSidebarOpen(true);
   };
   const showSidebar = async (view: 'connections' | 'files', focusSearch = false) => {
     if (fullscreen) await toggleFullscreen();
@@ -151,9 +155,6 @@ export function App() {
   useEffect(() => {
     localStorage.setItem('dachsterm.sidebar', String(sidebarOpen));
   }, [sidebarOpen]);
-  useEffect(() => {
-    localStorage.setItem('dachsterm.sidebarView', sidebarView);
-  }, [sidebarView]);
   const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
   const [zoomed, setZoomed] = useState(false);
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
@@ -308,7 +309,10 @@ export function App() {
       setActive(existing.tabId);
       return;
     }
-    const session = new TerminalSession(profile, theme, () => void refresh());
+    const session = new TerminalSession(profile, theme, () => {
+      void refresh();
+      if (profile.protocol === 'ssh') revealFiles();
+    });
     setTabs((previous) => insertTab(previous, session, layout));
     setActive(session.tabId);
     void session.connect(value, remember);
@@ -408,10 +412,6 @@ export function App() {
     if (active === session.tabId) setActive(tabs.find((t) => t !== session)?.tabId ?? '');
   }
   const selected = tabs.find((t) => t.tabId === active);
-  const fileSession =
-    !selected?.podtree && !selected?.localTarget && selected?.profile.protocol === 'ssh'
-      ? selected
-      : undefined;
   const profiles = snapshot.profiles
     .filter((p) => {
       const match = matchesSession(p, query, snapshot.groups);
@@ -567,7 +567,7 @@ export function App() {
                 onClick={() => setSidebarView(view)}
               >
                 <Icon name={view === 'connections' ? 'server' : 'folder'} size={16} />
-                {view === 'connections' ? '연결' : '원격 파일'}
+                {view === 'connections' ? '연결' : '파일'}
               </button>
             ))}
           </div>
@@ -747,20 +747,10 @@ export function App() {
             aria-labelledby="sidebar-tab-files"
             hidden={sidebarView !== 'files'}
           >
-            {selected?.localTarget || (selected && selected.profile.protocol !== 'ssh') ? (
-              <div className="file-empty">
-                <Icon name="folder" size={32} />
-                <h3>{selected.localTarget ? '로컬 터미널 사용 중' : '파일 작업 탭 사용 중'}</h3>
-                <p>
-                  {selected.localTarget
-                    ? '원격 파일은 SSH 연결을 선택하면 표시됩니다.'
-                    : '이 연결의 파일은 중앙 작업 탭에서 탐색할 수 있습니다.'}
-                </p>
-                <button onClick={() => setSidebarView('connections')}>연결 목록 보기</button>
-              </div>
-            ) : (
-              <FilePanel session={fileSession} />
-            )}
+            <SidebarFiles
+              session={selected}
+              showConnections={() => setSidebarView('connections')}
+            />
           </div>
         </div>
         {sidebarOpen && (

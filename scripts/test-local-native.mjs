@@ -1,7 +1,8 @@
 // Local PTY integration in Windows WebView2. Isolated app data; no remote credentials.
 import { chromium, expect } from '@playwright/test';
+import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -69,7 +70,7 @@ try {
   let pane = page.getByRole('region', { name: 'Windows PowerShell 터미널', exact: true });
   await expect(pane.locator('.connection-message')).toContainText('로컬 · Windows PowerShell');
   await expect(page.locator('.monitor-bar')).toHaveCount(0);
-  await expect(page.locator('.files')).toHaveCount(0);
+  await expect(page.locator('.files')).toBeHidden();
   await expect(page.getByRole('button', { name: '새 창으로 분리 ↗' })).toBeDisabled();
   async function command(pane, text, expected) {
     const input = pane.locator('.xterm-helper-textarea');
@@ -102,8 +103,86 @@ try {
   expect(localPid).toBeGreaterThan(0);
   const originalId = await pane.getAttribute('data-connection-id');
   await pane.locator('.xterm').evaluate((e) => e.setAttribute('data-instance', 'original'));
-  await page.getByRole('tab', { name: '원격 파일', exact: true }).click();
-  await expect(page.locator('#file-sidebar')).toContainText('로컬 터미널 사용 중');
+  // Opening a local shell keeps the sidebar where it was; only a server connection switches it.
+  await expect(page.getByRole('tab', { name: '연결', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.getByRole('tab', { name: '파일', exact: true }).click();
+  const localFiles = page.getByRole('complementary', { name: '로컬 파일 탐색' });
+  const localPath = localFiles.getByLabel('로컬 경로', { exact: true });
+  await expect(localPath).toHaveValue(/^[A-Z]:\\/i, { timeout: 15000 });
+  const scratch = await realpath(await mkdtemp(path.join(directory, 'files-')));
+  await mkdir(path.join(scratch, 'inner'));
+  await writeFile(path.join(scratch, 'seen.txt'), 'hello');
+  await command(pane, `Set-Location '${scratch}'; Write-Output ('CD' + '_ONE')`, 'CD_ONE');
+  await expect(localPath).toHaveValue(scratch);
+  await expect(localFiles.getByRole('button', { name: /seen\.txt/ })).toBeVisible();
+  const follow = localFiles.getByLabel('터미널 경로 따라가기', { exact: true });
+  await expect(follow).toBeChecked();
+  await follow.uncheck();
+  await command(pane, "Set-Location inner; Write-Output ('CD' + '_TWO')", 'CD_TWO');
+  await expect(localPath).toHaveValue(scratch);
+  await follow.check();
+  await expect(localPath).toHaveValue(path.join(scratch, 'inner'));
+  await command(pane, "Set-Location ..; Write-Output ('CD' + '_THREE')", 'CD_THREE');
+  await expect(localPath).toHaveValue(scratch);
+  console.log('PASS PowerShell directory follow, off and on');
+  await mkdir('test-results-native', { recursive: true });
+  const fileDialog = page.getByRole('dialog');
+  const answer = async (value) => {
+    await fileDialog.getByLabel('이름 또는 경로', { exact: true }).fill(value);
+    await fileDialog.getByRole('button', { name: '적용', exact: true }).click();
+    await expect(fileDialog).toHaveCount(0);
+  };
+  await localFiles.getByRole('button', { name: '폴더', exact: true }).click();
+  await answer('made');
+  await expect(localFiles.getByRole('button', { name: /^made/ })).toBeVisible();
+  await localFiles.getByRole('button', { name: '새 파일', exact: true }).click();
+  await answer('created.txt');
+  await expect(localFiles.getByRole('button', { name: /created\.txt/ })).toBeVisible();
+  await localFiles.getByRole('button', { name: /seen\.txt/ }).click();
+  await localFiles.getByRole('button', { name: '이름', exact: true }).click();
+  await answer('renamed.txt');
+  await expect(localFiles.getByRole('button', { name: /renamed\.txt/ })).toBeVisible();
+  // The tree is the panel: it keeps most of the height, and folders open in place.
+  const panelHeight = (await localFiles.boundingBox()).height;
+  const treeHeight = (await localFiles.locator('.file-list').boundingBox()).height;
+  assert(treeHeight / panelHeight > 0.5, `Tree height ${treeHeight} of ${panelHeight}`);
+  await writeFile(path.join(scratch, 'inner', 'nested.txt'), 'nested');
+  await localFiles.getByRole('button', { name: '펼치기: inner', exact: true }).click();
+  const nested = localFiles.locator('.file-tree-row').filter({ hasText: 'nested.txt' });
+  await expect(nested).toBeVisible();
+  await expect(localPath).toHaveValue(scratch);
+  await nested.locator('.file-row').click();
+  await page.screenshot({ path: path.resolve('test-results-native/local-files.png') });
+  await localFiles.getByRole('button', { name: '삭제', exact: true }).click();
+  await expect(fileDialog).toContainText('nested.txt');
+  await fileDialog.getByRole('button', { name: '적용', exact: true }).click();
+  await expect(fileDialog).toHaveCount(0);
+  await expect(nested).toHaveCount(0);
+  await expect
+    .poll(() => readFile(path.join(scratch, 'inner', 'nested.txt')).catch((e) => e.code))
+    .toBe('ENOENT');
+  await localFiles.getByRole('button', { name: '접기: inner', exact: true }).click();
+  await localFiles.getByRole('button', { name: /renamed\.txt/ }).click();
+  await localFiles.getByRole('button', { name: '복사', exact: true }).click();
+  await localFiles.getByRole('button', { name: /^inner/ }).dblclick();
+  await expect(localPath).toHaveValue(path.join(scratch, 'inner'));
+  await localFiles.getByRole('button', { name: '붙여넣기', exact: true }).click();
+  await expect(localFiles.getByRole('button', { name: /renamed\.txt/ })).toBeVisible();
+  expect(await readFile(path.join(scratch, 'inner', 'renamed.txt'), 'utf8')).toBe('hello');
+  // Pasting over an existing name reports it and leaves the file alone.
+  await writeFile(path.join(scratch, 'inner', 'renamed.txt'), 'changed');
+  await localFiles.getByRole('button', { name: '붙여넣기', exact: true }).click();
+  await expect(localFiles.getByRole('alert')).toContainText('이미 있습니다');
+  expect(await readFile(path.join(scratch, 'inner', 'renamed.txt'), 'utf8')).toBe('changed');
+  await localFiles.getByRole('button', { name: /renamed\.txt/ }).click();
+  await localFiles.getByRole('button', { name: '삭제', exact: true }).click();
+  await fileDialog.getByRole('button', { name: '적용', exact: true }).click();
+  await expect(fileDialog).toHaveCount(0);
+  await expect(localFiles.getByRole('button', { name: /renamed\.txt/ })).toHaveCount(0);
+  console.log('PASS local file create, rename, copy, no-overwrite paste and delete');
   await page.getByRole('tab', { name: '연결', exact: true }).click();
   await expect(pane).toHaveAttribute('data-connection-id', originalId);
   await expect(pane.locator('.xterm')).toHaveAttribute('data-instance', 'original');
@@ -124,7 +203,6 @@ try {
     .getByLabel('글꼴 크기')
     .selectOption('14');
   await page.keyboard.press('Escape');
-  await mkdir('test-results-native', { recursive: true });
   await page.screenshot({ path: path.resolve('test-results-native/unified-local.png') });
   await command(pane, "Write-Output ('SI' + 'ZE:' + $Host.UI.RawUI.WindowSize.Width)", 'SIZE:');
   const initialWidth = Number(
@@ -148,6 +226,11 @@ try {
   const cmd = page.getByRole('region', { name: '명령 프롬프트 터미널', exact: true });
   await expect(cmd.locator('.xterm-accessibility-tree')).toContainText('>', { timeout: 15000 });
   await command(cmd, 'echo DACHSTERM^CMD_OK', 'DACHSTERMCMD_OK');
+  await command(cmd, `cd /d "${scratch}" & echo CMD^_CD`, 'CMD_CD');
+  await page.getByRole('tab', { name: '파일', exact: true }).click();
+  await expect(localPath).toHaveValue(scratch);
+  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  console.log('PASS cmd directory follow');
   await page.getByRole('button', { name: '좌우', exact: true }).click();
   await expect(pane).toBeVisible();
   await expect(cmd).toBeVisible();
@@ -187,6 +270,17 @@ try {
       timeout: 15000,
     });
     await command(linux, "printf 'DACHSTERM%s\\n' WSL_OK", 'DACHSTERMWSL_OK');
+    await page.getByRole('tab', { name: '파일', exact: true }).click();
+    await expect(localPath).toHaveValue(/^\//, { timeout: 15000 });
+    await command(linux, "cd /usr/bin; printf 'WSL%s\\n' _CD", 'WSL_CD');
+    await expect(localPath).toHaveValue('/usr/bin');
+    await expect(localFiles.getByRole('button', { name: /^env/ }).first()).toBeVisible({
+      timeout: 15000,
+    });
+    await command(linux, 'false', '');
+    await command(linux, "printf 'EXIT:%s\\n' $?", 'EXIT:1');
+    await page.getByRole('tab', { name: '연결', exact: true }).click();
+    console.log('PASS WSL directory follow, Linux path listing and preserved exit status');
     await command(linux, 'exit', '');
     await expect(linux.locator('.connection-message')).toContainText('종료', { timeout: 15000 });
     await page.screenshot({ path: 'test-results-native/local-wsl.png' });

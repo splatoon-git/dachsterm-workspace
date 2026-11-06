@@ -29,6 +29,18 @@ describe('terminal paths and clipboard safety', () => {
     expect(directoryFromOsc('relative', false)).toBeNull();
     expect(directoryFromOsc('/' + 'x'.repeat(4096), false)).toBeNull();
   });
+  it('accepts drive and share paths only for local Windows shells', () => {
+    expect(directoryFromOsc('C:\\Users\\me', false, true)).toBe('C:\\Users\\me');
+    expect(directoryFromOsc('D:/work', false, true)).toBe('D:/work');
+    expect(directoryFromOsc('\\\\wsl.localhost\\Ubuntu\\app', false, true)).toBe(
+      '\\\\wsl.localhost\\Ubuntu\\app',
+    );
+    expect(directoryFromOsc('file://host/C:/Users/me', true, true)).toBe('C:/Users/me');
+    expect(directoryFromOsc('/usr/local', false, true)).toBe('/usr/local');
+    expect(directoryFromOsc('C:\\Users\\me', false)).toBeNull();
+    expect(directoryFromOsc('relative', false, true)).toBeNull();
+    expect(directoryFromOsc('C:\\bad\x07', false, true)).toBeNull();
+  });
   it('requires confirmation for line endings and terminal controls but permits tabs', () => {
     for (const value of ['echo ok\n', '\r', '\x1b[200~payload', '\x03', '\x00', '\x7f'])
       expect(needsPasteConfirmation(value)).toBe(true);

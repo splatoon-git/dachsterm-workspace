@@ -143,6 +143,7 @@ try {
     daily: true,
   };
   stage = 'local-open';
+  await page.getByRole('tab', { name: '연결', exact: true }).click();
   await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
   const local = page.getByRole('region', { name: 'Windows PowerShell 터미널', exact: true });
   await expect(local.locator('.xterm-accessibility-tree')).toContainText('PS C:');
@@ -473,6 +474,7 @@ try {
   result.checks.push('Actual OpenSSH: split CP949 bytes decoded into UTF-8 log');
   stage = 'wsl-auto-log';
   await invoke('log_auto', { key: 'local:wsl:Ubuntu', options });
+  await page.getByRole('tab', { name: '연결', exact: true }).click();
   await page.locator('.local-targets').getByTitle('Ubuntu 새 터미널 열기').click();
   const wslPane = page.getByRole('region', { name: 'Ubuntu 터미널', exact: true });
   await expect(wslPane.locator('.connection-message')).toContainText('로컬');
@@ -581,6 +583,7 @@ try {
   page.setDefaultTimeout(15000);
   page.on('pageerror', () => result.errors.push('pageerror'));
   expect(await invoke('log_auto_get', { key: 'local:powershell' })).toEqual(options);
+  await page.getByRole('tab', { name: '연결', exact: true }).click();
   await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
   const restartedPane = page.getByRole('region', {
     name: 'Windows PowerShell 터미널',

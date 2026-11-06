@@ -976,12 +976,6 @@ main {
 .files {
   overflow: auto;
 }
-.file-server {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 0 14px 12px;
-  overflow-wrap: anywhere;
-}
 .status-dot.online {
   background: var(--color-status-success);
 }
@@ -1010,41 +1004,23 @@ main {
   padding: 5px 6px;
   border-color: var(--color-border-subtle);
 }
-.hidden-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 10px;
-  color: var(--color-text-secondary);
-}
-.hidden-toggle input {
-  width: auto;
-  accent-color: var(--color-action-primary);
-}
 .file-list {
   min-height: 100px;
   flex: 1;
   overflow: auto;
 }
-.file-columns {
-  display: flex;
-  justify-content: space-between;
-  padding: 9px 13px;
-  font-size: 10px;
-  color: var(--color-text-secondary);
-  border-block: 1px solid var(--color-border-subtle);
-}
 .file-row {
   display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
   align-items: center;
   text-align: left;
-  gap: 8px;
-  width: 100%;
+  gap: 6px;
   border: 0;
   border-radius: 0;
   background: transparent;
-  padding: 9px 12px;
+  padding: 2px 8px 2px 0;
   font-size: 11px;
 }
 .file-row > span {
@@ -1060,29 +1036,9 @@ main {
 .file-row small {
   font-size: 9px;
 }
-.file-row.selected {
-  background: var(--color-action-selected);
-}
 .file-list-empty {
   padding: 12px;
   font-size: 11px;
-}
-.file-selection {
-  height: 128px;
-  flex: 0 0 128px;
-  overflow: auto;
-  border-top: 1px solid var(--color-border-subtle);
-  padding-top: 10px;
-}
-.file-selection > strong,
-.file-selection > small {
-  display: block;
-  padding: 0 12px 6px;
-  overflow-wrap: anywhere;
-  font-size: 11px;
-}
-.file-selection > small {
-  font-size: 10px;
 }
 .transfer-tray {
   border-top: 1px solid var(--color-border-default);
@@ -1666,7 +1622,6 @@ footer {
 }
 .ftp-pane .file-row {
   font-size: 13px;
-  padding: 11px 18px;
 }
 .ftp-pane .file-toolbar button {
   font-size: 12px;
@@ -1829,13 +1784,4 @@ footer {
   .shortcut-list dd {
     margin-bottom: 12px;
   }
-}
-/* Session-only SFTP path following controls use the shared theme tokens. */
-.file-follow {
-  display: grid;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-}
-.file-follow small {
-  overflow-wrap: anywhere;
 }

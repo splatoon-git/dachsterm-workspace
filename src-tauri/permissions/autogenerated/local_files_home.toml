@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-local-files-home"
+description = "Enables the local_files_home command without any pre-configured scope."
+commands.allow = ["local_files_home"]
+
+[[permission]]
+identifier = "deny-local-files-home"
+description = "Denies the local_files_home command without any pre-configured scope."
+commands.deny = ["local_files_home"]

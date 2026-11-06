@@ -1,5 +1,11 @@
 import { TerminalDecoder } from '../../lib/encoding';
-import { directoryFromOsc, terminalDisplay } from './preferences';
+import { DirectoryHookInstaller, type DirectoryHookStatus } from './directoryHook';
+import {
+  directoryFromOsc,
+  directoryHook,
+  terminalDisplay,
+  terminalPreferences,
+} from './preferences';
 import { programMetadata, type GuideProgram } from './guideData';
 import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
@@ -14,7 +20,12 @@ export type PodTreeLaunch = {
   namespace: string;
   operational: boolean;
 };
-export type LocalTarget = { id: string; name: string; kind: 'shell' | 'wsl' };
+export type LocalTarget = {
+  id: string;
+  name: string;
+  kind: 'shell' | 'wsl';
+  follow: 'launch' | 'typed' | 'none';
+};
 export type LocalCatalog = { targets: LocalTarget[]; warning: string | null };
 type HostKey = {
   type: 'hostKey';
@@ -43,6 +54,7 @@ export type SessionState = {
   hostKey: HostKey | null;
   authPrompt?: AuthPrompt | null;
   directory?: string | null;
+  directoryHook?: DirectoryHookStatus;
   guideEnabled?: boolean;
   guideProgram?: GuideProgram | null;
   guideRun?: number;
@@ -50,8 +62,45 @@ export type SessionState = {
 };
 export class TerminalSession {
   followDirectory?: boolean;
+  /** Where the local file panel was, since switching tabs remounts it. */
+  private lastFileLocation?: string;
+  fileLocation() {
+    return this.lastFileLocation;
+  }
+  rememberFileLocation(path: string) {
+    this.lastFileLocation = path;
+  }
+  private autoDirectoryHook = false;
+  private readonly directoryHookInstaller = new DirectoryHookInstaller({
+    terminal: () => this.terminal,
+    connected: () => this.current.status === 'connected',
+    directory: () => this.current.directory,
+    mode: () => {
+      if (this.podtree || this.profile.protocol !== 'ssh') return 'none';
+      return this.localTarget?.follow ?? 'remote';
+    },
+    supportsHook: () =>
+      call<boolean>('terminal_supports_directory_hook', { id: this.connectionId }),
+    type: (data) => this.send(data),
+    write: (data) => this.terminal.write(data),
+    report: (status) => this.update({ ...this.current, directoryHook: status }),
+  });
+  wantsDirectoryFollow() {
+    return this.followDirectory ?? terminalPreferences().followDirectory;
+  }
   setFollowDirectory(value: boolean) {
     this.followDirectory = value;
+    if (value && this.autoDirectoryHook && this.current.status === 'connected')
+      void this.directoryHookInstaller.install();
+  }
+  /** A Windows shell only takes its hook at launch; the typed hook is Bash and Zsh text. */
+  get canTypeDirectoryHook() {
+    return !this.podtree && (!this.localTarget || this.localTarget.kind === 'wsl');
+  }
+  typeDirectoryHook() {
+    this.directoryHookInstaller.cancel();
+    this.send(directoryHook + '\r');
+    this.terminal.focus();
   }
   readonly tabId = crypto.randomUUID();
   connectionId: string = crypto.randomUUID();
@@ -84,9 +133,9 @@ export class TerminalSession {
     this.terminal.loadAddon(this.fit);
     this.terminal.loadAddon(this.search);
     const directory = (value: string, uri: boolean) => {
-      const path = directoryFromOsc(value, uri);
-      if (path && !this.localTarget && this.current.directory !== path)
-        this.update({ ...this.current, directory: path });
+      const path = directoryFromOsc(value, uri, this.localTarget?.kind === 'shell');
+      if (path && this.current.directory !== path)
+        this.update({ ...this.current, directory: path, directoryHook: undefined });
       return true;
     };
     this.terminal.parser.registerOscHandler(7, (value) => directory(value, true));
@@ -146,6 +195,7 @@ export class TerminalSession {
   async connect(secret: string | null, remember = false) {
     if (this.pending || this.disposed) return;
     this.pending = true;
+    this.autoDirectoryHook = true;
     const id = this.connectionId;
     this.channel = new Channel<Event>();
     this.bindEvents(this.channel, id);
@@ -206,7 +256,8 @@ export class TerminalSession {
         const text = decoder.push(event.bytes);
         if (text.includes('\uFFFD'))
           this.notice('일부 문자가 대체 표시되었습니다. 세션 인코딩과 서버 로케일을 확인하세요.');
-        this.terminal.write(text, () => {
+        this.terminal.write(this.directoryHookInstaller.filter.push(text), () => {
+          this.directoryHookInstaller.noteOutput();
           void call(
             this.podtree ? 'podtree_ack' : this.localTarget ? 'local_ack' : 'terminal_ack',
             { id, seq: event.seq },
@@ -248,6 +299,8 @@ export class TerminalSession {
               },
             ).catch((e) => this.notice(errorText(e)));
           this.onConnected();
+          if (this.autoDirectoryHook && this.wantsDirectoryFollow())
+            void this.directoryHookInstaller.install();
         }
       }
     };
@@ -261,6 +314,7 @@ export class TerminalSession {
   }
   release() {
     this.disposed = true;
+    this.directoryHookInstaller.cancel();
     this.inputQueue = [];
     this.terminal.dispose();
     this.listeners.clear();
@@ -282,6 +336,7 @@ export class TerminalSession {
   }
   send(data: string) {
     if (this.current.status !== 'connected' || this.replaying) return;
+    this.directoryHookInstaller.noteInput();
     // Bound both queued input and individual IPC messages. Preserve surrogate pairs.
     if (this.inputQueue.reduce((n, s) => n + s.length, 0) + data.length > 65536) {
       this.notice('붙여넣기는 한 번에 64KiB 이하로 나누어 주세요.');
@@ -327,6 +382,7 @@ export class TerminalSession {
     this.connectionId = crypto.randomUUID();
     this.profile = profile;
     this.inputQueue = [];
+    this.directoryHookInstaller.cancel();
     this.terminal.reset();
     this.terminal.writeln('\r\n── 새 연결 · 이전 명령은 재실행하지 않습니다 ──\r\n');
     this.update({ status: 'connecting', message: '재접속 중', hostKey: null });
@@ -334,6 +390,7 @@ export class TerminalSession {
   }
   dispose() {
     this.disposed = true;
+    this.directoryHookInstaller.cancel();
     this.inputQueue = [];
     void this.disconnect();
     this.terminal.dispose();

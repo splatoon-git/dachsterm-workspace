@@ -80,10 +80,12 @@ export function saveTerminalPreferences(patch: Partial<TerminalPreferences>) {
   current = next;
   notify();
 }
+export const terminalPreferences = () => current;
 export function useTerminalPreferences() {
   return useSyncExternalStore(subscribeTerminalPreferences, () => current);
 }
-export function directoryFromOsc(value: string, uri = true): string | null {
+/** `windowsPaths` is for local Windows shells, which report a drive or network share. */
+export function directoryFromOsc(value: string, uri = true, windowsPaths = false): string | null {
   try {
     let path = value;
     if (uri) {
@@ -91,8 +93,9 @@ export function directoryFromOsc(value: string, uri = true): string | null {
       if (url.protocol !== 'file:' || url.username || url.password || url.search || url.hash)
         return null;
       path = decodeURIComponent(url.pathname);
+      if (windowsPaths && /^\/[A-Za-z]:/.test(path)) path = path.slice(1);
     }
-    return path.startsWith('/') &&
+    return (path.startsWith('/') || (windowsPaths && /^([A-Za-z]:[\\/]|\\\\)/.test(path))) &&
       path.length <= 4096 &&
       !Array.from(path).some((c) => c.charCodeAt(0) < 32 || c === '\x7f' || c === '\ufffd')
       ? path
@@ -107,5 +110,7 @@ export const needsPasteConfirmation = (text: string) =>
     return (code < 32 && code !== 9) || code === 127;
   });
 
-// A session-only prompt hook. No dotfiles or server settings are written.
-export const directoryHook = `if [ -n "$BASH_VERSION" ]; then eval '__dachsterm_cwd() { printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; }; [[ ";\${PROMPT_COMMAND[*]};" == *"__dachsterm_cwd"* ]] || PROMPT_COMMAND+=(__dachsterm_cwd)'; elif [ -n "$ZSH_VERSION" ]; then eval '__dachsterm_cwd() { printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; }; (( \${precmd_functions[(Ie)__dachsterm_cwd]} )) || precmd_functions+=(__dachsterm_cwd)'; else printf '%s\\n' 'DachsTerm: 이 셸은 OSC 7 경로 알림을 별도로 설정해야 합니다.'; fi`;
+// A session-only prompt hook. No dotfiles or server settings are written. A scalar PROMPT_COMMAND
+// is prepended, because Bash before 5.1 runs only element 0 of an array and a scalar may end in ";".
+// The cwd function keeps $? for the commands after it, and Bash drops the line from its history.
+export const directoryHook = `if [ -n "$BASH_VERSION" ]; then eval '__dachsterm_cwd() { local s=$?; printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; return $s; }; case ";\${PROMPT_COMMAND[*]};" in *__dachsterm_cwd*) ;; *) if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then PROMPT_COMMAND+=(__dachsterm_cwd); else PROMPT_COMMAND="__dachsterm_cwd\${PROMPT_COMMAND:+; $PROMPT_COMMAND}"; fi;; esac; case "$(HISTTIMEFORMAT= builtin history 1)" in *__dachsterm_cwd*) builtin history -d "$(HISTTIMEFORMAT= builtin history 1 | { read -r n _; printf %s "$n"; })";; esac'; elif [ -n "$ZSH_VERSION" ]; then eval '__dachsterm_cwd() { printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; }; (( \${precmd_functions[(Ie)__dachsterm_cwd]} )) || precmd_functions+=(__dachsterm_cwd)'; fi`;

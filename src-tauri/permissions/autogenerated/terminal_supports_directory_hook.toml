@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-terminal-supports-directory-hook"
+description = "Enables the terminal_supports_directory_hook command without any pre-configured scope."
+commands.allow = ["terminal_supports_directory_hook"]
+
+[[permission]]
+identifier = "deny-terminal-supports-directory-hook"
+description = "Denies the terminal_supports_directory_hook command without any pre-configured scope."
+commands.deny = ["terminal_supports_directory_hook"]

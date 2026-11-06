@@ -24,10 +24,15 @@ pub struct Target {
     pub id: String,
     pub name: String,
     pub kind: String,
+    /// How the panel learns this shell's directory: `launch` starts with the hook, `typed`
+    /// installs it at the first prompt, `none` means the shell has no supported hook.
+    pub follow: String,
     #[serde(skip)]
     pub(crate) program: PathBuf,
     #[serde(skip)]
     pub(crate) args: Vec<String>,
+    #[serde(skip)]
+    pub(crate) env: Vec<(String, String)>,
 }
 #[derive(Serialize)]
 pub struct Catalog {
@@ -100,9 +105,41 @@ fn target(id: &str, name: &str, kind: &str, program: PathBuf, args: &[&str]) -> 
         id: id.into(),
         name: name.into(),
         kind: kind.into(),
+        follow: "launch".into(),
         program,
         args: args.iter().map(|s| (*s).into()).collect(),
+        env: Vec::new(),
     }
+}
+#[cfg(test)]
+impl Target {
+    pub(crate) fn for_test(id: &str, kind: &str) -> Self {
+        target(id, id, kind, PathBuf::new(), &[])
+    }
+}
+// ConPTY renders the shell's screen itself, so text typed into a Windows shell cannot be hidden.
+// These give the shell its directory hook at launch and change no user configuration. Constrained
+// language mode forbids the calls below, and the shell's own prompt must keep working there.
+#[cfg(windows)]
+const POWERSHELL_FOLLOW: &str = "if($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage'){$global:__dachsterm_prompt=$function:prompt;function global:prompt{$p=$global:__dachsterm_prompt.Invoke() -join '';[Console]::Write(('{0}]1337;CurrentDir={1}{2}' -f [char]27,$ExecutionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath,[char]7));$p}}";
+// Keeps $? intact for a PS1 that shows the last exit status.
+#[cfg(windows)]
+const WSL_FOLLOW: &str = r#"__dachsterm_status=$?; printf '\033]1337;CurrentDir=%s\007' "$PWD"; (exit $__dachsterm_status)"#;
+#[cfg(windows)]
+fn cmd_follow_prompt() -> String {
+    let prompt = std::env::var("PROMPT").unwrap_or_else(|_| "$P$G".into());
+    format!("prompt $E]1337;CurrentDir=$P$E\\{prompt}")
+}
+#[cfg(windows)]
+fn wsl_follow_env() -> Vec<(String, String)> {
+    let forwarded = match std::env::var("WSLENV") {
+        Ok(existing) if !existing.is_empty() => format!("{existing}:PROMPT_COMMAND/u"),
+        _ => "PROMPT_COMMAND/u".into(),
+    };
+    vec![
+        ("PROMPT_COMMAND".into(), WSL_FOLLOW.into()),
+        ("WSLENV".into(), forwarded),
+    ]
 }
 #[cfg(windows)]
 fn decode_wsl(bytes: &[u8]) -> String {
@@ -132,7 +169,13 @@ pub async fn local_targets(state: State<'_, AppState>) -> Result<Catalog> {
         if let Some(pf) = std::env::var_os("ProgramFiles") {
             let pwsh = PathBuf::from(pf).join("PowerShell/7/pwsh.exe");
             if pwsh.is_file() {
-                targets.push(target("pwsh", "PowerShell 7", "shell", pwsh, &["-NoLogo"]));
+                targets.push(target(
+                    "pwsh",
+                    "PowerShell 7",
+                    "shell",
+                    pwsh,
+                    &["-NoLogo", "-NoExit", "-Command", POWERSHELL_FOLLOW],
+                ));
             }
         }
         targets.push(target(
@@ -140,14 +183,14 @@ pub async fn local_targets(state: State<'_, AppState>) -> Result<Catalog> {
             "Windows PowerShell",
             "shell",
             system.join("WindowsPowerShell/v1.0/powershell.exe"),
-            &["-NoLogo"],
+            &["-NoLogo", "-NoExit", "-Command", POWERSHELL_FOLLOW],
         ));
         targets.push(target(
             "cmd",
             "명령 프롬프트",
             "shell",
             system.join("cmd.exe"),
-            &[],
+            &["/K", &cmd_follow_prompt()],
         ));
         let wsl = system.join("wsl.exe");
         if wsl.is_file() {
@@ -160,7 +203,9 @@ pub async fn local_targets(state: State<'_, AppState>) -> Result<Catalog> {
                 Ok(Ok(output)) if output.status.success() => {
                     for name in decode_wsl(&output.stdout).trim_start_matches('\u{feff}').lines().map(str::trim).filter(|s| !s.is_empty()) {
                         if name.len() <= 256 && !name.chars().any(char::is_control) {
-                            targets.push(target(&format!("wsl:{name}"), name, "wsl", wsl.clone(), &["--distribution", name, "--cd", "~"]));
+                            let mut distribution = target(&format!("wsl:{name}"), name, "wsl", wsl.clone(), &["--distribution", name, "--cd", "~"]);
+                            distribution.env = wsl_follow_env();
+                            targets.push(distribution);
                         }
                     }
                 }
@@ -176,7 +221,13 @@ pub async fn local_targets(state: State<'_, AppState>) -> Result<Catalog> {
             "{} · 기본 셸",
             shell.file_name().unwrap_or_default().to_string_lossy()
         );
-        targets.push(target("default-shell", &name, "shell", shell, &["-l"]));
+        let supported = matches!(
+            shell.file_name().and_then(|n| n.to_str()),
+            Some("bash" | "zsh")
+        );
+        let mut default_shell = target("default-shell", &name, "shell", shell, &["-l"]);
+        default_shell.follow = if supported { "typed" } else { "none" }.into();
+        targets.push(default_shell);
     }
     targets.retain(|t| t.program.is_file());
     *state.locals.targets.lock().unwrap() =
@@ -244,6 +295,9 @@ pub async fn local_open(
             command.cwd(home);
         }
         command.env("TERM", "xterm-256color");
+        for (key, value) in &target.env {
+            command.env(key, value);
+        }
         let mut child = pair
             .slave
             .spawn_command(command)

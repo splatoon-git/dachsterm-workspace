@@ -9,7 +9,7 @@ export function ShortcutList() {
       <dd>Ctrl + Shift + B</dd>
       <dt>세션 검색</dt>
       <dd>Ctrl + Shift + F</dd>
-      <dt>원격 파일</dt>
+      <dt>파일</dt>
       <dd>Ctrl + Shift + E</dd>
       <dt>전체화면 / 종료</dt>
       <dd>F11</dd>

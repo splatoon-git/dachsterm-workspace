@@ -256,6 +256,7 @@ try {
     'Real Bash vi/vim/less/cat/tail entry/exit including Ctrl+C, manual pin survives, tab isolation',
   );
   stage = 'wsl';
+  await page.getByRole('tab', { name: '연결', exact: true }).click();
   await page.locator('.local-targets').getByTitle('Ubuntu 새 터미널 열기').click();
   const wsl = page.getByRole('region', { name: 'Ubuntu 터미널', exact: true });
   const wslId = await wsl.getAttribute('data-connection-id');

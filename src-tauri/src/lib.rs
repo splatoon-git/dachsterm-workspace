@@ -10,6 +10,7 @@ pub mod file_ops;
 pub mod ftp;
 pub mod hostkeys;
 pub mod local;
+mod local_files;
 mod local_links;
 #[cfg(target_os = "macos")]
 mod login_path;
@@ -23,6 +24,7 @@ mod session_management;
 mod session_transfer;
 mod settings;
 pub mod sftp;
+mod shell_probe;
 pub mod snippets;
 pub mod ssh;
 mod ssh_auth;
@@ -175,6 +177,12 @@ pub fn run() {
             local::local_resize,
             local::local_ack,
             local::local_close,
+            local_files::local_files_home,
+            local_files::local_files_list,
+            local_files::local_files_change,
+            local_files::local_files_batch,
+            local_files::local_files_edit,
+            shell_probe::terminal_supports_directory_hook,
             broadcast::broadcast_status,
             broadcast::broadcast_set,
             vault::vault_status,

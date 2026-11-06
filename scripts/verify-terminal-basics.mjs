@@ -13,10 +13,21 @@ export async function verifyTerminalBasics({
   setStage,
 }) {
   setStage('S1 terminal follow');
-  await page.getByRole('tab', { name: '원격 파일', exact: true }).click();
   await expect(page.getByLabel('터미널 경로 따라가기', { exact: true })).toBeChecked();
-  await page.getByRole('button', { name: '셸 경로 알림 연결', exact: true }).click();
-  await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/home/probe');
+  // Connecting shows the files and starts following, without the hook appearing on screen.
+  await expect(page.getByRole('tab', { name: '파일', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/home/probe', {
+    timeout: 20000,
+  });
+  await expect(pane().locator('.xterm-accessibility-tree')).toContainText('probe@');
+  expect(await pane().locator('.xterm-accessibility-tree').innerText()).not.toContain(
+    '__dachsterm_cwd',
+  );
+  await command(`printf 'HISTORY:%s\\n' "$(history | grep -c '__dachsterm[_]cwd')"`);
+  await output('HISTORY:0');
   await command('cd /tmp');
   await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/tmp');
   await page.getByLabel('터미널 경로 따라가기', { exact: true }).uncheck();
@@ -24,7 +35,7 @@ export async function verifyTerminalBasics({
   await output('probe@');
   await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/tmp');
   await page.getByRole('tab', { name: '연결', exact: true }).click();
-  await page.getByRole('tab', { name: '원격 파일', exact: true }).click();
+  await page.getByRole('tab', { name: '파일', exact: true }).click();
   await expect(page.getByLabel('터미널 경로 따라가기', { exact: true })).not.toBeChecked();
   await page.getByLabel('터미널 경로 따라가기', { exact: true }).check();
   await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/home/probe');
@@ -193,6 +204,7 @@ export async function verifyTerminalBasics({
     console.log(`PASS native authentication mode ${auth}; no stored secret reference`);
     await expect(pane().getByRole('form', { name: '서버 추가 인증', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: `${name} 탭 닫기`, exact: true }).click();
+    await page.getByRole('tab', { name: '연결', exact: true }).click();
     const profile = page.locator('.profile-card').filter({ hasText: name });
     await profile.locator('summary').click();
     await profile.getByRole('button', { name: '삭제', exact: true }).click();
