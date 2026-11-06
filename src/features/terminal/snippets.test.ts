@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptySnippet, expand, matchesSnippet, variables } from './snippets';
 import { commands, programMetadata } from './guideData';
+import { errorText } from '../../lib/ipc';
 describe('snippet literal expansion and metadata boundaries', () => {
   it('deduplicates Unicode placeholders and never recursively evaluates replacements', () => {
     expect(variables('{{경로}} {{경로}} {{name}}')).toEqual(['경로', 'name']);
@@ -8,6 +9,13 @@ describe('snippet literal expansion and metadata boundaries', () => {
       '$(echo example) {{경로}}',
     );
     expect(() => expand('{{missing}}', {})).toThrow();
+    let message = '';
+    try {
+      expand('{{missing}}', {});
+    } catch (error) {
+      message = errorText(error);
+    }
+    expect(message).toContain('missing');
     expect(expand('echo $HOME `pwd`', {})).toBe('echo $HOME `pwd`');
   });
   it('searches all metadata using AND terms', () => {

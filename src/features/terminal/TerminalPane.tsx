@@ -10,7 +10,9 @@ import { ProgramGuide } from './CommandGuide';
 import { AuthenticationPrompt } from './AuthenticationPrompt';
 import {
   needsPasteConfirmation,
+  saveTerminalDisplay,
   saveTerminalPreferences,
+  useTerminalDisplay,
   useTerminalPreferences,
 } from './preferences';
 function fitTerminal(session: TerminalSession) {
@@ -38,22 +40,9 @@ export function TerminalPane({
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const [query, setQuery] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [fontSize, setFontSize] = useState(
-    () => Number(localStorage.getItem('dachsterm.fontSize')) || 14,
-  );
-  const [scrollback, setScrollback] = useState(
-    () => Number(localStorage.getItem('dachsterm.scrollback')) || 5000,
-  );
+  const { fontSize, scrollback } = useTerminalDisplay();
   const [paste, setPaste] = useState<{ id: string; text: string } | null>(null);
   const preferences = useTerminalPreferences();
-  useEffect(() => {
-    const update = (e: StorageEvent) => {
-      if (e.key === 'dachsterm.fontSize') setFontSize(Number(e.newValue) || 14);
-      if (e.key === 'dachsterm.scrollback') setScrollback(Number(e.newValue) || 5000);
-    };
-    window.addEventListener('storage', update);
-    return () => window.removeEventListener('storage', update);
-  }, []);
   useEffect(() => {
     const element = host.current!;
     if (!session.terminal.element) session.terminal.open(element);
@@ -296,8 +285,11 @@ export function TerminalPane({
                 aria-label="글꼴 크기"
                 value={fontSize}
                 onChange={(e) => {
-                  setFontSize(Number(e.target.value));
-                  localStorage.setItem('dachsterm.fontSize', e.target.value);
+                  try {
+                    saveTerminalDisplay({ fontSize: Number(e.target.value) });
+                  } catch {
+                    session.notice('터미널 설정을 저장하지 못했습니다.');
+                  }
                 }}
               >
                 {[12, 14, 16, 18, 20, 24].map((n) => (
@@ -311,8 +303,11 @@ export function TerminalPane({
                 aria-label="스크롤백"
                 value={scrollback}
                 onChange={(e) => {
-                  setScrollback(Number(e.target.value));
-                  localStorage.setItem('dachsterm.scrollback', e.target.value);
+                  try {
+                    saveTerminalDisplay({ scrollback: Number(e.target.value) });
+                  } catch {
+                    session.notice('터미널 설정을 저장하지 못했습니다.');
+                  }
                 }}
               >
                 {[1000, 5000, 10000].map((n) => (

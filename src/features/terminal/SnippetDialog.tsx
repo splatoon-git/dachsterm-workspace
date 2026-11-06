@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Dialog } from '../../components/Dialog';
-import { call, errorText } from '../../lib/ipc';
+import { call, errorText, UserError } from '../../lib/ipc';
 import type { TerminalSession } from './session';
 import {
   emptySnippet,
@@ -96,16 +96,16 @@ export function SnippetDialog({
     try {
       const body = expand(draft.body, values);
       if (!body.trim() || new TextEncoder().encode(body).length > 16384)
-        throw new Error('명령은 비어 있지 않은 16KiB 이하 본문이어야 합니다.');
+        throw new UserError('명령은 비어 있지 않은 16KiB 이하 본문이어야 합니다.');
       if (
         Array.from(body).some(
           (c) => (c.charCodeAt(0) < 32 && !'\t\n\r'.includes(c)) || c.charCodeAt(0) === 127,
         )
       )
-        throw new Error('Tab·줄바꿈 이외 제어문자는 보낼 수 없습니다.');
+        throw new UserError('Tab·줄바꿈 이외 제어문자는 보낼 수 없습니다.');
       const targets = candidates.filter((s) => selected.includes(s.tabId));
       if (!targets.length || targets.length > 32)
-        throw new Error('연결된 대상 1~32개를 선택하세요.');
+        throw new UserError('연결된 대상 1~32개를 선택하세요.');
       if (
         targets.some(
           (s) =>
@@ -114,7 +114,7 @@ export function SnippetDialog({
             s.snapshot().replaying,
         )
       )
-        throw new Error('연결/인증 상태가 바뀌었습니다. 대상을 다시 확인하세요.');
+        throw new UserError('연결/인증 상태가 바뀌었습니다. 대상을 다시 확인하세요.');
       setPreview({
         body,
         execute,

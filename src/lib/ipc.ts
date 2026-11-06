@@ -49,5 +49,9 @@ export const blankProfile = (): Profile => ({
   lastConnected: null,
   hasSecret: false,
 });
-export const errorText = (error: unknown) =>
-  typeof error === 'string' ? error : '작업에 실패했습니다. 다시 시도하세요.';
+/** A message written for the user. Other Error objects stay generic in errorText. */
+export class UserError extends Error {}
+export function errorText(error: unknown) {
+  if (typeof error === 'string') return error;
+  return error instanceof UserError ? error.message : '작업에 실패했습니다. 다시 시도하세요.';
+}

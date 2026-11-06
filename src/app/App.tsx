@@ -1,5 +1,6 @@
 import { FtpPane } from '../features/sftp/FtpPane';
 import { useFullscreen } from './useFullscreen';
+import { insertTab, paneCapacity } from './workspaceTabs';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { MaintenancePanel } from '../features/settings/MaintenancePanel';
 import { SessionTransfer } from '../features/sessions/SessionTransfer';
@@ -307,14 +308,14 @@ export function App() {
       return;
     }
     const session = new TerminalSession(profile, theme, () => void refresh());
-    setTabs((previous) => (layout === 'single' ? [...previous, session] : [session, ...previous]));
+    setTabs((previous) => insertTab(previous, session, layout));
     setActive(session.tabId);
     void session.connect(value, remember);
   }
   function openLocal(target: LocalTarget) {
     const profile = { ...blankProfile(), id: target.id, name: target.name, host: 'localhost' };
     const session = new TerminalSession(profile, theme, () => {}, target);
-    setTabs((previous) => (layout === 'single' ? [...previous, session] : [session, ...previous]));
+    setTabs((previous) => insertTab(previous, session, layout));
     setActive(session.tabId);
     setActiveGame(null);
     setPreview(false);
@@ -817,7 +818,7 @@ export function App() {
                   select={() => {
                     setActive(t.tabId);
                     setActiveGame(null);
-                    if (layout !== 'single' && tabs.indexOf(t) >= (layout === 'grid' ? 4 : 2))
+                    if (layout !== 'single' && tabs.indexOf(t) >= paneCapacity(layout))
                       setTabs([t, ...tabs.filter((v) => v !== t)]);
                     setPreview(false);
                   }}
@@ -903,9 +904,7 @@ export function App() {
               </div>
               <BroadcastControl
                 enabled={layout !== 'single' && tabs.length > 1}
-                scope={tabs
-                  .slice(0, layout === 'grid' ? 4 : layout === 'single' ? 1 : 2)
-                  .map((t) => t.connectionId)}
+                scope={tabs.slice(0, paneCapacity(layout)).map((t) => t.connectionId)}
                 onSelectionChange={setBroadcastIds}
               />
               <button
@@ -939,11 +938,7 @@ export function App() {
           )}
           <div
             className={`terminal-grid layout-${layout}`}
-            data-pane-count={
-              zoomed
-                ? 1
-                : Math.min(tabs.length, layout === 'grid' ? 4 : layout === 'single' ? 1 : 2)
-            }
+            data-pane-count={zoomed ? 1 : Math.min(tabs.length, paneCapacity(layout))}
             hidden={!tabs.length || preview || !!activeGame}
             inert={!!activeGame}
             style={{ '--split-ratio': `${split}%` } as CSSProperties}
@@ -956,7 +951,7 @@ export function App() {
                   preview ||
                   (layout === 'single' || zoomed
                     ? active !== t.tabId
-                    : index >= (layout === 'grid' ? 4 : 2))
+                    : index >= paneCapacity(layout))
                 }
                 onFocusCapture={() => setActive(t.tabId)}
                 onPointerDown={() => setActive(t.tabId)}
@@ -981,7 +976,7 @@ export function App() {
                       !activeGame &&
                       (layout === 'single' || zoomed
                         ? active === t.tabId
-                        : index < (layout === 'grid' ? 4 : 2))
+                        : index < paneCapacity(layout))
                     }
                     theme={theme}
                     reconnect={() =>
@@ -1120,7 +1115,7 @@ export function App() {
           open={(launch, title) => {
             const profile = { ...blankProfile(), name: `PodTree · ${launch.context}`, host: title };
             const session = new TerminalSession(profile, theme, () => {}, undefined, launch);
-            setTabs((previous) => [...previous, session]);
+            setTabs((previous) => insertTab(previous, session, layout));
             setActive(session.tabId);
             setActiveGame(null);
             setPreview(false);

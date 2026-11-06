@@ -1,5 +1,5 @@
 import { TerminalDecoder } from '../../lib/encoding';
-import { directoryFromOsc } from './preferences';
+import { directoryFromOsc, terminalDisplay } from './preferences';
 import { programMetadata, type GuideProgram } from './guideData';
 import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
@@ -76,8 +76,7 @@ export class TerminalSession {
     this.terminal = new Terminal({
       theme: terminalTheme(theme),
       fontFamily: theme.foundations.font.mono,
-      fontSize: 14,
-      scrollback: 5000,
+      ...terminalDisplay(),
       cursorBlink: true,
       screenReaderMode: true,
       allowProposedApi: false,

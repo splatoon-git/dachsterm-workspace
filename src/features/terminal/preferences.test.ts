@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { directoryFromOsc, needsPasteConfirmation, saveTerminalPreferences } from './preferences';
+import {
+  directoryFromOsc,
+  needsPasteConfirmation,
+  saveTerminalDisplay,
+  saveTerminalPreferences,
+  subscribeTerminalPreferences,
+  terminalDisplay,
+} from './preferences';
 
 describe('terminal paths and clipboard safety', () => {
   it('accepts remote absolute paths without interpreting them as local URLs', () => {
@@ -22,6 +29,17 @@ describe('terminal paths and clipboard safety', () => {
     for (const value of ['echo ok\n', '\r', '\x1b[200~payload', '\x03', '\x00', '\x7f'])
       expect(needsPasteConfirmation(value)).toBe(true);
     expect(needsPasteConfirmation('한글 hello\tworld')).toBe(false);
+  });
+  it('notifies panes in the same window when font size or scrollback changes', () => {
+    let notified = 0;
+    const stop = subscribeTerminalPreferences(() => notified++);
+    saveTerminalDisplay({ fontSize: 18 });
+    saveTerminalDisplay({ scrollback: 1000 });
+    stop();
+    expect(notified).toBe(2);
+    expect(terminalDisplay()).toEqual({ fontSize: 18, scrollback: 1000 });
+    expect(localStorage.getItem('dachsterm.fontSize')).toBe('18');
+    expect(localStorage.getItem('dachsterm.scrollback')).toBe('1000');
   });
   it('persists explicit on/off choices and backspace compatibility', () => {
     saveTerminalPreferences({

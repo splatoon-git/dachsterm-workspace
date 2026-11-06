@@ -151,6 +151,16 @@ try {
   await page.getByRole('button', { name: '좌우', exact: true }).click();
   await expect(pane).toBeVisible();
   await expect(cmd).toBeVisible();
+  // A font change in one pane must reach the other pane in the same window.
+  for (const size of ['18', '14']) {
+    await pane.getByRole('button', { name: '터미널 설정', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '터미널 설정' })
+      .getByLabel('글꼴 크기')
+      .selectOption(size);
+    await page.keyboard.press('Escape');
+    await expect(cmd.locator('.xterm-rows')).toHaveCSS('font-size', `${size}px`);
+  }
   await cmd.getByRole('button', { name: '연결 종료', exact: true }).click();
   await expect(cmd.locator('.connection-message')).toContainText('종료', { timeout: 15000 });
   await cmd.getByRole('button', { name: '재접속', exact: true }).click();

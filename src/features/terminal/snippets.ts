@@ -1,3 +1,4 @@
+import { UserError } from '../../lib/ipc';
 export type Snippet = {
   id: string;
   name: string;
@@ -21,7 +22,7 @@ export function variables(body: string): string[] {
 export function expand(body: string, values: Record<string, string>): string {
   return body.replace(/\{\{([\p{L}\p{N}_-]{1,40})\}\}/gu, (_, name: string) => {
     if (!Object.hasOwn(values, name) || !values[name])
-      throw new Error(`자리표시자 ${name} 값을 입력하세요.`);
+      throw new UserError(`자리표시자 ${name} 값을 입력하세요.`);
     return values[name];
   });
 }
