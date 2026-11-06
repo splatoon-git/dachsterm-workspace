@@ -14,6 +14,8 @@ const screenshots = path.resolve('test-results-native');
 await mkdir(screenshots, { recursive: true });
 const probe = (key) => process.env[`DACHSTERM_PROBE_${key}`];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Argon2 in the debug build takes about 1s when idle and over 4s on a busy machine.
+const kdfWait = { timeout: 20000 };
 let app,
   browser,
   page,
@@ -88,7 +90,27 @@ async function shutdown() {
     await browser.close().catch(() => {});
     browser = null;
   }
+  await webviewExit();
   return graceful;
+}
+// On a busy machine WebView2 outlives the app. Launching again with the same data folder
+// then opens the debug port late or never, so wait for this test's own processes to end.
+async function webviewExit() {
+  const filter = `*${path.basename(directory)}*`;
+  for (let i = 0; i < 30; i++) {
+    const result = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        `@(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -like '${filter}' }).Count`,
+      ],
+      { encoding: 'utf8', windowsHide: true },
+    );
+    if (result.stdout.trim() === '0') return;
+    await sleep(500);
+  }
+  console.error('WebView2 processes still running after 15s or more');
 }
 function pane() {
   return page.locator(
@@ -155,6 +177,17 @@ async function connected() {
   await expect(pane().locator('.connection-message')).toContainText('연결됨', { timeout: 15000 });
   await command('stty -echo');
   await sleep(150);
+}
+// The click returns before the tab exists because connecting first awaits vault_status.
+// Until then pane() is the previous connected tab, so connected() alone would pass early.
+async function connectNewTab() {
+  const tabs = page.locator('.tab-strip').getByRole('tab');
+  const count = await tabs.count();
+  const previousId = await pane().getAttribute('data-connection-id');
+  await page.locator('.profile-card').getByRole('button', { name: '연결', exact: true }).click();
+  await expect(tabs).toHaveCount(count + 1);
+  await expect.poll(() => pane().getAttribute('data-connection-id')).not.toBe(previousId);
+  await connected();
 }
 function docker(args) {
   const r = spawnSync('docker', args, { encoding: 'utf8', timeout: 30000 });
@@ -253,11 +286,7 @@ try {
   stage = 'five tabs';
   for (let i = 0; i < 4; i++) {
     stage = `five tabs open ${i + 2}`;
-    const previousId = await pane().getAttribute('data-connection-id');
-    await page.locator('.profile-card').getByRole('button', { name: '연결', exact: true }).click();
-    await expect(page.locator('.tab-strip').getByRole('tab')).toHaveCount(i + 2);
-    await expect.poll(() => pane().getAttribute('data-connection-id')).not.toBe(previousId);
-    await connected();
+    await connectNewTab();
     await command(`printf 'TAB_${i}\\n'`);
     await output(`TAB_${i}`);
   }
@@ -453,8 +482,7 @@ try {
   await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
   await page.getByRole('dialog').getByLabel('터미널 인코딩').selectOption('euc-kr');
   await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
-  await page.locator('.profile-card').getByRole('button', { name: '연결', exact: true }).click();
-  await connected();
+  await connectNewTab();
   await command(`python3 -c "import sys;sys.stdout.buffer.write(bytes.fromhex('c7d1b1db'))"`);
   await output('한글');
   await command(
@@ -493,7 +521,10 @@ try {
   const previousClipboard = await page.evaluate(() => navigator.clipboard.readText());
   try {
     await pane().getByRole('button', { name: '복사', exact: true }).click();
-    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'NATIVE_한글_OK');
+    // The copy button writes asynchronously, so an immediate read can see the old value.
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('NATIVE_한글_OK');
     await pane().locator('.xterm-helper-textarea').focus();
     await typeInput("printf '");
     await pane().getByRole('button', { name: '붙여넣기', exact: true }).click();
@@ -656,7 +687,7 @@ try {
   await vaultDialog.getByRole('button', { name: '마스터 패스워드 저장', exact: true }).click();
   await expect(
     vaultDialog.getByText('마스터 패스워드를 저장했습니다.', { exact: true }),
-  ).toBeVisible();
+  ).toBeVisible(kdfWait);
   assert.equal((await invoke('vault_status')).enabled, true);
   await vaultDialog.getByRole('button', { name: '대화상자 닫기' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '대화상자 닫기' }).click();
@@ -667,11 +698,11 @@ try {
     .getByLabel('현재 마스터 패스워드', { exact: true })
     .fill('invalid-master-password');
   await vaultDialog.getByRole('button', { name: '확인 후 암호 표시' }).click();
-  await expect(vaultDialog.getByRole('alert')).toContainText('일치하지 않거나');
+  await expect(vaultDialog.getByRole('alert')).toContainText('일치하지 않거나', kdfWait);
   await sleep(1100);
   await vaultDialog.getByLabel('현재 마스터 패스워드', { exact: true }).fill(master);
   await vaultDialog.getByRole('button', { name: '확인 후 암호 표시' }).click();
-  await expect(vaultDialog.getByLabel('저장된 암호', { exact: true })).toBeVisible();
+  await expect(vaultDialog.getByLabel('저장된 암호', { exact: true })).toBeVisible(kdfWait);
   const revealed = await vaultDialog.getByLabel('저장된 암호', { exact: true }).inputValue();
   await vaultDialog.getByRole('button', { name: '암호 숨기기', exact: true }).click();
   assert(revealed === probe('PASSWORD'), 'master reveal roundtrip mismatch');
@@ -680,7 +711,7 @@ try {
   await vaultDialog.getByLabel('현재 마스터 패스워드', { exact: true }).fill(master);
   await vaultDialog.getByRole('button', { name: '확인 후 암호 표시' }).click();
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-  await expect(vaultDialog.getByRole('button', { name: '확인 후 암호 표시' })).toBeEnabled();
+  await expect(vaultDialog.getByRole('button', { name: '확인 후 암호 표시' })).toBeEnabled(kdfWait);
   await expect(vaultDialog.getByLabel('저장된 암호', { exact: true })).not.toBeVisible();
   assert.equal(await vaultDialog.getByLabel('저장된 암호', { exact: true }).inputValue(), '');
 
@@ -690,6 +721,8 @@ try {
   await pane().getByRole('button', { name: '연결 종료', exact: true }).click();
   await pane().getByRole('button', { name: '재접속', exact: true }).click();
   vaultDialog = page.getByRole('dialog', { name: '마스터 패스워드', exact: true });
+  // vault.rs rejects a second verification within 1s; the path here takes only about 1.1s.
+  await sleep(1100);
   await vaultDialog.getByLabel('현재 마스터 패스워드', { exact: true }).fill(master);
   await vaultDialog.getByRole('button', { name: '잠금 해제', exact: true }).click();
   await connected();
@@ -802,6 +835,15 @@ try {
       .match(/test-native\.mjs:\d+:\d+/g)
       ?.join(' <- ') ?? 'native assertion',
   );
+  // Alerts and connection status are app-authored strings, never entered credentials.
+  if (page)
+    console.error(
+      'UI states:',
+      await page
+        .locator('[role=alert], .connection-message')
+        .allTextContents()
+        .catch(() => []),
+    );
   if (stage.startsWith('U3'))
     console.error(String(error.stack).match(/verify-tunnels\.mjs:\d+:\d+/)?.[0] ?? 'U3 failure');
   if (stage.startsWith('S1'))
@@ -816,6 +858,8 @@ try {
     (stage.startsWith('S1 terminal') ||
       stage === 'launch' ||
       stage === 'detached window ownership' ||
+      stage === 'legacy terminal encoding' ||
+      stage.startsWith('split layout') ||
       stage.startsWith('file ') ||
       stage === 'selective multi input')
   )

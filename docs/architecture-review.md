@@ -79,7 +79,7 @@
 | T2 | 중간 | 확인 | 스크립트 전체 복제율 5.77%가 이 영역에 집중된다. 18개가 각자 `launch()`를 구현하고(최대 58줄 동일), `shutdown`, `invoke`도 반복된다. | `scripts/lib/native-app.mjs` | M |
 | T3 | 낮음 | 확인 | `tests/ui/fixtures/tunnels.tsx`가 `TunnelPanel`의 타입 22줄을 복제한다. | 제품 타입 import | S |
 | T4 | 낮음 | 확인 | Phase 기반 이름: `test-phase63-67-native.mjs`, `run-phase1.mjs`(Phase 2~4 포함). | 기능 이름으로 변경, 문서 참조 함께 수정 | S |
-| T5 | 중간 | 확인(원인 미확인) | `test:native`가 불안정하다. 같은 EXE로 3회 실행해 2회 서로 다른 단계(`master vault migration and reveal`, `legacy terminal encoding`)에서 실패하고 1회 전체 통과했다. | 실패 줄을 확보해 원인 확인, 부하 유무 비교 | M |
+| T5 | 중간 | 대부분 처리 | `test:native` 불안정. 스크립트의 경합과 짧은 대기가 원인이었고, 제품 결함은 확인되지 않았다. 수정 후 평상시 5회 통과했으나, 분할 단계 실패 1건은 원인 미확인이고 부하 상태 재검증은 하지 않았다. [기록](verification/native-test-flakiness.md) | 다시 실패하면 남긴 진단으로 분할 단계 원인 확인 | S |
 
 ## 합치지 말아야 할 것
 
