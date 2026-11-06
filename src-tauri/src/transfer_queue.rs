@@ -1632,6 +1632,9 @@ mod tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(&target, &link).unwrap();
         assert!(local_guard(&link.join("file")).await.is_err());
+        // Without this the test also passes when every path is refused, as on macOS,
+        // where the temporary directory itself sits under the system link /var.
+        local_guard(&target.join("file")).await.unwrap();
     }
     #[test]
     fn invalid_version_does_not_erase_queue() {
