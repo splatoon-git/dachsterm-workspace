@@ -136,7 +136,6 @@ Tauri 2 앱이다. React는 화면과 터미널 렌더링만 맡고, SSH 연결�
 | `windows.rs` | Windows OS가 아니라 터미널 창 분리 |
 | `session_transfer.rs` | 파일 전송이 아니라 세션 설정 이관 |
 | `sftp_list`, `features/sftp/` | FTP/FTPS도 처리 |
-| `transfer_cancel` | 실제로는 일시 중지 |
 | `run-phase1.mjs`, `probe:phase1` | Phase 2~4 검사 포함 |
 | `audit-windows.mjs`, `generate-notices.mjs` | Windows 의존성 그래프만 검사·고지 (macOS 미포함) |
 | roadmap §6 모듈 구성 | 계획이며 실제 구조와 다름 (`commands/`, `ssh/` 폴더 없음) |

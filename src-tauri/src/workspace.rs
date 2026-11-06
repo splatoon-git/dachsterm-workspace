@@ -71,32 +71,8 @@ pub async fn transfer_pick(
         .map(Some)
 }
 #[tauri::command]
-pub async fn transfer_drop(
-    state: State<'_, AppState>,
-    id: String,
-    path: String,
-    local: String,
-) -> Result<String> {
-    let local = std::path::PathBuf::from(local);
-    if !local.is_file() && !local.is_dir() {
-        return Err("파일 또는 폴더를 드롭하세요.".into());
-    }
-    let name = local
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or("파일 이름 오류")?;
-    let remote = format!("{}/{name}", path.trim_end_matches('/'));
-    state
-        .transfers
-        .start(state.connections.clone(), id, remote, local, true)
-}
-#[tauri::command]
 pub fn transfer_list(state: State<'_, AppState>) -> Vec<Transfer> {
     state.transfers.list()
-}
-#[tauri::command]
-pub fn transfer_cancel(state: State<'_, AppState>, id: String) -> Result<()> {
-    state.transfers.control(&[id], "pause")
 }
 #[tauri::command]
 pub async fn transfer_batch(
@@ -309,20 +285,6 @@ pub async fn editor_pick() -> Result<Option<String>> {
         .map(|f| f.path().to_string_lossy().into_owned()))
 }
 
-#[tauri::command]
-pub async fn transfer_resume(
-    state: State<'_, AppState>,
-    id: String,
-    connection_id: String,
-    profile_id: String,
-) -> Result<()> {
-    state.transfers.resume(
-        state.connections.clone(),
-        id,
-        profile_id,
-        Some(connection_id),
-    )
-}
 #[tauri::command]
 pub async fn transfer_discard(
     state: State<'_, AppState>,

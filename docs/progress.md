@@ -1,9 +1,10 @@
 # DachsTerm 구현 진행 현황
 
 - 마지막 갱신: 2026-11-06
+- **P3·B9 완료 / 실제 SSH 회귀 통과, 검사 불안정(T5)** — `tests/` 타입 검사를 게이트에 연결하고 미사용 명령 4개를 제거했다. `test:native`는 같은 EXE로 3회 중 2회 서로 다른 단계에서 실패하고 3회째 전체 통과했다. 원인은 미확인이다. FTP 네이티브와 자동 게이트는 통과했다(Vitest 231, Playwright 87, Rust 56+1). 모두 `0a9286f` + 미커밋 기준의 로컬 결과이며 CI 결과가 아니다. 다음 첫 행동: 푸시해 CI를 확인한 뒤 T5의 실패 줄을 확보한다. [검증 기록](verification/tests-typecheck-and-unused-commands.md) 참조.
 - **macOS 준비 점검(5.2 선행)** — `macos.yml` 첫 실행 통과(`0b3dc2b`, 실행 `42162935907`): Vitest 231, Playwright 87, Rust 55+1, clippy, debug `.app` 생성. 빌드와 자동 테스트만 확인했으며 **실기기 실행 결과는 아직 없다.** 남은 ID: M.1~M.11. 다음 첫 행동: M.2~M.4를 수정하고 MacBook에서 `mac-verify`로 검증한다. [macOS 준비 상태](verification/macos-readiness.md) 참조.
 - **N.2 이름 변경** — 작업 폴더와 GitHub 저장소는 `dachsterm-workspace`, 제품은 `DachsTerm`, 마스코트는 `Dachs`로 통일했다. 게임 화면·코드·CSS·테스트와 설계 문서 파일명을 갱신했다. 현재 상태는 이 문서 하단 N.2 기록을 따른다. README는 소개·설치·지원 범위로 줄이고 사용법은 [사용 안내서](user-guide.md), 개발·검사는 [개발 가이드](development.md)로 분리했다.
-- **N.1 제품명·내부 식별자 DachsTerm 전환 구현·Windows 검증 완료 / SSH·Mac 재검증 대기**: 데이터 이전 없이 npm/Rust/실행 파일·앱 ID·저장 키·JSON 규약·보안 저장소·암호화 AAD·셸 알림·테스트/문서를 통일했다. 단위656(사본 포함 추정, 실측 226은 하단 구조 검토 참조)+57개/UI86개, 실제 로컬PTY/WSL·테마·OS 암호보관/재시작·복구·FTP/FTPS/CP949·새 NSIS 설치/재설치/실행/제거 통과. [개명 검증](verification/rename.md) 및 하단 N.1이 최신 상태다. 과거 산출물 경로/해시와 실제 폴더/GitHub 주소는 보존한다.
+- **N.1 제품명·내부 식별자 DachsTerm 전환 구현·Windows·실제 SSH 검증 완료(불안정 T5 있음) / PodTree·Mac 재검증 대기**: 데이터 이전 없이 npm/Rust/실행 파일·앱 ID·저장 키·JSON 규약·보안 저장소·암호화 AAD·셸 알림·테스트/문서를 통일했다. 단위656(사본 포함 추정, 실측 226은 하단 구조 검토 참조)+57개/UI86개, 실제 로컬PTY/WSL·테마·OS 암호보관/재시작·복구·FTP/FTPS/CP949·새 NSIS 설치/재설치/실행/제거 통과. [개명 검증](verification/rename.md) 및 하단 N.1이 최신 상태다. 과거 산출물 경로/해시와 실제 폴더/GitHub 주소는 보존한다.
 - **6.2 스니펫·6.6 기본 명령/로그 필터/조작표 구현·Windows 실제 통합 검증 완료**: SQLite 스니펫·최종 대상/본문 확인·브로드캐스트 격리, 기본 명령26/필터7·복사·수동/Bash 실행 알림 조작표. 실제 SSH/PowerShell/WSL·독립 창·재시작7개 시나리오 묶음 통과, pageErrors0. [검증 기록](verification/phase-6-2-6.md)과 하단 최종 기록 참조. 물리IME/Mac 및 최신 release/설치본 대기이며 Phase6 전체 환경 검증 완료는 아니다.
 - **6.3 세션 로그·6.7 PodTree 구현 및 Windows 실제 통합 검증 완료 / Mac·선택 환경 대기**: UTF-8 로그/마스킹/회전/자동 기록, 독립 PodTree PTY·고정 context/namespace·조회/운영 모드·종료 정리. 실제 PowerShell/OpenSSH/WSL·Kubernetes 13개 시나리오와 앱 재시작 통과. [검증 기록](verification/phase63-67.md), 하단 최종 기록과 보존 debug를 따른다. 전체 Phase 6 완료는 아니다.
 - **6.4/6.5 구현·Windows 자동 검증 완료 / 외부 실파일·Mac 대기**: 최대4홉 SSH·각 홉 인증/신뢰, 계층/태그/일괄 수정/템플릿, JSON v3·외부 이관 확장. 실제 OpenSSH 1/2홉·혼합 인증·SFTP/편집/모니터링/터널·중간 단절 격리 및 최종 WebView2의 경유 인증/신뢰·PTY·템플릿·일괄 수정·재시작 통과. Rust54개·세션 규칙3개·관련 브라우저8개 통과. debug 산출물과 별도 대기는 [검증 기록](verification/phase-6-jump-sessions.md), 상세는 하단 6.4/6.5를 따른다. 전체 Phase 6 완료는 아니다.
@@ -822,5 +823,6 @@
 - 테스트 수(P2): `vite.config.ts`에 `test.include`를 추가했다. 이전 기록의 "42파일 656개"는 재현되지 않으며 worktree 사본 집계로 추정한다. 이 수치를 현재 값으로 인용하지 않는다.
 - 버그: F1 `UserError`로 스니펫 오류 표시. F2 `app/workspaceTabs.ts`의 `insertTab`으로 분할 화면 새 탭 표시. F3 글꼴·스크롤백을 공용 스토어로 동기화.
 - 로컬 검증: `npx vitest run src` 18파일 231개, `npx tsc --noEmit`, `npx eslint src`, `npx playwright test` 87개, `node scripts/test-local-native.mjs`(실제 PTY 분할 패널 글꼴 동기화 단언 추가) 통과. F1, F2 회귀 테스트는 수정을 되돌리면 실패함을 확인했다.
-- 미검증: F2는 함수 단위 테스트만 있고 실제 PodTree 탭 동작은 Kubernetes 환경이 필요해 실행하지 않았다. 실제 SSH 네이티브(`test:native`)는 이번에 실행하지 않았다.
-- 남은 ID: `docs/architecture-review.md`의 P3, P5, P6, B*, U*, T*. 다음 첫 행동은 브랜치의 CI 결과 확인 후 `main` 병합이며, 사용자 승인 후 진행한다.
+- 미검증: F2는 함수 단위 테스트만 있고 실제 PodTree 탭 동작은 Kubernetes 환경이 필요해 실행하지 않았다. 실제 SSH 네이티브는 후속 P3·B9 작업에서 실행했다.
+- P3·B9와 실제 SSH 회귀 결과: [검증 기록](verification/tests-typecheck-and-unused-commands.md). `test:native`는 3회 중 1회만 전체 통과했으며 불안정 원인은 T5로 남겼다.
+- 남은 ID: `docs/architecture-review.md`의 P5, P6, B1~B8, B10, B11, U*, T*. 다음 첫 행동은 상단 항목을 따른다.

@@ -253,11 +253,17 @@ test('resize and theme redraw preserve frozen engine, choices and logical aspect
   );
   await page.setViewportSize({ width: 360, height: 900 });
   await expect
-    .poll(() => page.locator('canvas').evaluate((c) => Math.abs(c.width / c.height - 16 / 9)))
+    .poll(() =>
+      page
+        .locator('canvas')
+        .evaluate((c: HTMLCanvasElement) => Math.abs(c.width / c.height - 16 / 9)),
+    )
     .toBeLessThan(0.02);
-  const before = await page.locator('canvas').evaluate((c) => c.toDataURL());
+  const before = await page.locator('canvas').evaluate((c: HTMLCanvasElement) => c.toDataURL());
   await page.evaluate(() => window.survivorUi.dark());
-  await expect.poll(() => page.locator('canvas').evaluate((c) => c.toDataURL())).not.toBe(before);
+  await expect
+    .poll(() => page.locator('canvas').evaluate((c: HTMLCanvasElement) => c.toDataURL()))
+    .not.toBe(before);
   expect(await page.evaluate(() => JSON.stringify(window.survivorUi.controller.session.run))).toBe(
     serialized,
   );

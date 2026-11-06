@@ -126,20 +126,6 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
     }
     Ok(data)
 }
-#[tauri::command]
-pub async fn config_import(state: State<'_, AppState>) -> Result<usize> {
-    let Some(file) = rfd::AsyncFileDialog::new()
-        .add_filter("JSON", &["json"])
-        .pick_file()
-        .await
-    else {
-        return Ok(0);
-    };
-    let data = crate::maintenance::read_config(file.path())?;
-    let _guard = state.mutation.lock().unwrap();
-    crate::maintenance::snapshot(&state.store, &state.directory)?;
-    import(&state.store, &data)
-}
 pub fn import(store: &Store, data: &[u8]) -> Result<usize> {
     if data.len() > crate::maintenance::MAX_CONFIG_BYTES {
         return Err("설정 파일은 2MiB 이하여야 합니다.".into());

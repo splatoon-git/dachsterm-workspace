@@ -83,13 +83,13 @@ const second = {
   connectionId: 'id-two',
   profile: { ...first.profile, name: '테스트 로컬' },
   localTarget: { id: 'powershell', name: 'PowerShell', kind: 'shell' },
-} as TerminalSession;
+} as unknown as TerminalSession;
 const excluded = {
   ...first,
   tabId: 'pod',
   profile: { ...first.profile, name: 'PodTree' },
   podtree: {},
-} as TerminalSession;
+} as unknown as TerminalSession;
 window.__invalidate = () => {
   first.connectionId = 'new-id';
 };

@@ -122,7 +122,13 @@ try {
     const local = path.join(root, '한글 upload.bin');
     await writeFile(local, Buffer.from([239, 187, 191, 0, 255, 13, 10, 123, 42]));
     const id = await pane.getAttribute('data-connection-id');
-    const job = await invoke('transfer_drop', { id, path: `/${protocol}-ui`, local });
+    const [job] = await invoke('transfer_batch', {
+      id,
+      path: `/${protocol}-ui`,
+      mode: 'drop',
+      paths: [local],
+      conflict: 'error',
+    });
     await expect
       .poll(async () => (await invoke('transfer_list')).find((t) => t.id === job)?.status)
       .toBe('completed');

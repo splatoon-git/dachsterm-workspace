@@ -350,10 +350,12 @@ try {
   const { writeFile: writeLocal } = await import('node:fs/promises');
   const uploadFile = path.join(directory, '한글 upload.txt');
   await writeLocal(uploadFile, 'native upload revision');
-  const transferId = await invoke('transfer_drop', {
+  const [transferId] = await invoke('transfer_batch', {
     id: workspaceId,
     path: listing.path,
-    local: uploadFile,
+    mode: 'drop',
+    paths: [uploadFile],
+    conflict: 'error',
   });
   await expect
     .poll(async () => (await invoke('transfer_list')).find((t) => t.id === transferId)?.status)
@@ -794,7 +796,12 @@ try {
       `${error.name}: ${String(error.message).match(/locator\.[a-zA-Z]+/)?.[0] ?? 'assertion or operation'} failed`,
     );
   console.error(`FAIL native integration stage: ${stage} (details redacted)`);
-  console.error(String(error.stack).match(/test-native\.mjs:\d+:\d+/)?.[0] ?? 'native assertion');
+  // File and line only: helper frames alone do not identify the failing step.
+  console.error(
+    String(error.stack)
+      .match(/test-native\.mjs:\d+:\d+/g)
+      ?.join(' <- ') ?? 'native assertion',
+  );
   if (stage.startsWith('U3'))
     console.error(String(error.stack).match(/verify-tunnels\.mjs:\d+:\d+/)?.[0] ?? 'U3 failure');
   if (stage.startsWith('S1'))
