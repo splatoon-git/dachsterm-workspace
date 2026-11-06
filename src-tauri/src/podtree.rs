@@ -1,4 +1,5 @@
 //! Dedicated Kubernetes PTYs. Never members of the shell broadcast or snippet targets.
+mod launch;
 use crate::{
     AppState,
     ssh::{Event, Input},
@@ -293,17 +294,7 @@ async fn stage(state: &AppState, launch: &Launch) -> Result<(String, String)> {
     {
         return Err("PodTree 임시 경로 확인 실패".into());
     }
-    let command = format!(
-        "export DACHSTERM_EMBEDDED=1 KUBECTL=kubectl; exec bash {} --context {} -n {} {}",
-        quote(&format!("{path}/podtree.sh")),
-        quote(&launch.context),
-        quote(&launch.namespace),
-        if launch.operational {
-            ""
-        } else {
-            "--read-only"
-        }
-    );
+    let command = launch::start_command(launch, &path);
     Ok((path, command))
 }
 fn emit(sink: &Channel<Event>, status: &str, message: &str) {

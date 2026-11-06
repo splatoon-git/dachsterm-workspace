@@ -4,11 +4,15 @@ mod commands;
 mod config_includes;
 pub mod credentials;
 pub mod editor;
+mod editor_location;
 pub mod encoding;
 pub mod file_ops;
 pub mod ftp;
 pub mod hostkeys;
 pub mod local;
+mod local_links;
+#[cfg(target_os = "macos")]
+mod login_path;
 mod maintenance;
 pub mod monitoring;
 pub mod podtree;
@@ -56,6 +60,8 @@ pub struct AppState {
     pub closing: AtomicBool,
 }
 pub fn run() {
+    #[cfg(target_os = "macos")]
+    login_path::apply();
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {

@@ -63,33 +63,6 @@ pub fn destination(p: &crate::storage::Profile) -> String {
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
-fn editor_program(program: &str) -> PathBuf {
-    #[cfg(windows)]
-    {
-        let relative = match program {
-            "code" => Some("Microsoft VS Code/Code.exe"),
-            "cursor" => Some("cursor/Cursor.exe"),
-            "subl" => Some("Sublime Text/sublime_text.exe"),
-            _ => None,
-        };
-        if let Some(relative) = relative {
-            let mut roots = Vec::new();
-            if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-                roots.push(PathBuf::from(local).join("Programs"));
-            }
-            if let Some(programs) = std::env::var_os("ProgramFiles") {
-                roots.push(PathBuf::from(programs));
-            }
-            for root in roots {
-                let path = root.join(relative);
-                if path.is_file() {
-                    return path;
-                }
-            }
-        }
-    }
-    PathBuf::from(program)
-}
 async fn read_remote(s: &russh_sftp::client::SftpSession, path: &str) -> Result<Vec<u8>> {
     let file = s.open(path).await.map_err(sftp::failure)?;
     let mut data = Vec::new();
@@ -240,7 +213,7 @@ impl Editors {
         };
         persist(&edit)?;
         // Never interpolate a shell command. The file argument is always a separate argument.
-        let mut command = std::process::Command::new(editor_program(program));
+        let mut command = std::process::Command::new(crate::editor_location::resolve(program));
         command.args(args).arg(&edit.local);
         #[cfg(windows)]
         {

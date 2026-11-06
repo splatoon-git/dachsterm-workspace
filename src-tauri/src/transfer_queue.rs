@@ -1,5 +1,6 @@
 //! Bounded, persistent transfer scheduler. Authentication stays in Connections.
 use crate::{
+    local_links::{linked, refuse_links},
     sftp::{self, Plan, Source, Transfer},
     ssh::Connections,
     storage::{Result, Store},
@@ -132,30 +133,9 @@ fn local_path(value: &Path) -> Result<()> {
     }
     Ok(())
 }
-fn linked(m: &std::fs::Metadata) -> bool {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        m.file_attributes() & 0x400 != 0
-    }
-    #[cfg(not(windows))]
-    {
-        m.file_type().is_symlink()
-    }
-}
 async fn local_guard(path: &Path) -> Result<()> {
     local_path(path)?;
-    for p in path.ancestors() {
-        match tokio::fs::symlink_metadata(p).await {
-            Ok(m) if linked(&m) => {
-                return Err("링크 또는 junction 경로를 따라가지 않습니다.".into());
-            }
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(sftp::failure(e)),
-        }
-    }
-    Ok(())
+    refuse_links(path).await
 }
 fn stamp(m: &std::fs::Metadata) -> Result<Source> {
     Ok(Source {
