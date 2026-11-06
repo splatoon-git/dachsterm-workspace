@@ -1,0 +1,37 @@
+/* In a short pane only the preview shrinks, so the actions stay on screen. */
+.paste-confirm {
+  display: flex;
+  flex-direction: column;
+}
+.paste-confirm > * {
+  flex-shrink: 0;
+}
+.paste-confirm pre {
+  flex-shrink: 1;
+  min-height: 3em;
+  max-height: 200px;
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm);
+  overflow: auto;
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-panel);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-small);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.paste-confirm mark {
+  padding: 0 2px;
+  border-radius: var(--radius-small);
+  background: var(--color-surface-header);
+  color: var(--color-status-warning);
+  font-weight: 600;
+}
+.paste-confirm .paste-counts,
+.paste-confirm .paste-omitted {
+  color: var(--color-text-secondary);
+}

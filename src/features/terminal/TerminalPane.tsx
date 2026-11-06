@@ -9,6 +9,7 @@ import { SessionLog } from './SessionLog';
 import { ProgramGuide } from './CommandGuide';
 import { AuthenticationPrompt } from './AuthenticationPrompt';
 import { attachFontSizeWheel } from './fontWheel';
+import { PasteConfirm } from './PasteConfirm';
 import {
   fontSizeChoices,
   needsPasteConfirmation,
@@ -368,21 +369,15 @@ export function TerminalPane({
         />
       )}
       {paste !== null && paste.id === session.connectionId && state.status === 'connected' && (
-        <div className="trust-card" role="alert">
-          <p>여러 줄 또는 제어문자가 포함되어 있습니다. 붙여넣으면 명령이 실행될 수 있습니다.</p>
-          <div className="form-actions">
-            <button onClick={() => setPaste(null)}>취소</button>
-            <button
-              onClick={() => {
-                session.terminal.paste(paste.text);
-                session.terminal.focus();
-                setPaste(null);
-              }}
-            >
-              붙여넣기 실행
-            </button>
-          </div>
-        </div>
+        <PasteConfirm
+          text={paste.text}
+          cancel={() => setPaste(null)}
+          confirm={() => {
+            session.terminal.paste(paste.text);
+            session.terminal.focus();
+            setPaste(null);
+          }}
+        />
       )}
       <div className="live-terminal" ref={host} />
       {!session.podtree && <ProgramGuide key={session.connectionId} session={session} />}

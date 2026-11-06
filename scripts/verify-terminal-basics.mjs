@@ -77,6 +77,9 @@ export async function verifyTerminalBasics({
     await expect(
       pane().getByText('여러 줄 또는 제어문자가 포함되어 있습니다.', { exact: false }),
     ).toBeVisible();
+    await expect(pane().getByLabel('붙여넣을 내용', { exact: true })).toContainText(
+      "printf 'MULTILINE_TWO",
+    );
     await pane().getByRole('button', { name: '취소', exact: true }).click();
     await command("printf 'PASTE_CANCELLED_OK\\n'");
     await output('PASTE_CANCELLED_OK');
