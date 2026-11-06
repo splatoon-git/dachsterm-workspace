@@ -47,7 +47,6 @@ node scripts/test-<기능>-native.mjs    개별 네이티브 검사. target/debu
 
 - Docker의 Linux 컨테이너 엔진이 필요하다. 호스트 OpenSSH 설정은 건드리지 않는다.
 - 같은 EXE를 빌드와 테스트가 동시에 쓰면 잠금 오류가 난다.
-- `npm test`는 `vitest run src`다. `src`는 경로 부분 일치 필터이므로 `target/` 아래 소스 사본이 있으면 함께 실행되어 개수가 늘 수 있다.
 
 ## 아키텍처
 
@@ -57,7 +56,7 @@ Tauri 2 앱이다. React는 화면과 터미널 렌더링만 맡고, SSH 연결�
 
 - 모든 호출은 [src/lib/ipc.ts](src/lib/ipc.ts)의 `call<T>('명령', args)`를 거친다. Tauri 밖(`desktop === false`)에서는 거부되므로, Playwright UI 테스트는 백엔드 없이 동작하고 필요한 경우 `tests/ui/fixtures/`의 페이지로 컴포넌트를 띄운다.
 - 명령 이름은 타입으로 검사되지 않는다. 등록 위치는 [engineering-rules.md](docs/engineering-rules.md)의 체크리스트를 따른다.
-- 백엔드 오류는 `Result<T, String>`의 한국어 문자열로 전달된다. `errorText`는 문자열만 통과시키고 `Error` 객체는 일반 문구로 바꾼다.
+- 백엔드 오류는 `Result<T, String>`의 한국어 문자열로 전달된다. `errorText`는 문자열과 `UserError`만 그대로 표시하고 다른 `Error`는 일반 문구로 바꾼다.
 
 ### 식별자와 터미널 데이터 흐름
 

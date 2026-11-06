@@ -73,11 +73,11 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 
 - 의존 방향은 `app → features → components·lib·themes`다. `components`, `lib`, `themes`는 `features`를 import하지 않는다.
 - 기능 간 직접 import를 새로 추가하지 않는다. 공유할 코드는 아래 계층으로 내린다.
-- 탭 생성은 App의 기존 경로와 같은 삽입 규칙을 따른다. 분할 화면은 앞쪽 탭만 표시한다.
+- 탭은 `app/workspaceTabs.ts`의 `insertTab`으로 넣는다. 분할 화면은 앞쪽 `paneCapacity`개만 표시한다.
 - 새 탭 종류나 연결 종류를 `this.podtree ? … : this.localTarget ? …` 분기로 늘리지 않는다.
 - 여러 상태를 인코딩한 문자열(`'discard:id'`) 대신 판별 유니온을 쓴다.
 - 순수 로직은 컴포넌트 밖 `.ts`로 빼고 단위 테스트한다.
-- 사용자에게 보여줄 오류는 `errorText`로 표시되는지 확인한다. 현재 `Error` 객체의 메시지는 표시되지 않는다.
+- 사용자에게 보여줄 프런트엔드 오류는 `lib/ipc.ts`의 `UserError`로 던진다. 일반 `Error`의 메시지는 `errorText`가 표시하지 않는다.
 - `localStorage`는 `dachsterm.*` 키만 쓰고, 읽기·쓰기를 try/catch로 감싸며, 읽은 값을 검증한다(`themes/store.ts` 참고).
 - 같은 창의 다른 패널에는 `storage` 이벤트가 오지 않는다. 창 내부 동기화에 쓰지 않는다.
 - 폴링은 이전 요청이 끝나기 전에 다음 요청을 보내지 않게 한다.
