@@ -819,7 +819,7 @@
 
 ## 구조 검토·구현 규칙 추가 (2026-11-06)
 
-- 사용자 요청으로 저장소 전체 구조를 검토하고 규칙을 추가했다. 추가: `CLAUDE.md`, `docs/engineering-rules.md`, `docs/architecture-review.md`. 이후 승인에 따라 CI와 버그 3건을 수정했다. 브랜치 `chore/ci-line-endings`에 커밋했고 `main`에는 아직 반영하지 않았다.
+- 사용자 요청으로 저장소 전체 구조를 검토하고 규칙을 추가했다. 추가: `CLAUDE.md`, `docs/engineering-rules.md`, `docs/architecture-review.md`. 이후 승인에 따라 CI와 버그 3건을 수정해 `main`에 병합·푸시했다(`9536b28`, CI 실행 `42160705400` 성공).
 - CI(P1, P4): `.gitattributes`를 `* text=auto eol=lf`로 변경. 깨끗한 클론에서 수정 전 Prettier 183개 실패, 수정 후 통과. 이전 CI는 `format:check`에서 멈춰 뒤 게이트가 실행된 적이 없었다. 실행 `42156057319`가 첫 성공이다(Vitest 226개, Playwright 87개 포함).
 - 테스트 수(P2): `vite.config.ts`에 `test.include`를 추가했다. 이전 기록의 "42파일 656개"는 재현되지 않으며 worktree 사본 집계로 추정한다. 이 수치를 현재 값으로 인용하지 않는다.
 - 버그: F1 `UserError`로 스니펫 오류 표시. F2 `app/workspaceTabs.ts`의 `insertTab`으로 분할 화면 새 탭 표시. F3 글꼴·스크롤백을 공용 스토어로 동기화.
