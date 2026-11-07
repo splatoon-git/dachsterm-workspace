@@ -9,6 +9,8 @@
 | 변경 전 `55cc424` | `scripts/verify-windows.ps1` | 종료 0 |
 | TW.1 미커밋 트리 | `scripts/verify-windows.ps1` | 종료 0. Vitest 455, Playwright 99, Rust 85+1 |
 | TW.2 미커밋 트리 | `scripts/verify-windows.ps1` | 종료 0. Vitest 460, Playwright 115, Rust 85+1 |
+| TW.1~TW.3 묶음 `5737fb6` | `scripts/verify-windows.ps1` | 실패. `workspace-drag.spec.ts`의 탭 바 재생성 경합으로 1건 실패해 테스트를 고쳤다(`e331f13`) |
+| 같은 묶음 `e331f13` | `scripts/verify-windows.ps1` | 1회차 실패: `snack.spec.ts:93`의 픽스처가 5초 안에 그려지지 않았다. 단독 3회 반복은 18/18 통과했고, 의존하는 변경은 `styles.css`에서 지운 탭·그리드 규칙뿐이다. 2회차 종료 0. Vitest 460, Playwright 139, Rust 85+1 |
 
 게이트의 `generate-notices.mjs`는 `licenses/THIRD_PARTY_NOTICES.txt`를 내용 차이 없이 CRLF로 다시 쓴다. 매번 복원했고 커밋하지 않았다.
 
