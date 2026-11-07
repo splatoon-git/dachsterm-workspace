@@ -18,6 +18,8 @@ const box = (page: Page) => page.locator('#root > div');
 test.beforeEach(async ({ page }) => {
   await page.goto('/tests/ui/fixtures/terminal-pane.html');
   await expect(page.locator('.xterm-rows')).toBeVisible();
+  // xterm starts at 24 rows; compare against the size after the first fit, not before it.
+  await expect.poll(async () => (await position(page)).rows).not.toBe(24);
   await write(page, Array.from({ length: 120 }, (_, i) => `line ${i}\r\n`).join(''));
   await expect.poll(async () => (await position(page)).bottom).toBeGreaterThan(0);
 });
