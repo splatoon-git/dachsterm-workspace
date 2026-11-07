@@ -1,13 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openGame } from './helpers';
 async function openAdventure(page: Page) {
   await page.goto('/');
-  if (!(await page.locator('.sidebar-games summary').isVisible()))
-    await page.getByRole('tab', { name: '연결', exact: true }).click();
-  await page.locator('.sidebar-games summary').click();
-  await page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name: '닥스의 모험', exact: true })
-    .click();
+  await openGame(page, '닥스의 모험');
   return page.getByRole('tabpanel', { name: '닥스의 모험', exact: true });
 }
 for (const width of [1280, 360])

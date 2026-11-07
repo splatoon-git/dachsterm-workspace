@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { openNewConnection, openPreview } from './helpers';
 for (const width of [1280, 560])
   test(`session editor labels, focus and transient secret at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 820 });
     await page.goto('/');
-    await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
-    await page.getByRole('menuitem', { name: /^새 연결…/ }).click();
+    await openNewConnection(page);
     const dialog = page.getByRole('dialog', { name: '새 연결' });
     await expect(dialog.getByLabel('이름', { exact: true })).toBeFocused();
     const actionHeights = await dialog
@@ -35,27 +35,18 @@ for (const width of [1280, 800, 560])
     await expect(page.getByRole('link', { name: '작업 영역으로 이동' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator('main')).toBeFocused();
-    await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-    await page
-      .locator('header')
-      .getByRole('button', { name: '터미널 미리보기', exact: true })
-      .click();
+    await openPreview(page);
     await expect(page.locator('.xterm-screen')).toBeVisible();
     await page.screenshot({ path: `test-results/terminal-${width}.png` });
-    // A chosen menu item closes the menu, so open it again.
-    await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-    await page.getByRole('button', { name: '작업 화면', exact: true }).click();
+    await page.getByRole('button', { name: '터미널 미리보기 탭 닫기', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '서버 작업의 편안한 시작' })).toBeVisible();
     await page.screenshot({ path: `test-results/welcome-${width}.png` });
   });
 test('replacement theme updates existing UI and terminal without component changes', async ({
   page,
 }) => {
   await page.goto('/');
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page
-    .locator('header')
-    .getByRole('button', { name: '터미널 미리보기', exact: true })
-    .click();
+  await openPreview(page);
   await expect(page.locator('.xterm-screen')).toBeVisible();
   await page.evaluate(async () => {
     // A new definition needs no component changes, including after mounting a terminal.

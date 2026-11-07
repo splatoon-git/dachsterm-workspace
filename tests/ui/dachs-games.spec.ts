@@ -1,17 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openGame as chooseGame } from './helpers';
+import { openPreview } from './helpers';
 
 async function openGame(page: Page, name: string) {
-  const launcher = page.locator('.sidebar-games summary');
-  if (!(await launcher.isVisible()))
-    await page.getByRole('tab', { name: '연결', exact: true }).click();
-  if (!(await page.locator('.sidebar-games').getAttribute('open'))) {
-    if (!(await page.getByRole('navigation', { name: '게임 목록' }).isVisible()))
-      await launcher.click();
-  }
-  await page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name, exact: true })
-    .click();
+  await chooseGame(page, name);
   return page.getByRole('tabpanel', { name, exact: true });
 }
 
@@ -115,8 +107,7 @@ test('Dachs games follow theme, retain terminal instance, pause on blur and supp
   page,
 }) => {
   await page.goto('/');
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await openPreview(page);
   const terminal = page.locator('.xterm');
   await terminal.evaluate((e) => e.setAttribute('data-instance', 'kept'));
   const adventure = await openGame(page, '닥스의 모험');

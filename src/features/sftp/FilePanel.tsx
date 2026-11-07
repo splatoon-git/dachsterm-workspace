@@ -1,4 +1,5 @@
 import { TransferQueue, type Transfer } from './TransferQueue';
+import { EditorPicker } from './EditorPicker';
 import { PermissionEditor } from './PermissionEditor';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -10,6 +11,7 @@ import { selectionAfterClick, withoutNested, type FileEntry } from './fileList';
 import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
 import { FileAction, FilePathBar, FileTreeRow, useFileTree } from './fileTree';
 import { FollowControl, useDirectoryFollow } from './follow';
+import { operationText } from './fileOperation';
 type FileClipboard = { sourceId: string; operation: 'copy' | 'move'; paths: string[] };
 type BatchOutcome = { completed: string[]; errors: string[] };
 type Entry = FileEntry;
@@ -372,18 +374,6 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
         />
         <span className="file-actions-gap" />
         <FileAction
-          label="복사"
-          icon="copy"
-          disabled={!selection.length || working}
-          onClick={() => void copySelection('copy')}
-        />
-        <FileAction
-          label="잘라내기"
-          icon="cut"
-          disabled={!selection.length || working}
-          onClick={() => void copySelection('move')}
-        />
-        <FileAction
           label="붙여넣기"
           icon="paste"
           disabled={!clipboard || working}
@@ -493,67 +483,6 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               {selected.permissions?.toString(8).slice(-3)}
             </small>
           )}
-        </div>
-        <div className="file-actions" role="group" aria-label="선택 항목 작업">
-          <FileAction
-            label="다운로드"
-            icon="download"
-            disabled={!selection.length || working}
-            onClick={() =>
-              void (selection.length === 1 && !selected?.directory
-                ? run('transfer_pick', { id, path: target, upload: false })
-                : run('transfer_batch', {
-                    id,
-                    path: listing.path,
-                    mode: 'download',
-                    paths: selectedPaths,
-                    conflict,
-                  }))
-            }
-          />
-          <FileAction
-            label="편집"
-            icon="edit"
-            disabled={isFtp || selection.length !== 1 || selected?.directory}
-            title={isFtp ? '외부 편집은 SSH/SFTP 연결에서 지원합니다.' : '편집'}
-            onClick={() => setOperation('edit')}
-          />
-          <FileAction
-            label="이름"
-            icon="rename"
-            disabled={selection.length !== 1 || working}
-            onClick={() => {
-              setValue(selected?.name ?? '');
-              setOperation('rename');
-            }}
-          />
-          <FileAction
-            label="권한"
-            icon="lock"
-            disabled={!selection.length || working}
-            onClick={() => {
-              setValue(selected?.permissions?.toString(8).slice(-3) ?? '644');
-              setOperation('chmod');
-            }}
-          />
-          <FileAction
-            label="압축"
-            icon="archive"
-            disabled={isFtp || !selection.length || working}
-            onClick={() => archive('compress')}
-          />
-          <FileAction
-            label="압축 해제"
-            icon="extract"
-            disabled={isFtp || selection.length !== 1 || selected?.directory || working}
-            onClick={() => archive('extract')}
-          />
-          <FileAction
-            label="삭제"
-            icon="trash"
-            disabled={!selection.length || working}
-            onClick={() => setOperation('delete')}
-          />
         </div>
       </div>
       <details
@@ -681,7 +610,49 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
           at={context}
           close={() => setContext(null)}
           items={[
-            { label: '복사', shortcut: 'Ctrl+C', run: () => void copySelection('copy') },
+            {
+              label: '다운로드',
+              disabled: working,
+              run: () =>
+                void (selection.length === 1 && !selected?.directory
+                  ? run('transfer_pick', { id, path: target, upload: false })
+                  : run('transfer_batch', {
+                      id,
+                      path: listing.path,
+                      mode: 'download',
+                      paths: selectedPaths,
+                      conflict,
+                    })),
+            },
+            {
+              label: '외부 편집기로 열기',
+              disabled: isFtp || selection.length !== 1 || !!selected?.directory,
+              run: () => setOperation('edit'),
+            },
+            {
+              label: '이름 바꾸기',
+              shortcut: 'F2',
+              separated: true,
+              disabled: selection.length !== 1 || working,
+              run: () => {
+                setValue(selected?.name ?? '');
+                setOperation('rename');
+              },
+            },
+            {
+              label: '권한…',
+              disabled: working,
+              run: () => {
+                setValue(selected?.permissions?.toString(8).slice(-3) ?? '644');
+                setOperation('chmod');
+              },
+            },
+            {
+              label: '복사',
+              shortcut: 'Ctrl+C',
+              separated: true,
+              run: () => void copySelection('copy'),
+            },
             { label: '잘라내기', shortcut: 'Ctrl+X', run: () => void copySelection('move') },
             {
               label: '붙여넣기',
@@ -690,36 +661,37 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               run: () => void paste(),
             },
             {
-              label: '다른 프로그램으로 편집',
-              disabled: isFtp || selection.length !== 1 || !!selected?.directory,
-              run: () => setOperation('edit'),
-            },
-            {
               label: '전체 경로 복사',
               run: () =>
                 void navigator.clipboard
                   .writeText(selectedPaths.join('\n'))
                   .catch(() => setError('경로 복사 실패')),
             },
-            { label: '압축하기…', disabled: isFtp, run: () => archive('compress') },
+            {
+              label: '압축하기…',
+              separated: true,
+              disabled: isFtp,
+              run: () => archive('compress'),
+            },
             {
               label: '압축 해제…',
               disabled: isFtp || selection.length !== 1 || !!selected?.directory,
               run: () => archive('extract'),
             },
-            { label: '삭제', shortcut: 'Delete', danger: true, run: () => setOperation('delete') },
+            {
+              label: '삭제',
+              shortcut: 'Delete',
+              separated: true,
+              danger: true,
+              run: () => setOperation('delete'),
+            },
           ]}
         />
       )}
       {operation && (
         <Dialog
-          title={
-            operation === 'edit'
-              ? '외부 편집기'
-              : operation.startsWith('overwrite')
-                ? '원격 파일 덮어쓰기'
-                : '파일 작업'
-          }
+          title={operationText(operation, selection.length).title}
+          size={operation === 'edit' ? 'medium' : 'small'}
           close={() => setOperation('')}
         >
           <form
@@ -811,27 +783,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
           >
             {operation === 'edit' ? (
               <>
-                <label>
-                  프로그램 경로
-                  <input
-                    list="editors"
-                    value={editor}
-                    onChange={(e) => setEditor(e.target.value)}
-                    required
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void call<string | null>('editor_pick')
-                      .then((p) => {
-                        if (p) setEditor(p);
-                      })
-                      .catch((e) => setError(errorText(e)))
-                  }
-                >
-                  프로그램 찾아보기…
-                </button>
+                <EditorPicker value={editor} change={setEditor} fail={setError} />
                 <label>
                   저장 후 동작
                   <select value={uploadMode} onChange={(e) => setUploadMode(e.target.value)}>
@@ -864,14 +816,9 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                     표현 불가능한 문자는 업로드하지 않습니다.
                   </small>
                 </label>
-                <datalist id="editors">
-                  <option value="code" />
-                  <option value="cursor" />
-                  <option value="subl" />
-                </datalist>
-                <p className="muted">
-                  편집기에서 저장한 뒤 선택한 방식으로 업로드합니다. 충돌하거나 취소한 수정본은
-                  로컬에 보존됩니다.
+                <p className="field-help">
+                  편집기에서 저장하면 고른 방식으로 업로드합니다. 충돌하거나 취소한 수정본은 로컬에
+                  남깁니다.
                 </p>
               </>
             ) : operation === 'compress' || operation === 'extract' ? (
@@ -924,7 +871,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                     onChange={(e) => setArchiveLimit(Number(e.target.value))}
                   />
                 </label>
-                <p className="muted">
+                <p className="field-help">
                   서버의 Python 3와 Linux 지원을 사용합니다. ZIP 파일명 인코딩 지정은 Python 3.11
                   이상이 필요합니다. 파일 내용은 변환하지 않습니다. 링크·장치·경로 이탈 항목은
                   거부하며 기존 대상에 덮어쓰지 않습니다.
@@ -952,8 +899,11 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               <button type="button" onClick={() => setOperation('')}>
                 취소
               </button>
-              <button disabled={working} className="primary">
-                {working ? '처리 중…' : operation === 'edit' ? '편집 시작' : '적용'}
+              <button
+                disabled={working}
+                className={operationText(operation, selection.length).danger ? 'danger' : 'primary'}
+              >
+                {working ? '처리 중…' : operationText(operation, selection.length).action}
               </button>
             </div>
           </form>

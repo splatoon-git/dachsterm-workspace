@@ -50,7 +50,6 @@ button:disabled {
 .workspace-grid.files-hidden {
   grid-template-columns: 220px minmax(0, 1fr);
 }
-.sessions,
 .files {
   display: flex;
   flex-direction: column;
@@ -59,9 +58,7 @@ button:disabled {
   /* Its rows adapt to the panel's own width, which the sidebar width sets. */
   container-type: inline-size;
 }
-.sessions {
-  border-right: var(--border-width-default) solid var(--color-border-default);
-}
+
 .files {
   border-left: var(--border-width-default) solid var(--color-border-default);
 }
@@ -80,16 +77,7 @@ h2 {
   font-size: var(--font-small);
   color: var(--color-text-secondary);
 }
-.search {
-  display: block;
-  padding: 0 var(--space-md) var(--space-xl);
-}
-.search span {
-  display: block;
-  font-size: var(--font-small);
-  margin-bottom: var(--space-sm);
-  color: var(--color-text-secondary);
-}
+
 input {
   width: 100%;
   background: var(--color-surface-panel);
@@ -105,38 +93,7 @@ input::placeholder {
 nav {
   padding: 0 var(--space-sm);
 }
-.nav-item {
-  width: 100%;
-  display: flex;
-  gap: var(--space-md);
-  text-align: left;
-  border-color: transparent;
-  margin-bottom: var(--space-xs);
-}
-.nav-item span:first-of-type {
-  flex: 1;
-}
-.nav-item[aria-current] {
-  background: var(--color-action-selected);
-}
-.nav-item:disabled {
-  background: transparent;
-}
-.sidebar-empty {
-  padding: var(--space-xxl) var(--space-lg);
-  color: var(--color-text-secondary);
-  font-size: var(--font-small);
-  line-height: 1.8;
-}
-.sidebar-empty p {
-  margin-top: var(--space-sm);
-}
-.local-note {
-  margin-top: auto;
-  padding: var(--space-lg);
-  font-size: var(--font-small);
-  color: var(--color-text-secondary);
-}
+
 /* Read by screen readers, not drawn: per-pane status that the status bar shows only when focused. */
 .sr-only {
   position: absolute;
@@ -326,26 +283,13 @@ small {
   .welcome small {
     margin-top: var(--space-xl);
   }
-  .sidebar-empty {
-    padding: var(--space-xl) var(--space-md);
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
   }
 }
-@media (max-width: 700px) {
-  .nav-item {
-    font-size: var(--font-small);
-    padding: var(--space-sm) var(--space-xs);
-    gap: var(--space-sm);
-    white-space: nowrap;
-  }
-  .sidebar-empty {
-    word-break: keep-all;
-  }
-}
+
 /* Phase 1: token-based session editor and terminal workspace. */
 select {
   font: inherit;
@@ -355,37 +299,6 @@ select {
   border-radius: var(--radius-small);
   padding: var(--space-sm);
   max-width: 100%;
-}
-dialog {
-  width: min(600px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
-  overflow: auto;
-  border: var(--border-width-default) solid var(--color-border-default);
-  border-radius: var(--radius-large);
-  padding: var(--space-xl);
-  color: var(--color-text-primary);
-  background: var(--color-surface-panel);
-  box-shadow: var(--shadow-panel);
-}
-dialog::backdrop {
-  background: var(--color-overlay-backdrop);
-}
-.dialog-heading,
-.form-actions,
-.group-row,
-.group-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
-.dialog-heading {
-  margin-bottom: var(--space-lg);
-}
-.form-actions {
-  justify-content: flex-end;
-  margin-top: var(--space-lg);
-  flex-wrap: wrap;
 }
 .form-grid {
   display: grid;
@@ -419,53 +332,7 @@ label.checkbox {
   background: var(--color-surface-panel);
   color: var(--color-status-error);
 }
-.sessions {
-  overflow: auto;
-}
-.session-list {
-  flex: 1;
-  overflow: auto;
-  min-height: 80px;
-  padding: var(--space-sm);
-}
-.profile-card {
-  margin-bottom: var(--space-sm);
-  border: var(--border-width-default) solid var(--color-border-subtle);
-  border-radius: var(--radius-medium);
-  background: var(--color-surface-panel);
-}
-.profile-target {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  text-align: left;
-  border: none;
-  background: transparent;
-  padding: var(--space-md);
-  gap: var(--space-xs);
-}
-.profile-target strong,
-.profile-target > span {
-  overflow-wrap: anywhere;
-}
-.profile-target > span {
-  font-size: var(--font-small);
-  color: var(--color-text-secondary);
-}
-.group-heading {
-  padding: var(--space-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--font-small);
-}
-.group-heading button,
-.group-row > button:last-child {
-  padding: var(--space-xs) var(--space-sm);
-}
-.group-row .nav-item {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  margin: 0;
-}
+
 .terminal-pane {
   position: relative;
   display: flex;
@@ -523,7 +390,6 @@ button {
 .workspace-grid.files-hidden {
   grid-template-columns: var(--sidebar-width, 232px) 4px minmax(0, 1fr);
 }
-.sessions,
 .files {
   border: 0;
   background: var(--color-surface-subtle);
@@ -544,60 +410,7 @@ button {
   background: var(--color-surface-header);
   padding: 2px 7px;
 }
-.search {
-  padding-bottom: 12px;
-}
-.search span {
-  display: none;
-}
-.search input {
-  font-size: 12px;
-  padding: 9px 10px;
-  background: var(--color-surface-panel);
-  border-color: var(--color-border-default);
-}
-.nav-item {
-  justify-content: flex-start;
-  font-size: 12px;
-  padding: 9px 12px;
-}
-.nav-item[aria-current] {
-  font-weight: 600;
-  color: var(--color-action-primary);
-}
-.group-heading {
-  margin-top: 14px;
-  font-size: 10px;
-  letter-spacing: 1px;
-}
-.group-heading button,
-.group-row > button:last-child {
-  border: 0;
-  background: transparent;
-}
-.profile-card {
-  border-color: transparent;
-  background: transparent;
-  border-radius: 7px;
-}
-.profile-card:hover,
-.profile-card:focus-within {
-  background: var(--color-surface-panel);
-  border-color: var(--color-border-subtle);
-}
-.profile-target {
-  align-items: flex-start;
-  font-size: 12px;
-  gap: 5px;
-}
-.profile-target > span {
-  font-family: var(--font-mono);
-  font-size: 10px;
-}
-.local-note {
-  font-size: 10px;
-  border-top: 1px solid var(--color-border-subtle);
-}
+
 .resize-handle {
   background: var(--color-border-subtle);
   cursor: col-resize;
@@ -881,11 +694,6 @@ main {
 .edit-item small {
   font-size: 10px;
 }
-.transfer-item button {
-  align-self: flex-end;
-  font-size: 10px;
-  padding: 3px 6px;
-}
 .transfer-item progress {
   width: 100%;
   height: 4px;
@@ -1012,9 +820,7 @@ main {
   .welcome > small {
     font-size: 9px;
   }
-  .profile-target {
-    padding: 8px;
-  }
+
   .file-toolbar button {
     font-size: 10px;
   }
@@ -1196,12 +1002,6 @@ main {
 }
 
 /* Short-lived credential disclosure. */
-.secret-reveal {
-  margin-top: 16px;
-}
-.secret-reveal input {
-  font-family: var(--font-mono);
-}
 
 .file-filter {
   display: flex;
@@ -1263,24 +1063,7 @@ main {
 }
 
 /* Optional local tools share the session navigation and workspace tabs. */
-.sidebar-games {
-  flex-shrink: 0;
-  border-top: 1px solid var(--color-border-subtle);
-  padding: var(--space-sm);
-}
-.sidebar-games summary {
-  padding: var(--space-sm);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  font-size: var(--font-small);
-}
-.sidebar-games nav {
-  padding: var(--space-xs) 0 0;
-}
-.sidebar-games .nav-item {
-  align-items: center;
-  font-size: var(--font-small);
-}
+
 /* Local environments and compact, keyboard accessible application navigation. */
 .toolbar-menu {
   position: relative;
@@ -1298,32 +1081,43 @@ main {
 .toolbar-menu-items {
   position: absolute;
   left: 0;
-  top: calc(100% + 8px);
+  top: calc(100% + 4px);
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 190px;
-  padding: 8px;
+  gap: 2px;
+  min-width: 200px;
+  padding: var(--space-xs);
   background: var(--color-surface-panel);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-medium);
 }
-.toolbar-menu-items > button {
-  text-align: left;
+.toolbar-menu-items nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+}
+.toolbar-menu-items button {
   justify-content: flex-start;
-  min-height: 36px;
-}
-.local-targets {
-  border-bottom: 1px solid var(--color-border-subtle);
-  padding: 0 8px 10px;
-}
-.local-targets p {
-  margin: 6px;
-  color: var(--color-text-secondary);
+  min-height: 30px;
+  padding: 0 var(--space-sm);
+  border: 0;
+  background: transparent;
   font-size: var(--font-small);
-  line-height: 1.6;
+  text-align: left;
 }
+.toolbar-menu-items button:hover:enabled,
+.toolbar-menu-items button[aria-current] {
+  background: var(--color-action-selected);
+}
+.toolbar-menu-items .menu-label {
+  padding: 6px var(--space-sm) 2px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .local-target {
   align-items: center;
   min-height: 36px;
@@ -1339,28 +1133,59 @@ main {
 }
 .local-picker {
   display: grid;
-  gap: 8px;
-  margin: 16px 0;
+  gap: 6px;
 }
 .local-picker button {
   display: flex;
+  justify-content: flex-start;
   align-items: center;
-  gap: 12px;
-  min-height: 48px;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 var(--space-md);
+  border-color: var(--color-border-subtle);
+  font-size: var(--font-small);
   text-align: left;
+}
+.local-picker button:hover:enabled {
+  border-color: var(--color-action-primary);
+  background: var(--color-action-selected);
+}
+.local-picker svg {
+  color: var(--color-text-secondary);
+}
+.local-picker strong {
+  font-weight: 500;
 }
 .local-picker span {
   margin-left: auto;
   color: var(--color-text-secondary);
+  font-size: 11px;
 }
 .shortcut-list {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+.shortcut-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding: 6px 0;
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
+  font-size: var(--font-small);
 }
 .shortcut-list dd {
   margin: 0;
+  flex-shrink: 0;
+}
+.shortcut-list kbd {
+  padding: 1px 6px;
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: 4px;
+  background: var(--color-surface-subtle);
   font-family: var(--font-mono);
+  font-size: 11px;
 }
 .workspace-grid > .sessions[hidden] {
   display: none;
@@ -1371,9 +1196,7 @@ main {
 .workspace-grid.sidebar-hidden.files-hidden {
   grid-template-columns: minmax(0, 1fr);
 }
-.sessions {
-  overflow-y: auto;
-}
+
 @media (max-width: 1050px) {
   .workspace-grid.sidebar-hidden {
     grid-template-columns: minmax(0, 1fr);
@@ -1383,11 +1206,9 @@ main {
   .toolbar-menu-items button {
     font-size: 12px;
   }
-  .shortcut-list {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-  .shortcut-list dd {
-    margin-bottom: 12px;
+  .shortcut-list > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
   }
 }

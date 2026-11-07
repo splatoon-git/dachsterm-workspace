@@ -213,18 +213,6 @@ export function LocalFilePanel({
         />
         <span className="file-actions-gap" />
         <FileAction
-          label="복사"
-          icon="copy"
-          disabled={!selection.length}
-          onClick={() => remember('copy')}
-        />
-        <FileAction
-          label="잘라내기"
-          icon="cut"
-          disabled={!selection.length}
-          onClick={() => remember('move')}
-        />
-        <FileAction
           label="붙여넣기"
           icon="paste"
           disabled={!clipboard}
@@ -310,26 +298,6 @@ export function LocalFilePanel({
           </strong>
           {editable && <small>{formatBytes(selected.size)}</small>}
         </div>
-        <div className="file-actions" role="group" aria-label="선택 항목 작업">
-          <FileAction
-            label="편집"
-            icon="edit"
-            disabled={!editable}
-            onClick={() => ask({ kind: 'edit', program: savedEditor() })}
-          />
-          <FileAction
-            label="이름"
-            icon="rename"
-            disabled={!selected}
-            onClick={() => selected && ask({ kind: 'rename', value: selected.name })}
-          />
-          <FileAction
-            label="삭제"
-            icon="trash"
-            disabled={!selection.length}
-            onClick={() => ask({ kind: 'delete' })}
-          />
-        </div>
       </div>
       {context && (
         <ContextMenu
@@ -337,18 +305,29 @@ export function LocalFilePanel({
           at={context}
           close={() => setContext(null)}
           items={[
-            { label: '복사', shortcut: 'Ctrl+C', run: () => remember('copy') },
+            {
+              label: '외부 편집기로 열기',
+              disabled: !editable,
+              run: () => ask({ kind: 'edit', program: savedEditor() }),
+            },
+            {
+              label: '이름 바꾸기',
+              shortcut: 'F2',
+              disabled: !selected,
+              run: () => selected && ask({ kind: 'rename', value: selected.name }),
+            },
+            {
+              label: '복사',
+              shortcut: 'Ctrl+C',
+              separated: true,
+              run: () => remember('copy'),
+            },
             { label: '잘라내기', shortcut: 'Ctrl+X', run: () => remember('move') },
             {
               label: '붙여넣기',
               shortcut: 'Ctrl+V',
               disabled: !clipboard,
               run: () => void paste(),
-            },
-            {
-              label: '외부 편집기로 열기',
-              disabled: !editable,
-              run: () => ask({ kind: 'edit', program: savedEditor() }),
             },
             {
               label: '전체 경로 복사',
@@ -360,6 +339,7 @@ export function LocalFilePanel({
             {
               label: '삭제',
               shortcut: 'Delete',
+              separated: true,
               danger: true,
               run: () => ask({ kind: 'delete' }),
             },

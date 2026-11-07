@@ -4,33 +4,12 @@
   --control-gap: 6px;
 }
 /* Action emphasis never changes geometry. */
-.form-actions > button,
-.dialog-heading > button,
 dialog .tunnel-row-actions > button,
-dialog .tunnel-list-heading > button {
+dialog .tunnel-list-actions > button {
   min-height: var(--control-height);
   padding: 5px 12px;
   font-size: var(--font-small);
   line-height: 20px;
-}
-.dialog-heading > button {
-  width: var(--control-height);
-  height: var(--control-height);
-  padding: 0;
-  flex-shrink: 0;
-}
-dialog input:not([type='checkbox']):not([type='radio']),
-dialog select {
-  min-height: var(--control-height);
-  padding: 5px 8px;
-  font-size: var(--font-small);
-  line-height: 20px;
-}
-dialog label {
-  min-width: 0;
-}
-dialog select {
-  width: 100%;
 }
 .danger-action {
   color: var(--color-status-error);
@@ -103,86 +82,7 @@ dialog select {
   scrollbar-gutter: stable;
   padding-bottom: 12px;
 }
-.connections-scroll .session-list {
-  overflow: visible;
-  min-height: 0;
-  flex: none;
-  padding: 8px;
-}
-.connections-scroll .group-heading {
-  margin-top: 8px;
-  padding: 4px 12px;
-  letter-spacing: 0;
-  font-size: 11px;
-}
-.connections-scroll .group-heading button,
-.connections-scroll .group-row > button:last-child {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-}
-.local-targets {
-  padding: 0 8px 12px;
-}
-.local-targets .nav-item {
-  background: transparent;
-}
-.local-targets .group-heading {
-  padding-inline: 4px;
-  margin-top: 0;
-}
-.workspace-sidebar .nav-item {
-  align-items: center;
-  min-height: 36px;
-  padding: 8px 10px;
-  white-space: normal;
-}
-.session-filters {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--radius-small);
-  background: var(--color-surface-header);
-}
-.session-filters .nav-item {
-  justify-content: center;
-  flex: 1;
-  padding: 6px 2px;
-  min-height: 30px;
-  margin: 0;
-  font-size: 11px;
-  background: transparent;
-}
-.session-filters .nav-item[aria-current] {
-  background: var(--color-surface-panel);
-  color: var(--color-text-primary);
-}
-.workspace-sidebar .search {
-  padding: 0 12px 8px;
-  flex-shrink: 0;
-}
-.workspace-sidebar .search input {
-  height: 36px;
-}
-.profile-card {
-  border-color: var(--color-border-subtle);
-  background: var(--color-surface-panel);
-}
-.profile-target {
-  padding: 10px 12px;
-}
-.profile-target strong {
-  font-size: 13px;
-}
-.profile-target span {
-  font-size: 11px;
-}
-.workspace-sidebar .local-note {
-  flex-shrink: 0;
-  padding: 12px 16px;
-  margin-top: 0;
-  font-size: 11px;
-}
+
 .sidebar-file-panel {
   flex: 1;
   min-height: 0;
@@ -380,19 +280,7 @@ dialog select {
   min-height: 38px;
   padding-block: 8px;
 }
-.connections-scroll .group-heading {
-  margin-top: 4px;
-}
-.workspace-sidebar .nav-item {
-  min-height: 32px;
-  padding-block: 6px;
-}
-.workspace-sidebar .local-note {
-  padding-block: 8px;
-}
-.sidebar-empty {
-  padding: 18px 12px;
-}
+
 .tray-heading {
   position: sticky;
   top: -4px;
@@ -400,7 +288,6 @@ dialog select {
   background: var(--color-surface-subtle);
 }
 .terminal-fullscreen > .toolbar,
-.terminal-fullscreen .sidebar-rail,
 .terminal-fullscreen .workspace-sidebar,
 .terminal-fullscreen .sidebar-backdrop,
 .terminal-fullscreen .unified-workspace > .resize-handle {
@@ -443,13 +330,75 @@ dialog select {
 .transfer-queue .transfer-item {
   overflow-wrap: anywhere;
 }
-.transfer-queue .transfer-item label {
+/* A transfer row: name, state, one action and its menu on the first line. */
+.transfer-head {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+.transfer-head label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--font-small);
 }
 .transfer-queue .transfer-item input[type='checkbox'] {
   width: auto;
+  margin: 0;
+}
+.transfer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.transfer-status {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+.transfer-status[data-status='failed'] {
+  color: var(--color-status-error);
+}
+.transfer-status[data-status='running'] {
+  color: var(--color-action-primary);
+}
+.transfer-head > button {
+  flex-shrink: 0;
+  height: 22px;
+  min-height: 0;
+  padding: 0 6px;
+  font-size: 10px;
+}
+.transfer-head > .transfer-more {
+  width: 22px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.transfer-head > .transfer-more:hover {
+  background: var(--color-surface-subtle);
+}
+.transfer-batch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  font-size: 10px;
+}
+.transfer-batch > span {
+  color: var(--color-text-secondary);
+}
+.transfer-batch button {
+  height: 22px;
+  min-height: 0;
+  padding: 0 6px;
+  font-size: 10px;
 }
 .transfer-results ul {
   list-style: none;

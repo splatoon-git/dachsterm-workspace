@@ -1,0 +1,181 @@
+/* One tree of foldable sections, 26px rows, indented by depth. */
+.conn-tree {
+  --tree-row: 26px;
+  --tree-indent: 12px;
+  padding: var(--space-xs) var(--space-xs) var(--space-md);
+  font-size: var(--font-small);
+}
+.tree-section + .tree-section {
+  margin-top: 2px;
+}
+.tree-head {
+  display: flex;
+  align-items: center;
+  padding-left: calc(var(--depth, 0) * var(--tree-indent));
+  border-radius: var(--radius-small);
+}
+.tree-toggle {
+  display: flex;
+  flex: 1;
+  justify-content: flex-start;
+  min-width: 0;
+  height: var(--tree-row);
+  min-height: 0;
+  gap: 6px;
+  padding: 0 var(--space-xs);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  text-align: left;
+}
+.tree-section > .tree-head .tree-toggle {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.tree-toggle:hover:enabled,
+.tree-head:hover {
+  background: var(--color-surface-panel);
+}
+.tree-chevron {
+  display: inline-flex;
+  color: var(--color-text-secondary);
+  transition: transform var(--motion-fast);
+}
+.tree-toggle[aria-expanded='true'] .tree-chevron {
+  transform: rotate(90deg);
+}
+.tree-toggle svg {
+  flex-shrink: 0;
+}
+.tree-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-count {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 400;
+}
+/* The section menu button shows on hover or focus, as on the tab bars. */
+.tree-more {
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  opacity: 0;
+}
+.tree-head:hover .tree-more,
+.tree-more:focus-visible,
+.tree-head:focus-within .tree-more {
+  opacity: 1;
+}
+.conn-tree .profile-card,
+.conn-tree .profile-shortcut {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+.conn-tree .profile-target,
+.conn-tree .profile-shortcut-target,
+.conn-tree .local-target {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  height: var(--tree-row);
+  min-height: 0;
+  gap: 6px;
+  padding: 0 var(--space-sm) 0
+    calc(var(--space-xs) + var(--depth, 1) * var(--tree-indent) + var(--space-xs));
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--color-text-primary);
+  text-align: left;
+  white-space: nowrap;
+}
+.conn-tree .profile-target:hover,
+.conn-tree .profile-shortcut-target:hover,
+.conn-tree .local-target:hover:enabled {
+  background: var(--color-surface-panel);
+}
+.conn-tree .profile-target:focus-visible,
+.conn-tree .profile-shortcut-target:focus-visible,
+.conn-tree .local-target:focus-visible {
+  outline-offset: -2px;
+}
+.conn-tree .profile-target svg,
+.conn-tree .profile-shortcut-target svg,
+.conn-tree .local-target svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+.profile-target strong,
+.profile-shortcut-target strong,
+.local-target span {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.conn-tree .row-detail {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+.local-target small {
+  margin-left: auto;
+  padding: 0 var(--space-xs);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  color: var(--color-text-secondary);
+  font-size: 9px;
+}
+.tree-note,
+.tree-empty {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm) var(--space-xs)
+    calc(var(--space-sm) + var(--tree-indent) + 14px);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.tree-empty p {
+  margin: 0 0 var(--space-xs);
+}
+.link-button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-action-primary);
+  font-size: 11px;
+}
+.link-button:hover:enabled {
+  background: transparent;
+  text-decoration: underline;
+}
+.protocol-badge {
+  flex-shrink: 0;
+  padding: 0 var(--space-xs);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  color: var(--color-text-secondary);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.protocol-badge.ftp {
+  border-color: var(--color-status-warning);
+  color: var(--color-status-warning);
+}

@@ -30,10 +30,15 @@ const base: TabMenuState = {
   groupCount: 2,
   zoomed: false,
   otherTabs: 1,
+  tabCount: 1,
   narrow: false,
 };
-const commands = (state: Partial<TabMenuState>) =>
+const arrangeCommands: string[] = ['columns', 'rows', 'grid', 'single'];
+const all = (state: Partial<TabMenuState>) =>
   tabMenuEntries({ ...base, ...state }).map((entry) => entry.command);
+/** The menu without the window-wide arrange items, which every kind of tab shares. */
+const commands = (state: Partial<TabMenuState>) =>
+  all(state).filter((command) => !arrangeCommands.includes(command));
 
 describe('sessionKind', () => {
   it('tells the four kinds apart', () => {
@@ -66,12 +71,17 @@ describe('tabMenuEntries', () => {
       'splitDown',
       'zoom',
       'detach',
+      'columns',
+      'rows',
+      'grid',
+      'single',
       'disconnect',
       'close',
       'closeOthers',
     ]);
     expect(entries.filter((e) => e.separated).map((e) => e.command)).toEqual([
       'splitRight',
+      'columns',
       'disconnect',
     ]);
   });
@@ -114,6 +124,22 @@ describe('tabMenuEntries', () => {
     const entries = tabMenuEntries({ ...base, groupCount: 1, otherTabs: 0, narrow: true });
     const disabled = entries.filter((e) => e.disabled).map((e) => e.command);
     expect(disabled).toEqual(['splitRight', 'splitDown', 'zoom', 'closeOthers']);
+  });
+  it('lays out every tab at once with two tabs or a split to gather', () => {
+    const entries = tabMenuEntries({ ...base, tabCount: 3 });
+    const arrange = entries.filter((e) => arrangeCommands.includes(e.command));
+    expect(arrange.map((e) => e.label)).toEqual([
+      '모든 탭 좌우',
+      '모든 탭 상하',
+      '모든 탭 2 × 2',
+      '모든 탭 하나로',
+    ]);
+    expect(arrange[0].separated).toBe(true);
+    expect(all({ tabCount: 3, narrow: true })).not.toContain('columns');
+    expect(all({ tabCount: 1, groupCount: 1 })).not.toContain('columns');
+    // One tab left in a split can still be gathered into one group.
+    expect(all({ tabCount: 1, groupCount: 2 })).toContain('single');
+    expect(tabMenuEntries({ ...base, tabCount: 2, groupCount: 1 }).at(-4)?.disabled).toBe(true);
   });
   it('names the state it is in', () => {
     const labels = tabMenuEntries({ ...base, zoomed: true, recording: true }).map((e) => e.label);

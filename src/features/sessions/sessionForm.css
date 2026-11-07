@@ -51,10 +51,9 @@
 .session-advanced fieldset > p {
   margin: 0;
 }
-.session-vault > p {
-  margin: 0;
-}
-.session-vault > .form-actions {
-  justify-content: flex-start;
-  margin-top: var(--space-sm);
+.session-vault {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
 }

@@ -1,5 +1,6 @@
 import { Dialog } from '../../components/Dialog';
-import { call, errorText } from '../../lib/ipc';
+import { EditorPicker } from './EditorPicker';
+import { operationText } from './fileOperation';
 
 export type LocalFileOperation =
   | { kind: 'mkdir' | 'newfile' | 'rename'; value: string }
@@ -48,8 +49,9 @@ export function LocalFileDialog({
   close: () => void;
   submit: () => void;
 }) {
+  const text = operationText(operation.kind, selection.length);
   return (
-    <Dialog title={operation.kind === 'edit' ? '외부 편집기' : '파일 작업'} close={close}>
+    <Dialog title={text.title} size={operation.kind === 'edit' ? 'medium' : 'small'} close={close}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -57,35 +59,20 @@ export function LocalFileDialog({
         }}
       >
         {operation.kind === 'delete' ? (
-          <p>
-            {selection.length}개 항목과 폴더 안의 모든 내용을 삭제합니다. 휴지통을 거치지 않으며
-            되돌릴 수 없습니다.
-            <br />
-            {selection.join(', ')}
-          </p>
-        ) : operation.kind === 'edit' ? (
           <>
-            <label>
-              프로그램 경로
-              <input
-                required
-                value={operation.program}
-                onChange={(e) => change({ kind: 'edit', program: e.target.value })}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() =>
-                void call<string | null>('editor_pick')
-                  .then((program) => {
-                    if (program) change({ kind: 'edit', program });
-                  })
-                  .catch((e) => fail(errorText(e)))
-              }
-            >
-              프로그램 찾아보기…
-            </button>
+            <p>폴더 안의 내용까지 모두 지웁니다. 휴지통을 거치지 않으며 되돌릴 수 없습니다.</p>
+            <ul className="delete-list">
+              {selection.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
           </>
+        ) : operation.kind === 'edit' ? (
+          <EditorPicker
+            value={operation.program}
+            change={(program) => change({ kind: 'edit', program })}
+            fail={fail}
+          />
         ) : (
           <label>
             이름 또는 경로
@@ -96,16 +83,14 @@ export function LocalFileDialog({
             />
           </label>
         )}
-        {error && (
-          <p role="alert" className="inline-error">
-            {error}
-          </p>
-        )}
+        {error && <p role="alert">{error}</p>}
         <div className="form-actions">
           <button type="button" onClick={close}>
             취소
           </button>
-          <button className="primary">{operation.kind === 'edit' ? '열기' : '적용'}</button>
+          <button className={text.danger ? 'danger' : 'primary'}>
+            {operation.kind === 'edit' ? '열기' : text.action}
+          </button>
         </div>
       </form>
     </Dialog>

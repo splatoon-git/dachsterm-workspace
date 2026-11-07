@@ -52,9 +52,8 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
   },
 });
 const { blankProfile } = await import('../../../src/lib/ipc');
-const { SnippetDialog } = await import('../../../src/features/terminal/SnippetDialog');
-const { CommandCatalog, ProgramGuide } =
-  await import('../../../src/features/terminal/CommandGuide');
+const { CommandPanel } = await import('../../../src/features/terminal/CommandPanel');
+const { ProgramGuide } = await import('../../../src/features/terminal/CommandGuide');
 const { PaneView } = await import('../../../src/features/terminal/paneView');
 const states: SessionState[] = [
   { status: 'connected', message: '', hostKey: null, guideProgram: null },
@@ -106,24 +105,22 @@ window.__invalidate = () => {
 };
 applyTheme(getCurrentTheme());
 function Fixture() {
-  const [open, setOpen] = useState('snippets');
+  const [open, setOpen] = useState(true);
   return (
     <>
-      <button onClick={() => setOpen('snippets')}>스니펫 열기</button>
-      <button onClick={() => setOpen('commands')}>명령 열기</button>
+      <button onClick={() => setOpen(true)}>명령 열기</button>
       {/* The app opens the full guide from the tab menu. */}
       <button onClick={() => first.view.set({ guide: true })}>조작표 전체 보기</button>
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 24 }}>
         <ProgramGuide session={first} />
       </div>
-      {open === 'snippets' && (
-        <SnippetDialog
+      {open && (
+        <CommandPanel
           sessions={[first, second, excluded]}
           active="one"
-          close={() => setOpen('')}
+          close={() => setOpen(false)}
         />
       )}
-      {open === 'commands' && <CommandCatalog close={() => setOpen('')} />}
     </>
   );
 }

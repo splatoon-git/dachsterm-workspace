@@ -1,0 +1,115 @@
+/* External editor choice: installed editors as cards, then any other program. */
+.editor-picker {
+  min-width: 0;
+  margin: 0 0 var(--space-md);
+  padding: 0;
+  border: 0;
+}
+.editor-picker legend {
+  margin-bottom: var(--space-sm);
+  padding: 0;
+  font-size: var(--font-small);
+}
+.editor-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-sm);
+}
+.editor-option {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 48px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-panel);
+  color: var(--color-text-primary);
+  font-size: var(--font-small);
+  text-align: left;
+  cursor: pointer;
+}
+.editor-option:hover {
+  border-color: var(--color-border-default);
+}
+.editor-option:has(input:checked) {
+  border-color: var(--color-action-primary);
+  background: var(--color-action-selected);
+}
+.editor-option:has(input:focus-visible) {
+  outline: var(--border-width-focus) solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+/* The radio stays for keyboard and screen readers; the card shows the state. */
+.editor-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.editor-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-small);
+  background: var(--color-surface-header);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+.editor-option:has(input:checked) .editor-mark {
+  background: var(--color-action-primary);
+  color: var(--color-text-on-action);
+}
+.editor-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.editor-text strong,
+.editor-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-text strong {
+  font-weight: 500;
+}
+.editor-text small {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.editor-browse {
+  border-style: dashed;
+}
+.editor-browse:hover:enabled {
+  background: var(--color-surface-subtle);
+}
+.editor-typed {
+  margin-top: var(--space-sm);
+  font-size: 11px;
+}
+.editor-typed summary {
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.editor-typed input {
+  margin-top: var(--space-xs);
+  font-family: var(--font-mono);
+}
+.editor-note {
+  margin: var(--space-sm) 0 0;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.editor-browse .editor-text small {
+  font-family: inherit;
+}

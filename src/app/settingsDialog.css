@@ -1,0 +1,94 @@
+/* App settings: a category list at the left and the chosen category at the right. */
+.settings-window .dialog-body {
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
+  padding: 0;
+  overflow: hidden;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-md) var(--space-sm);
+  overflow: auto;
+  border-right: var(--border-width-default) solid var(--color-border-subtle);
+  background: var(--color-surface-subtle);
+}
+.settings-nav [role='tab'] {
+  justify-content: flex-start;
+  gap: var(--space-sm);
+  height: 32px;
+  min-height: 0;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  text-align: left;
+  white-space: nowrap;
+}
+.settings-nav [role='tab']:hover {
+  background: var(--color-surface-panel);
+  color: var(--color-text-primary);
+}
+.settings-nav [role='tab'][aria-selected='true'] {
+  background: var(--color-action-selected);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+.settings-panel {
+  min-width: 0;
+  overflow: auto;
+  padding: 20px var(--space-xl) var(--space-xl);
+}
+.settings-panel-heading {
+  margin-bottom: 20px;
+}
+.settings-panel-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.settings-panel-heading p {
+  margin: var(--space-xs) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  line-height: 1.5;
+}
+/* A category's own section needs no frame of its own inside the panel. */
+.settings-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.settings-data > p,
+.settings-data > .form-actions {
+  margin: 0;
+}
+.settings-data > .form-actions {
+  justify-content: flex-start;
+}
+.settings-panel .vault-panel {
+  max-width: 440px;
+}
+
+@media (max-width: 700px) {
+  .settings-window .dialog-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: var(--space-sm);
+    border-right: 0;
+    border-bottom: var(--border-width-default) solid var(--color-border-subtle);
+  }
+  .settings-nav [role='tab'] {
+    flex-shrink: 0;
+  }
+  .settings-panel {
+    padding: var(--space-lg);
+  }
+}

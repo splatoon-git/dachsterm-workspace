@@ -60,6 +60,22 @@
 .tools .toolbar-menu > summary:hover {
   background: var(--color-surface-subtle);
 }
+/* Icon buttons: what the old view and tools menus held, one per action. */
+.tools > .header-icon {
+  width: 28px;
+  padding: 0;
+  color: var(--color-text-secondary);
+}
+.tools > .header-icon:hover,
+.tools > .header-icon[aria-expanded='true'] {
+  color: var(--color-text-primary);
+}
+.header-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--space-xs);
+  background: var(--color-border-subtle);
+}
 .title-note {
   color: var(--color-text-secondary);
   white-space: nowrap;

@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { openGame, openPreview } from './helpers';
 
 for (const width of [1280, 800, 560, 360]) {
   test(`unified left sidebar, shortcuts and restart view at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 820 });
     await page.goto('/');
-    // The rail's icons open the sidebar; the icon of the open view folds it.
-    const toggle = page.getByRole('tab', { name: '연결', exact: true });
+    // The title bar button folds and opens the sidebar; its tabs switch the view.
+    const toggle = page.getByRole('button', { name: '사이드바', exact: true });
     const sidebar = page.locator('#workspace-sidebar');
     if (width <= 700) {
       await expect(sidebar).toBeHidden();
@@ -14,14 +15,14 @@ for (const width of [1280, 800, 560, 360]) {
     const connections = page.getByRole('tab', { name: '연결', exact: true });
     const files = page.getByRole('tab', { name: '파일', exact: true });
     await connections.focus();
-    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowRight');
     await expect(files).toBeFocused();
     await expect(files).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('complementary', { name: '세션 탐색' })).toBeHidden();
     await expect(page.getByRole('complementary', { name: 'SFTP 파일 탐색' })).toBeVisible();
     const bounds = await sidebar.boundingBox();
-    const rail = await page.getByRole('navigation', { name: '사이드바 보기' }).boundingBox();
-    expect(bounds!.x).toBe(rail!.x + rail!.width);
+    // No icon column any more: the sidebar starts at the window's edge.
+    expect(bounds!.x).toBe(0);
     expect(bounds!.width).toBeGreaterThanOrEqual(200);
     expect(await sidebar.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     if (width > 700) {
@@ -46,7 +47,7 @@ for (const width of [1280, 800, 560, 360]) {
     await expect(page.getByRole('searchbox')).toHaveValue('missing-server');
     await page.screenshot({ path: `test-results/unified-sidebar-${width}.png` });
     if (width <= 700) {
-      // The backdrop starts after the icon rail; press its far right, outside the drawer.
+      // Press the backdrop's far right, outside the drawer.
       const backdrop = page.getByRole('button', { name: '사이드바 닫기', exact: true });
       const area = (await backdrop.boundingBox())!;
       await backdrop.click({ position: { x: area.width - 5, y: 40 } });
@@ -63,15 +64,11 @@ test('a game fits a split group, pauses without the keyboard and keeps the previ
 }) => {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto('/');
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
-  await page.locator('.sidebar-games summary').click();
-  await page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name: '블록 퍼즐', exact: true })
-    .click();
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '모든 탭 좌우', exact: true }).click();
+  await openPreview(page);
+  await openGame(page, '블록 퍼즐');
+  // Laying out every tab at once is in the tab menu.
+  await page.getByRole('tab', { name: '블록 퍼즐', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '모든 탭 좌우' }).click();
   const terminal = page.locator('.xterm');
   const game = page.getByRole('tabpanel', { name: '블록 퍼즐', exact: true });
   await expect(terminal).toBeVisible();
@@ -87,9 +84,7 @@ test('a game fits a split group, pauses without the keyboard and keeps the previ
   await expect(page.getByRole('tab', { name: '블록 퍼즐', exact: true })).toBeVisible();
 });
 
-test('the start page opens in a saved split and a preset menu closes after use', async ({
-  page,
-}) => {
+test('the start page opens in a saved split and the menus close after use', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto('/');
   await page.evaluate(() => localStorage.setItem('dachsterm.layout', 'grid'));
@@ -97,30 +92,29 @@ test('the start page opens in a saved split and a preset menu closes after use',
   await expect(page.getByRole('heading', { name: '서버 작업의 편안한 시작' })).toBeVisible();
   await expect(page.locator('.tab-strip')).toHaveCount(1);
   await expect(page.getByRole('tab', { name: '시작하기', exact: true })).toBeVisible();
-  const menu = page.locator('.toolbar-menu').filter({ hasText: '보기' });
+  const menu = page.locator('.toolbar-menu').filter({ hasText: '도구' });
   await menu.locator('summary').click();
   await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
   await expect(page.locator('.tab-strip')).toHaveCount(4);
   await expect(page.getByRole('tab', { name: '시작하기', exact: true })).toHaveCount(0);
   await expect(menu).not.toHaveAttribute('open');
-  await menu.locator('summary').click();
-  await page.getByRole('button', { name: '모든 탭 상하', exact: true }).click();
-  await expect(menu).not.toHaveAttribute('open');
+  await page.getByRole('tab', { name: '터미널 미리보기', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '모든 탭 상하' }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(page.locator('.tab-strip')).toHaveCount(2);
 });
 
 test('switching the sidebar preserves the existing terminal renderer', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await openPreview(page);
   await page.keyboard.press('Escape');
   const terminal = page.locator('.xterm');
   await expect(terminal).toBeVisible();
   await terminal.evaluate((e) => e.setAttribute('data-instance', 'original'));
   await page.getByRole('tab', { name: '파일', exact: true }).click();
   await page.getByRole('tab', { name: '연결', exact: true }).click();
-  // Pressing the open view's icon again folds the sidebar.
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  // The title bar button folds the sidebar.
+  await page.getByRole('button', { name: '사이드바', exact: true }).click();
   await expect(page.locator('#workspace-sidebar')).toBeHidden();
   await expect(terminal).toHaveAttribute('data-instance', 'original');
   await expect(terminal).toBeVisible();
@@ -130,8 +124,7 @@ test('fullscreen focuses the workspace and restores the sidebar without replacin
   page,
 }) => {
   await page.goto('/');
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await openPreview(page);
   await page.keyboard.press('Escape');
   await page.locator('.xterm').evaluate((e) => e.setAttribute('data-instance', 'original'));
   await page.keyboard.press('F11');

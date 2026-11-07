@@ -276,6 +276,14 @@ pub async fn edit_close(state: State<'_, AppState>, id: String) -> Result<()> {
 pub async fn edit_mode(state: State<'_, AppState>, id: String, mode: String) -> Result<()> {
     state.editors.set_mode(&id, &mode).await
 }
+/// Known editors installed on this computer, for the editor picker. It only checks files.
+#[tauri::command]
+pub async fn editor_list() -> Result<Vec<crate::editor_location::Installed>> {
+    tauri::async_runtime::spawn_blocking(crate::editor_location::installed)
+        .await
+        .map_err(|_| "설치된 편집기를 확인하지 못했습니다.".to_string())
+}
+
 #[tauri::command]
 pub async fn editor_pick() -> Result<Option<String>> {
     Ok(rfd::AsyncFileDialog::new()

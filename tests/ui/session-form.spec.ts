@@ -1,9 +1,9 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
+import { openNewConnection } from './helpers';
 
 async function openForm(page: Page) {
   await page.goto('/');
-  await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
-  await page.getByRole('menuitem', { name: /^새 연결…/ }).click();
+  await openNewConnection(page);
   return page.getByRole('dialog', { name: '새 연결' });
 }
 

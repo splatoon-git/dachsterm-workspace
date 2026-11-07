@@ -28,7 +28,15 @@ export type IconName =
   | 'lock'
   | 'archive'
   | 'extract'
-  | 'trash';
+  | 'trash'
+  | 'sidebar'
+  | 'keyboard'
+  | 'snippet'
+  | 'tools'
+  | 'star'
+  | 'clock'
+  | 'more'
+  | 'palette';
 const paths: Record<IconName, string> = {
   game: 'M7 7h10c3 0 4 3 4 7s-2 5-4 3l-2-2H9l-2 2c-2 2-4 1-4-3s1-7 4-7z M8 10v5 M5.5 12.5h5 M16 11h.01 M18 14h.01',
   server: 'M4 3h16v7H4z M4 14h16v7H4z M7 6.5h.01 M7 17.5h.01 M11 6.5h6 M11 17.5h6',
@@ -46,6 +54,8 @@ const paths: Record<IconName, string> = {
   tunnel: 'M3 8h6v8H3z M15 8h6v8h-6z M9 12h6 M6 5V3 M18 19v2',
   activity: 'M2 12h5l3-8 4 16 3-8h5',
   arrow: 'M5 12h14 M14 7l5 5-5 5',
+  palette:
+    'M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-2 0-3h3a4 4 0 0 0 4-4c0-5-4-9-9-9z M7.5 11h.01 M10 7.5h.01 M14.5 7.5h.01',
   close: 'M6 6l12 12 M18 6L6 18',
   up: 'M12 19V5 M6 11l6-6 6 6',
   folderPlus: 'M3 7V5h6l2 2h10v13H3z M12 11v5 M9.5 13.5h5',
@@ -60,6 +70,15 @@ const paths: Record<IconName, string> = {
   archive: 'M3 4h18v5H3z M5 9v11h14V9 M10 13h4',
   extract: 'M3 4h18v5H3z M5 9v11h14V9 M12 12v5 M9.5 14.5l2.5 2.5 2.5-2.5',
   trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14 M10 11v6 M14 11v6',
+  sidebar: 'M3 4h18v16H3z M9 4v16',
+  keyboard: 'M2 6h20v12H2z M6 10h.01 M10 10h.01 M14 10h.01 M18 10h.01 M7 14h10',
+  snippet:
+    'M8 4H7a2 2 0 0 0-2 2v4l-2 2 2 2v4a2 2 0 0 0 2 2h1 M16 4h1a2 2 0 0 1 2 2v4l2 2-2 2v4a2 2 0 0 1-2 2h-1',
+  tools:
+    'M14.5 6.5a4 4 0 0 0-5.3 5.3L3.5 17.5l3 3 5.7-5.7a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.3-.6-.6-2.3z',
+  star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2',
+  more: 'M5 12h.01 M12 12h.01 M19 12h.01',
 };
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return (

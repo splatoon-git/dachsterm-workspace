@@ -20,7 +20,7 @@ export function SessionForm({
   close: () => void;
   saved: (profile: Profile, connect: boolean, secret: string | null) => void;
 }) {
-  const [vaultOpen, setVaultOpen] = useState<'manage' | 'reveal' | null>(null);
+  const [revealOpen, setRevealOpen] = useState(false);
   const [profile, setProfile] = useState(initial);
   const [tags, setTags] = useState((initial.tags ?? []).join(', '));
   const [templates, setTemplates] = useState<SessionTemplate[]>([]);
@@ -66,6 +66,11 @@ export function SessionForm({
   return (
     <Dialog
       title={initial.id ? '세션 수정' : '새 연결'}
+      description={
+        initial.id
+          ? `${initial.username}@${initial.host}:${initial.port}`
+          : '서버 주소와 계정을 넣고 저장하거나 바로 연결합니다.'
+      }
       close={() => {
         if (!busy) close();
       }}
@@ -354,29 +359,20 @@ export function SessionForm({
                 />
               )}
               <div className="wide session-vault">
-                <p className="muted">
-                  비밀정보는 SQLite에 기록하지 않습니다. 저장소를 사용할 수 없으면 ‘저장하지
-                  않음’으로 연결하세요.
+                <p className="field-help">
+                  암호는 세션 DB가 아니라 보안 저장소에 둡니다. 마스터 패스워드는 설정 › 암호
+                  보관함에서 정합니다.
                 </p>
-                <div className="form-actions">
-                  <button type="button" onClick={() => setVaultOpen('manage')}>
-                    마스터 패스워드 · 잠금 해제
+                {initial.hasSecret && (
+                  <button type="button" onClick={() => setRevealOpen(true)}>
+                    저장된 암호 보기
                   </button>
-                  {initial.hasSecret && (
-                    <button type="button" onClick={() => setVaultOpen('reveal')}>
-                      저장된 암호 보기
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           </details>
         </div>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <p role="alert">{error}</p>}
         <div className="form-actions">
           <button type="button" disabled={busy} onClick={close}>
             취소
@@ -389,12 +385,7 @@ export function SessionForm({
           </button>
         </div>
       </form>
-      {vaultOpen && (
-        <VaultDialog
-          close={() => setVaultOpen(null)}
-          revealProfile={vaultOpen === 'reveal' ? initial : undefined}
-        />
-      )}
+      {revealOpen && <VaultDialog close={() => setRevealOpen(false)} revealProfile={initial} />}
     </Dialog>
   );
 }

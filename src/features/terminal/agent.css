@@ -14,7 +14,7 @@
   font-weight: 700;
 }
 .agent-hook-guide {
-  margin-top: var(--space-md);
+  font-size: var(--font-small);
 }
 .agent-hook-guide summary {
   cursor: pointer;

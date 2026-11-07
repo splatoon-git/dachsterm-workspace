@@ -247,6 +247,7 @@ pub fn run() {
             workspace::edit_close,
             workspace::edit_start,
             workspace::edit_mode,
+            workspace::editor_list,
             workspace::editor_pick,
             workspace::edit_list,
             workspace::edit_resolve,

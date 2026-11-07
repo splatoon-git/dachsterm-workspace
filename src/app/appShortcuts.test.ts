@@ -41,6 +41,17 @@ describe('app shortcuts', () => {
     expect(appShortcut(key('ArrowUp', { ctrl: true, alt: true, shift: true }))).toBeNull();
   });
 
+  it('opens the header tools from the keyboard', () => {
+    expect(appShortcut(key('KeyS', { ctrl: true, shift: true }))).toEqual({ name: 'commands' });
+    expect(appShortcut(key('KeyU', { meta: true, shift: true }))).toEqual({ name: 'tunnels' });
+    expect(appShortcut(key('Slash', { ctrl: true, shift: true }))).toEqual({ name: 'help' });
+    expect(appShortcut(key('Comma', { meta: true }))).toEqual({ name: 'settings' });
+    // Ctrl+S is the terminal's XOFF and F1 is help in programs such as mc.
+    expect(appShortcut(key('KeyS', { ctrl: true }))).toBeNull();
+    expect(appShortcut(key('F1'))).toBeNull();
+    expect(appShortcut(key('Comma', { ctrl: true, shift: true }))).toBeNull();
+  });
+
   it('keeps F11 for full screen', () => {
     expect(appShortcut(key('F11'))).toEqual({ name: 'fullscreen' });
   });

@@ -63,6 +63,7 @@
     "allow-broadcast-status",
     "allow-broadcast-set",
     "allow-edit-mode",
+    "allow-editor-list",
     "allow-editor-pick",
     "allow-file-batch",
     "allow-file-clipboard",

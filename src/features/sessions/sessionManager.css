@@ -1,0 +1,115 @@
+/* Batch edit: pick sessions, pick fields, then preview and apply. */
+.session-manager .dialog-section > p {
+  margin: 0 0 var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.manager-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.manager-search input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.manager-rows {
+  max-height: 220px;
+  margin-block: var(--space-sm);
+  overflow: auto;
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+}
+.manager-rows > label.checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 6px var(--space-md);
+  font-size: var(--font-small);
+}
+.manager-rows > label + label {
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+}
+.manager-rows > label > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.manager-rows small {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manager-rows .dialog-empty {
+  margin: var(--space-sm);
+}
+.manager-template {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-width: 320px;
+  margin-bottom: var(--space-md);
+  font-size: var(--font-small);
+}
+.manager-fields {
+  gap: var(--space-sm);
+}
+.manager-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+}
+.manager-field[data-on='true'] {
+  border-color: var(--color-action-primary);
+  background: var(--color-action-selected);
+}
+.manager-field > label.checkbox,
+.manager-field label.checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-small);
+}
+.manager-field input:not([type='checkbox']),
+.manager-field select {
+  width: 100%;
+  min-width: 0;
+}
+.manager-save {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.manager-save input {
+  flex: 1;
+  min-width: 0;
+  max-width: 320px;
+}
+.manager-templates {
+  margin-top: var(--space-sm);
+  font-size: var(--font-small);
+}
+.manager-templates summary {
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.manager-templates > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 4px 0;
+}
+.manager-apply {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
