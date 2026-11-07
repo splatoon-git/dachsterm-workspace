@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.10**, 설계일: **2026-11-07**.
-- 현재 상태: **설계 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **DX.1·DX.3·DX.4·DX.5·DX.9 구현, 나머지 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -112,6 +112,14 @@ pub fn quote(value: &str) -> String; // POSIX 작은따옴표 인용
 - 시간 초과와 출력 초과는 채널을 닫고 오류를 반환한다. 호출이 취소되면 채널도 닫힌다.
 - 구현: AT.6과 DX.3의 선행으로 먼저 넣었다. `stderr`는 쓰는 곳이 없어 `Output`에서 뺐다.
 - `podtree.rs:75`의 `quote`와 `shell_probe.rs`를 이 모듈로 옮긴다. 표준 입력을 쓰는 `archive.rs`와 주기 수집용 `monitoring.rs`는 정책이 달라 B10에서 별도로 판단한다. AT.6의 `remote_ports`는 이 모듈을 쓴다.
+- DX.5에서 `stderr`를 되살렸다(수동 조회 때 첫 줄 표시). 시간·출력 초과는 `Failure::{TimedOut, TooLarge}`로 구분해 호출자가 문구가 아니라 종류로 분기한다(규칙 §6). `String` 변환이 있어 기존 호출의 `?`는 그대로다.
+
+**B10 판단(2026-11-07):**
+
+| 대상 | 판단 | 근거 |
+|---|---|---|
+| `monitoring.rs` 수집 | **옮긴다.** 완료 | 주기성은 호출하는 루프의 정책이고 한 번의 수집은 시간·출력 상한이 있는 읽기 명령이라 이 모듈과 정책이 같다. 옮기면 세 가지가 고쳐진다: ① 시간 초과 때 채널을 닫지 않아 서버 프로세스와 채널이 남던 것(2초 주기라 `MaxSessions`를 잠식할 수 있다), ② 로그인 셸의 rc 출력이 섞이던 것, ③ fish·csh 로그인 셸에서 `LC_ALL=C; export LC_ALL`이 문법 오류이던 것(`sh -c`로 해결). 상한(10초, 256KiB), 종료 코드 확인, 시간 초과 문구는 유지했다. 차이: stderr도 256KiB 상한에 포함한다 |
+| `archive.rs` | **옮기지 않는다** | ① 요청 JSON을 표준 입력으로 보내고 EOF를 보내야 하는데 `run`은 표준 입력이 없다. 이 한 곳을 위해 공용 API를 넓히지 않는다. ② 시간 초과(600초) 때 채널을 닫으면 압축 해제가 이름 바꾸기 도중에 끊길 수 있다. 지금은 서버 작업을 끝까지 두고 "서버의 작업 상태와 임시 폴더를 확인하라"고 안내하는데, 이 모듈은 시간 초과 때 채널을 닫는 것이 정책이라 반대다. ③ 실행 프로그램이 `sh`가 아니라 `python3 -c`라 표식 줄 처리가 필요 없다(응답은 JSON 한 개). 인용 함수도 결과가 같아 바꾸지 않는다. 표준 입력이 필요한 두 번째 기능이 생기면 그때 `run`에 입력 인자를 더한다 |
 
 ### DX.2 — Agent forwarding과 서명 승인
 
@@ -243,6 +251,16 @@ LC_ALL=C GIT_OPTIONAL_LOCKS=0 git -c core.fsmonitor=false status --porcelain=v2 
 
 **기본 명령:** `guideData.ts`에 Git 분류를 추가한다. `status`, `diff --stat`, `log --oneline --graph`, `branch -vv`, `stash list`, `worktree list`, `reflog`. 읽기 명령만 넣고, 기존처럼 복사만 한다.
 
+**구현(2026-11-07)과 설계에서 바꾼 것:**
+
+- 백엔드는 `git_status.rs`(조회 전용 모듈)다. DX.6이 같은 안전 접두사(`SAFE_GIT`)를 쓴다. 명령의 `printf <표식>`은 `remote_exec`가 이미 rc 출력을 가르므로 뺐다. 결과는 `repo | notRepo | stopped` 판별 유니온이고, 연결 실패 같은 오류만 `Err`다.
+- **표시 위치(사용자 결정):** 브랜치와 변경 수는 탭이 아니라 **상태바**에 둔다(`app/GitStatusItem.tsx`). 대상은 포커스된 칸의 활성 SSH 탭이다. 업스트림 차이는 툴팁에 넣고, 누르면 수동 조회다. 탭(`SessionTab`)에는 접근성 이름(`… Git main, 변경 3개`)과 툴팁만 덧붙인다.
+- **파일 트리:** `fileTree.tsx`의 `useFileTree`가 행에 절대 경로를 붙이고 목록을 받을 때마다 `listed`를 알린다. `FileTreeRow`가 `components/fileDecorations.ts` 컨텍스트로 표시한다. `App`은 사이드바의 `SidebarFiles`를 같은 이름의 `app/SidebarFiles.tsx`(Git 컨텍스트 제공자)로 바꿔 import 한 줄만 달라졌고, `FilePanel.tsx`는 수정하지 않았다.
+- **조회 일정:** `features/git/gitStatus.ts`의 `GitScheduler`(순수, 단위 테스트). 간격 안에 다시 온 사건은 남은 시간 뒤 한 번만 실행하고(타이머 반복 없음), 탭 활성화는 최근 결과가 있으면 버린다. 프롬프트 복귀는 DX.9의 OSC 133;A를 쓴다(재생 중 제외). 조회 결과는 저장소 루트로도 저장해 하위 폴더는 같은 결과를 쓴다.
+- **시간·출력 초과:** `stopped`로 받아 그 폴더와 루트의 자동 조회를 멈추고 상태바에 **Git 조회 멈춤**(누르면 수동 조회)을 둔다. 출력 1MiB 초과도 같은 처리다.
+- **수동 조회:** 자동 조회를 끄면 상태바에 작은 **Git** 버튼만 남는다. 상시 버튼을 늘리지 않으려고 자동 조회를 끈 경우에만 보인다. 실패 때만 첫 줄을 `Git · …`로 보여 준다.
+- 비UTF-8 경로는 손실 변환된 이름으로 표시만 된다. 동작 대상 제외는 경로로 동작하는 DX.6에서 처리한다.
+
 ### DX.6 — diff 검토와 프롬프트 전달
 
 서버에서 에이전트가 고친 코드를 VS Code Remote 없이 검토하는 기능이다. **이 제품의 핵심 차별점으로 삼는다.**
@@ -338,6 +356,15 @@ exec tmux attach -t '=<이름>'
 - 명령 시작은 Bash에 표준 preexec이 없으므로 앱이 터미널에서 받은 Enter 시각으로 판단한다. 전체 화면 프로그램 안의 Enter는 세지 않는다.
 - 기능: 프롬프트 간 이동(`Ctrl/Cmd+Shift+↑↓`, 충돌 확인), 실패한 명령의 줄 표시, 긴 명령 완료 알림(기본 30초 이상, 포커스 밖일 때만, AT.3 경로). AT.2의 프롬프트 감지 보완도 이 신호를 쓸 수 있다.
 - 재생 중에는 표식만 복원하고 알림은 보내지 않는다. `registerMarker`와 `registerDecoration`이 `allowProposedApi: false`에서 쓸 수 있는지 구현 시 xterm 6.0.0 타입에서 확인한다. 이 세션에 `node_modules`가 없어 확인하지 못했다.
+
+**구현(2026-11-07)과 설계에서 바꾼 것:**
+
+- 훅은 TW.6에서 `shellHook.ts`로 합쳐졌으므로 거기에 넣었다. 프롬프트 함수가 `133;D;<코드>`, 경로, `133;A` 순으로 보낸다. Zsh는 각 precmd 함수에 `$?`를 복원하므로 함수 위치와 무관하게 코드가 맞다.
+- **명령 시작:** TW.6의 Bash 래퍼는 vi·less 등 이름 있는 프로그램만 감싸 일반 명령에 쓸 수 없다. Zsh는 `preexec`에 `133;C`를 더했다. Bash는 4.4 이상에서 `PS0`에 `133;C`를 앞에 붙인다(빈 줄에서는 출력되지 않아 빈 Enter가 실패로 잡히지 않는다, 두 번 넣어도 한 번). Bash 3.2만 설계의 Enter 시각 방식을 쓰며, 셸이 `C`를 한 번이라도 보내면 Enter 방식은 끈다. Enter 방식은 프롬프트 뒤 입력이 비었으면 세지 않고, 대체 화면 안의 Enter는 세지 않는다. `C` 없이 온 `D`는 버린다.
+- **xterm 6.0.0 확인:** `registerMarker`는 `allowProposedApi: false`에서 쓸 수 있다. `registerDecoration`은 `_checkProposedApi()`로 예외를 던진다. 실험 API를 켜지 않고 `FailedCommandMarks.tsx`가 표식 줄 위치로 왼쪽 막대를 직접 그린다(스크롤·크기 변경·버퍼 전환 때 다시 계산).
+- **이동:** `Ctrl/Cmd+Shift+↑↓`는 터미널 키 처리기에서만 쓴다. 표식이 없으면 키를 셸로 넘긴다. 칸 이동 `Ctrl/Cmd+Alt+방향키`와 겹치지 않는다.
+- **긴 명령 알림:** AT.3 `programNotifier`에 `command` 사유를 더했다. 이 알림기는 SSH 탭에만 있어 로컬·WSL 탭은 표시와 이동만 된다. 설정 `longCommandNotify`는 끔·10초·30초·1분·5분.
+- **연결 위치:** `session.ts`(400줄, DX.2와 겹침)는 수정하지 않았다. `integrations.ts`가 `attachCommandMarks`를 부르고, 탭 쪽은 `commandMarksOf(terminal)`로 찾는다. `TerminalPane.tsx`에는 키 한 줄과 표시 컴포넌트만 넣었다. 훅은 경로 따라가기나 조작표가 켜져 있을 때만 들어가므로, 둘 다 끄면 명령 경계도 없다.
 
 ### DX.10 — 문서와 전체 회귀
 

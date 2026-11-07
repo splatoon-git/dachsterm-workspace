@@ -12,6 +12,8 @@ import { AuthenticationPrompt } from './AuthenticationPrompt';
 import { attachFontSizeWheel } from './fontWheel';
 import { afterRendererResumes, throttleTrailing } from './fitThrottle';
 import { PasteConfirm } from './PasteConfirm';
+import { handlePromptJumpKey } from './commandMarks';
+import { FailedCommandMarks } from './FailedCommandMarks';
 import { PromptAttachConfirm } from './PromptAttachConfirm';
 import { usePromptAttachments } from './usePromptAttachments';
 import { useInputReach } from './broadcastStatus';
@@ -134,6 +136,7 @@ export function TerminalPane({
         session.send(enter);
         return false;
       }
+      if (handlePromptJumpKey(session.terminal, event)) return false;
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.code === 'KeyC') {
         event.preventDefault();
         copy();
@@ -263,6 +266,7 @@ export function TerminalPane({
         />
       )}
       <div className="live-terminal" ref={host} />
+      <FailedCommandMarks session={session} />
     </section>
   );
 }

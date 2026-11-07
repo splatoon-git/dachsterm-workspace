@@ -1,0 +1,17 @@
+/* A zero-size anchor at the pane's top left. Marks are placed from it in pixels. */
+.command-marks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.command-failed {
+  position: absolute;
+  left: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--color-status-error);
+  pointer-events: auto;
+}

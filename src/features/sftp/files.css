@@ -154,3 +154,25 @@
   font-size: 10px;
   color: var(--color-text-secondary);
 }
+/* Git status of a row (DX.5). A letter, so the state never depends on color alone. */
+.file-git-mark {
+  flex: none;
+  min-width: 1.2em;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.file-git-mark[data-mark='M'],
+.file-git-mark[data-mark='folder'] {
+  color: var(--color-status-warning);
+}
+.file-git-mark[data-mark='A'] {
+  color: var(--color-status-success);
+}
+.file-git-mark[data-mark='D'],
+.file-git-mark[data-mark='U'] {
+  color: var(--color-status-error);
+}
+.file-git-mark[data-mark='?'] {
+  color: var(--color-status-info);
+}

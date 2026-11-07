@@ -9,6 +9,7 @@ mod editor_location;
 pub mod encoding;
 pub mod file_ops;
 pub mod ftp;
+pub mod git_status;
 pub mod hostkeys;
 pub mod local;
 mod local_files;
@@ -199,6 +200,7 @@ pub fn run() {
             prompt_files::prompt_files_upload,
             remote_ports::remote_ports,
             terminal_start::tmux_current_path,
+            git_status::git_status,
             broadcast::broadcast_status,
             broadcast::broadcast_set,
             vault::vault_status,

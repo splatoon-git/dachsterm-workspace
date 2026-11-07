@@ -55,7 +55,7 @@
 | B7 | 중간 | 보고 | 오류 모델: `sftp::failure`가 로컬·exec·FTP 오류까지 "SFTP"로 표시한다. `editor.rs`는 문자열로 제어 흐름을 분기한다. `settings.rs:26`은 손상된 터널 설정을 빈 목록으로 삼킨다. | `AppError` 도입 | M~L |
 | B8 | 중간 | 일부 확인 | `.lock().unwrap()` 160건 이상(확인). 한 번 오염되면 연쇄 panic이 된다. 종료 경로가 전송·모니터·터널을 다루지 않는다(보고). | 공용 잠금 헬퍼, 종료 순서 정리 | M |
 | B9 | 낮음 | 확인 | 호출되지 않는 명령: `config_import`, `transfer_cancel`, `transfer_resume`. `transfer_drop`은 테스트 스크립트만 쓴다. 등록 3곳에서 함께 제거한다. | 제거 | S |
-| B10 | 낮음 | 보고 | 소규모 복제: `posix-rename` 처리, glob, 인코딩 라벨, 원격 실행 3벌, 셸 quoter 2벌. examples 전용 API(`sftp::transfer`, `Connections::start`). | 병합·제거 | S |
+| B10 | 낮음 | 일부 처리 | 소규모 복제: `posix-rename` 처리, glob, 인코딩 라벨, 원격 실행 3벌, 셸 quoter 2벌. examples 전용 API(`sftp::transfer`, `Connections::start`). 원격 실행과 quoter는 DX.1에서 `remote_exec.rs`로 합쳤고 `monitoring.rs`도 옮겼다. `archive.rs`는 표준 입력과 시간 초과 정책이 달라 남긴다(근거: [설계안 DX.1](design/developer-workflow.md)). | 나머지 병합·제거 | S |
 | B11 | 낮음 | 일부 확인 | 보안 정리. `edit_start`가 프런트에서 받은 임의 프로그램을 실행한다(확인, 사용자 지정 편집기 기능이지만 허용 목록이 없음). `connect`는 조기 반환 경로에서 secret을 아직 보호하지 않는다(보고). capability 설명 "Main window only"와 달리 `terminal-*`도 대상이다(확인). | 저장된 편집기 설정과 대조, 진입 첫 줄에서 `Zeroizing` | S |
 
 ## 프런트엔드 구조

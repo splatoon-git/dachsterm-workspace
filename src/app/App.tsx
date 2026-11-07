@@ -57,7 +57,7 @@ import { ResizeHandle } from '../components/ResizeHandle';
 import { SessionTab } from './SessionTab';
 import { capabilities } from '../features/terminal/sessionKind';
 import type { CSSProperties } from 'react';
-import { SidebarFiles } from '../features/sftp/SidebarFiles';
+import { SidebarFiles } from './SidebarFiles';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
 import { TitleBar } from './TitleBar';

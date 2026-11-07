@@ -4,6 +4,7 @@ import { ProgramGuide } from '../features/terminal/CommandGuide';
 import { isRecording, useLogStatus } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
 import { capabilities, sessionKind } from '../features/terminal/sessionKind';
+import { GitStatusItem } from './GitStatusItem';
 import './statusBar.css';
 
 function where(session: TerminalSession) {
@@ -89,7 +90,10 @@ export function StatusBar({
         {game ? (
           <span>로컬 · {game}</span>
         ) : session ? (
-          <Target key={session.connectionId} session={session} />
+          <>
+            <Target key={session.connectionId} session={session} />
+            {sessionKind(session) === 'ssh' && <GitStatusItem session={session} />}
+          </>
         ) : (
           <span>
             <span className="status-dot" aria-hidden="true" />

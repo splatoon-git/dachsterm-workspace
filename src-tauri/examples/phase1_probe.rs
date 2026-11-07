@@ -1,6 +1,7 @@
 #[path = "queue/checks.rs"]
 mod queue_checks;
 // Runs the actual product engine against the ephemeral OpenSSH fixture. No secret output.
+mod git_checks;
 mod jump_checks;
 mod workspace_checks;
 use dachsterm::{
@@ -288,6 +289,7 @@ async fn run() -> Result<()> {
     println!("PASS queue suite cleanup");
     workspace_checks::files(manager.clone(), &first.id, &store.list()?.profiles[0].id).await?;
     workspace_checks::services(manager.clone(), &first.id, &p.id).await?;
+    git_checks::run(&manager, &first.id).await?;
     first.send("stty -echo; printf '\\nREADY_ONE\\n'\n").await?;
     first.marker("READY_ONE\r\n").await?;
     first

@@ -1,6 +1,7 @@
-//! One bounded remote command on its own exec channel. New features run remote commands through
-//! here. `archive.rs` (uses stdin) and `monitoring.rs` (periodic) keep their own policies.
-use crate::{ssh::Host, storage::Result};
+//! One bounded remote command on its own exec channel. Every remote command runs through here
+//! except `archive.rs`, which sends its request on stdin and must not be cut off at its time limit
+//! (see the DX.1 note in docs/design/developer-workflow.md).
+use crate::ssh::Host;
 use russh::{ChannelMsg, client};
 use std::time::Duration;
 
@@ -10,7 +11,26 @@ pub struct Limits {
 }
 pub struct Output {
     pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
     pub exit: Option<u32>,
+}
+
+/// Callers that act on a limit, such as Git status stopping automatic queries, match on these
+/// instead of on message text.
+#[derive(Debug)]
+pub enum Failure {
+    TimedOut,
+    TooLarge,
+    Other(String),
+}
+impl From<Failure> for String {
+    fn from(failure: Failure) -> Self {
+        match failure {
+            Failure::TimedOut => "원격 명령 시간이 초과되었습니다.".into(),
+            Failure::TooLarge => "원격 명령 출력이 너무 큽니다.".into(),
+            Failure::Other(message) => message,
+        }
+    }
 }
 
 /// POSIX single-quote quoting.
@@ -51,7 +71,12 @@ impl Drop for OpenChannel {
 }
 
 /// `script` runs under `sh -c`, so fish or csh login shells see the same syntax.
-pub async fn run(handle: &client::Handle<Host>, script: &str, limits: Limits) -> Result<Output> {
+pub async fn run(
+    handle: &client::Handle<Host>,
+    script: &str,
+    limits: Limits,
+) -> Result<Output, Failure> {
+    let other = |message: &str| Failure::Other(message.into());
     let marker = format!("DACHSTERM-{}", uuid::Uuid::new_v4().simple());
     let command = format!(
         "sh -c {}",
@@ -61,37 +86,38 @@ pub async fn run(handle: &client::Handle<Host>, script: &str, limits: Limits) ->
         let channel = handle
             .channel_open_session()
             .await
-            .map_err(|_| "원격 명령 채널을 열 수 없습니다.")?;
+            .map_err(|_| other("원격 명령 채널을 열 수 없습니다."))?;
         let mut open = OpenChannel(Some(channel));
         let channel = open.0.as_mut().unwrap();
         channel
             .exec(true, command)
             .await
-            .map_err(|_| "원격 명령을 시작할 수 없습니다.")?;
-        let (mut stdout, mut exit, mut size) = (Vec::new(), None, 0);
+            .map_err(|_| other("원격 명령을 시작할 수 없습니다."))?;
+        let (mut stdout, mut stderr, mut exit) = (Vec::new(), Vec::new(), None);
         while let Some(message) = channel.wait().await {
             match message {
-                ChannelMsg::Data { data } => {
-                    size += data.len();
-                    stdout.extend_from_slice(&data);
-                }
-                ChannelMsg::ExtendedData { data, .. } => size += data.len(),
+                ChannelMsg::Data { data } => stdout.extend_from_slice(&data),
+                ChannelMsg::ExtendedData { data, .. } => stderr.extend_from_slice(&data),
                 ChannelMsg::ExitStatus { exit_status } => exit = Some(exit_status),
-                ChannelMsg::Failure => return Err("서버가 원격 명령을 거부했습니다.".to_string()),
+                ChannelMsg::Failure => return Err(other("서버가 원격 명령을 거부했습니다.")),
                 _ => {}
             }
-            if size > limits.max_output {
-                return Err("원격 명령 출력이 너무 큽니다.".to_string());
+            if stdout.len() + stderr.len() > limits.max_output {
+                return Err(Failure::TooLarge);
             }
         }
-        Ok((stdout, exit))
+        Ok((stdout, stderr, exit))
     };
-    let (stdout, exit) = tokio::time::timeout(limits.timeout, work)
+    let (stdout, stderr, exit) = tokio::time::timeout(limits.timeout, work)
         .await
-        .map_err(|_| "원격 명령 시간이 초과되었습니다.")??;
+        .map_err(|_| Failure::TimedOut)??;
     let stdout = after_marker(&stdout, marker.as_bytes())
-        .ok_or("이 서버에서는 원격 명령을 실행할 수 없습니다.")?;
-    Ok(Output { stdout, exit })
+        .ok_or_else(|| other("이 서버에서는 원격 명령을 실행할 수 없습니다."))?;
+    Ok(Output {
+        stdout,
+        stderr,
+        exit,
+    })
 }
 
 #[cfg(test)]

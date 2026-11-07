@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/xterm';
 import { programMetadata, type GuideProgram } from './guideData';
+import { attachCommandMarks, commandNotice } from './commandMarks';
 import type { KittyKeyboard } from './kittyKeyboard';
 import { directoryFromOsc, terminalPreferences } from './preferences';
 import { parseOsc52 } from './osc52';
@@ -47,6 +48,11 @@ export function attachTerminalIntegrations(terminal: Terminal, host: Integration
     if (now && now.state !== before && now.state !== 'working')
       agent.attention(now.state, now.detail);
   };
+  // Long commands notify through the program notifier, which only agent-capable tabs have.
+  attachCommandMarks(terminal, {
+    replaying: () => agent?.replaying() ?? false,
+    finished: agent && ((exit, ms) => agent.attention('command', commandNotice(exit, ms))),
+  });
   parser.registerOscHandler(7, (value) => directory(value, true));
   parser.registerOscHandler(777, (value) => {
     const program = programMetadata(value);
@@ -70,8 +76,8 @@ export function attachTerminalIntegrations(terminal: Terminal, host: Integration
   });
   parser.registerOscHandler(1337, (value) => {
     if (!value.startsWith('CurrentDir=')) return false;
-    // Our shell hook sends this once per prompt, and shells here send no OSC 133. OSC 7 is not
-    // used for this because programs can send it at any time.
+    // Our shell hook sends this once per prompt, together with OSC 133;A. Shells without our hook
+    // may send neither. OSC 7 is not used for this because programs can send it at any time.
     agent?.status.programEnded();
     return directory(value.slice(11), false);
   });

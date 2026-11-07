@@ -25,6 +25,7 @@ import {
 } from './native-workspace.mjs';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
+import { verifyDeveloperWorkflow } from './verify-developer-workflow.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-native-'));
 const screenshots = path.resolve('test-results-native');
@@ -269,6 +270,16 @@ try {
     showConnections,
     directory,
     screenshots,
+    setStage: (value) => {
+      stage = value;
+    },
+  });
+  await verifyDeveloperWorkflow({
+    page,
+    pane,
+    docker,
+    probe,
+    command,
     setStage: (value) => {
       stage = value;
     },
@@ -1002,7 +1013,8 @@ async function reportFailure(error) {
     console.error(String(error.stack).match(/verify-tunnels\.mjs:\d+:\d+/)?.[0] ?? 'U3 failure');
   if (stage.startsWith('AT') || stage.startsWith('DX'))
     console.error(
-      String(error.stack).match(/verify-agent-terminal\.mjs:\d+:\d+/)?.[0] ?? 'agent failure',
+      String(error.stack).match(/verify-(agent-terminal|developer-workflow)\.mjs:\d+:\d+/)?.[0] ??
+        'agent failure',
     );
   if (stage.startsWith('S1'))
     console.error(
