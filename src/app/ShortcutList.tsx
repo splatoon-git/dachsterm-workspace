@@ -19,6 +19,10 @@ export function ShortcutList() {
       <dd>Ctrl + Shift + Enter</dd>
       <dt>칸 사이 포커스 이동</dt>
       <dd>Ctrl + Alt + 방향키</dd>
+      <dt>같은 연결로 오른쪽에 분할</dt>
+      <dd>Ctrl + Shift + \</dd>
+      <dt>동시 입력 중지 / 입력 받을 창 선택</dt>
+      <dd>Ctrl + Shift + M</dd>
       <dt>탭 이동 (탭에 포커스)</dt>
       <dd>← / → · Home / End</dd>
       <dt>탭 메뉴 (탭에 포커스)</dt>

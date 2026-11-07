@@ -308,6 +308,24 @@ try {
   await expect(terminalSearch).toBeFocused();
   await terminalSearch.press('Escape');
   await expect(terminalSearch).toHaveCount(0);
+  // Ctrl+Shift+\ opens the same shell again on the right, without typing into the terminal.
+  await page.keyboard.press('Control+Shift+Backslash');
+  await expect(page.locator('.tab-strip')).toHaveCount(2);
+  const splitShell = page.locator(`.terminal-pane:not([data-connection-id="${originalId}"])`);
+  await expect(splitShell.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
+    timeout: 15000,
+  });
+  expect(
+    await page.locator('.pane-cell').evaluateAll((cells) => {
+      const [left, right] = cells
+        .filter((cell) => !cell.hidden)
+        .map((cell) => cell.getBoundingClientRect());
+      return Math.round(right.left) >= Math.round(left.right);
+    }),
+  ).toBe(true);
+  await chooseTabMenu(page, '탭 닫기', splitShell);
+  await expect(page.locator('.tab-strip')).toHaveCount(1);
+  console.log('PASS Ctrl+Shift+Backslash splits the same shell to the right');
   await page.getByRole('button', { name: 'Windows PowerShell 탭 닫기' }).click();
   await expect
     .poll(() =>
@@ -332,6 +350,14 @@ try {
     "1..500 | ForEach-Object { 'local-row' }; Write-Output ('FLOW' + '_OK')",
     'FLOW_OK',
   );
+  // Settings that moved out of the panes live with the app and survive a restart.
+  const guideSetting = 'vi·vim·less·tail 실행 중 조작표 자동 표시';
+  const followSetting = '새 파일 패널에서 터미널 경로 따라가기';
+  settings = await openTerminalSettings(page);
+  await expect(settings.getByLabel(guideSetting, { exact: true })).toBeChecked();
+  await settings.getByLabel(guideSetting, { exact: true }).uncheck();
+  await settings.getByLabel(followSetting, { exact: true }).uncheck();
+  await closeTerminalSettings(page);
   await shutdown();
   expect(app.exitCode).toBe(0);
   await expect
@@ -342,6 +368,13 @@ try {
       }).stdout.includes(` ${shutdownPid} `),
     )
     .toBe(false);
+  const restarted = await launch();
+  settings = await openTerminalSettings(restarted);
+  await expect(settings.getByLabel(guideSetting, { exact: true })).not.toBeChecked();
+  await expect(settings.getByLabel(followSetting, { exact: true })).not.toBeChecked();
+  await expect(settings.getByLabel('마우스 선택 시 자동 복사', { exact: true })).toBeChecked();
+  await closeTerminalSettings(restarted);
+  console.log('PASS moved terminal settings survive a restart');
   console.log(
     'Local PTY IO, Unicode, resize, split, isolated close/reopen, app shutdown, output flow and navigation passed.',
   );

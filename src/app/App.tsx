@@ -11,6 +11,7 @@ import {
 } from './WorkspaceGrid';
 import { useWorkspaceLayout, type Beside } from './useWorkspaceLayout';
 import { useTabMenu } from './useTabMenu';
+import { useAppShortcuts } from './appShortcuts';
 import { StatusBar } from './StatusBar';
 import {
   allTabs,
@@ -19,7 +20,6 @@ import {
   tabKey,
   type GroupNode,
   type Preset,
-  type Side,
   type TabRef,
 } from './workspaceLayout';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -33,7 +33,6 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useEffectEvent,
   useRef,
   useState,
   useSyncExternalStore,
@@ -88,12 +87,6 @@ const presets: [Preset, string][] = [
   ['grid', '모든 탭 2 × 2'],
   ['single', '모든 탭 하나로'],
 ];
-const focusKeys: Record<string, Side> = {
-  ArrowLeft: 'left',
-  ArrowRight: 'right',
-  ArrowUp: 'top',
-  ArrowDown: 'bottom',
-};
 function subscribeNarrowViewport(listener: () => void) {
   const media = window.matchMedia('(max-width: 700px)');
   media.addEventListener('change', listener);
@@ -307,76 +300,34 @@ export function App() {
     closeDrawer();
     void session.connect(null);
   }
-  const shortcut = useEffectEvent((e: KeyboardEvent) => {
-    if (!document.querySelector('dialog[open]') && e.code === 'F11') {
-      e.preventDefault();
-      e.stopPropagation();
-      void toggleFullscreen();
-      return;
+  useAppShortcuts((shortcut) => {
+    switch (shortcut.name) {
+      case 'fullscreen':
+        return void toggleFullscreen();
+      case 'moveFocus':
+        return workspace.moveFocus(shortcut.side);
+      case 'zoom':
+        return workspace.groupCount > 1 && workspace.toggleZoom();
+      case 'local':
+        return setLocalOpen(true);
+      case 'newConnection':
+        return setForm(blankProfile());
+      case 'sidebar':
+        return fullscreen ? void showSidebar(sidebarView) : setSidebarOpen((v) => !v);
+      case 'terminalSearch':
+        return selected && capabilities(selected).terminal && selected.view.set({ search: true });
+      case 'sessionSearch':
+        return void showSidebar('connections', true);
+      case 'files':
+        return void showSidebar('files');
+      case 'inputScope':
+        return input.shortcut();
+      case 'splitRight':
+        // Like the tab menu: the same target again, as a new connection and a new shell.
+        if (selected && capabilities(selected).split && !narrow)
+          splitTab(selected, { groupId: workspace.focusedGroup.id, side: 'right' });
     }
-    if (
-      !document.querySelector('dialog[open]') &&
-      (e.ctrlKey || e.metaKey) &&
-      e.altKey &&
-      !e.shiftKey &&
-      e.code in focusKeys
-    ) {
-      e.preventDefault();
-      e.stopPropagation();
-      workspace.moveFocus(focusKeys[e.code]);
-      return;
-    }
-    if (
-      document.querySelector('dialog[open]') ||
-      !(e.ctrlKey || e.metaKey) ||
-      !e.shiftKey ||
-      e.altKey
-    )
-      return;
-    switch (e.code) {
-      case 'Enter':
-        e.preventDefault();
-        if (workspace.groupCount > 1) workspace.toggleZoom();
-        break;
-      case 'KeyL':
-        e.preventDefault();
-        setLocalOpen(true);
-        break;
-      case 'KeyN':
-        e.preventDefault();
-        setForm(blankProfile());
-        break;
-      case 'KeyB':
-        e.preventDefault();
-        if (fullscreen) void showSidebar(sidebarView);
-        else setSidebarOpen((v) => !v);
-        break;
-      case 'KeyF':
-        e.preventDefault();
-        if (selected && capabilities(selected).terminal) selected.view.set({ search: true });
-        break;
-      case 'KeyO':
-        e.preventDefault();
-        void showSidebar('connections', true);
-        break;
-      case 'KeyE':
-        e.preventDefault();
-        showSidebar('files');
-        break;
-      case 'KeyM':
-        e.preventDefault();
-        input.shortcut();
-        break;
-      default:
-        return;
-    }
-    e.stopPropagation();
   });
-  useEffect(() => {
-    const listener = (e: KeyboardEvent) => shortcut(e);
-    window.addEventListener('keydown', listener, true);
-    return () => window.removeEventListener('keydown', listener, true);
-  }, []);
   function requestConnect(profile: Profile, existing?: TerminalSession, beside?: Beside) {
     if (existing?.podtree) {
       setPodtreeOpen(true);
@@ -422,15 +373,16 @@ export function App() {
     else if (game) closeGame(game.id);
     else workspace.close(key);
   };
+  const splitTab = (t: TerminalSession, beside: Beside) =>
+    t.localTarget
+      ? openLocal(t.localTarget, beside)
+      : requestConnect(savedProfile(t), undefined, beside);
   const tabMenu = useTabMenu({
     workspace,
     narrow,
     sessionOf: (key) => tabs.find((t) => sessionKey(t) === key),
     actions: {
-      split: (t, beside) =>
-        t.localTarget
-          ? openLocal(t.localTarget, beside)
-          : requestConnect(savedProfile(t), undefined, beside),
+      split: splitTab,
       detach: (t) => void detach(t),
       reconnect: reconnectTab,
       close: closeKey,
@@ -990,7 +942,7 @@ export function App() {
               <button onClick={() => setSettingsOpen('terminal')}>터미널 설정</button>
             </div>
             <p className="muted">
-              글꼴, 스크롤 기록, 마우스와 알림 동작은 모든 터미널에 적용됩니다.
+              글꼴, 마우스·키보드, 조작표·경로 따라가기, 알림은 모든 터미널에 적용됩니다.
             </p>
           </section>
           <section className="settings-data">

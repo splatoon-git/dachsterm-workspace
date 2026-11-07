@@ -1,0 +1,11 @@
+.terminal-settings-group {
+  margin-top: var(--space-md);
+}
+.terminal-settings-group h3 {
+  margin: 0;
+  font-size: var(--font-small);
+  color: var(--color-text-secondary);
+}
+.terminal-settings-group > p {
+  margin: 0;
+}

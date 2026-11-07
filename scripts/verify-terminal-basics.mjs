@@ -133,7 +133,7 @@ export async function verifyTerminalBasics({
   await preferences.getByLabel('Backspace 전송', { exact: true }).selectOption('bs');
   await preferences.getByLabel('마우스 선택 시 자동 복사', { exact: true }).uncheck();
   await preferences.getByLabel('마우스 우클릭 붙여넣기', { exact: true }).uncheck();
-  await preferences.getByLabel('새 SFTP 탐색기의 터미널 경로 따라가기', { exact: true }).uncheck();
+  await preferences.getByLabel('새 파일 패널에서 터미널 경로 따라가기', { exact: true }).uncheck();
   await closeTerminalSettings(page);
   await pane().locator('.xterm-helper-textarea').focus();
   await page.keyboard.type("printf 'LEGACY_BS_OK\\n'X");
@@ -153,13 +153,14 @@ export async function verifyTerminalBasics({
     clipboardWrite: true,
     osNotifications: true,
     bellNotifications: true,
+    programGuide: true,
   });
   await openTerminalSettings(page);
   await preferences.getByLabel('Backspace 전송', { exact: true }).selectOption('del');
   for (const label of [
     '마우스 선택 시 자동 복사',
     '마우스 우클릭 붙여넣기',
-    '새 SFTP 탐색기의 터미널 경로 따라가기',
+    '새 파일 패널에서 터미널 경로 따라가기',
   ])
     await preferences.getByLabel(label, { exact: true }).check();
   await closeTerminalSettings(page);

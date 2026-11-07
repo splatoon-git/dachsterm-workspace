@@ -343,6 +343,8 @@ type InputScope = { mode: 'off' } | { mode: 'all' } | { mode: 'pick'; ids: strin
 | TW.6 | Zsh는 `preexec`의 첫 단어만 비교하고, Bash 래퍼와 맞추려고 `|`가 있는 줄은 건너뛴다 |
 | TW.6 | 실행 시 훅을 받는 WSL(`launch`)과 Windows 셸, tmux 세션에는 실행 알림이 없다. 전체 화면 프로그램이면 일반 안내가 나온다. WSL에 넣으려면 Rust의 `WSL_FOLLOW`를 바꿔야 해서 이번 범위에서 뺐다 |
 | TW.6 | 일반 안내의 `Shift+드래그`는 Windows에서만 표시한다. xterm은 macOS에서 `Option+클릭` 강제 선택을 `macOptionClickForcesSelection`이 켜져 있을 때만 허용하고, 이 앱은 그 옵션을 켜지 않는다. 터미널 설정 안내 문구의 같은 설명은 Mac 실기기에서 확인할 대상이다 |
+| TW.7 | 터미널 설정은 §7 표대로 표시·마우스·키보드·프로그램 연동·알림 묶음으로 나눴다. 값의 저장 위치(`dachsterm.terminalPreferences` 등)와 키는 그대로라 기존 값이 유지된다. 경로 따라가기 항목 이름은 FTP·로컬도 포함하도록 “새 파일 패널에서 터미널 경로 따라가기”로 바꿨다 |
+| TW.7 | 전역 단축키 처리는 `App.tsx`에서 `appShortcuts.ts`(키→동작 순수 함수와 훅)로 옮겼다. `Ctrl/Cmd+Shift+\`는 같은 연결로 오른쪽 분할만 하고, 아래 분할은 탭 메뉴에 둔다. 좁은 창과 FTP·PodTree 탭에서는 아무 일도 하지 않는다 |
 | TW.8 | 플랫폼 설정 파일은 창 목록을 통째로 바꾸므로(JSON Merge Patch) 주 창 항목 전체를 반복한다. `windows.rs`의 테스트가 플랫폼 항목과 `tauri.conf.json`이 제목 줄 설정 말고는 같은지 확인한다 |
 | TW.8 | ＋ 새 연결은 메뉴다: 새 연결…, 로컬 터미널…(선택 대화상자), 발견된 셸 목록. 접근성 이름 `＋ 새 연결`은 유지했다 |
 | TW.8 | 세로 아이콘 줄의 연결·파일은 탭 역할을 유지해 키보드(위·아래·Home·End)로 옮긴다. 사이드바 기본 너비 240px, 범위 200~420px |
