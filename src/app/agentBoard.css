@@ -1,0 +1,97 @@
+/* The agent list (DX.8): a count in the status bar and a list above it, like the server monitor. */
+.agent-board {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+.status-bar .agent-board-toggle {
+  border: 0;
+  background: none;
+  white-space: nowrap;
+}
+.status-bar .agent-board-toggle:hover {
+  background: var(--color-action-hover);
+}
+.agent-board-sep {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+.agent-board-popover {
+  position: absolute;
+  z-index: 30;
+  right: var(--space-md);
+  bottom: calc(100% + var(--space-sm));
+  width: min(520px, calc(100vw - 2 * var(--space-lg)));
+  max-height: min(360px, 60vh);
+  overflow: auto;
+  padding: var(--space-sm);
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface-panel);
+  box-shadow: var(--shadow-popup);
+  color: var(--color-text-primary);
+  font-size: var(--font-small);
+  white-space: normal;
+}
+.agent-board-popover ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* State, name, window mark, branch and time on one line; the name gives way first. */
+.status-bar .agent-row {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr) auto auto auto;
+  gap: var(--space-sm);
+  align-items: center;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--color-text-primary);
+  font-size: var(--font-small);
+  text-align: left;
+}
+.status-bar .agent-row:hover,
+.status-bar .agent-row:focus-visible {
+  background: var(--color-action-hover);
+}
+.agent-row-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-row-window {
+  grid-column: 3;
+  padding: 0 var(--space-xs);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  color: var(--color-text-secondary);
+}
+.agent-row-git {
+  grid-column: 4;
+  max-width: 14em;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-row-time {
+  grid-column: 5;
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+.agent-board-hint {
+  margin: var(--space-sm) var(--space-sm) 0;
+  color: var(--color-text-secondary);
+}
+@media (max-width: 700px) {
+  .agent-row-git {
+    display: none;
+  }
+}

@@ -13,6 +13,8 @@ import { useWorkspaceLayout, type Beside } from './useWorkspaceLayout';
 import { useTabMenu } from './useTabMenu';
 import { useAgentLaunch, type Opening } from './useAgentLaunch';
 import { useAppShortcuts } from './appShortcuts';
+import { useAgentBoard } from './useAgentBoard';
+import { useNarrowViewport } from './useNarrowViewport';
 import { SettingsDialog } from './SettingsDialog';
 import { StatusBar } from './StatusBar';
 import {
@@ -27,15 +29,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { InputScopeControl, InputScopeMark } from '../features/terminal/InputScope';
 import { useInputScope } from '../features/terminal/useInputScope';
 import { VaultDialog, type VaultStatus } from '../features/sessions/VaultDialog';
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '../themes/useTheme';
 import {
   call,
@@ -77,14 +71,9 @@ const sessionRef = (session: TerminalSession): TabRef => ({
   tabId: session.tabId,
 });
 const sessionKey = (session: TerminalSession) => tabKey(sessionRef(session));
-function subscribeNarrowViewport(listener: () => void) {
-  const media = window.matchMedia('(max-width: 700px)');
-  media.addEventListener('change', listener);
-  return () => media.removeEventListener('change', listener);
-}
 export function App() {
   const theme = useTheme();
-  const narrow = useSyncExternalStore(subscribeNarrowViewport, () => window.innerWidth <= 700);
+  const narrow = useNarrowViewport();
   const [snapshot, setSnapshot] = useState<Snapshot>({ profiles: [], groups: [] });
   const [localCatalog, setLocalCatalog] = useState<LocalCatalog>({ targets: [], warning: null });
   const [localLoading, setLocalLoading] = useState(desktop);
@@ -317,6 +306,8 @@ export function App() {
         return setTunnelsOpen(true);
       case 'help':
         return setHelpOpen(true);
+      case 'nextAgent':
+        return agents.next();
       case 'settings':
         return setSettingsOpen(true);
     }
@@ -389,6 +380,7 @@ export function App() {
   const activeGame = focusedTab?.kind === 'game' ? focusedTab.id : null;
   const hasPreview = allTabs(workspace.layout.root).some((tab) => tab.kind === 'preview');
   const selected = tabs.find((t) => sessionKey(t) === focusedKey);
+  const agents = useAgentBoard({ tabs, selected, open: workspace.open, fail: setError });
   const activeSession = (group: GroupNode) => tabs.find((t) => sessionKey(t) === group.active);
   // Only panes on screen take part: zoom and a narrow window leave one group in view.
   const input = useInputScope(
@@ -679,6 +671,7 @@ export function App() {
         game={games.find((game) => game.id === activeGame)?.title}
         sending={input.sending}
         input={tabs.length > 0 && <InputScopeControl input={input} />}
+        agents={agents}
       />
       {tabMenu.element}
       {commandsOpen && (

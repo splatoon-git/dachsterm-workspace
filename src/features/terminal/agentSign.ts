@@ -68,10 +68,13 @@ export function currentSign(items: readonly PendingSign[], connectionId: string)
 
 const waiting: ProgramSummary = { state: 'blocked', detail: '키 서명 승인 요청' };
 
-/** The tab shows a waiting request like a program waiting for input. */
+/** A waiting request reads like a program waiting for input, on the tab and in the agent list. */
+export const signWaiting = (items: readonly PendingSign[], connectionId: string) =>
+  currentSign(items, connectionId) ? waiting : null;
+
 export function useSignWaiting(queue: AgentSignQueue, connectionId: string) {
   const items = useSyncExternalStore(queue.subscribe, queue.snapshot);
-  return currentSign(items, connectionId) ? waiting : null;
+  return signWaiting(items, connectionId);
 }
 
 export function signPurpose(request: AgentSignRequest) {

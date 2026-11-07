@@ -18,6 +18,7 @@ export type AppShortcut =
   | { name: 'commands' }
   | { name: 'tunnels' }
   | { name: 'help' }
+  | { name: 'nextAgent' }
   | { name: 'settings' };
 
 const sides: Record<string, Side> = {
@@ -42,6 +43,8 @@ const withShift: Record<string, AppShortcut> = {
   KeyU: { name: 'tunnels' },
   // Ctrl+? as most apps write it. F1 stays with the terminal, where programs such as mc use it.
   Slash: { name: 'help' },
+  // Ctrl+> as "next". No control character or common program binding uses Ctrl+Shift+period.
+  Period: { name: 'nextAgent' },
 };
 
 type Keys = Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>;
