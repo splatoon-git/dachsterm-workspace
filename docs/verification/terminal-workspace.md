@@ -157,6 +157,47 @@ FTP 단계는 Python FTP 픽스처를 원래 작업 폴더의 `.tools/ftp-fixtur
 - 실제 macOS의 `/bin/bash` 3.2와 로컬 Zsh(입력해 넣는 훅), Mac 실기기 전체는 대기다([macos-readiness](macos-readiness.md) M.14).
 - 전체 게이트, 전체 Vitest·Playwright, 게임 테스트, `verify-windows.ps1 -Native`.
 
+## TW.9 제목 줄·사이드바·명령 창 정리
+
+미커밋 트리(기준 `c8b25ce`)에서 실행했다. 다른 세션이 기본 포트 1420에서 다른 worktree의 Vite를 띄워 두어, Playwright는 임시 설정으로 포트 1431의 이 worktree 서버를 썼다(첫 실행은 1420의 이전 코드로 실패해 버렸다).
+
+| 명령 | 결과 |
+|---|---|
+| `npm run typecheck`, `npx eslint src tests scripts`, `npx prettier --check src scripts tests` | 통과 |
+| `npx vitest run` | 44파일 517/517 |
+| `npx playwright test` (포트 1431) | 141/141 |
+| `npm run tauri -- build --debug --no-bundle` | 성공. 아래 네이티브 검사는 이 실행 파일로 했다. 이후 `CommandPanel.tsx`에서 `BasicDetail.tsx`를 떼어 낸 정리는 빌드 뒤라 Playwright `assistant.spec.ts` 7/7로만 확인했다 |
+| `test-workspace-native` | 종료 0. 1·2회차 실패는 검사 쪽 원인: 모든 탭 배치를 첫 탭 우클릭으로 열어 포커스 칸이 바뀌었다. 포커스된 칸의 선택 탭을 쓰도록 `arrangeTabs`를 고쳤다. 1회차에 한 칸에 `a`가 먼저 들어가 `aecho`가 된 현상이 한 번 있었고 이후 재현되지 않았다 |
+| `test-local-native` | 종료 0. 탭이 하나뿐이면 메뉴에 모든 탭 배치가 없으므로 `arrangeTabs`가 그때는 메뉴를 닫도록 고쳤다 |
+| `test-games-native` | 종료 0. 이 PC의 PowerShell 프롬프트가 `PS C:`가 아니어서 첫 출력만 기다리도록 고쳤다(다른 검사와 같은 방식) |
+| `test-themes-native` | 종료 0. 설치 앱에는 터미널 미리보기가 없어 로컬 PowerShell 탭으로 테마를 확인한다 |
+| `run-phase1 --native --reuse-build` | 실패. 38단계 통과, `master vault migration and reveal` 단계에서 "새 마스터 패스워드가 일치하지 않습니다"(test-native.mjs:810). 이 단계의 화면(설정 → 마스터 패스워드)과 대화상자는 바꾸지 않았다. 두 입력칸에 같은 값을 채웠는데 달라진 것으로 보아, `test-workspace-native` 1회차의 `aecho`처럼 입력칸에 바깥 키 입력이 섞인 것으로 추정한다(같은 PC에서 다른 작업 중). 재실행하지 않았고 원인은 미확인이다. 이 단계 뒤의 단계는 실행되지 않았다 |
+| `test-assistant-native` | 종료 0. 명령 창의 스니펫 저장·값 입력·입력만 넣기(PowerShell), 동시 입력 중 SSH 한 곳에만 한 번 실행, WSL, 독립 창의 명령 창, 재시작 후 스니펫 복원 |
+
+- 고친 제품 결함: 모달 대화상자 안에서 연 우클릭 메뉴가 `body`에 그려져 눌리지 않았다(명령 창 스니펫 우클릭). 열린 대화상자 안에 그리도록 `ContextMenu`를 고쳤다.
+- 외부 편집기 대화상자(사용자 지적, 같은 작업에 포함): 설치 편집기 탐지 `editor_list`(Rust `editor_location.rs`)와 공용 `EditorPicker`. `cargo fmt --check`, `cargo clippy -p dachsterm --all-targets -- -D warnings` 통과, `cargo test -p dachsterm --lib editor_location` 3/3. 실제 앱 화면에서 이 PC의 VS Code·Notepad++·메모장이 카드로 나오는 것을 스크린샷으로 확인했다. 이 대화상자를 쓰는 `test-native.mjs`(원격 편집)는 선택자만 고치고 실행하지 않았다. macOS 탐지 경로는 Mac 실기기에서 확인하지 않았다.
+- 실행 못 함: `test-phase63-67-native`의 PodTree 단계. 도구 메뉴에서 진입점을 숨겼기 때문이다(사용자 결정). KV.12에서 PodTree와 함께 정리한다. 이 검사는 게이트에 들어 있지 않다.
+- 선택자만 고치고 실행하지 않음: `test-survivor-integration-native`, `test-survivor-ui-native`, `play-survivor-native`, `measure-survivor-lifecycle-native`. 공용 도우미(`openNewConnectionForm`, `showSidebarView`)가 바뀌었지만 실행하지 않음: `test-jump-native`, `test-session-transfer-native`, `test-transfer-queue-native`, `test-ftp-native`, `verify-agent-terminal`, `verify-terminal-basics`.
+
+## TW.10 대화상자 공통 규격·설정 창·목록 버튼
+
+미커밋 트리(TW.9 변경 위에)에서 실행했다. 바꾼 것만 한 번씩 돌렸다. Playwright는 TW.9와 같이 포트 1431의 임시 설정을 썼다.
+
+| 명령 | 결과 |
+|---|---|
+| `npm run typecheck`, `npx eslint src tests --quiet`, `npm run format:check` | 통과 |
+| `npx vitest run src/features/sftp/fileOperation.test.ts` (새 테스트) | 3/3 |
+| Playwright `assistant`, `layout`, `navigation`, `session-form`, `session-manager`, `session-transfer`, `terminal-font`, `themes`, `transfer-queue`, `tunnels` | 46/46. 이후 `session-manager` 재구성 뒤 4/4, 터널 머리글 수정 뒤 `tunnels` 6/6 |
+| `npm run tauri -- build --debug --no-bundle` | 성공 |
+| `test-local-native` | 종료 0. 설정 창의 터미널 분류(다시 열면 마지막 분류), 로컬 파일 우클릭 메뉴의 이름 바꾸기, Delete·Ctrl+C로 바꾼 삭제·복사, 재시작 후 설정 유지 |
+| `test-maintenance-native` | 종료 0. 설정 창의 복구·진단 분류 |
+
+- 화면 확인: 브라우저(백엔드 없음)에서 설정 6개 분류(1280px, 560px), 새 연결, 로컬 터미널 열기, 단축키, 터널 편집·목록·메뉴, 전송 대기열을 스크린샷으로 봤다. 실제 앱에서는 위 두 네이티브 검사의 스크린샷(파일 패널, 상태바 `Windows PowerShell 로컬 셸`, 설정 복구·진단)을 봤다.
+- 고친 결함: 암호 보관함의 `.secret-reveal`에 준 `display: flex`가 `hidden` 속성을 덮어 저장된 암호 칸이 항상 보였다(스크린샷에서 발견). `[hidden]`일 때 숨기도록 고쳤다.
+- 선택자만 고치고 실행하지 않음(Docker SSH·FTP 환경 필요): `test-native`(설정 → 암호 보관함 분류, 파일 우클릭의 권한·압축·압축 해제, 파일 대화상자 버튼 이름), `test-ftp-native`(만들기·삭제 버튼), `test-transfer-queue-native`(⋯ 메뉴의 파일별 결과), `test-jump-native`(세션 일괄 수정 분류, 없어진 `서버 추가` 버튼을 `Ctrl+Shift+N`으로), `test-session-transfer-native`(가져오기·내보내기 분류), `verify-tunnels`·`verify-agent-terminal`(터널 카드 메뉴, 도구 메뉴 대신 제목 줄 터널 아이콘). `test-native`의 마스터 암호 단계는 TW.9에서 원인 미확인 실패가 있었고, 이번에 그 단계의 화면이 설정 패널로 바뀌었다.
+- 사용자 지적 후속(같은 날): 탭 메뉴에서 연 조작표 창이 상태바의 `nowrap`을 물려받아 가로 스크롤이 생기고, 실행 중인 프로그램이 없으면 기준점(상태바 가운데 칸)이 비어 오른쪽으로 밀렸다. 창을 화면 아래 가운데에 고정하고 줄바꿈하도록 고쳤다. 자동 표시는 상태바가 맡고 탭 메뉴 항목은 직접 고르는 용도라 이름을 **조작표 보기·고정**으로 바꿨다. 명령 창의 새 스니펫은 기본 크기에서 스크롤이 생겨 이름·그룹, 태그·설명을 한 줄씩 묶고 창 높이를 660px로 늘렸다. Playwright `assistant` 7/7, Vitest `tabMenu` 11/11, 스크린샷 확인. 탭 메뉴 이름을 바꾼 `test-assistant-native`는 미실행(Docker 필요).
+- 실행 못 함: `test-phase63-67-native`의 세션 기록 단계는 레이블을 유지했지만 같은 스크립트의 PodTree 단계에 막혀 실행하지 않았다.
+
 ## 알려진 실패
 
 `verify-windows.ps1 -Native`는 `run-ftp --native`에서 끝까지 가지 못했다. 변경 전에도 있던 실패이며, TW.4에서 원인(검사 경합)을 찾아 고쳤다. 아래는 당시 기록이다. 고친 뒤 `verify-windows.ps1 -Native` 전체는 아직 다시 실행하지 않았다.
