@@ -1,5 +1,4 @@
 import type { Terminal } from '@xterm/xterm';
-import { directoryHook } from './preferences';
 
 export type DirectoryHookStatus = 'waiting' | 'unavailable';
 /** `remote` must pass a login shell check first; `launch` already started with the hook. */
@@ -68,12 +67,14 @@ type Host = {
   directory(): string | null | undefined;
   mode(): DirectoryHookMode;
   supportsHook(): Promise<boolean>;
+  /** The hook text, which depends on the settings when it is typed. */
+  hook(): string;
   type(data: string): void;
   write(data: string): void;
   report(status: DirectoryHookStatus | undefined): void;
 };
 
-/** Connects a shell's directory reports without touching its configuration files. */
+/** Connects a shell's directory and program reports without touching its configuration files. */
 export class DirectoryHookInstaller {
   readonly filter = new HookEchoFilter();
   private run = 0;
@@ -119,7 +120,7 @@ export class DirectoryHookInstaller {
     // The leading space keeps it out of history where the shell ignores such lines. The no-op
     // first word marks where the echo starts, since one word is never split by highlighting.
     this.host.type(
-      ` : ${echoStart}; ${directoryHook}; printf '\\033]1337;DachsTermReady=${token}\\007'\r`,
+      ` : ${echoStart}; ${this.host.hook()}; printf '\\033]1337;DachsTermReady=${token}\\007'\r`,
     );
     return true;
   }

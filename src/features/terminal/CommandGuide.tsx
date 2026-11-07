@@ -1,8 +1,11 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
+import type { Terminal } from '@xterm/xterm';
 import { Dialog } from '../../components/Dialog';
-import { commands, guideHook, guideKeys, type GuideProgram } from './guideData';
+import { isMac } from '../../lib/platform';
+import { commands, guideKeys, type GuideProgram } from './guideData';
 import type { TerminalSession } from './session';
 import { usePaneView } from './paneView';
+import { useTerminalPreferences } from './preferences';
 import './assistant.css';
 const placeholders = /(파일명|프로그램명|검색어|제외어|문구1|문구2|경로|원본|대상|호스트)/g;
 export function CommandCatalog({ close }: { close: () => void }) {
@@ -79,24 +82,6 @@ export function CommandCatalog({ close }: { close: () => void }) {
           -f와 Linux 전용 도구는 macOS/BSD에서 동일하게 동작한다고 보장하지 않습니다.
         </p>
       </details>
-      <details>
-        <summary>Bash에서 프로그램 조작표 자동 표시 연결</summary>
-        <p>
-          탭 메뉴의 “조작표 전체 보기”에서 “실행 알림 사용”을 켜고 아래 코드를 직접 검토·실행하세요.
-          현재 Bash 세션에만 vi/vim/less/tail/cat 함수를 만들며 명령 인자·입력·이력은 수집하지
-          않습니다. 기존 별칭/함수가 있으면 적용하지 않습니다. 셸 설정 파일은 바꾸지 않습니다.
-          command vim처럼 함수를 우회하면 자동 표시되지 않습니다.
-        </p>
-        <pre>{guideHook}</pre>
-        <button onClick={() => void copy(guideHook, 'Bash 실행 알림 연결')}>
-          Bash 연동 코드 복사
-        </button>
-        <p>
-          연동 해제는 현재 셸을 종료하고 새 셸을 여세요. 화면 알림만 끄려면 조작표의 “끄기”를
-          누르세요. 파이프/백그라운드/중첩 실행은 수동 선택·고정을 사용하세요. 알림은 안내용이며
-          현재 편집 모드를 판별하지 않습니다.
-        </p>
-      </details>
     </Dialog>
   );
 }
@@ -109,17 +94,47 @@ const guideNote = (program: GuideProgram) =>
       ? '자체 검색·페이지 키는 없습니다. 터미널 스크롤백 또는 less를 사용하세요.'
       : '안내용입니다. 이 표는 서버에 키를 보내지 않습니다.';
 
+const autoNote =
+  '자동 표시는 Bash·Zsh에서 vi, vim, less, tail을 실행하면 나타나고 끝나면 사라집니다. 설정 → 터미널에서 끌 수 있습니다. sudo·command를 앞에 붙인 실행, 파이프, tmux 안, 다른 셸에서는 직접 고르세요.';
+
+/** Whether a full-screen program such as vim or top has switched to the alternate screen. */
+function useAlternateScreen(terminal: Terminal) {
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const subscription = terminal.buffer.onBufferChange(listener);
+      return () => subscription.dispose();
+    },
+    [terminal],
+  );
+  return useSyncExternalStore(subscribe, () => terminal.buffer.active.type === 'alternate');
+}
+
 /**
  * The program guide in the status bar. It shows a few keys while a known program runs and opens
- * the full table on request. It only displays keys; it never sends or intercepts them.
+ * the full table on request. A full-screen program it cannot name gets a general notice, since a
+ * name is never guessed from the screen. It only displays keys; it never sends or intercepts them.
  */
 export function ProgramGuide({ session }: { session: TerminalSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const view = usePaneView(session.view);
-  const program = view.pinned ?? (state.guideEnabled ? state.guideProgram : null);
+  const { programGuide } = useTerminalPreferences();
+  const alternate = useAlternateScreen(session.terminal);
+  const program = view.pinned ?? (programGuide ? state.guideProgram : null);
+  const fullScreen = !program && programGuide && alternate;
   const close = () => session.view.set({ guide: false });
   return (
     <div className="program-guide" role="group" aria-label="프로그램 조작표">
+      {fullScreen && (
+        <span className="guide-inline">
+          <strong>전체 화면 프로그램 실행 중</strong>
+          {/* xterm forces a selection with Shift elsewhere; on a Mac it needs an Option setting. */}
+          {!isMac && (
+            <span className="guide-key">
+              <kbd>Shift+드래그</kbd> 텍스트 선택
+            </span>
+          )}
+        </span>
+      )}
       {program && (
         <span className="guide-inline">
           <strong>{program}</strong>
@@ -130,7 +145,7 @@ export function ProgramGuide({ session }: { session: TerminalSession }) {
           ))}
         </span>
       )}
-      {program && (
+      {(program || fullScreen) && (
         <button aria-expanded={view.guide} onClick={() => session.view.set({ guide: !view.guide })}>
           전체 보기
         </button>
@@ -163,22 +178,6 @@ export function ProgramGuide({ session }: { session: TerminalSession }) {
                 </option>
               ))}
             </select>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={!!state.guideEnabled}
-                onChange={(e) => session.enableGuide(e.target.checked)}
-              />
-              실행 알림 사용
-            </label>
-            <button
-              onClick={() => {
-                session.view.set({ pinned: null, guide: false });
-                session.enableGuide(false);
-              }}
-            >
-              끄기
-            </button>
             <button aria-label="조작표 닫기" onClick={close}>
               ×
             </button>
@@ -198,10 +197,7 @@ export function ProgramGuide({ session }: { session: TerminalSession }) {
               <p className="muted">{guideNote(program)}</p>
             </>
           ) : (
-            <p className="muted">
-              프로그램을 직접 선택·고정하세요. 자동 표시는 Bash 연동의 명시적 실행 알림이
-              필요합니다. 도구 → 기본 명령·로그 필터에서 연결 방법을 볼 수 있습니다.
-            </p>
+            <p className="muted">프로그램을 직접 선택·고정하세요. {autoNote}</p>
           )}
         </section>
       )}

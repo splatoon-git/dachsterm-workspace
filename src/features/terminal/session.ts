@@ -1,6 +1,7 @@
 import { TerminalDecoder } from '../../lib/encoding';
 import { DirectoryHookInstaller } from './directoryHook';
-import { directoryHook, terminalDisplay, terminalPreferences } from './preferences';
+import { terminalDisplay, terminalPreferences } from './preferences';
+import { shellHook } from './shellHook';
 import { attachTerminalIntegrations } from './integrations';
 import { attachTerminalLinks } from './terminalLinks';
 import { programNotifier } from './terminalNotify';
@@ -50,12 +51,17 @@ export class TerminalSession {
     },
     supportsHook: () =>
       call<boolean>('terminal_supports_directory_hook', { id: this.connectionId }),
+    hook: () => shellHook({ guide: terminalPreferences().programGuide }),
     type: (data) => this.send(data),
     write: (data) => this.terminal.write(data),
     report: (status) => this.update({ ...this.current, directoryHook: status }),
   });
   wantsDirectoryFollow() {
     return this.followDirectory ?? terminalPreferences().followDirectory;
+  }
+  /** One hook carries folder reports and program notices, so either setting installs it. */
+  private wantsShellHook() {
+    return this.wantsDirectoryFollow() || terminalPreferences().programGuide;
   }
   setFollowDirectory(value: boolean) {
     this.followDirectory = value;
@@ -69,7 +75,7 @@ export class TerminalSession {
   }
   typeDirectoryHook() {
     this.directoryHookInstaller.cancel();
-    this.send(directoryHook + '\r');
+    this.send(shellHook({ guide: terminalPreferences().programGuide }) + '\r');
     this.terminal.focus();
   }
   readonly tabId = crypto.randomUUID();
@@ -118,13 +124,10 @@ export class TerminalSession {
     attachTerminalIntegrations(this.terminal, {
       windowsPaths: this.localTarget?.kind === 'shell',
       directory: (path) => this.setDirectory(path),
-      program: (program) => {
-        if (this.current.guideEnabled && !this.podtree)
-          this.update({
-            ...this.current,
-            guideProgram: program,
-            guideRun: (this.current.guideRun ?? 0) + 1,
-          });
+      // Kept while the guide is off too, so turning it on shows a program already running.
+      program: (guideProgram) => {
+        const guideRun = (this.current.guideRun ?? 0) + 1;
+        if (!this.podtree) this.update({ ...this.current, guideProgram, guideRun });
       },
       agent:
         this.podtree || this.profile.protocol !== 'ssh'
@@ -183,9 +186,6 @@ export class TerminalSession {
     };
   };
   snapshot = () => this.current;
-  enableGuide(enabled: boolean) {
-    this.update({ ...this.current, guideEnabled: enabled, guideProgram: null });
-  }
   private update(state: SessionState) {
     this.current = state;
     this.listeners.forEach((fn) => fn());
@@ -301,7 +301,7 @@ export class TerminalSession {
               rows: this.terminal.rows,
             }).catch((e) => this.notice(errorText(e)));
           this.onConnected();
-          if (this.autoDirectoryHook && this.wantsDirectoryFollow())
+          if (this.autoDirectoryHook && this.wantsShellHook())
             void this.directoryHookInstaller.install();
         }
       }

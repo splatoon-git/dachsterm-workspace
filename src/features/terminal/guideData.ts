@@ -190,37 +190,3 @@ export const guideKeys: Record<GuideProgram, [string, string][]> = {
     ['이전 출력 보기', '터미널 스크롤백 · 휠/스크롤바'],
   ],
 };
-// Explicit opt-in wrappers, session only. Do not inspect history, keystrokes or arguments.
-// Refuse aliases/functions so user customizations are never silently replaced.
-export const guideHook = `if [ -n "$BASH_VERSION" ]; then
-  __dachsterm_guide_install() {
-    local p
-    for p in vi vim less tail cat __dachsterm_guide_prompt; do
-      case "$(type -t "$p")" in function|alias) printf '%s\\n' "DachsTerm: $p 별칭/함수가 있어 연동을 취소했습니다."; return 1;; esac
-    done
-${(['vi', 'vim', 'less', 'tail', 'cat'] as const)
-  .map(
-    (p) => `    ${p}() {
-      local __dachsterm_rc=0 __dachsterm_notify=0
-      if [ -t 0 ] && [ -t 1 ]; then
-        printf '\\033]777;DachsTerm;program;${p}\\007'
-        __dachsterm_notify=1
-      fi
-      command ${p} "$@" || __dachsterm_rc=$?
-      if [ "$__dachsterm_notify" = 1 ]; then printf '\\033]777;DachsTerm;end\\007'; fi
-      return "$__dachsterm_rc"
-    }`,
-  )
-  .join('\n')}
-    __dachsterm_guide_prompt() { printf '\\033]777;DachsTerm;end\\007'; }
-    if declare -p PROMPT_COMMAND 2>/dev/null | command grep -q '^declare -a'; then
-      PROMPT_COMMAND+=(__dachsterm_guide_prompt)
-    else
-      PROMPT_COMMAND="\${PROMPT_COMMAND:+$PROMPT_COMMAND; }__dachsterm_guide_prompt"
-    fi
-  }
-  __dachsterm_guide_install
-  unset -f __dachsterm_guide_install
-else
-  printf '%s\\n' 'DachsTerm: Bash에서만 지원합니다. 수동 조작표를 사용하세요.'
-fi`;

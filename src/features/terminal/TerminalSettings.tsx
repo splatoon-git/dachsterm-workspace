@@ -24,6 +24,7 @@ export function TerminalSettings({ close }: { close: () => void }) {
             ['copyOnSelect', '마우스 선택 시 자동 복사'],
             ['rightClickPaste', '마우스 우클릭 붙여넣기'],
             ['followDirectory', '새 SFTP 탐색기의 터미널 경로 따라가기'],
+            ['programGuide', 'vi·vim·less·tail 실행 중 조작표 자동 표시'],
             ['programStatus', '실행 중인 프로그램 상태를 탭에 표시'],
             ['clipboardWrite', '프로그램의 클립보드 복사 허용'],
             ['osNotifications', '다른 작업 중일 때 프로그램 상태를 OS 알림으로 표시'],

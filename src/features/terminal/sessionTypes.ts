@@ -42,7 +42,6 @@ export type SessionState = {
   authPrompt?: AuthPrompt | null;
   directory?: string | null;
   directoryHook?: DirectoryHookStatus;
-  guideEnabled?: boolean;
   guideProgram?: GuideProgram | null;
   guideRun?: number;
   replaying?: boolean;

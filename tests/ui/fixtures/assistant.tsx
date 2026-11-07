@@ -13,6 +13,7 @@ declare global {
     __clipboard: string;
     __copyFail: boolean;
     __guide: (program: 'cat' | null) => void;
+    __alternate: (on: boolean) => void;
   }
 }
 window.__sent = [];
@@ -56,8 +57,20 @@ const { CommandCatalog, ProgramGuide } =
   await import('../../../src/features/terminal/CommandGuide');
 const { PaneView } = await import('../../../src/features/terminal/paneView');
 const states: SessionState[] = [
-  { status: 'connected', message: '', hostKey: null, guideProgram: null, guideEnabled: false },
+  { status: 'connected', message: '', hostKey: null, guideProgram: null },
 ];
+const buffer = {
+  active: { type: 'normal' },
+  changed: new Set<() => void>(),
+  onBufferChange(fn: () => void) {
+    buffer.changed.add(fn);
+    return { dispose: () => buffer.changed.delete(fn) };
+  },
+};
+window.__alternate = (on) => {
+  buffer.active = { type: on ? 'alternate' : 'normal' };
+  buffer.changed.forEach((fn) => fn());
+};
 const listeners = new Set<() => void>();
 window.__guide = (program) => {
   states[0] = { ...states[0], guideProgram: program, guideRun: (states[0].guideRun ?? 0) + 1 };
@@ -67,16 +80,12 @@ const first = {
   tabId: 'one',
   connectionId: 'id-one',
   profile: { ...blankProfile(), name: '테스트 SSH', host: 'example.test', username: 'test' },
-  terminal: { modes: { bracketedPasteMode: true } },
+  terminal: { modes: { bracketedPasteMode: true }, buffer },
   view: new PaneView(),
   snapshot: () => states[0],
   subscribe: (fn: () => void) => {
     listeners.add(fn);
     return () => listeners.delete(fn);
-  },
-  enableGuide: (v: boolean) => {
-    states[0] = { ...states[0], guideEnabled: v };
-    listeners.forEach((fn) => fn());
   },
 } as unknown as TerminalSession;
 const second = {

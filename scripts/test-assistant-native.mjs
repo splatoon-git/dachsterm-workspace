@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
-import { commands, guideHook } from '../src/features/terminal/guideData.ts';
+import { commands } from '../src/features/terminal/guideData.ts';
 import { chooseTabMenu, openNewConnectionForm, showSidebarView } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-assistant-'));
@@ -117,9 +117,7 @@ try {
   const fingerprint = docker(['exec', fixture, 'ssh-keygen', '-lf', '/run/probe/host.pub']).split(
     /\s+/,
   )[1];
-  await writeFile(path.join(directory, 'guide-hook.sh'), guideHook + '\n');
   await writeFile(path.join(directory, 'assistant-commands.json'), JSON.stringify(commands));
-  docker(['cp', path.join(directory, 'guide-hook.sh'), `${fixture}:/tmp/guide-hook.sh`]);
   docker([
     'cp',
     path.join(directory, 'assistant-commands.json'),
@@ -128,6 +126,8 @@ try {
   docker(['cp', 'tests/assistant-linux.py', `${fixture}:/tmp/assistant-linux.py`]);
   docker(['exec', fixture, 'ln', '-s', '/usr/bin/vim.tiny', '/usr/local/bin/vim']);
   docker(['exec', fixture, 'bash', '-c', 'seq 1 200 > /tmp/guide-pages']);
+  // An alias made before the shell starts must keep working; only its name loses the guide.
+  docker(['exec', fixture, 'sh', '-c', "echo 'alias vi=vim.tiny' >> /home/probe/.bashrc"]);
   docker(['exec', fixture, 'python3', '/tmp/assistant-linux.py']);
   result.checks.push('Linux real commands and filters including live buffering, rotation, SIGINT');
   stage = 'launch';
@@ -221,25 +221,16 @@ try {
     'Real SSH UTF-8, exactly once with broadcast on, selected SSH/local, per-target failure isolation',
   );
   stage = 'guide';
-  await enter(ssh, 'source /tmp/guide-hook.sh');
-  // The guide is in the status bar and shows the focused pane.
+  // The hook went in by itself when the shell started: no opt-in and no copied code.
   const guide = page.locator('footer .program-guide');
   const shown = guide.locator('.guide-inline strong');
   const fullGuide = page.getByRole('region', { name: '조작표 전체 보기' });
-  await chooseTabMenu(page, '조작표 전체 보기', ssh);
-  await fullGuide.getByLabel('실행 알림 사용').check();
-  await fullGuide.getByRole('button', { name: '조작표 닫기' }).click();
-  for (const [program, command, exit] of [
-    ['vi', 'vi /tmp/guide-file', ':q!'],
-    ['vim', 'vim /tmp/guide-file', ':q!'],
-    ['less', 'less /tmp/guide-pages', 'q'],
-    ['cat', 'cat', null],
-    ['tail', 'tail -f /etc/hostname', null],
-  ]) {
-    await enter(ssh, command);
-    await expect(shown).toHaveText(program);
-    expect(docker(['exec', fixture, 'pgrep', '-u', 'probe', '-x', program])).toMatch(/\d+/);
-    const input = ssh.locator('.xterm-helper-textarea');
+  const general = '전체 화면 프로그램 실행 중';
+  async function run(pane, command, expected, exit, process) {
+    await enter(pane, command);
+    await expect(shown).toHaveText(expected);
+    expect(docker(['exec', fixture, 'pgrep', '-u', 'probe', '-x', process])).toMatch(/\d+/);
+    const input = pane.locator('.xterm-helper-textarea');
     await input.focus();
     if (exit === null) await input.press('Control+c');
     else if (exit === 'q') await input.press('q');
@@ -250,6 +241,21 @@ try {
     }
     await expect(shown).toHaveCount(0);
   }
+  // `vi` is an alias in this account, so only that name is left to the general notice.
+  await run(ssh, 'vi /tmp/guide-file', general, ':q!', 'vim.tiny');
+  await run(ssh, 'vim /tmp/guide-file', 'vim', ':q!', 'vim');
+  await run(ssh, 'less /tmp/guide-pages', 'less', 'q', 'less');
+  await run(ssh, 'tail -f /etc/hostname', 'tail', null, 'tail');
+  await run(ssh, 'command vim /tmp/guide-file', general, ':q!', 'vim');
+  // `cat` ends at once and stays a manual pick.
+  await enter(ssh, 'cat');
+  expect(docker(['exec', fixture, 'pgrep', '-u', 'probe', '-x', 'cat'])).toMatch(/\d+/);
+  await expect(guide.locator('.guide-inline')).toHaveCount(0);
+  await ssh.locator('.xterm-helper-textarea').press('Control+c');
+  // The same hook still reports the folder.
+  await enter(ssh, 'cd /tmp');
+  await showSidebarView(page, '파일');
+  await expect(page.getByLabel('원격 경로')).toHaveValue('/tmp');
   await chooseTabMenu(page, '조작표 전체 보기', ssh);
   await fullGuide.getByLabel('조작표 선택·고정').selectOption('vim');
   await fullGuide.getByRole('button', { name: '조작표 닫기' }).click();
@@ -261,7 +267,39 @@ try {
   await page.getByRole('tab', { name: /스니펫 SSH/ }).click();
   await expect(shown).toHaveText('vim');
   result.checks.push(
-    'Real Bash vi/vim/less/cat/tail entry/exit including Ctrl+C, manual pin survives, tab isolation',
+    'Real Bash guide without opt-in: vim/less/tail entry/exit including Ctrl+C, alias vi and command vim fall back to the general notice, cat manual only, folder follow kept, pin and tab isolation',
+  );
+  stage = 'guide-zsh';
+  docker([
+    'exec',
+    fixture,
+    'sh',
+    '-c',
+    'touch /home/probe/.zshrc && chown probe:probe /home/probe/.zshrc && chsh -s /usr/bin/zsh probe',
+  ]);
+  await openNewConnectionForm(page);
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('이름', { exact: true }).fill('Zsh SSH');
+  await dialog.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
+  await dialog.getByLabel('포트', { exact: true }).fill(port);
+  await dialog.getByLabel('사용자', { exact: true }).fill('probe');
+  let zshPassword = docker(['exec', fixture, 'cat', '/run/probe/password']);
+  await dialog.getByLabel('비밀번호', { exact: true }).fill(zshPassword);
+  zshPassword = '';
+  await dialog.getByRole('button', { name: '저장 후 연결', exact: true }).click();
+  const zsh = page.getByRole('region', { name: 'Zsh SSH 터미널', exact: true });
+  await expect(zsh.locator('.connection-message')).toContainText('연결됨');
+  await enter(zsh, 'echo "ZSH_$ZSH_VERSION"');
+  await expect(text(zsh)).toContainText(/ZSH_5\.\d/);
+  await run(zsh, 'vim /tmp/guide-file', 'vim', ':q!', 'vim');
+  await run(zsh, 'less /tmp/guide-pages', 'less', 'q', 'less');
+  await run(zsh, 'tail -f /etc/hostname', 'tail', null, 'tail');
+  await run(zsh, 'command vim /tmp/guide-file', general, ':q!', 'vim');
+  await enter(zsh, 'cd /var');
+  await expect(page.getByLabel('원격 경로')).toHaveValue('/var');
+  await chooseTabMenu(page, '탭 닫기', zsh);
+  result.checks.push(
+    'Real Zsh guide without opt-in: vim/less/tail entry/exit, command vim general notice, folder follow kept',
   );
   stage = 'wsl';
   await showSidebarView(page, '연결');
@@ -269,23 +307,20 @@ try {
   const wsl = page.getByRole('region', { name: 'Ubuntu 터미널', exact: true });
   const wslId = await wsl.getAttribute('data-connection-id');
   await expect(wsl.locator('.connection-message')).toContainText('로컬');
-  const nativeHookPath = path.join(directory, 'guide-hook.sh').replaceAll('\\', '/');
-  const linuxHookPath = '/mnt/' + nativeHookPath[0].toLowerCase() + nativeHookPath.slice(2);
-  await enter(wsl, `source '${linuxHookPath}'`);
-  await chooseTabMenu(page, '조작표 전체 보기', wsl);
-  await fullGuide.getByLabel('실행 알림 사용').check();
-  await fullGuide.getByRole('button', { name: '조작표 닫기' }).click();
   await invoke('snippet_send', {
     targets: [{ id: wslId, bracketed: true }],
     body: "printf 'WSL_한글\\n'",
     execute: true,
   });
   await expect(text(wsl)).toContainText('WSL_한글');
-  await enter(wsl, 'cat');
-  await expect(shown).toHaveText('cat');
-  await wsl.locator('.xterm-helper-textarea').press('Control+c');
+  // WSL takes only the folder hook at launch, so a pager gets the general notice.
+  await enter(wsl, 'less /etc/os-release');
+  await expect(shown).toHaveText(general);
+  await wsl.locator('.xterm-helper-textarea').press('q');
   await expect(shown).toHaveCount(0);
-  result.checks.push('Actual local WSL snippet UTF-8 and Bash cat metadata/Ctrl+C');
+  result.checks.push(
+    'Actual local WSL snippet UTF-8 and the general notice for less without the hook',
+  );
   stage = 'detached';
   await page.getByRole('tab', { name: /스니펫 SSH/ }).click();
   await chooseTabMenu(page, '새 창으로 분리');

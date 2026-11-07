@@ -13,15 +13,18 @@ test('narrow snippet editor and explicit program metadata expand/clear without l
   await page.keyboard.press('Escape');
   const guide = page.getByRole('group', { name: '프로그램 조작표' });
   const full = page.getByRole('region', { name: '조작표 전체 보기' });
-  await page.getByRole('button', { name: '조작표 전체 보기', exact: true }).click();
-  await full.getByLabel('실행 알림 사용').check();
-  await full.getByRole('button', { name: '조작표 닫기', exact: true }).click();
-  await expect(full).toHaveCount(0);
+  // The guide is on by default, so a program notice shows without any opt-in.
   await page.evaluate(() => window.__guide('cat'));
   await expect(guide).toContainText('cat');
   await expect(guide.getByRole('button', { name: '전체 보기', exact: true })).toBeVisible();
   await page.evaluate(() => window.__guide(null));
   await expect(guide.getByRole('button', { name: '전체 보기', exact: true })).toHaveCount(0);
+  // A full-screen program the hook cannot name gets the general notice, never a guessed name.
+  await page.evaluate(() => window.__alternate(true));
+  await expect(guide.locator('.guide-inline strong')).toHaveText('전체 화면 프로그램 실행 중');
+  await expect(guide.getByRole('button', { name: '전체 보기', exact: true })).toBeVisible();
+  await page.evaluate(() => window.__alternate(false));
+  await expect(guide.locator('.guide-inline')).toHaveCount(0);
   await page.getByRole('button', { name: '조작표 전체 보기', exact: true }).click();
   await full.getByLabel('조작표 선택·고정').selectOption('vim');
   await page.evaluate(() => {
@@ -131,6 +134,24 @@ for (const width of [360, 800])
     await expect(page.getByRole('region', { name: '조작표 전체 보기' })).toContainText(
       ':q! + Enter',
     );
-    await page.getByRole('button', { name: '끄기', exact: true }).click();
+    await page.getByRole('button', { name: '조작표 닫기', exact: true }).click();
     await expect(page.getByLabel('조작표 선택·고정')).toHaveCount(0);
   });
+test('turning the guide off in settings hides automatic guides but keeps a pin', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem('dachsterm.terminalPreferences', JSON.stringify({ programGuide: false })),
+  );
+  await page.goto('/tests/ui/fixtures/assistant.html');
+  await page.getByRole('button', { name: '대화상자 닫기' }).click();
+  const guide = page.getByRole('group', { name: '프로그램 조작표' });
+  await page.evaluate(() => {
+    window.__guide('cat');
+    window.__alternate(true);
+  });
+  await expect(guide.locator('.guide-inline')).toHaveCount(0);
+  await page.getByRole('button', { name: '조작표 전체 보기', exact: true }).click();
+  await page.getByLabel('조작표 선택·고정').selectOption('less');
+  await expect(guide.locator('.guide-inline strong')).toHaveText('less');
+});

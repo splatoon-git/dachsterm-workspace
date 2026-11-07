@@ -14,6 +14,8 @@ export type TerminalPreferences = {
   osNotifications: boolean;
   /** Treats the terminal bell as a notification too. */
   bellNotifications: boolean;
+  /** Shows the keys of vi, vim, less and tail in the status bar while they run. */
+  programGuide: boolean;
 };
 const defaults: TerminalPreferences = {
   copyOnSelect: true,
@@ -25,6 +27,7 @@ const defaults: TerminalPreferences = {
   clipboardWrite: true,
   osNotifications: true,
   bellNotifications: true,
+  programGuide: true,
 };
 export { isMac as isMacPlatform } from '../../lib/platform';
 const key = 'dachsterm.terminalPreferences';
@@ -42,6 +45,7 @@ function read(): TerminalPreferences {
       osNotifications: typeof saved.osNotifications === 'boolean' ? saved.osNotifications : true,
       bellNotifications:
         typeof saved.bellNotifications === 'boolean' ? saved.bellNotifications : true,
+      programGuide: typeof saved.programGuide === 'boolean' ? saved.programGuide : true,
     };
   } catch {
     return defaults;
@@ -131,8 +135,3 @@ export const needsPasteConfirmation = (text: string) =>
     const code = c.charCodeAt(0);
     return (code < 32 && code !== 9) || code === 127;
   });
-
-// A session-only prompt hook. No dotfiles or server settings are written. A scalar PROMPT_COMMAND
-// is prepended, because Bash before 5.1 runs only element 0 of an array and a scalar may end in ";".
-// The cwd function keeps $? for the commands after it, and Bash drops the line from its history.
-export const directoryHook = `if [ -n "$BASH_VERSION" ]; then eval '__dachsterm_cwd() { local s=$?; printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; return $s; }; case ";\${PROMPT_COMMAND[*]};" in *__dachsterm_cwd*) ;; *) if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then PROMPT_COMMAND+=(__dachsterm_cwd); else PROMPT_COMMAND="__dachsterm_cwd\${PROMPT_COMMAND:+; $PROMPT_COMMAND}"; fi;; esac; case "$(HISTTIMEFORMAT= builtin history 1)" in *__dachsterm_cwd*) builtin history -d "$(HISTTIMEFORMAT= builtin history 1 | { read -r n _; printf %s "$n"; })";; esac'; elif [ -n "$ZSH_VERSION" ]; then eval '__dachsterm_cwd() { printf "\\033]1337;CurrentDir=%s\\007" "$PWD"; }; (( \${precmd_functions[(Ie)__dachsterm_cwd]} )) || precmd_functions+=(__dachsterm_cwd)'; fi`;
