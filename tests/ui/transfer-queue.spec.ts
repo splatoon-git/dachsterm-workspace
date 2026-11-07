@@ -25,15 +25,28 @@ for (const width of [360, 800]) {
       connectionId: 'new-authenticated-connection',
       profileId: 'server',
     });
-    await queue.getByRole('button', { name: '맨 앞으로' }).click();
+    // Row actions other than pause or resume are in each row's menu.
+    await queue
+      .getByRole('button', { name: /전송 작업$/ })
+      .nth(1)
+      .click();
+    await page.getByRole('menuitem', { name: '맨 앞으로' }).click();
     expect(await page.evaluate(() => window.__queueCalls.at(-1)?.args)).toMatchObject({
       action: 'first',
       ids: ['job-1'],
     });
-    await queue.getByRole('button', { name: '파일별 결과' }).first().click();
+    await queue
+      .getByRole('button', { name: /전송 작업$/ })
+      .first()
+      .click();
+    await page.getByRole('menuitem', { name: '파일별 결과' }).click();
     await expect(queue.getByText('/한글 폴더/중첩 폴더/동일한 파일.txt')).toBeVisible();
     await expect(queue.getByRole('button', { name: '다음 결과' })).toBeDisabled();
-    await queue.getByRole('button', { name: '기록 정리' }).click();
+    await queue
+      .getByRole('button', { name: /전송 작업$/ })
+      .nth(5)
+      .click();
+    await page.getByRole('menuitem', { name: '기록 정리' }).click();
     expect(await page.evaluate(() => window.__queueCalls.at(-1))).toMatchObject({
       command: 'discard-confirm',
       args: { id: 'job-5' },

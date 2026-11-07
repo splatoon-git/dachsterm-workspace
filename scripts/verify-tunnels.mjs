@@ -53,9 +53,12 @@ export async function verifyTunnels({ page, invoke, probe, screenshots }) {
   await new Promise((r) => localEcho.listen(0, '127.0.0.1', r));
   const dialog = page.getByRole('dialog', { name: 'SSH 터널', exact: true });
   async function open() {
-    await page.locator('.toolbar-menu > summary').filter({ hasText: '도구' }).click();
     await page.getByRole('button', { name: '터널', exact: true }).click();
     await expect(dialog).toBeVisible();
+  }
+  async function chooseTunnel(row, item) {
+    await row.getByRole('button', { name: /작업$/ }).click();
+    await page.getByRole('menuitem', { name: item, exact: true }).click();
   }
   try {
     await open();
@@ -77,19 +80,21 @@ export async function verifyTunnels({ page, invoke, probe, screenshots }) {
       await dialog.getByRole('button', { name: '설정 저장' }).click();
       const row = dialog.getByRole('article', { name, exact: true });
       await expect(row).toContainText('중지됨');
-      await row.getByLabel('연결 시 자동 시작').click();
-      await expect(row.getByLabel('연결 시 자동 시작')).toBeChecked();
+      await chooseTunnel(row, '연결 시 자동 시작 켜기');
+      await expect(row).toContainText('자동 시작');
       await expect
         .poll(async () => (await invoke('tunnel_configs')).find((c) => c.name === name)?.autoStart)
         .toBe(true);
-      await row.getByLabel('연결 시 자동 시작').click();
-      await expect(row.getByLabel('연결 시 자동 시작')).not.toBeChecked();
+      await chooseTunnel(row, '연결 시 자동 시작 끄기');
+      await expect(row.locator('.tunnel-tag')).toHaveCount(0);
       await expect
         .poll(async () => (await invoke('tunnel_configs')).find((c) => c.name === name)?.autoStart)
         .toBe(false);
       await row.getByRole('button', { name: '시작', exact: true }).click();
       await expect(row).toContainText('실행 중');
-      await expect(row.getByRole('button', { name: '수정' })).toBeDisabled();
+      await row.getByRole('button', { name: /작업$/ }).click();
+      await expect(page.getByRole('menuitem', { name: '수정…', exact: true })).toBeDisabled();
+      await page.keyboard.press('Escape');
       const status = (await invoke('tunnel_list')).find(
         (s) => s.name === name && s.status === 'running',
       );
@@ -114,7 +119,7 @@ export async function verifyTunnels({ page, invoke, probe, screenshots }) {
     await page.screenshot({ path: path.join(screenshots, 'tunnel-saved-list.png') });
     for (const kind of ['local', 'remote', 'dynamic']) {
       const row = dialog.getByRole('article', { name: `UI ${kind}`, exact: true });
-      await row.getByRole('button', { name: '삭제', exact: true }).click();
+      await chooseTunnel(row, '삭제…');
       await row.getByRole('button', { name: '삭제 확인' }).click();
       await expect(row).toHaveCount(0);
     }

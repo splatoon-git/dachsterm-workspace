@@ -12,8 +12,7 @@ import { ToolbarMenu } from '../components/ToolbarMenu';
 import { StatusBar } from './StatusBar';
 import { TitleBar } from './TitleBar';
 import { TerminalSettings } from '../features/terminal/TerminalSettings';
-import { SnippetDialog } from '../features/terminal/SnippetDialog';
-import { CommandCatalog } from '../features/terminal/CommandGuide';
+import { CommandPanel } from '../features/terminal/CommandPanel';
 import { StatusBadge, useProgramSummary } from '../features/terminal/StatusBadge';
 function DetachedProgramStatus({ session }: { session: TerminalSession }) {
   const summary = useProgramSummary(session.programStatus);
@@ -23,7 +22,6 @@ export function DetachedWindow({ id }: { id: string }) {
   const theme = useTheme();
   const [session, setSession] = useState<TerminalSession | null>(null);
   const [error, setError] = useState('');
-  const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { fullscreen, toggleFullscreen } = useFullscreen(setError);
@@ -79,10 +77,7 @@ export function DetachedWindow({ id }: { id: string }) {
           <button disabled={!session} onClick={() => session?.view.set({ log: true })}>
             세션 기록
           </button>
-          <button disabled={!session} onClick={() => setSnippetsOpen(true)}>
-            스니펫
-          </button>
-          <button onClick={() => setCommandsOpen(true)}>기본 명령·로그 필터</button>
+          <button onClick={() => setCommandsOpen(true)}>명령</button>
           <button onClick={() => setSettingsOpen(true)}>터미널 설정</button>
           <button onClick={() => void toggleFullscreen()}>
             {fullscreen ? '전체화면 종료' : '전체화면'}
@@ -112,14 +107,13 @@ export function DetachedWindow({ id }: { id: string }) {
         input={<InputScopeControl input={input} />}
       />
       {settingsOpen && <TerminalSettings close={() => setSettingsOpen(false)} />}
-      {session && snippetsOpen && (
-        <SnippetDialog
-          sessions={[session]}
-          active={session.tabId}
-          close={() => setSnippetsOpen(false)}
+      {commandsOpen && (
+        <CommandPanel
+          sessions={session ? [session] : []}
+          active={session?.tabId}
+          close={() => setCommandsOpen(false)}
         />
       )}
-      {commandsOpen && <CommandCatalog close={() => setCommandsOpen(false)} />}
     </div>
   );
 }

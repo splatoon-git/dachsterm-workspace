@@ -78,16 +78,13 @@ export function ForwardPortDialog({
   }
   const listed = ports && visiblePorts(ports, showSystem);
   return (
-    <Dialog title="서버 포트 열기" className="forward-port-dialog" close={close}>
-      <p className="muted">
-        {session.profile.name}의 포트를 내 PC의 127.0.0.1로 연결합니다. 저장되지 않고 연결이 끝나면
-        함께 닫힙니다.
-      </p>
-      {error && (
-        <p role="alert" className="inline-error">
-          {error}
-        </p>
-      )}
+    <Dialog
+      title="서버 포트 열기"
+      description={`${session.profile.name}의 포트를 내 PC의 127.0.0.1로 잇습니다. 저장하지 않으며 연결이 끝나면 함께 닫힙니다.`}
+      className="forward-port-dialog"
+      close={close}
+    >
+      {error && <p role="alert">{error}</p>}
       {link && target && (
         <div className="forward-port-link">
           <code>{link}</code>
@@ -136,9 +133,9 @@ export function ForwardPortDialog({
             새로고침
           </button>
         </div>
-        {portError && <p className="muted">{portError}</p>}
+        {portError && <p role="alert">{portError}</p>}
         {!portError && !listed && <p className="muted">포트 목록을 읽는 중입니다.</p>}
-        {listed?.length === 0 && <p className="muted">표시할 포트가 없습니다.</p>}
+        {listed?.length === 0 && <p className="dialog-empty">표시할 포트가 없습니다.</p>}
         {listed?.map((port) => (
           <div className="forward-port-row" key={`${port.host}:${port.port}`}>
             <span>

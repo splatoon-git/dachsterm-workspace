@@ -166,8 +166,7 @@ try {
   await arrangeTabs(page, '하나로');
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
   await expect(page.getByRole('radiogroup', { name: '입력 범위' })).toBeHidden();
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '전체화면', exact: true }).click();
+  await page.keyboard.press('F11');
   await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(true);
   await expect(page.locator('.terminal-pane:visible')).toHaveCount(1);
   await page.keyboard.press('F11');

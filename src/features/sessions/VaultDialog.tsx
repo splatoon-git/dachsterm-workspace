@@ -1,15 +1,47 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Dialog } from '../../components/Dialog';
+import { Icon } from '../../components/Icon';
 import { call, errorText } from '../../lib/ipc';
+import './vault.css';
 export type VaultStatus = { enabled: boolean; unlocked: boolean; seconds: number };
+type RevealProfile = { id: string; name: string };
+
+export const vaultSummary =
+  '서버 암호와 Passphrase는 OS 보안 저장소에 보관합니다. 마스터 패스워드를 정하면 한 번 더 암호화합니다.';
+
+/** The master password as its own dialog: asked before a connection, or to show a saved secret. */
 export function VaultDialog({
   close,
   revealProfile,
   unlocked,
 }: {
   close: () => void;
-  revealProfile?: { id: string; name: string };
+  revealProfile?: RevealProfile;
   unlocked?: () => void;
+}) {
+  return (
+    <Dialog
+      title={revealProfile ? `${revealProfile.name} 저장된 암호 보기` : '마스터 패스워드'}
+      description={
+        revealProfile ? '암호를 볼 때마다 마스터 패스워드를 다시 확인합니다.' : vaultSummary
+      }
+      size="small"
+      close={close}
+    >
+      <VaultPanel revealProfile={revealProfile} unlocked={unlocked} done={close} />
+    </Dialog>
+  );
+}
+
+/** Status, unlock, change and lock for the master password. Settings shows it in place. */
+export function VaultPanel({
+  revealProfile,
+  unlocked,
+  done,
+}: {
+  revealProfile?: RevealProfile;
+  unlocked?: () => void;
+  done?: () => void;
 }) {
   const [status, setStatus] = useState<VaultStatus | null>(null);
   const [mode, setMode] = useState('unlock');
@@ -89,7 +121,7 @@ export function VaultDialog({
         timer.current = setTimeout(hide, 30000);
       } else if (action === 'unlock' && unlocked) {
         unlocked();
-        close();
+        done?.();
       } else {
         setMessage(
           action === 'configure'
@@ -117,21 +149,15 @@ export function VaultDialog({
     }
   }
   return (
-    <Dialog
-      title={revealProfile ? `${revealProfile.name} 저장된 암호 보기` : '마스터 패스워드'}
-      close={close}
-    >
-      <p className="muted">
-        서버별 암호와 Passphrase를 OS 보안 저장소에 보관합니다. 마스터 패스워드를 설정하면 추가
-        암호화가 적용됩니다.
-      </p>
+    <div className="vault-panel">
       {status && (
-        <p role="status">
+        <p className={`vault-state ${status.unlocked ? 'open' : ''}`} role="status">
+          <Icon name="lock" size={14} />
           {status.enabled
             ? status.unlocked
-              ? '잠금 해제됨 · 해제 후 5분이 지나면 자동 잠금'
-              : '보관함 잠김'
-            : '마스터 패스워드가 설정되지 않았습니다.'}
+              ? '잠금 해제됨 · 5분이 지나면 자동으로 잠깁니다'
+              : '잠김 · 연결할 때 마스터 패스워드를 묻습니다'
+            : '마스터 패스워드 없음 · OS 보안 저장소만 사용합니다'}
         </p>
       )}
       {status && (
@@ -166,29 +192,27 @@ export function VaultDialog({
                   autoComplete="new-password"
                 />
               </label>
-              <p className="muted">
-                12자 이상의 긴 암호를 사용하세요. 분실하면 저장된 암호를 복구할 수 없습니다. 기존
+              <p className="field-help">
+                12자 이상으로 정하세요. 잊어버리면 저장된 암호를 되살릴 수 없습니다. 이미 저장된
                 서버 암호도 함께 암호화됩니다.
               </p>
             </>
           )}
           {revealProfile && mode !== 'configure' && (
-            <p className="muted">
-              암호를 볼 때마다 재인증합니다. 30초 후 또는 다른 창으로 이동하면 숨깁니다.
-            </p>
+            <p className="field-help">30초가 지나거나 다른 창으로 옮기면 다시 숨깁니다.</p>
           )}
           <div className="form-actions">
             {status.enabled && !revealProfile && (
               <button
                 type="button"
+                className="start"
                 disabled={busy}
                 onClick={() => {
                   hide();
                   setMode(mode === 'configure' ? 'unlock' : 'configure');
                 }}
               >
-                {' '}
-                {mode === 'configure' ? '잠금 해제로 돌아가기' : '마스터 패스워드 변경'}{' '}
+                {mode === 'configure' ? '잠금 해제로 돌아가기' : '마스터 패스워드 변경'}
               </button>
             )}
             {status.unlocked && (
@@ -222,11 +246,7 @@ export function VaultDialog({
         <button onClick={hide}>암호 숨기기</button>
       </div>
       {message && <p role="status">{message}</p>}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-    </Dialog>
+      {error && <p role="alert">{error}</p>}
+    </div>
   );
 }

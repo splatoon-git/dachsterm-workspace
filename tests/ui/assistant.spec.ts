@@ -1,10 +1,19 @@
 import { test, expect } from '@playwright/test';
+const secretCheck = '비밀번호·개인키·Passphrase·OTP 같은 인증정보가 들어 있지 않습니다.';
+const stored = (body: string) =>
+  JSON.stringify({
+    revision: 0,
+    items: [{ id: 's1', name: '인사', description: '', body, group: '', tags: '' }],
+  });
+
 test('narrow snippet editor and explicit program metadata expand/clear without losing pin', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/tests/ui/fixtures/assistant.html');
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('dialog', { name: '명령', exact: true });
+  await expect(dialog.getByText('저장된 스니펫이 없습니다')).toBeVisible();
+  await dialog.getByRole('button', { name: '새 스니펫', exact: true }).first().click();
   await dialog.getByLabel('이름', { exact: true }).fill('좁은 화면 확인');
   await dialog.getByLabel('명령 본문', { exact: true }).fill('echo {{값}}');
   expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
@@ -34,20 +43,26 @@ test('narrow snippet editor and explicit program metadata expand/clear without l
   await expect(guide.locator('.guide-inline strong')).toHaveText('vim');
   await expect(guide.getByRole('button', { name: '고정 해제', exact: true })).toBeVisible();
 });
-test('explicit multi-target review cancels without sending and sends once after confirmation', async ({
+test('a snippet goes once to each chosen terminal and never to an excluded one', async ({
   page,
 }) => {
+  await page.addInitScript(
+    (value) => localStorage.setItem('fixture.snippets', value),
+    stored('echo 한글'),
+  );
   await page.goto('/tests/ui/fixtures/assistant.html');
-  const dialog = page.getByRole('dialog', { name: '스니펫', exact: true });
-  await dialog.getByLabel('명령 본문', { exact: true }).fill('echo 한글');
-  await dialog.getByRole('checkbox', { name: /테스트 로컬/ }).check();
-  await dialog.getByRole('button', { name: 'Enter 포함 실행 · 미리보기' }).click();
-  await expect(dialog.locator('li')).toHaveCount(2);
-  await dialog.getByRole('button', { name: '돌아가기' }).click();
-  expect(await page.evaluate(() => window.__sent)).toEqual([]);
-  await dialog.getByRole('button', { name: 'Enter 포함 실행 · 미리보기' }).click();
-  await dialog.getByRole('button', { name: '확인 · 실행' }).focus();
-  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: '명령', exact: true });
+  const targets = dialog.getByRole('region', { name: '보낼 터미널' });
+  // The active terminal starts chosen; PodTree is never offered.
+  await expect(targets.getByRole('checkbox', { name: /테스트 SSH/ })).toBeChecked();
+  await expect(targets.getByText('PodTree', { exact: true })).toHaveCount(0);
+  await targets.getByRole('checkbox', { name: /테스트 SSH/ }).uncheck();
+  await expect(dialog.getByRole('button', { name: '실행', exact: true })).toBeDisabled();
+  await targets.getByRole('checkbox', { name: /테스트 SSH/ }).check();
+  await targets.getByRole('checkbox', { name: /테스트 로컬/ }).check();
+  await expect(dialog.getByTestId('snippet-preview')).toHaveText('echo 한글');
+  await dialog.getByRole('button', { name: '실행', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('2개 터미널에 실행했습니다');
   expect(await page.evaluate(() => window.__sent)).toEqual([
     {
       targets: [
@@ -59,29 +74,34 @@ test('explicit multi-target review cancels without sending and sends once after 
     },
   ]);
 });
-test('snippet CRUD, restore, literal preview, target isolation and reconnect rejection', async ({
-  page,
-}) => {
+test('snippet CRUD, restore, literal preview and the multi-line check', async ({ page }) => {
   await page.goto('/tests/ui/fixtures/assistant.html');
-  const dialog = page.getByRole('dialog', { name: '스니펫', exact: true });
+  const dialog = page.getByRole('dialog', { name: '명령', exact: true });
+  await dialog.getByRole('button', { name: '새 스니펫', exact: true }).first().click();
   await dialog.getByLabel('이름', { exact: true }).fill('로그 확인');
   await dialog.getByLabel('그룹', { exact: true }).fill('운영');
   await dialog.getByLabel('태그', { exact: true }).fill('linux');
   await dialog.getByLabel('명령 본문', { exact: true }).fill("printf '{{경로}}'\necho done");
-  await dialog.getByLabel('저장 내용에 인증정보가 없습니다.').check();
+  await expect(dialog.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
+  await dialog.getByLabel(secretCheck).check();
   await dialog.getByRole('button', { name: '저장', exact: true }).click();
-  await expect(dialog.getByRole('status')).toContainText('저장했습니다');
+  const list = dialog.locator('#command-list');
+  await expect(list.getByRole('button', { name: /로그 확인/ })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
   await page.reload();
-  await dialog.getByRole('button', { name: '로그 확인' }).click();
-  await dialog.getByLabel('스니펫 검색').fill('운영 linux');
-  await expect(dialog.getByRole('button', { name: '로그 확인' })).toBeVisible();
+  await dialog.getByLabel('명령 검색').fill('운영 linux');
+  await expect(list.getByRole('button', { name: /로그 확인/ })).toBeVisible();
+  await expect(dialog.getByTestId('snippet-preview')).toHaveText("printf '경로'\necho done");
   await dialog.getByLabel('경로', { exact: true }).fill('한글 $HOME');
-  await expect(dialog.getByText('PodTree', { exact: true })).toHaveCount(0);
-  await dialog.getByRole('button', { name: '입력만 넣기 · 미리보기' }).click();
-  await expect(dialog.locator('pre')).toHaveText("printf '한글 $HOME'\necho done");
-  await expect(dialog.getByRole('button', { name: '확인 · 입력' })).toBeDisabled();
-  await dialog.getByRole('checkbox').check();
-  await dialog.getByRole('button', { name: '확인 · 입력' }).click();
+  await expect(dialog.getByTestId('snippet-preview')).toHaveText("printf '한글 $HOME'\necho done");
+  await dialog.getByRole('button', { name: '입력만 넣기', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('확인란');
+  expect(await page.evaluate(() => window.__sent)).toEqual([]);
+  await dialog.getByLabel(/넣기만 해도 실행될 수 있음/).check();
+  await dialog.getByRole('button', { name: '입력만 넣기', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('1개 터미널에 넣었습니다');
   expect(await page.evaluate(() => window.__sent)).toEqual([
     {
       targets: [{ id: 'id-one', bracketed: true }],
@@ -89,34 +109,29 @@ test('snippet CRUD, restore, literal preview, target isolation and reconnect rej
       execute: false,
     },
   ]);
-  await dialog.getByLabel('경로', { exact: true }).fill('path');
-  await dialog.getByRole('button', { name: 'Enter 포함 실행 · 미리보기' }).click();
-  await page.evaluate(() => window.__invalidate());
-  await dialog.getByRole('checkbox').check();
-  await dialog.getByRole('button', { name: '확인 · 실행' }).click();
-  await expect(dialog.getByRole('status')).toContainText('바뀌었습니다');
-  expect(await page.evaluate(() => window.__sent.length)).toBe(1);
-  await dialog.getByRole('button', { name: '복제', exact: true }).click();
+  // The values are for one send only.
+  await expect(dialog.getByLabel('경로', { exact: true })).toHaveValue('');
+  await dialog.getByRole('button', { name: '스니펫 복제', exact: true }).click();
   await expect(dialog.getByLabel('이름', { exact: true })).toHaveValue('로그 확인 복사');
-  await dialog.getByLabel('저장 내용에 인증정보가 없습니다.').check();
+  await dialog.getByLabel(secretCheck).check();
   await dialog.getByRole('button', { name: '저장', exact: true }).click();
-  await expect(dialog.getByRole('status')).toContainText('저장했습니다');
+  await dialog.getByLabel('명령 검색').fill('');
+  const copy = list.getByRole('button', { name: /로그 확인 복사/ });
+  await copy.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /^삭제/ }).click();
   await dialog.getByRole('button', { name: '삭제', exact: true }).click();
-  await dialog.getByRole('button', { name: '삭제 확인', exact: true }).click();
-  await expect(
-    dialog
-      .getByRole('region', { name: '저장된 스니펫' })
-      .getByRole('button', { name: '로그 확인 복사' }),
-  ).toHaveCount(0);
+  await expect(copy).toHaveCount(0);
+  await expect(list.getByRole('button', { name: /로그 확인/ })).toHaveCount(1);
 });
 for (const width of [360, 800])
-  test(`catalog copy and keyboard guide at ${width}px`, async ({ page }) => {
+  test(`basic commands copy, become a snippet, and keyboard guide at ${width}px`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto('/tests/ui/fixtures/assistant.html');
-    await page.getByRole('button', { name: '대화상자 닫기' }).click();
-    await page.getByRole('button', { name: '명령 열기', exact: true }).click();
-    const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('기본 명령 검색').fill('둘 중 하나');
+    const dialog = page.getByRole('dialog', { name: '명령', exact: true });
+    await dialog.getByRole('tab', { name: '기본 명령' }).click();
+    await dialog.getByLabel('명령 검색').fill('둘 중 하나');
     await dialog.getByRole('button', { name: '둘 중 하나 포함 · OR 복사' }).click();
     expect(await page.evaluate(() => window.__clipboard)).toBe(
       "grep -F -e '문구1' -e '문구2' -- '파일명'",
@@ -128,6 +143,10 @@ for (const width of [360, 800])
     await expect(dialog.getByRole('status')).toContainText('복사하지 못했습니다');
     expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await page.screenshot({ path: `target/verification/assistant-${width}.png` });
+    await dialog.getByRole('button', { name: '내 스니펫으로 저장', exact: true }).click();
+    await expect(dialog.getByLabel('명령 본문', { exact: true })).toHaveValue(
+      "grep -F -e '{{문구1}}' -e '{{문구2}}' -- '{{파일명}}'",
+    );
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: '조작표 전체 보기', exact: true }).click();
     await page.getByLabel('조작표 선택·고정').selectOption('vim');
@@ -137,6 +156,21 @@ for (const width of [360, 800])
     await page.getByRole('button', { name: '조작표 닫기', exact: true }).click();
     await expect(page.getByLabel('조작표 선택·고정')).toHaveCount(0);
   });
+test('the search box moves through the list with the arrow keys', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/assistant.html');
+  const dialog = page.getByRole('dialog', { name: '명령', exact: true });
+  await dialog.getByRole('tab', { name: '기본 명령' }).click();
+  const search = dialog.getByLabel('명령 검색');
+  await search.focus();
+  const current = dialog.locator('.cmd-item[aria-current]');
+  const first = (await current.textContent()) ?? '';
+  await page.keyboard.press('ArrowDown');
+  await expect(current).not.toHaveText(first);
+  await page.keyboard.press('ArrowUp');
+  await expect(current).toHaveText(first);
+  await page.keyboard.press('Enter');
+  await expect(dialog.locator('.cmd-actions button.primary')).toBeFocused();
+});
 test('turning the guide off in settings hides automatic guides but keeps a pin', async ({
   page,
 }) => {

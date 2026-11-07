@@ -88,7 +88,6 @@ export function SessionTransfer({
   }
   return (
     <section className="settings-data session-transfer" aria-label="세션 가져오기와 내보내기">
-      <h3>세션 가져오기 · 내보내기</h3>
       <p className="muted">
         DachsTerm JSON으로 세션·계층·태그·경유·템플릿·터널을 보관합니다. 외부 형식의 지원·제외
         필드는 변환 보고서에서 확인하세요. 암호와 개인키 내용은 포함하지 않습니다.

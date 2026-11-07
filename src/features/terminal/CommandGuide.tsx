@@ -1,90 +1,11 @@
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import type { Terminal } from '@xterm/xterm';
-import { Dialog } from '../../components/Dialog';
 import { isMac } from '../../lib/platform';
-import { commands, guideKeys, type GuideProgram } from './guideData';
+import { guideKeys, type GuideProgram } from './guideData';
 import type { TerminalSession } from './session';
 import { usePaneView } from './paneView';
 import { useTerminalPreferences } from './preferences';
 import './assistant.css';
-const placeholders = /(파일명|프로그램명|검색어|제외어|문구1|문구2|경로|원본|대상|호스트)/g;
-export function CommandCatalog({ close }: { close: () => void }) {
-  const [query, setQuery] = useState('');
-  const [group, setGroup] = useState('전체');
-  const [message, setMessage] = useState('');
-  async function copy(text: string, name: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setMessage(`${name} 복사 완료`);
-    } catch {
-      setMessage('클립보드에 복사하지 못했습니다. 명령을 직접 선택해 복사하세요.');
-    }
-  }
-  return (
-    <Dialog title="기본 명령·로그 필터" close={close} className="assistant-dialog">
-      <p>
-        GNU/Linux 예제입니다. 강조된 부분을 바꾸고 직접 붙여넣어 실행하세요. 복사는 Enter를 포함하지
-        않습니다.
-      </p>
-      <div className="assistant-filters">
-        <input
-          aria-label="기본 명령 검색"
-          placeholder="명령·설명 검색"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <select aria-label="명령 분류" value={group} onChange={(e) => setGroup(e.target.value)}>
-          {['전체', ...new Set(commands.map((c) => c.group))].map((g) => (
-            <option key={g}>{g}</option>
-          ))}
-        </select>
-      </div>
-      <p role="status">{message}</p>
-      <div className="command-list">
-        {commands
-          .filter(
-            (c) =>
-              (group === '전체' || c.group === group) &&
-              `${c.title} ${c.command} ${c.note ?? ''}`
-                .toLocaleLowerCase()
-                .includes(query.toLocaleLowerCase()),
-          )
-          .map((c) => (
-            <article key={c.title}>
-              <div>
-                <strong>{c.title}</strong>
-                <button
-                  aria-label={`${c.title} 복사`}
-                  onClick={() => void copy(c.command, c.title)}
-                >
-                  복사
-                </button>
-              </div>
-              <code>
-                {c.command
-                  .split(placeholders)
-                  .map((part, i) => (i % 2 ? <mark key={i}>{part}</mark> : part))}
-              </code>
-              {c.note && <p className="muted">{c.note}</p>}
-            </article>
-          ))}
-      </div>
-      <details>
-        <summary>인용·필터 결과·지원 환경 도움말</summary>
-        <p>
-          작은따옴표 안은 문자 그대로 전달됩니다. 검색어에 작은따옴표가 있으면 따옴표를 닫고
-          이스케이프한 뒤 다시 여세요: <code>{`grep -F -- 'it'\\''s' '파일명'`}</code>. 큰따옴표
-          안의 $·백틱은 셸에서 해석될 수 있습니다.
-        </p>
-        <p>
-          출력이 없으면 일치 항목 없음, 파일 경로, 읽기 권한을 확인하세요. 실시간 필터는 새 줄이
-          들어올 때 출력합니다. 로그 교체는 tail -F, 종료는 Ctrl+C입니다. --line-buffered, readlink
-          -f와 Linux 전용 도구는 macOS/BSD에서 동일하게 동작한다고 보장하지 않습니다.
-        </p>
-      </details>
-    </Dialog>
-  );
-}
 /** Keys shown in the status bar itself; the rest are in the full table. */
 const INLINE_KEYS = 5;
 const guideNote = (program: GuideProgram) =>
@@ -197,7 +118,13 @@ export function ProgramGuide({ session }: { session: TerminalSession }) {
               <p className="muted">{guideNote(program)}</p>
             </>
           ) : (
-            <p className="muted">프로그램을 직접 선택·고정하세요. {autoNote}</p>
+            <>
+              <p>
+                지금 실행 중인 프로그램을 알아보지 못했습니다. 위에서 프로그램을 고르면 이 탭에
+                고정되어 상태바에 계속 보입니다.
+              </p>
+              <p className="muted guide-auto">{autoNote}</p>
+            </>
           )}
         </section>
       )}

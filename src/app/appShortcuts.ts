@@ -13,7 +13,11 @@ export type AppShortcut =
   | { name: 'sessionSearch' }
   | { name: 'files' }
   | { name: 'inputScope' }
-  | { name: 'splitRight' };
+  | { name: 'splitRight' }
+  | { name: 'commands' }
+  | { name: 'tunnels' }
+  | { name: 'help' }
+  | { name: 'settings' };
 
 const sides: Record<string, Side> = {
   ArrowLeft: 'left',
@@ -32,6 +36,10 @@ const withShift: Record<string, AppShortcut> = {
   KeyE: { name: 'files' },
   KeyM: { name: 'inputScope' },
   Backslash: { name: 'splitRight' },
+  KeyS: { name: 'commands' },
+  KeyU: { name: 'tunnels' },
+  // Ctrl+? as most apps write it. F1 stays with the terminal, where programs such as mc use it.
+  Slash: { name: 'help' },
 };
 
 type Keys = Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>;
@@ -43,6 +51,8 @@ export function appShortcut(e: Keys): AppShortcut | null {
   if (e.altKey && !e.shiftKey)
     return e.code in sides ? { name: 'moveFocus', side: sides[e.code] } : null;
   if (e.shiftKey && !e.altKey) return withShift[e.code] ?? null;
+  // Ctrl+, sends no control character, and Command+, opens settings in every Mac app.
+  if (!e.shiftKey && !e.altKey && e.code === 'Comma') return { name: 'settings' };
   return null;
 }
 

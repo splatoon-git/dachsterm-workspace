@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { themes } from '../../src/themes/registry';
+import { openPreview } from './helpers';
 
 test('every theme applies to the existing terminal and persists across reload', async ({
   page,
 }) => {
   await page.goto('/');
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await openPreview(page);
   await expect(page.locator('.xterm-screen')).toBeVisible();
   await page
     .locator('.xterm-screen')
@@ -48,8 +48,7 @@ test('theme synchronizes across open windows, new windows and storage removal', 
   await page.goto('/');
   const other = await context.newPage();
   await other.goto('/');
-  await other.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await other.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await openPreview(other);
   await page.getByRole('button', { name: '설정', exact: true }).click();
   await page.getByRole('radio', { name: 'Dracula', exact: true }).check();
   await expect(other.locator('html')).toHaveAttribute('data-theme', 'dracula');
@@ -75,7 +74,7 @@ for (const width of [1280, 560, 360]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     await page.getByRole('button', { name: '설정', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: '워크스페이스 설정' });
+    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
     await expect(page.getByRole('radio', { name: 'DachsTerm Classic', exact: true })).toBeFocused();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('radio', { name: 'GitHub White', exact: true })).toBeChecked();

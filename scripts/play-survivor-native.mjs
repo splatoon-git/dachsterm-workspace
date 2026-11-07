@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { createHash } from 'node:crypto';
+import { openGame } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-play-'));
 const server = net.createServer();
@@ -48,11 +49,7 @@ try {
     await new Promise((r) => setTimeout(r, 250));
   }
   if (!page) throw Error('Native page unavailable');
-  await page.locator('.sidebar-games summary').click();
-  await page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name: '닥스의 서바이버', exact: true })
-    .click();
+  await openGame(page, '닥스의 서바이버');
   await mkdir('target/verification', { recursive: true });
   const names = [
     '왕와앙',

@@ -1,0 +1,39 @@
+/* The master password: a state line, then the fields for the current step. */
+.vault-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.vault-panel .form-actions {
+  margin-top: var(--space-xs);
+}
+p.vault-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--space-lg);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+p.vault-state.open {
+  background: color-mix(in srgb, var(--color-status-success) 14%, var(--color-surface-panel));
+  color: var(--color-text-primary);
+}
+.secret-reveal {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+.secret-reveal[hidden] {
+  display: none;
+}
+.secret-reveal label {
+  flex: 1;
+}
+.secret-reveal input {
+  font-family: var(--font-mono);
+}

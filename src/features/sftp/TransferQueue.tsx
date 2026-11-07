@@ -1,4 +1,12 @@
 import { useEffect, useState } from 'react';
+import {
+  ContextMenu,
+  anchorBelow,
+  isMenuKey,
+  type MenuItem,
+  type MenuPoint,
+} from '../../components/ContextMenu';
+import { Icon } from '../../components/Icon';
 import { call, errorText } from '../../lib/ipc';
 
 export type Transfer = {
@@ -106,16 +114,45 @@ export function TransferQueue({
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [details, setDetails] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ at: MenuPoint; transfer: Transfer } | null>(null);
   const chosen = transfers.filter((t) => selected.includes(t.id));
   const control = (action: string, values: Transfer[]) =>
     void run('transfer_control', { ids: values.map((t) => t.id), action, connectionId, profileId });
+  const verb = (t: Transfer) => (t.direction === 'upload' ? '보내기' : '받기');
+  // The one action a row shows; everything else is in its menu.
+  const main = (t: Transfer) =>
+    pausable(t)
+      ? { label: '일시 중지', run: () => control('pause', [t]) }
+      : resumable(t)
+        ? { label: `확인 후 이어서 ${verb(t)}`, run: () => control('resume', [t]) }
+        : null;
+  const items = (t: Transfer): MenuItem[] => [
+    { label: '맨 앞으로', disabled: t.status !== 'queued', run: () => control('first', [t]) },
+    {
+      label: details === t.id ? '파일별 결과 닫기' : '파일별 결과',
+      disabled: !t.files,
+      run: () => setDetails(details === t.id ? null : t.id),
+    },
+    {
+      label: '전송 취소',
+      separated: true,
+      disabled: !(pausable(t) || resumable(t)),
+      run: () => control('cancel', [t]),
+    },
+    {
+      label: t.status === 'completed' ? '기록 정리' : '부분 파일 삭제',
+      danger: t.status !== 'completed',
+      disabled: !(resumable(t) || t.status === 'completed'),
+      run: () => discard(t.id),
+    },
+  ];
   return (
     <section aria-label="전송 큐" className="transfer-queue">
       <p className="encoding-note">
         동시 2개 묶음 · 취소 시 부분 파일·빈 폴더 보존 · 재개는 현재 서버에서 사용자 확인 후 실행
       </p>
       {transfers.length > 0 && (
-        <div className="file-toolbar">
+        <div className="transfer-batch">
           <button
             onClick={() =>
               setSelected(chosen.length === transfers.length ? [] : transfers.map((t) => t.id))
@@ -123,96 +160,113 @@ export function TransferQueue({
           >
             {chosen.length === transfers.length ? '선택 해제' : '모두 선택'}
           </button>
-          <button
-            disabled={!chosen.some(pausable)}
-            onClick={() => control('pause', chosen.filter(pausable))}
-          >
-            선택 일시정지
-          </button>
-          <button
-            disabled={!chosen.some(resumable)}
-            onClick={() => control('resume', chosen.filter(resumable))}
-          >
-            선택 재개 확인
-          </button>
-          <button
-            disabled={!chosen.some((t) => pausable(t) || resumable(t))}
-            onClick={() =>
-              control(
-                'cancel',
-                chosen.filter((t) => pausable(t) || resumable(t)),
-              )
-            }
-          >
-            선택 취소
-          </button>
+          {chosen.length > 0 && (
+            <>
+              <span>{chosen.length}개 선택</span>
+              <button
+                disabled={!chosen.some(pausable)}
+                onClick={() => control('pause', chosen.filter(pausable))}
+              >
+                선택 일시정지
+              </button>
+              <button
+                disabled={!chosen.some(resumable)}
+                onClick={() => control('resume', chosen.filter(resumable))}
+              >
+                선택 재개 확인
+              </button>
+              <button
+                disabled={!chosen.some((t) => pausable(t) || resumable(t))}
+                onClick={() =>
+                  control(
+                    'cancel',
+                    chosen.filter((t) => pausable(t) || resumable(t)),
+                  )
+                }
+              >
+                선택 취소
+              </button>
+            </>
+          )}
         </div>
       )}
-      {transfers.map((t) => (
-        <div className="transfer-item" key={t.id}>
-          <label>
-            <input
-              type="checkbox"
-              aria-label={`${t.name} 전송 선택`}
-              checked={selected.includes(t.id)}
-              onChange={(e) =>
-                setSelected(
-                  e.target.checked ? [...selected, t.id] : selected.filter((id) => id !== t.id),
-                )
-              }
-            />{' '}
-            {t.direction === 'upload' ? '↑' : '↓'} {t.name.split('/').pop()}
-          </label>
-          <strong>{labels[t.status] ?? t.status}</strong>
-          <small>
-            {t.finished ?? 0} 완료 · {t.skipped ?? 0} 건너뜀 / {t.files ?? 0} 항목 ·{' '}
-            {t.conflict === 'overwrite'
-              ? '묶음 전체 덮어쓰기'
-              : t.conflict === 'rename'
-                ? '동명 이름 변경'
-                : '기존 파일 보존'}
-          </small>
-          <progress aria-label={`${t.name} 전체 진행률`} value={t.done} max={t.total || 1} />
-          <small>
-            {size(t.done)} / {size(t.total)}
-          </small>
-          {t.current && (
-            <small className="transfer-current" title={t.current}>
-              {t.current.split(/[\\/]/).pop()} · {size(t.currentDone ?? 0)} /{' '}
-              {size(t.currentTotal ?? 0)}
-            </small>
-          )}
-          <small role={t.status === 'failed' ? 'alert' : undefined}>{t.message}</small>
-          <div className="file-toolbar">
-            {t.status === 'queued' && (
-              <button onClick={() => control('first', [t])}>맨 앞으로</button>
-            )}
-            {pausable(t) && <button onClick={() => control('pause', [t])}>일시 중지</button>}
-            {resumable(t) && (
-              <button onClick={() => control('resume', [t])}>
-                확인 후 이어서 {t.direction === 'upload' ? '보내기' : '받기'}
-              </button>
-            )}
-            {(pausable(t) || resumable(t)) && (
-              <button onClick={() => control('cancel', [t])}>전송 취소</button>
-            )}
-            {(resumable(t) || t.status === 'completed') && (
-              <button onClick={() => discard(t.id)}>
-                {t.status === 'completed' ? '기록 정리' : '부분 파일 삭제'}
-              </button>
-            )}
-            {!!t.files && (
+      {transfers.map((t) => {
+        const action = main(t);
+        return (
+          <div
+            className="transfer-item"
+            key={t.id}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu({ at: { x: e.clientX, y: e.clientY }, transfer: t });
+            }}
+          >
+            <div className="transfer-head">
+              <label>
+                <input
+                  type="checkbox"
+                  aria-label={`${t.name} 전송 선택`}
+                  checked={selected.includes(t.id)}
+                  onChange={(e) =>
+                    setSelected(
+                      e.target.checked ? [...selected, t.id] : selected.filter((id) => id !== t.id),
+                    )
+                  }
+                />
+                <span aria-hidden="true">{t.direction === 'upload' ? '↑' : '↓'}</span>
+                <span className="transfer-name" title={t.name}>
+                  {t.name.split('/').pop()}
+                </span>
+              </label>
+              <strong className="transfer-status" data-status={t.status}>
+                {labels[t.status] ?? t.status}
+              </strong>
+              {action && <button onClick={action.run}>{action.label}</button>}
               <button
-                aria-expanded={details === t.id}
-                onClick={() => setDetails(details === t.id ? null : t.id)}
+                className="transfer-more"
+                aria-label={`${t.name} 전송 작업`}
+                aria-haspopup="menu"
+                onClick={(e) => setMenu({ at: anchorBelow(e.currentTarget), transfer: t })}
+                onKeyDown={(e) => {
+                  if (!isMenuKey(e)) return;
+                  e.preventDefault();
+                  setMenu({ at: anchorBelow(e.currentTarget), transfer: t });
+                }}
               >
-                파일별 결과
+                <Icon name="more" size={14} />
               </button>
+            </div>
+            <progress aria-label={`${t.name} 전체 진행률`} value={t.done} max={t.total || 1} />
+            <small>
+              {size(t.done)} / {size(t.total)} · {t.finished ?? 0} 완료 · {t.skipped ?? 0} 건너뜀 /{' '}
+              {t.files ?? 0} 항목 ·{' '}
+              {t.conflict === 'overwrite'
+                ? '묶음 전체 덮어쓰기'
+                : t.conflict === 'rename'
+                  ? '동명 이름 변경'
+                  : '기존 파일 보존'}
+            </small>
+            {t.current && (
+              <small className="transfer-current" title={t.current}>
+                {t.current.split(/[\\/]/).pop()} · {size(t.currentDone ?? 0)} /{' '}
+                {size(t.currentTotal ?? 0)}
+              </small>
             )}
+            {t.message && (
+              <small role={t.status === 'failed' ? 'alert' : undefined}>{t.message}</small>
+            )}
+            {details === t.id && <Results id={t.id} count={t.files ?? 0} />}
           </div>
-          {details === t.id && <Results id={t.id} count={t.files ?? 0} />}
-        </div>
-      ))}
+        );
+      })}
+      {menu && (
+        <ContextMenu
+          at={menu.at}
+          label={`${menu.transfer.name} 전송 작업`}
+          items={items(menu.transfer)}
+          close={() => setMenu(null)}
+        />
+      )}
     </section>
   );
 }

@@ -43,7 +43,6 @@ export function MaintenancePanel({ restored }: { restored: () => void }) {
   }
   return (
     <section className="settings-data" aria-label="복구와 진단">
-      <h3>복구와 진단</h3>
       <p className="muted">
         세션·그룹 삭제와 설정 가져오기 전에 복구본을 만듭니다. 최근 10개를 이 PC에 보관하며,
         암호·개인키 내용·신뢰한 호스트키·편집 파일은 포함하지 않습니다. 다른 PC에 보관하려면 JSON

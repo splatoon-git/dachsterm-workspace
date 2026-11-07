@@ -1,0 +1,238 @@
+/*
+ * The shared dialog frame. Header, scrolling body and a pinned footer; every dialog in the app
+ * uses it, so sizes, spacing, button order and error placement match everywhere.
+ *
+ *   header   16px 20px · title 15px semibold · optional one-line description · close icon
+ *   body     16px 20px · scrolls on its own · sections separated by 20px
+ *   footer   the last .form-actions · pinned · secondary actions left of the primary one,
+ *            a destructive or extra action pushed to the left with .start
+ *   errors   role="alert" inside the body shows as a red banner, status lines stay quiet
+ */
+dialog {
+  width: min(600px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  overflow: hidden;
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  color: var(--color-text-primary);
+  background: var(--color-surface-panel);
+  box-shadow: var(--shadow-panel);
+}
+dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog::backdrop {
+  background: var(--color-overlay-backdrop);
+}
+dialog.dialog-small {
+  width: min(440px, calc(100vw - 32px));
+}
+dialog.dialog-large {
+  width: min(920px, calc(100vw - 32px));
+  height: min(640px, calc(100dvh - 48px));
+}
+
+.dialog-heading {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-lg) var(--space-md) var(--space-md) 20px;
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
+}
+.dialog-title {
+  min-width: 0;
+  padding-top: 2px;
+}
+.dialog-title h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+.dialog-title p {
+  margin: 2px 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  line-height: 1.5;
+}
+.dialog-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.dialog-close:hover {
+  background: var(--color-surface-subtle);
+  color: var(--color-text-primary);
+}
+
+.dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-lg) 20px;
+}
+.dialog-body > :first-child,
+.dialog-body > form > :first-child {
+  margin-top: 0;
+}
+.dialog-body > form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.dialog-body > p {
+  margin: 0 0 var(--space-md);
+  line-height: 1.6;
+}
+.dialog-body > form > p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* The trailing action row is the footer: pinned under the scrolling content. A nested dialog
+   rendered after a form does not count, hence last-of-type. */
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+.dialog-body > .form-actions:last-child,
+.dialog-body > form:last-of-type > .form-actions:last-child {
+  position: sticky;
+  z-index: 1;
+  bottom: calc(-1 * var(--space-lg));
+  margin: var(--space-lg) -20px calc(-1 * var(--space-lg));
+  padding: var(--space-md) 20px;
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+  background: var(--color-surface-panel);
+}
+.form-actions > .start {
+  margin-right: auto;
+}
+.form-actions > button {
+  min-height: var(--control-height);
+  padding: 5px 14px;
+  font-size: var(--font-small);
+  line-height: 20px;
+}
+/* Only the footer's buttons: a context menu item also uses .danger, for red text alone. */
+.form-actions > button.danger {
+  border-color: var(--color-status-error);
+  background: var(--color-status-error);
+  color: var(--color-text-on-action);
+}
+.form-actions > button.danger:hover:enabled {
+  filter: brightness(0.94);
+}
+.form-actions > button.danger-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-status-error);
+}
+.form-actions > button.danger-quiet:hover:enabled {
+  background: color-mix(in srgb, var(--color-status-error) 10%, transparent);
+}
+
+/* Fields: label above the control, help below it. */
+dialog input:not([type='checkbox']):not([type='radio']),
+dialog select {
+  min-height: var(--control-height);
+  padding: 5px 8px;
+  font-size: var(--font-small);
+  line-height: 20px;
+}
+dialog label {
+  min-width: 0;
+}
+dialog select {
+  width: 100%;
+}
+.field-help {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Messages: an error is a banner, a status line is quiet text. */
+.dialog-body [role='alert'] {
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm) var(--space-md);
+  border: var(--border-width-default) solid
+    color-mix(in srgb, var(--color-status-error) 35%, transparent);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--color-status-error) 8%, var(--color-surface-panel));
+  color: var(--color-status-error);
+  font-size: var(--font-small);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.dialog-body p[role='status'] {
+  margin: var(--space-sm) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+
+/* A section inside a long dialog: a title, an optional line under it, then its content. */
+.dialog-section + .dialog-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+}
+.dialog-section > h3 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+.dialog-section > h3 + p {
+  margin: 0 0 var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  line-height: 1.5;
+}
+
+/* Nothing to show yet: an icon, one line, and the action that fills it. */
+.dialog-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl) var(--space-lg);
+  border: var(--border-width-default) dashed var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  text-align: center;
+}
+.dialog-empty strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-body);
+}
+
+@media (max-width: 700px) {
+  .dialog-heading {
+    padding: var(--space-md) var(--space-sm) var(--space-sm) var(--space-lg);
+  }
+  .dialog-body {
+    padding: var(--space-md) var(--space-lg);
+  }
+  .dialog-body > .form-actions:last-child,
+  .dialog-body > form:last-of-type > .form-actions:last-child {
+    bottom: calc(-1 * var(--space-md));
+    margin: var(--space-md) calc(-1 * var(--space-lg)) calc(-1 * var(--space-md));
+    padding: var(--space-sm) var(--space-lg);
+  }
+}

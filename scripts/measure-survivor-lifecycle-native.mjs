@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { createHash } from 'node:crypto';
+import { openGame } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-memory-'));
 const server = net.createServer();
@@ -45,20 +46,16 @@ try {
     await new Promise((r) => setTimeout(r, 250));
   }
   if (!page) throw Error('Native page unavailable');
-  await page.locator('.sidebar-games summary').click();
-  await page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name: '닥스의 서바이버', exact: true })
-    .click();
+  await openGame(page, '닥스의 서바이버');
   await page.getByRole('button', { name: '새 도전 시작', exact: true }).waitFor();
   await page.getByRole('button', { name: '닥스의 서바이버 탭 닫기', exact: true }).click();
   await page.evaluate(() => {
     window.memoryRound = async (count) => {
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const button = (text) =>
-        Array.from(document.querySelectorAll('.survivor-game button,.sidebar-games button')).find(
-          (e) => e.textContent.trim() === text && !e.disabled,
-        );
+        Array.from(
+          document.querySelectorAll('.survivor-game button,.toolbar-menu-items button'),
+        ).find((e) => e.textContent.trim() === text && !e.disabled);
       const wait = async (fn) => {
         for (let i = 0; i < 200; i++) {
           const v = fn();

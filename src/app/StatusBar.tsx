@@ -10,7 +10,7 @@ function where(session: TerminalSession) {
   const { profile } = session;
   switch (sessionKind(session)) {
     case 'local':
-      return null;
+      return session.localTarget?.kind === 'wsl' ? 'WSL' : '로컬 셸';
     case 'podtree':
       return profile.host;
     case 'ftp':
@@ -24,6 +24,9 @@ function Target({ session }: { session: TerminalSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const { profile } = session;
   const place = where(session);
+  // A local shell's ready message only repeats its name ("로컬 · Ubuntu"); other states still show.
+  const message =
+    sessionKind(session) === 'local' && state.status === 'connected' ? '' : state.message;
   return (
     <span className="status-target" title={state.message}>
       <span
@@ -32,7 +35,7 @@ function Target({ session }: { session: TerminalSession }) {
       />
       <strong>{profile.name}</strong>
       {place && <span>{place}</span>}
-      <span className="status-message">{state.message}</span>
+      {message && <span className="status-message">{message}</span>}
       {capabilities(session).terminal && (
         <span className="status-tag">{profile.encoding?.toUpperCase() ?? 'UTF-8'}</span>
       )}

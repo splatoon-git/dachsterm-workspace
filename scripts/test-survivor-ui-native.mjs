@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import { openGame } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw Error('Windows WebView2 required.');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-ui-'));
@@ -49,11 +50,7 @@ async function launch() {
   }
   if (!page) throw Error('Native app origin unavailable.');
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.locator('.sidebar-games summary').click();
-  await page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name: '닥스의 서바이버', exact: true })
-    .click();
+  await openGame(page, '닥스의 서바이버');
   return page;
 }
 async function nativeClose(page) {

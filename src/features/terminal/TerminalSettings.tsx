@@ -18,11 +18,35 @@ type Toggle = keyof {
 
 function Group({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="terminal-settings-group" aria-label={title}>
+    <section className="dialog-section terminal-settings-group" aria-label={title}>
       <h3>{title}</h3>
-      <div className="terminal-preferences">{children}</div>
-      {note && <p className="muted">{note}</p>}
+      {note && <p>{note}</p>}
+      <div className="setting-rows">{children}</div>
     </section>
+  );
+}
+
+/** One setting: its name at the left and the control at the right. */
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="setting-row">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+/** Terminal settings on their own, for a detached window that has no app settings. */
+export function TerminalSettings({ close }: { close: () => void }) {
+  return (
+    <Dialog
+      title="터미널 설정"
+      description="모든 터미널과 새 창에 바로 적용됩니다."
+      className="terminal-settings-dialog"
+      close={close}
+    >
+      <TerminalSettingsPanel />
+    </Dialog>
   );
 }
 
@@ -31,7 +55,7 @@ function Group({ title, note, children }: { title: string; note?: string; childr
  * connection stay in its session form, and the session log and a pinned guide stay in the tab menu.
  * Problems show inside the dialog, which has no pane.
  */
-export function TerminalSettings({ close }: { close: () => void }) {
+export function TerminalSettingsPanel() {
   const { fontSize, scrollback } = useTerminalDisplay();
   const preferences = useTerminalPreferences();
   const [message, setMessage] = useState('');
@@ -45,20 +69,19 @@ export function TerminalSettings({ close }: { close: () => void }) {
   };
   const toggles = (items: (readonly [Toggle, string])[]) =>
     items.map(([key, label]) => (
-      <label className="checkbox" key={key}>
+      <Row key={key} label={label}>
         <input
           type="checkbox"
+          className="switch"
           checked={preferences[key]}
           onChange={(e) => save({ [key]: e.target.checked })}
         />
-        {label}
-      </label>
+      </Row>
     ));
   return (
-    <Dialog title="터미널 설정" close={close}>
+    <>
       <Group title="표시">
-        <label>
-          글꼴 크기
+        <Row label="글꼴 크기">
           <select
             aria-label="글꼴 크기"
             value={fontSize}
@@ -74,9 +97,8 @@ export function TerminalSettings({ close }: { close: () => void }) {
               <option key={n}>{n}</option>
             ))}
           </select>
-        </label>
-        <label>
-          스크롤 기록
+        </Row>
+        <Row label="스크롤 기록">
           <select
             aria-label="스크롤백"
             value={scrollback}
@@ -89,10 +111,12 @@ export function TerminalSettings({ close }: { close: () => void }) {
             }}
           >
             {[1000, 5000, 10000].map((n) => (
-              <option key={n}>{n}</option>
+              <option key={n} value={n}>
+                {n.toLocaleString()}줄
+              </option>
             ))}
           </select>
-        </label>
+        </Row>
       </Group>
       <Group
         title="마우스·키보드"
@@ -103,8 +127,7 @@ export function TerminalSettings({ close }: { close: () => void }) {
           ['rightClickPaste', '마우스 우클릭 붙여넣기'],
           ...(isMacPlatform ? ([['macOptionAsMeta', 'Option 키를 Meta로 사용']] as const) : []),
         ])}
-        <label>
-          Backspace 전송
+        <Row label="Backspace 전송">
           <select
             aria-label="Backspace 전송"
             value={preferences.backspace}
@@ -113,7 +136,7 @@ export function TerminalSettings({ close }: { close: () => void }) {
             <option value="del">DEL · 표준 기본값</option>
             <option value="bs">Ctrl+H · 오래된 서버 호환</option>
           </select>
-        </label>
+        </Row>
       </Group>
       <Group
         title="프로그램 연동"
@@ -132,9 +155,11 @@ export function TerminalSettings({ close }: { close: () => void }) {
           ['bellNotifications', '터미널 벨도 OS 알림으로 표시'],
         ])}
       </Group>
-      <p className="muted">모든 설정은 열린 터미널과 새 창에도 바로 적용됩니다.</p>
+      <section className="dialog-section" aria-label="CLI 에이전트">
+        <h3>CLI 에이전트</h3>
+        <AgentHookGuide notice={setMessage} />
+      </section>
       {message && <p role="status">{message}</p>}
-      <AgentHookGuide notice={setMessage} />
-    </Dialog>
+    </>
   );
 }

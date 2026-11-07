@@ -10,13 +10,6 @@ export function ThemePicker() {
   const [saved, setSaved] = useState(true);
   return (
     <section className="theme-settings" aria-label="테마 설정">
-      <div className="theme-heading">
-        <div>
-          <h3>내 작업 공간의 분위기</h3>
-          <p>테마를 선택하면 화면과 열린 터미널에 바로 적용됩니다.</p>
-        </div>
-        <span className="theme-count">{themes.length} THEMES</span>
-      </div>
       <fieldset className="theme-picker">
         <legend>테마 선택</legend>
         <div className="theme-grid">

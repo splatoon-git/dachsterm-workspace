@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
+import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { nextEnabled, placeMenu, type MenuPoint } from './menuPlacement';
 export type { MenuPoint };
@@ -22,6 +22,15 @@ export function anchorBelow(element: Element): MenuPoint {
   return { x: rect.left, y: rect.bottom };
 }
 
+/**
+ * Where the menu is drawn. A modal dialog makes the rest of the page inert, so a menu opened while
+ * one is open belongs inside the topmost dialog; otherwise it could not be clicked.
+ */
+function menuHost(): HTMLElement {
+  const open = document.querySelectorAll<HTMLDialogElement>('dialog[open]');
+  return open[open.length - 1] ?? document.body;
+}
+
 /** Whether a key press asks for the focused element's context menu. */
 export const isMenuKey = (event: { key: string; shiftKey: boolean }) =>
   event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10');
@@ -42,6 +51,7 @@ export function ContextMenu({
   close: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [host] = useState(menuHost);
   const onClose = useEffectEvent(close);
   useLayoutEffect(() => {
     const menu = ref.current!;
@@ -119,6 +129,6 @@ export function ContextMenu({
         </Fragment>
       ))}
     </div>,
-    document.body,
+    host,
   );
 }

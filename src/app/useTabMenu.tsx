@@ -5,7 +5,7 @@ import type { TerminalSession } from '../features/terminal/session';
 import { capabilities } from '../features/terminal/sessionKind';
 import { tabMenuEntries, type TabCommand } from './tabMenu';
 import type { Beside, Workspace } from './useWorkspaceLayout';
-import { groupOfTab, groups, tabKey } from './workspaceLayout';
+import { allTabs, groupOfTab, groups, tabKey, type Preset } from './workspaceLayout';
 
 export type TabActions = {
   /** Opens the same target again beside the group: a new connection and a new shell. */
@@ -14,6 +14,8 @@ export type TabActions = {
   reconnect: (session: TerminalSession) => void;
   /** Closes any tab by its key, with the checks each kind needs. */
   close: (key: string) => void;
+  /** After the window's tabs were laid out again, to put focus back on a terminal. */
+  arranged: () => void;
 };
 
 /** The tab header menu, shared by right-click, Shift+F10, the menu key and the ⋯ button. */
@@ -29,6 +31,16 @@ export function useTabMenu({
   actions: TabActions;
 }) {
   const [menu, setMenu] = useState<MenuRequest | null>(null);
+  const arrange = () =>
+    Object.fromEntries(
+      (['columns', 'rows', 'grid', 'single'] as Preset[]).map((preset) => [
+        preset,
+        () => {
+          workspace.preset(preset);
+          actions.arranged();
+        },
+      ]),
+    ) as Record<Preset, () => void>;
   const open = (key: string, at: MenuPoint) => {
     const group = groupOfTab(workspace.layout.root, key);
     if (!group) return;
@@ -58,6 +70,7 @@ export function useTabMenu({
       disconnect: () => void session?.disconnect(),
       reconnect: () => session && actions.reconnect(session),
       close: () => actions.close(key),
+      ...arrange(),
       closeOthers: () =>
         group.tabs.map(tabKey).forEach((other) => {
           if (other !== key) actions.close(other);
@@ -70,6 +83,7 @@ export function useTabMenu({
       groupCount: groups(workspace.layout.root).length,
       zoomed: workspace.zoomed,
       otherTabs: group.tabs.length - 1,
+      tabCount: allTabs(workspace.layout.root).length,
       narrow,
     });
     setMenu({

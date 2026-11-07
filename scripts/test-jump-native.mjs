@@ -171,6 +171,7 @@ try {
   await page.getByRole('button', { name: `${target.name} 탭 닫기`, exact: true }).click();
   stage = 'batch preview through native UI';
   await page.getByRole('button', { name: '설정', exact: true }).click();
+  await page.getByRole('tab', { name: '세션 일괄 수정', exact: true }).click();
   const management = page.getByRole('region', { name: '고급 세션 관리' });
   await management.getByLabel('관리 대상 검색').fill('tag:prod group:서울');
   await management.getByRole('button', { name: '검색 결과 전체 선택' }).click();
@@ -184,7 +185,8 @@ try {
   assert(snapshot.profiles.every((p) => p.tags.includes('verified')));
   stage = 'template new form and route display';
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: '서버 추가', exact: true }).click();
+  // There is no add-server button any more; the new connection form has its own key.
+  await page.keyboard.press('Control+Shift+N');
   stage = 'template select';
   await page.getByLabel('공통 설정 템플릿').selectOption({ label: '운영 기본' });
   stage = 'template route display';
@@ -213,6 +215,7 @@ try {
   assert(snapshot.profiles.every((p) => p.tags.includes('verified')));
   assert.equal((await invoke('session_templates')).length, 1);
   await page.getByRole('button', { name: '설정', exact: true }).click();
+  await page.getByRole('tab', { name: '세션 일괄 수정', exact: true }).click();
   await page.setViewportSize({ width: 560, height: 820 });
   await page.getByRole('region', { name: '고급 세션 관리' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'target/verification/session-management-native.png' });

@@ -1,5 +1,18 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import type {} from './fixtures/tunnels';
+
+/** Opens a saved tunnel's ⋯ menu and returns one of its items. */
+async function tunnelItem(page: Page, row: Locator, item: string) {
+  await row.getByRole('button', { name: /작업$/ }).click();
+  return page.getByRole('menuitem', { name: item, exact: true });
+}
+async function chooseTunnel(page: Page, row: Locator, item: string) {
+  await (await tunnelItem(page, row, item)).click();
+}
+async function expectTunnelItemDisabled(page: Page, row: Locator, item: string) {
+  await expect(await tunnelItem(page, row, item)).toBeDisabled();
+  await page.keyboard.press('Escape');
+}
 
 test('tunnel save/list/start/stop, errors, autostart and delete protect the saved configuration', async ({
   page,
@@ -24,7 +37,8 @@ test('tunnel save/list/start/stop, errors, autostart and delete protect the save
   await expect(row).toBeVisible();
   await expect(page.locator('form')).toHaveCount(0);
   expect(await page.evaluate(() => window.__tunnelTest.calls.includes('tunnel_start'))).toBe(false);
-  await row.getByLabel('연결 시 자동 시작').check();
+  await chooseTunnel(page, row, '연결 시 자동 시작 켜기');
+  await expect(row).toContainText('자동 시작');
   await expect.poll(() => page.evaluate(() => window.__tunnelTest.configs[0].autoStart)).toBe(true);
   await page.evaluate(() => {
     window.__tunnelTest.failStart = true;
@@ -37,17 +51,17 @@ test('tunnel save/list/start/stop, errors, autostart and delete protect the save
   await row.getByRole('button', { name: '시작', exact: true }).click();
   await expect(row).toContainText('실행 중');
   await expect(row).toContainText('127.0.0.1:45678');
-  await expect(row.getByRole('button', { name: '수정' })).toBeDisabled();
-  await expect(row.getByRole('button', { name: '삭제', exact: true })).toBeDisabled();
+  await expectTunnelItemDisabled(page, row, '수정…');
+  await expectTunnelItemDisabled(page, row, '삭제…');
   await row.getByRole('button', { name: '중지', exact: true }).click();
   await expect(row).toContainText('중지됨');
-  await row.getByRole('button', { name: '수정' }).click();
+  await chooseTunnel(page, row, '수정…');
   await page.getByLabel('이름', { exact: true }).fill('취소할 이름');
   await page.getByRole('button', { name: '취소' }).click();
   await expect(row).toBeVisible();
   await page.evaluate(() => window.__tunnelTest.disconnect());
   await expect(row.getByRole('button', { name: '시작', exact: true })).toBeDisabled();
-  await row.getByRole('button', { name: '삭제', exact: true }).click();
+  await chooseTunnel(page, row, '삭제…');
   await row.getByRole('button', { name: '삭제 확인' }).click();
   await expect(row).toHaveCount(0);
 });
@@ -115,7 +129,7 @@ test('status failure and another connection running block unsafe edits', async (
   await page.getByRole('button', { name: '새 터널', exact: true }).click();
   await page.getByRole('button', { name: '설정 저장' }).click();
   const row = page.getByRole('article');
-  await row.getByRole('button', { name: '수정' }).click();
+  await chooseTunnel(page, row, '수정…');
   await page.evaluate(() => {
     const c = window.__tunnelTest.configs[0];
     window.__tunnelTest.statuses = [
@@ -125,7 +139,7 @@ test('status failure and another connection running block unsafe edits', async (
   await page.getByRole('button', { name: '설정 저장' }).click();
   await expect(page.getByRole('alert').first()).toContainText('실행 중인 터널');
   await page.getByRole('button', { name: '취소' }).click();
-  await expect(row.getByRole('button', { name: '삭제', exact: true })).toBeDisabled();
+  await expectTunnelItemDisabled(page, row, '삭제…');
   await row.getByRole('button', { name: '중지', exact: true }).click();
   await page.evaluate(() => {
     window.__tunnelTest.failList = true;

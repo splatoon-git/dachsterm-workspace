@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openGame, openPreview } from './helpers';
 
 async function setup(page: Page, kind: 'bone' | 'star' | 'onion' = 'bone') {
   await page.goto('/tests/ui/fixtures/snack.html');
@@ -115,15 +116,10 @@ test('snack integrates with dark theme, tab preservation and the existing termin
     Math.random = () => 0.5;
   });
   await page.goto('/');
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await openPreview(page);
   const terminal = page.locator('.xterm');
   await terminal.evaluate((e) => e.setAttribute('data-instance', 'snack-kept'));
-  await page.locator('.sidebar-games summary').click();
-  await page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name: '닥스의 간식 타임', exact: true })
-    .click();
+  await openGame(page, '닥스의 간식 타임');
   const panel = page.getByRole('tabpanel', { name: '닥스의 간식 타임', exact: true });
   const board = panel.getByRole('group');
   await expect(board).toBeVisible();

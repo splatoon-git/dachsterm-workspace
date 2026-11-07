@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import type {} from './fixtures/survivor';
+import { openGame, openPreview } from './helpers';
 
 const fixture = '/tests/ui/fixtures/survivor.html';
 const game = (page: Page) => page.locator('.survivor-game');
@@ -204,14 +205,10 @@ test('production catalog retains terminal, Esc pauses, tab close failure cancels
   page,
 }) => {
   await page.goto('/');
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await openPreview(page);
   await page.locator('.xterm').evaluate((e) => e.setAttribute('data-survivor-kept', 'yes'));
-  await page.locator('.sidebar-games summary').click();
-  const launch = page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name: '닥스의 서바이버', exact: true });
-  await launch.click();
+  const launch = () => openGame(page, '닥스의 서바이버');
+  await launch();
   await page.getByRole('button', { name: '새 도전 시작', exact: true }).click();
   await expect(game(page)).toHaveAttribute('data-phase', 'playing');
   await page.keyboard.press('Escape');
@@ -238,7 +235,7 @@ test('production catalog retains terminal, Esc pauses, tab close failure cancels
   await page.getByRole('button', { name: '저장 재시도', exact: true }).click();
   await page.getByRole('button', { name: '닥스의 서바이버 탭 닫기', exact: true }).click();
   await expect(game(page)).toHaveCount(0);
-  await launch.click();
+  await launch();
   await expect(page.getByRole('button', { name: '새 도전 시작', exact: true })).toBeEnabled();
 });
 

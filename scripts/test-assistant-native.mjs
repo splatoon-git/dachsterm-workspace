@@ -85,12 +85,21 @@ async function enter(pane, body) {
   }, body);
   await input.press('Enter');
 }
-async function tools(name) {
-  await page
-    .locator('summary')
-    .filter({ hasText: /^도구$/ })
-    .click();
-  await page.getByRole('button', { name, exact: true }).click();
+/** The 명령 panel from its title bar button, in the main window or a detached one. */
+async function openCommands(target = page) {
+  await target.getByRole('button', { name: '명령', exact: true }).click();
+  return target.getByRole('dialog', { name: '명령', exact: true });
+}
+/** Saves a new snippet in the panel; it is chosen and ready to send once saved. */
+async function saveSnippet(dialog, name, body) {
+  await dialog.getByRole('button', { name: '새 스니펫', exact: true }).first().click();
+  await dialog.getByLabel('이름', { exact: true }).fill(name);
+  await dialog.getByLabel('명령 본문', { exact: true }).fill(body);
+  await dialog.getByLabel(/인증정보가 들어 있지 않습니다/).check();
+  await dialog.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(
+    dialog.locator('#command-list').getByRole('button', { name: new RegExp(name) }),
+  ).toHaveAttribute('aria-current', 'true');
 }
 try {
   docker([
@@ -144,17 +153,11 @@ try {
   await expect(text(local)).toContainText(/\S/, { timeout: 15000 });
   const localId = await local.getAttribute('data-connection-id');
   stage = 'local-snippet';
-  await tools('스니펫');
-  let dialog = page.getByRole('dialog', { name: '스니펫', exact: true });
-  await dialog.getByLabel('이름', { exact: true }).fill('검증 스니펫');
-  await dialog.getByLabel('명령 본문', { exact: true }).fill("Write-Output ('LOCAL_{{value}}')");
-  await dialog.getByLabel('저장 내용에 인증정보가 없습니다.').check();
-  await dialog.getByRole('button', { name: '저장', exact: true }).click();
-  await expect(dialog.getByRole('status')).toContainText('저장했습니다');
+  let dialog = await openCommands();
+  await saveSnippet(dialog, '검증 스니펫', "Write-Output ('LOCAL_{{value}}')");
   await dialog.getByLabel('value', { exact: true }).fill('한글');
-  await dialog.getByRole('button', { name: '입력만 넣기 · 미리보기' }).click();
-  await dialog.getByRole('button', { name: '확인 · 입력' }).click();
-  await expect(dialog.getByRole('status')).toContainText('입력 전달됨');
+  await dialog.getByRole('button', { name: '입력만 넣기', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('1개 터미널에 넣었습니다');
   await dialog.getByRole('button', { name: '대화상자 닫기' }).click();
   // The echoed command contains parentheses; output alone is a separate accessibility row.
   expect(await text(local).innerText()).not.toMatch(/(?:^|\n)LOCAL_한글(?:\n|$)/);
@@ -179,14 +182,18 @@ try {
   await enter(ssh, 'stty -echo');
   stage = 'broadcast-isolation';
   await invoke('broadcast_set', { ids: [localId, sshId] });
-  await tools('스니펫');
-  dialog = page.getByRole('dialog', { name: '스니펫', exact: true });
-  await dialog
-    .getByLabel('명령 본문', { exact: true })
-    .fill("printf 'SSH_ONLY_%s\\n' '한글'; printf x >> /tmp/snippet-once");
-  await dialog.getByRole('button', { name: 'Enter 포함 실행 · 미리보기' }).click();
-  await dialog.getByRole('button', { name: '확인 · 실행' }).click();
-  await expect(dialog.getByRole('status')).toContainText('입력 전달됨');
+  dialog = await openCommands();
+  await saveSnippet(
+    dialog,
+    'SSH 한 번',
+    "printf 'SSH_ONLY_%s\\n' '한글'; printf x >> /tmp/snippet-once",
+  );
+  // Only the focused terminal is chosen, whatever broadcast group it is in.
+  const targets = dialog.getByRole('region', { name: '보낼 터미널' });
+  await expect(targets.getByRole('checkbox', { name: /스니펫 SSH/ })).toBeChecked();
+  await expect(targets.getByRole('checkbox', { name: /Windows PowerShell/ })).not.toBeChecked();
+  await dialog.getByRole('button', { name: '실행', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('1개 터미널에 실행했습니다');
   await dialog.getByRole('button', { name: '대화상자 닫기' }).click();
   await expect(text(ssh)).toContainText('SSH_ONLY_한글');
   expect(docker(['exec', fixture, 'cat', '/tmp/snippet-once'])).toBe('x');
@@ -263,7 +270,7 @@ try {
   await enter(ssh, 'cd /tmp');
   await showSidebarView(page, '파일');
   await expect(page.getByLabel('원격 경로')).toHaveValue('/tmp');
-  await chooseTabMenu(page, '조작표 전체 보기', ssh);
+  await chooseTabMenu(page, '조작표 보기·고정', ssh);
   await fullGuide.getByLabel('조작표 선택·고정').selectOption('vim');
   await fullGuide.getByRole('button', { name: '조작표 닫기' }).click();
   await enter(ssh, 'cat /etc/hostname');
@@ -384,12 +391,11 @@ try {
     .toBe(true);
   // The detached window keeps its tools in the title bar menu.
   await detached.locator('.toolbar-menu > summary').filter({ hasText: '메뉴' }).click();
-  await detached.getByRole('button', { name: '스니펫', exact: true }).click();
-  const detachedDialog = detached.getByRole('dialog', { name: '스니펫', exact: true });
-  await detachedDialog.getByLabel('명령 본문', { exact: true }).fill('echo DETACHED_ONCE');
-  await detachedDialog.getByRole('button', { name: 'Enter 포함 실행 · 미리보기' }).click();
-  await detachedDialog.getByRole('button', { name: '확인 · 실행' }).click();
-  await expect(detachedDialog.getByRole('status')).toContainText('입력 전달됨');
+  await detached.getByRole('button', { name: '명령', exact: true }).click();
+  const detachedDialog = detached.getByRole('dialog', { name: '명령', exact: true });
+  await saveSnippet(detachedDialog, '분리 창 확인', 'echo DETACHED_ONCE');
+  await detachedDialog.getByRole('button', { name: '실행', exact: true }).click();
+  await expect(detachedDialog.getByRole('status')).toContainText('1개 터미널에 실행했습니다');
   await detachedDialog.getByRole('button', { name: '대화상자 닫기' }).click();
   await expect(detached.locator('.xterm-accessibility-tree')).toContainText('DETACHED_ONCE');
   const denied = await invoke('snippet_send', {
@@ -416,7 +422,8 @@ try {
     localStorage.setItem('dachsterm.theme', 'github-dark');
     window.dispatchEvent(new StorageEvent('storage', { key: 'dachsterm.theme' }));
   });
-  await tools('기본 명령·로그 필터');
+  dialog = await openCommands();
+  await dialog.getByRole('tab', { name: '기본 명령' }).click();
   await mkdir('target/verification', { recursive: true });
   await page.screenshot({ path: 'target/verification/assistant-native-dark.png' });
   await page.getByRole('button', { name: '대화상자 닫기' }).click();
@@ -425,12 +432,13 @@ try {
   await expect.poll(() => app.exitCode).toBe(0);
   await browser.close();
   await launch();
-  await tools('스니펫');
-  dialog = page.getByRole('dialog', { name: '스니펫', exact: true });
-  await dialog.getByRole('button', { name: '검증 스니펫' }).click();
-  await expect(dialog.getByLabel('명령 본문', { exact: true })).toHaveValue(
-    "Write-Output ('LOCAL_{{value}}')",
-  );
+  dialog = await openCommands();
+  await dialog.getByRole('tab', { name: '내 스니펫' }).click();
+  await dialog
+    .locator('#command-list')
+    .getByRole('button', { name: /검증 스니펫/ })
+    .click();
+  await expect(dialog.getByTestId('snippet-preview')).toHaveText("Write-Output ('LOCAL_value')");
   await expect(dialog.getByLabel('value', { exact: true })).toHaveValue('');
   result.checks.push(
     'Actual app restart restores SQLite snippets without transient values or automatic execution',

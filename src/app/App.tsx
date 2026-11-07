@@ -12,6 +12,7 @@ import {
 import { useWorkspaceLayout, type Beside } from './useWorkspaceLayout';
 import { useTabMenu } from './useTabMenu';
 import { useAppShortcuts } from './appShortcuts';
+import { SettingsDialog } from './SettingsDialog';
 import { StatusBar } from './StatusBar';
 import {
   allTabs,
@@ -19,12 +20,9 @@ import {
   groups,
   tabKey,
   type GroupNode,
-  type Preset,
   type TabRef,
 } from './workspaceLayout';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { MaintenancePanel } from '../features/settings/MaintenancePanel';
-import { SessionTransfer } from '../features/sessions/SessionTransfer';
 import { InputScopeControl, InputScopeMark } from '../features/terminal/InputScope';
 import { useInputScope } from '../features/terminal/useInputScope';
 import { VaultDialog, type VaultStatus } from '../features/sessions/VaultDialog';
@@ -38,7 +36,6 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { useTheme } from '../themes/useTheme';
-import { ThemePicker } from '../themes/ThemePicker';
 import {
   call,
   desktop,
@@ -49,28 +46,25 @@ import {
   type Group,
 } from '../lib/ipc';
 import { SessionForm } from '../features/sessions/SessionForm';
-import { SessionManager } from '../features/sessions/SessionManager';
-import { groupPath, inGroup, matchesSession } from '../features/sessions/model';
+import { groupPath } from '../features/sessions/model';
 import { TerminalSession, type LocalCatalog, type LocalTarget } from '../features/terminal/session';
 import { PodTreeDialog } from '../features/terminal/PodTreeDialog';
-import { SnippetDialog } from '../features/terminal/SnippetDialog';
-import { CommandCatalog } from '../features/terminal/CommandGuide';
+import { CommandPanel } from '../features/terminal/CommandPanel';
 import { SessionTerminal } from './SessionTerminal';
 import { tmuxCloseNotice } from './tmuxNotice';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { SessionTab } from './SessionTab';
-import { ProfileList } from '../features/sessions/ProfileList';
 import { capabilities } from '../features/terminal/sessionKind';
-import { TerminalSettings } from '../features/terminal/TerminalSettings';
 import type { CSSProperties } from 'react';
 import { SidebarFiles } from '../features/sftp/SidebarFiles';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
-import { ToolbarMenu } from '../components/ToolbarMenu';
-import { anchorBelow, ContextMenu, type MenuPoint } from '../components/ContextMenu';
 import { TitleBar } from './TitleBar';
-import { SidebarRail } from './SidebarRail';
+import { SidebarTabs } from './SidebarTabs';
+import { ConnectionTree, useFolded } from './ConnectionTree';
+import { HeaderActions, HeaderMenus } from './HeaderTools';
+import { modKey } from '../lib/platform';
 const TerminalPreview = lazy(() =>
   import('../features/terminal/TerminalPreview').then((m) => ({ default: m.TerminalPreview })),
 );
@@ -81,12 +75,6 @@ const sessionRef = (session: TerminalSession): TabRef => ({
   tabId: session.tabId,
 });
 const sessionKey = (session: TerminalSession) => tabKey(sessionRef(session));
-const presets: [Preset, string][] = [
-  ['columns', '모든 탭 좌우'],
-  ['rows', '모든 탭 상하'],
-  ['grid', '모든 탭 2 × 2'],
-  ['single', '모든 탭 하나로'],
-];
 function subscribeNarrowViewport(listener: () => void) {
   const media = window.matchMedia('(max-width: 700px)');
   media.addEventListener('change', listener);
@@ -100,10 +88,9 @@ export function App() {
   const [localLoading, setLocalLoading] = useState(desktop);
   const [localOpen, setLocalOpen] = useState(false);
   const [podtreeOpen, setPodtreeOpen] = useState(false);
-  const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [newMenu, setNewMenu] = useState<MenuPoint | null>(null);
+  const tree = useFolded();
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth > 700 && localStorage.getItem('dachsterm.sidebar') !== 'false',
   );
@@ -154,7 +141,7 @@ export function App() {
     existing?: TerminalSession;
     beside?: Beside;
   } | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState<'' | 'workspace' | 'terminal'>('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [gameTabs, setGameTabs] = useState<GameId[]>([]);
   const survivorClose = useRef<(() => boolean) | null>(null);
   const registerSurvivorClose = useCallback((close: (() => boolean) | null) => {
@@ -220,10 +207,6 @@ export function App() {
   } | null>(null);
   const secret = useRef<HTMLInputElement>(null);
   const [tabs, setTabs] = useState<TerminalSession[]>([]);
-  function arrange(preset: Preset) {
-    workspace.preset(preset);
-    focusActiveTerminal();
-  }
   const [leftWidth, setLeftWidth] = useState(() =>
     Math.max(200, Math.min(420, Number(localStorage.getItem('dachsterm.leftWidth')) || 240)),
   );
@@ -231,7 +214,6 @@ export function App() {
     localStorage.setItem('dachsterm.leftWidth', String(leftWidth));
   }, [leftWidth]);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('all');
   const refresh = useCallback(async () => {
     if (desktop) {
       try {
@@ -326,6 +308,15 @@ export function App() {
         // Like the tab menu: the same target again, as a new connection and a new shell.
         if (selected && capabilities(selected).split && !narrow)
           splitTab(selected, { groupId: workspace.focusedGroup.id, side: 'right' });
+        return;
+      case 'commands':
+        return setCommandsOpen(true);
+      case 'tunnels':
+        return setTunnelsOpen(true);
+      case 'help':
+        return setHelpOpen(true);
+      case 'settings':
+        return setSettingsOpen(true);
     }
   });
   function requestConnect(profile: Profile, existing?: TerminalSession, beside?: Beside) {
@@ -386,6 +377,7 @@ export function App() {
       detach: (t) => void detach(t),
       reconnect: reconnectTab,
       close: closeKey,
+      arranged: focusActiveTerminal,
     },
   });
   const focusedKey = workspace.focusedGroup.active;
@@ -480,22 +472,6 @@ export function App() {
       />
     );
   };
-  const profiles = snapshot.profiles
-    .filter((p) => {
-      const match = matchesSession(p, query, snapshot.groups);
-      return (
-        match &&
-        (filter === 'all' ||
-          (filter === 'favorite' && p.favorite) ||
-          (filter === 'recent' && p.lastConnected) ||
-          inGroup(p, filter, snapshot.groups))
-      );
-    })
-    .sort((a, b) =>
-      filter === 'recent'
-        ? (b.lastConnected ?? 0) - (a.lastConnected ?? 0)
-        : (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name),
-    );
   return (
     <div className={`app-shell ${fullscreen ? 'terminal-fullscreen' : ''}`}>
       <a className="skip-link" href="#workspace">
@@ -509,70 +485,24 @@ export function App() {
       <TitleBar
         fail={setError}
         end={
-          <button
-            aria-label="＋ 새 연결"
-            aria-haspopup="menu"
-            title="새 연결 · 로컬 터미널"
-            onClick={(e) => setNewMenu(anchorBelow(e.currentTarget))}
-          >
-            <Icon name="plus" size={16} /> <span>새 연결</span>
-          </button>
+          <HeaderActions
+            commands={() => setCommandsOpen(true)}
+            tunnels={() => setTunnelsOpen(true)}
+            help={() => setHelpOpen(true)}
+            settings={() => setSettingsOpen(true)}
+          />
         }
       >
-        <ToolbarMenu label="보기">
-          <button
-            aria-pressed={sidebarOpen && sidebarView === 'files'}
-            onClick={() => showSidebar('files')}
-          >
-            <Icon name="folder" size={16} /> 파일
-          </button>
-          <button
-            onClick={() =>
-              hasPreview ? workspace.close('preview') : workspace.open({ kind: 'preview' })
-            }
-          >
-            {hasPreview ? '작업 화면' : '터미널 미리보기'}
-          </button>
-          {presets.map(([preset, label]) => (
-            <button key={preset} onClick={() => arrange(preset)}>
-              {label}
-            </button>
-          ))}
-          <button onClick={() => void toggleFullscreen()}>
-            {fullscreen ? '전체화면 종료' : '전체화면'}
-          </button>
-          <button onClick={() => setHelpOpen(true)}>키보드 단축키</button>
-        </ToolbarMenu>
-        <ToolbarMenu label="도구">
-          <button onClick={() => setSnippetsOpen(true)}>스니펫</button>
-          <button onClick={() => setCommandsOpen(true)}>기본 명령·로그 필터</button>
-          <button onClick={() => setPodtreeOpen(true)}>PodTree 열기</button>
-          <button onClick={() => setTunnelsOpen(true)}>
-            <Icon name="tunnel" size={16} />
-            터널
-          </button>
-        </ToolbarMenu>
-      </TitleBar>
-      {newMenu && (
-        <ContextMenu
-          label="새 연결"
-          at={newMenu}
-          close={() => setNewMenu(null)}
-          items={[
-            { label: '새 연결…', shortcut: 'Ctrl/Cmd+Shift+N', run: () => setForm(blankProfile()) },
-            {
-              label: '로컬 터미널…',
-              shortcut: 'Ctrl/Cmd+Shift+L',
-              separated: true,
-              run: () => setLocalOpen(true),
-            },
-            ...localCatalog.targets.map((target) => ({
-              label: target.kind === 'wsl' ? `WSL · ${target.name}` : target.name,
-              run: () => openLocal(target),
-            })),
-          ]}
+        <HeaderMenus
+          sidebarOpen={sidebarOpen}
+          toggleSidebar={() =>
+            fullscreen ? void showSidebar(sidebarView) : setSidebarOpen((v) => !v)
+          }
+          activeGame={activeGame}
+          openGame={openGame}
+          preview={() => workspace.open({ kind: 'preview' })}
         />
-      )}
+      </TitleBar>
       {error && (
         <div className="app-error" role="alert">
           {error}
@@ -581,253 +511,159 @@ export function App() {
           </button>
         </div>
       )}
-      <div className="workspace-row">
-        <SidebarRail
-          view={sidebarView}
-          open={sidebarOpen}
-          choose={(view) => {
-            // The press already put focus on the icon; showSidebar would move it a frame later.
-            if (sidebarOpen && sidebarView === view) setSidebarOpen(false);
-            else {
-              setSidebarView(view);
-              setSidebarOpen(true);
+      <div
+        className={`workspace-grid unified-workspace ${sidebarOpen ? '' : 'sidebar-hidden'}`}
+        style={
+          {
+            '--sidebar-width': `${leftWidth}px`,
+          } as CSSProperties
+        }
+      >
+        {sidebarOpen && (
+          <button
+            className="sidebar-backdrop"
+            aria-label="사이드바 닫기"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        <div
+          id="workspace-sidebar"
+          className="workspace-sidebar"
+          hidden={!sidebarOpen}
+          onKeyDown={(e) => {
+            if (
+              e.key === 'Escape' &&
+              window.innerWidth <= 700 &&
+              !document.querySelector('dialog[open]')
+            ) {
+              e.stopPropagation();
+              setSidebarOpen(false);
+              document.querySelector<HTMLElement>('[aria-controls="workspace-sidebar"]')?.focus();
             }
           }}
-          settings={() => setSettingsOpen('workspace')}
-        />
-        <div
-          className={`workspace-grid unified-workspace ${sidebarOpen ? '' : 'sidebar-hidden'}`}
-          style={
-            {
-              '--sidebar-width': `${leftWidth}px`,
-            } as CSSProperties
-          }
         >
-          {sidebarOpen && (
-            <button
-              className="sidebar-backdrop"
-              aria-label="사이드바 닫기"
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
-          <div
-            id="workspace-sidebar"
-            className="workspace-sidebar"
-            hidden={!sidebarOpen}
-            onKeyDown={(e) => {
-              if (
-                e.key === 'Escape' &&
-                window.innerWidth <= 700 &&
-                !document.querySelector('dialog[open]')
-              ) {
-                e.stopPropagation();
-                setSidebarOpen(false);
-                document.getElementById(`sidebar-tab-${sidebarView}`)?.focus();
-              }
-            }}
+          <SidebarTabs view={sidebarView} choose={setSidebarView} />
+          <aside
+            id="session-sidebar"
+            className="sessions connections-view"
+            aria-label="세션 탐색"
+            hidden={sidebarView !== 'connections'}
           >
-            <aside
-              id="session-sidebar"
-              className="sessions"
-              aria-label="세션 탐색"
-              hidden={sidebarView !== 'connections'}
-            >
-              <label className="search">
-                <span>세션 검색</span>
-                <input
-                  ref={searchInput}
-                  type="search"
-                  placeholder="이름 또는 호스트 검색"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </label>
-              <div className="connections-scroll">
-                <section className="local-targets" aria-label="로컬 환경">
-                  <div className="group-heading">
-                    <span>로컬 터미널</span>
-                    <button
-                      aria-label="로컬 환경 새로고침"
-                      disabled={!desktop || localLoading}
-                      onClick={() => void refreshLocal()}
-                    >
-                      ↻
-                    </button>
-                  </div>
-                  {localLoading && <p role="status">로컬 환경 탐색 중…</p>}
-                  {!desktop && <p>데스크톱 앱에서 자동 탐색합니다.</p>}
-                  {localCatalog.targets.map((target) => (
-                    <button
-                      key={target.id}
-                      className="nav-item local-target"
-                      onClick={() => openLocal(target)}
-                      title={`${target.name} 새 터미널 열기`}
-                    >
-                      <Icon name="terminal" size={15} />
-                      <span>{target.name}</span>
-                      <small>{target.kind === 'wsl' ? 'WSL' : '로컬'}</small>
-                    </button>
-                  ))}
-                  {localCatalog.warning && <p role="status">{localCatalog.warning}</p>}
-                </section>
-                <div className="group-heading">
-                  <span>저장된 연결</span>
-                  <button aria-label="서버 추가" onClick={() => setForm(blankProfile())}>
-                    ＋
-                  </button>
-                </div>
-
-                <nav aria-label="세션 분류">
-                  <div className="session-filters">
-                    {[
-                      ['all', '전체'],
-                      ['favorite', '즐겨찾기'],
-                      ['recent', '최근'],
-                    ].map(([id, label]) => (
-                      <button
-                        key={id}
-                        className="nav-item"
-                        aria-current={filter === id ? 'page' : undefined}
-                        onClick={() => setFilter(id)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="group-heading">
-                    <span>그룹</span>
-                    <button aria-label="그룹 추가" onClick={() => setGroup({ id: '', name: '' })}>
-                      ＋
-                    </button>
-                  </div>
-                  {snapshot.groups.map((g) => (
-                    <div className="group-row" key={g.id}>
-                      <button
-                        className="nav-item"
-                        aria-current={filter === g.id ? 'page' : undefined}
-                        onClick={() => setFilter(g.id)}
-                      >
-                        ▱ {groupPath(g.id, snapshot.groups)}
-                      </button>
-                      <button aria-label={`${g.name} 그룹 수정`} onClick={() => setGroup(g)}>
-                        ⋯
-                      </button>
-                    </div>
-                  ))}
-                </nav>
-                <ProfileList
-                  profiles={profiles}
-                  showRecent={filter === 'recent'}
-                  empty={query ? '검색 결과가 없습니다.' : '등록된 서버가 없습니다.'}
-                  connect={(p) => requestConnect(p)}
-                  edit={setForm}
-                  toggleFavorite={(p) =>
+            <div className="sidebar-search">
+              <input
+                ref={searchInput}
+                type="search"
+                aria-label="세션 검색"
+                placeholder={`연결 검색 · ${modKey('Shift+O')}`}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <div className="connections-scroll">
+              <ConnectionTree
+                profiles={snapshot.profiles}
+                groups={snapshot.groups}
+                query={query}
+                local={localCatalog}
+                localLoading={localLoading}
+                folded={tree.folded}
+                toggle={tree.toggle}
+                actions={{
+                  connect: (p) => requestConnect(p),
+                  edit: setForm,
+                  toggleFavorite: (p) =>
                     void action('save_session', {
                       profile: { ...p, favorite: !p.favorite },
                       secretAction: 'keep',
                       secret: null,
-                    })
-                  }
-                  duplicate={(p) => void action('duplicate_session', { id: p.id })}
-                  remove={setRemove}
-                />
-                <details className="sidebar-games">
-                  <summary>게임</summary>
-                  <nav aria-label="게임 목록">
-                    {games.map((game) => (
-                      <button
-                        key={game.id}
-                        className="nav-item"
-                        aria-current={activeGame === game.id ? 'page' : undefined}
-                        onClick={() => openGame(game.id)}
-                      >
-                        <Icon name="terminal" size={14} />
-                        {game.title}
-                      </button>
-                    ))}
-                  </nav>
-                </details>
-              </div>
-              <div className="local-note">
-                <span className="status-dot" />
-                로컬 워크스페이스
-              </div>
-            </aside>
-            <div
-              id="file-sidebar"
-              className="sidebar-file-panel"
-              role="tabpanel"
-              aria-labelledby="sidebar-tab-files"
-              hidden={sidebarView !== 'files'}
-            >
-              <SidebarFiles
-                session={selected}
-                showConnections={() => setSidebarView('connections')}
+                    }),
+                  duplicate: (p) => void action('duplicate_session', { id: p.id }),
+                  remove: setRemove,
+                  newConnection: (groupId) =>
+                    setForm({ ...blankProfile(), groupId: groupId ?? null }),
+                  newGroup: (parentId) => setGroup({ id: '', name: '', parentId }),
+                  editGroup: setGroup,
+                  openLocal: (target) => openLocal(target),
+                  pickLocal: () => setLocalOpen(true),
+                  refreshLocal: () => void refreshLocal(),
+                }}
               />
             </div>
+          </aside>
+          <div
+            id="file-sidebar"
+            className="sidebar-file-panel"
+            role="tabpanel"
+            aria-labelledby="sidebar-tab-files"
+            hidden={sidebarView !== 'files'}
+          >
+            <SidebarFiles
+              session={selected}
+              showConnections={() => setSidebarView('connections')}
+            />
           </div>
-          {sidebarOpen && (
-            <ResizeHandle
-              value={leftWidth}
-              min={200}
-              max={420}
-              onChange={setLeftWidth}
-              label="사이드바 너비"
-            />
-          )}
-          <main id="workspace" tabIndex={-1} inert={narrow && sidebarOpen && !fullscreen}>
-            <WorkspaceGrid
-              workspace={workspace}
-              narrow={narrow}
-              order={[
-                ...tabs.map(sessionRef),
-                ...(hasPreview ? [{ kind: 'preview' } as const] : []),
-                ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
-              ]}
-              renderTab={renderTab}
-              renderCell={renderCell}
-              detach={(key) => {
-                const session = tabs.find((t) => sessionKey(t) === key);
-                if (session && capabilities(session).detach) void detach(session);
-              }}
-              openMenu={tabMenu.open}
-              cellClass={(tab) =>
-                tabs.some(
-                  (t) =>
-                    sessionKey(t) === tabKey(tab) && input.status.selected.includes(t.connectionId),
-                )
-                  ? 'broadcast-target'
-                  : ''
-              }
-              groupMark={(group) => (
-                <InputScopeMark
-                  input={input}
-                  connectionId={activeSession(group)?.connectionId}
-                  name={activeSession(group)?.profile.name ?? ''}
-                />
-              )}
-              start={
-                tabs.length || hasPreview
-                  ? undefined
-                  : {
-                      tab: (active, select) => (
-                        <PlainTab title="시작하기" active={active} select={select} />
-                      ),
-                      page: (
-                        <Welcome
-                          newConnection={() => setForm(blankProfile())}
-                          openLocal={() => setLocalOpen(true)}
-                          showRecent={() => {
-                            setFilter('recent');
-                            showSidebar('connections');
-                          }}
-                        />
-                      ),
-                    }
-              }
-            />
-          </main>
         </div>
+        {sidebarOpen && (
+          <ResizeHandle
+            value={leftWidth}
+            min={200}
+            max={420}
+            onChange={setLeftWidth}
+            label="사이드바 너비"
+          />
+        )}
+        <main id="workspace" tabIndex={-1} inert={narrow && sidebarOpen && !fullscreen}>
+          <WorkspaceGrid
+            workspace={workspace}
+            narrow={narrow}
+            order={[
+              ...tabs.map(sessionRef),
+              ...(hasPreview ? [{ kind: 'preview' } as const] : []),
+              ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
+            ]}
+            renderTab={renderTab}
+            renderCell={renderCell}
+            detach={(key) => {
+              const session = tabs.find((t) => sessionKey(t) === key);
+              if (session && capabilities(session).detach) void detach(session);
+            }}
+            openMenu={tabMenu.open}
+            cellClass={(tab) =>
+              tabs.some(
+                (t) =>
+                  sessionKey(t) === tabKey(tab) && input.status.selected.includes(t.connectionId),
+              )
+                ? 'broadcast-target'
+                : ''
+            }
+            groupMark={(group) => (
+              <InputScopeMark
+                input={input}
+                connectionId={activeSession(group)?.connectionId}
+                name={activeSession(group)?.profile.name ?? ''}
+              />
+            )}
+            start={
+              tabs.length || hasPreview
+                ? undefined
+                : {
+                    tab: (active, select) => (
+                      <PlainTab title="시작하기" active={active} select={select} />
+                    ),
+                    page: (
+                      <Welcome
+                        newConnection={() => setForm(blankProfile())}
+                        openLocal={() => setLocalOpen(true)}
+                        showRecent={() => {
+                          tree.unfold('recent');
+                          void showSidebar('connections');
+                        }}
+                      />
+                    ),
+                  }
+            }
+          />
+        </main>
       </div>
       <StatusBar
         session={activeGame ? undefined : selected}
@@ -836,14 +672,13 @@ export function App() {
         input={tabs.length > 0 && <InputScopeControl input={input} />}
       />
       {tabMenu.element}
-      {snippetsOpen && (
-        <SnippetDialog
+      {commandsOpen && (
+        <CommandPanel
           sessions={tabs}
           active={selected?.tabId}
-          close={() => setSnippetsOpen(false)}
+          close={() => setCommandsOpen(false)}
         />
       )}
-      {commandsOpen && <CommandCatalog close={() => setCommandsOpen(false)} />}
       {podtreeOpen && (
         <PodTreeDialog
           sessions={tabs}
@@ -861,39 +696,51 @@ export function App() {
         />
       )}
       {localOpen && (
-        <Dialog title="로컬 터미널 열기" close={() => setLocalOpen(false)}>
-          <p className="muted">
-            서버 등록 없이 이 컴퓨터에서 셸을 시작합니다. WSL은 선택한 배포판의 기본 사용자로
-            열립니다.
-          </p>
-          {localLoading && <p role="status">로컬 환경 탐색 중…</p>}
+        <Dialog
+          title="로컬 터미널 열기"
+          description="서버 등록 없이 이 컴퓨터에서 셸을 엽니다. WSL은 배포판의 기본 사용자로 열립니다."
+          size="small"
+          close={() => setLocalOpen(false)}
+        >
+          {localLoading && <p role="status">이 컴퓨터의 셸을 찾는 중…</p>}
           {!desktop && (
-            <p>데스크톱 앱에서 PowerShell·WSL 또는 macOS 기본 셸을 자동으로 찾습니다.</p>
+            <p className="dialog-empty">
+              데스크톱 앱에서 PowerShell·WSL 또는 macOS 기본 셸을 자동으로 찾습니다.
+            </p>
           )}
           <div className="local-picker">
             {localCatalog.targets.map((target) => (
               <button key={target.id} onClick={() => openLocal(target)}>
-                <Icon name="terminal" size={18} />
+                <Icon name="terminal" size={16} />
                 <strong>{target.name}</strong>
                 <span>{target.kind === 'wsl' ? 'WSL 배포판' : '로컬 셸'}</span>
               </button>
             ))}
           </div>
-          {localCatalog.warning && <p role="status">{localCatalog.warning}</p>}
+          {localCatalog.warning && <p role="alert">{localCatalog.warning}</p>}
           {!localLoading && desktop && !localCatalog.targets.length && (
-            <p>발견된 셸이 없습니다. 설치 상태를 확인하고 새로고침하세요.</p>
+            <p className="dialog-empty">찾은 셸이 없습니다. 설치 상태를 확인하고 새로고침하세요.</p>
           )}
-          <button disabled={!desktop || localLoading} onClick={() => void refreshLocal()}>
-            목록 새로고침
-          </button>
+          <div className="form-actions">
+            <button
+              className="start"
+              disabled={!desktop || localLoading}
+              onClick={() => void refreshLocal()}
+            >
+              <Icon name="refresh" size={14} />
+              목록 새로고침
+            </button>
+            <button onClick={() => setLocalOpen(false)}>닫기</button>
+          </div>
         </Dialog>
       )}
       {helpOpen && (
-        <Dialog title="키보드 단축키" close={() => setHelpOpen(false)}>
-          <p className="muted">
-            macOS에서는 Ctrl 대신 Command를 사용하세요. 대화상자에서는 전역 단축키가 실행되지
-            않습니다.
-          </p>
+        <Dialog
+          title="키보드 단축키"
+          description="대화상자가 열려 있을 때는 앱 단축키가 동작하지 않습니다."
+          size="small"
+          close={() => setHelpOpen(false)}
+        >
           <ShortcutList />
         </Dialog>
       )}
@@ -926,36 +773,12 @@ export function App() {
           }
         />
       )}
-      {settingsOpen === 'terminal' && (
-        <TerminalSettings close={() => setSettingsOpen('workspace')} />
-      )}
       {settingsOpen && (
-        <Dialog
-          title="워크스페이스 설정"
-          className="settings-dialog"
-          close={() => setSettingsOpen('')}
-        >
-          <ThemePicker />
-          <section className="settings-data">
-            <h3>터미널</h3>
-            <div className="form-actions">
-              <button onClick={() => setSettingsOpen('terminal')}>터미널 설정</button>
-            </div>
-            <p className="muted">
-              글꼴, 마우스·키보드, 조작표·경로 따라가기, 알림은 모든 터미널에 적용됩니다.
-            </p>
-          </section>
-          <section className="settings-data">
-            <h3>암호 보관함</h3>
-            <div className="form-actions">
-              <button onClick={() => setVaultOpen(true)}>마스터 패스워드 · 암호 보관함</button>
-            </div>
-            <p className="muted">패널 배치와 분할 방식은 자동 저장됩니다.</p>
-          </section>
-          <SessionManager snapshot={snapshot} changed={() => void refresh()} />
-          <SessionTransfer changed={() => void refresh()} profiles={snapshot.profiles} />
-          <MaintenancePanel restored={() => void refresh()} />
-        </Dialog>
+        <SettingsDialog
+          snapshot={snapshot}
+          changed={() => void refresh()}
+          close={() => setSettingsOpen(false)}
+        />
       )}
       {form && (
         <SessionForm
@@ -974,7 +797,12 @@ export function App() {
         />
       )}
       {auth && (
-        <Dialog title={`${auth.profile.name} 인증`} close={() => setAuth(null)}>
+        <Dialog
+          title={`${auth.profile.name} 인증`}
+          description={`${auth.profile.username}@${auth.profile.host}:${auth.profile.port}`}
+          size="small"
+          close={() => setAuth(null)}
+        >
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -993,9 +821,9 @@ export function App() {
               <input type="checkbox" name="rememberSecret" />
               로그인 성공 후 이 세션의 암호 저장
             </label>
-            <p className="muted">
-              선택하면 보안 저장소에 보관하고 다음 접속에 사용합니다. 선택하지 않으면 이번 연결에만
-              사용합니다. OTP·추가 인증 응답은 저장하지 않습니다.
+            <p className="field-help">
+              저장하면 보안 저장소에 두고 다음 접속에 씁니다. OTP와 추가 인증 응답은 저장하지
+              않습니다.
             </p>
             <div className="form-actions">
               <button type="button" onClick={() => setAuth(null)}>
@@ -1007,7 +835,11 @@ export function App() {
         </Dialog>
       )}
       {group && (
-        <Dialog title="그룹 관리" close={() => setGroup(null)}>
+        <Dialog
+          title={group.id ? '그룹 수정' : '새 그룹'}
+          size="small"
+          close={() => setGroup(null)}
+        >
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -1050,46 +882,53 @@ export function App() {
               </select>
             </label>
             <label>
-              그룹 정렬 순서
+              정렬 순서
               <input
                 type="number"
                 value={group.sortOrder ?? 0}
                 onChange={(e) => setGroup({ ...group, sortOrder: Number(e.target.value) })}
               />
             </label>
-            <p className="muted">
-              삭제 미리보기: 이 그룹의 직속 세션{' '}
-              {snapshot.profiles.filter((p) => p.groupId === group.id).length}개와 직속 하위 그룹{' '}
-              {snapshot.groups.filter((g) => g.parentId === group.id).length}개를 최상위로
-              이동합니다. 하위 그룹의 세션과 열린 연결은 유지됩니다.
-            </p>
+            {group.id && (
+              <p className="field-help">
+                삭제하면 직속 세션 {snapshot.profiles.filter((p) => p.groupId === group.id).length}
+                개와 하위 그룹 {snapshot.groups.filter((g) => g.parentId === group.id).length}개를
+                최상위로 옮깁니다. 열린 연결은 유지됩니다.
+              </p>
+            )}
             <div className="form-actions">
               {group.id && (
                 <button
                   type="button"
+                  className="start danger-quiet"
                   onClick={() =>
                     void action('save_group', { id: group.id, name: null }).then((ok) => {
-                      if (ok) {
-                        setGroup(null);
-                        setFilter('all');
-                      }
+                      if (ok) setGroup(null);
                     })
                   }
                 >
                   그룹 삭제
                 </button>
               )}
+              <button type="button" onClick={() => setGroup(null)}>
+                취소
+              </button>
               <button className="primary">저장</button>
             </div>
           </form>
         </Dialog>
       )}
       {remove && (
-        <Dialog title="세션 삭제" close={() => setRemove(null)}>
-          <p>{remove.name} 세션과 OS 저장소의 인증정보를 삭제합니다. 열린 연결은 유지됩니다.</p>
+        <Dialog title="세션 삭제" size="small" close={() => setRemove(null)}>
+          <p>
+            <strong>{remove.name}</strong> 세션과 보안 저장소의 인증정보를 지웁니다. 열린 연결은
+            유지됩니다. 지우기 전에 복구본을 만들어 두며, 설정 › 복구·진단에서 다시 추가할 수
+            있습니다.
+          </p>
           <div className="form-actions">
             <button onClick={() => setRemove(null)}>취소</button>
             <button
+              className="danger"
               onClick={() =>
                 void action('delete_session', { id: remove.id }).then((ok) => {
                   if (ok) setRemove(null);

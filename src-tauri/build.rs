@@ -52,6 +52,7 @@ fn main() {
             "edit_close",
             "edit_start",
             "edit_mode",
+            "editor_list",
             "editor_pick",
             "edit_list",
             "edit_resolve",
