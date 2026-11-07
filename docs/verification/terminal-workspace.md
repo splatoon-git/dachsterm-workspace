@@ -102,6 +102,61 @@ FTP 단계는 Python FTP 픽스처를 원래 작업 폴더의 `.tools/ftp-fixtur
 - 전체화면 진입·복귀 뒤 제목 줄과 세로 아이콘 줄 표시는 Playwright로만 확인했다.
 - Mac 실기기 전체(macos-readiness M.14): 신호등 겹침, 패키지 앱, 독립 창.
 
+## TW.5~TW.7
+
+작업 ID마다 typecheck, lint, 새로 만들거나 고친 테스트만 실행하고 커밋했다. 전체 게이트(`verify-windows.ps1`), 전체 Vitest·Playwright, 게임 테스트는 실행하지 않았다. Rust와 Tauri 설정은 바꾸지 않아 cargo 검사도 하지 않았다.
+
+| ID·커밋 | 명령 | 결과 |
+|---|---|---|
+| TW.5 `f812b3d` | `npm run typecheck`, `npm run lint`, `npx vitest run` `inputScopeModel`·`poller`·`useInputScope`·`logStatus` 테스트 | 통과. 4파일 17/17 |
+| TW.6 `c3bdfd2` | typecheck, lint, `npx vitest run` `shellHook`·`preferences`·`directoryHook` 테스트, `npx playwright test tests/ui/assistant.spec.ts` | 통과. 3파일 21/21, Playwright 6/6 |
+| TW.7 `17af4de` | typecheck, lint, `npx vitest run src/app/appShortcuts.test.ts`, `npx playwright test tests/ui/navigation.spec.ts tests/ui/terminal-font.spec.ts` | 통과. 3/3, Playwright 7/7 |
+
+### 셸 훅 (실제 셸, Docker 안의 pty)
+
+`script -q -c "<셸> -i"`로 pty를 만들고 생성한 훅 한 줄(`shellHook({ guide: true })`)을 넣은 뒤 명령을 실행해 출력의 OSC 시퀀스를 확인했다. 앱을 거치지 않은 셸 단독 확인이다.
+
+| 셸 | 이미지 | 결과 |
+|---|---|---|
+| Bash 5.2.15 | `dachsterm-openssh-probe` | `$?` 유지(`false` 뒤 1), 미리 만든 `alias vi`는 그대로 동작하고 래퍼가 붙지 않음, `tail` 진입·종료 알림, 파이프의 `less`는 알림 없음 |
+| Bash 3.2.57 | `bash:3.2` | 위와 같음. 훅을 두 번 넣어도 `PROMPT_COMMAND`가 `__dachsterm_cwd` 하나 |
+| Zsh 5.9 | `bash:3.2` + `zsh` | `tail` 진입·종료, `command tail`과 파이프의 `less`는 알림 없음, 두 번 넣어도 `preexec`·`precmd` 함수 하나 |
+
+조작표를 끈 훅의 Bash 부분은 추가한 종료 함수를 빼면 이전 경로 알림 훅과 글자 단위로 같다(스크립트로 비교). 처음 Zsh 확인에서 파이프 줄도 알림이 나와 Bash와 맞게 고쳤고, 고친 줄의 JS 이스케이프 실수로 모든 줄이 건너뛰어지는 것을 같은 확인에서 잡아 고쳤다.
+
+### 실제 앱 (WebView2)
+
+실행 파일은 `17af4de`에서 `npm run tauri -- build --debug --no-bundle`로 한 번 만들었다(sha256 `d0cd75b2a2836b55878808b28c0529a6d81a7e56dee21c137c7e82c549e0598a`). 이후 바뀐 것은 검사 스크립트뿐이다(`a53d7b7`). 픽스처 이미지는 `zsh`를 넣어 다시 빌드했다.
+
+| 항목 | 명령 | 결과 |
+|---|---|---|
+| TW.5 로컬: 2×2에서 전체(3개 창), 여러 줄 붙여넣기 확인창의 `동시 입력 중 · 3개 창`, 상태바 경고색과 대상 테두리 3개, 대상 변경 → 탭 바 체크 해제로 2개 창, 비대상 창 격리, 확대 시 해제와 상태바 이유, `하나로`에서 입력 범위 숨김, `Ctrl+Shift+M` 두 번(선택 열기 → 개별, 전달 없음), 대상 연결 종료 시 해제와 이유 | `node scripts/test-workspace-native.mjs` | 종료 0 |
+| TW.5 SSH: 2×2에서 선택 모드로 SSH 두 창 체크 → 두 셸만 받음, 세 번째 창 격리, 연결 종료 시 해제, 재접속 뒤 자동 포함 없음, SSH·로컬 혼합 양방향, 로컬 탭 닫기 시 해제. 터미널 설정 저장값 비교(`verify-terminal-basics.mjs`) 포함 | `node scripts/run-phase1.mjs --native --reuse-build` | 종료 0, PASS 42줄 |
+| TW.5 SSH 전체·붙여넣기: SSH와 PowerShell 좌우, 전체 → 여러 줄 붙여넣기 확인창 `2개 창` → 두 창 모두 실행, 중지 뒤 SSH 입력이 PowerShell에 가지 않음 | `node scripts/test-assistant-native.mjs` | 종료 0 (아래 같은 실행) |
+| TW.6 Bash: 별도 연결 작업 없이 vim·less·tail 진입·종료 자동 표시(tail은 Ctrl+C), `.bashrc`의 `alias vi`와 `command vim`은 일반 안내, cat은 표시 없음, `cd /tmp`가 파일 패널 경로에 반영, 수동 고정 유지와 탭 사이 섞임 없음 | 같은 명령 | 종료 0 |
+| TW.6 Zsh: 로그인 셸을 Zsh로 바꾼 새 SSH 탭에서 `cd /var` 반영, vim·less·tail 자동 표시, `command vim` 일반 안내 | 같은 명령 | 종료 0 |
+| TW.6 미지원 환경: 실행 알림이 없는 WSL(`Ubuntu-24.04`)에서 `less`가 일반 안내 | 같은 명령 | 종료 0. 이 실행 전체 9개 확인, 페이지 오류 0 |
+| TW.7 `Ctrl+Shift+\`로 같은 PowerShell을 오른쪽에 분할(칸 2개, 오른쪽 배치), 조작표 자동 표시·경로 따라가기를 끄고 앱 종료 → 재시작 후 꺼진 값 유지, 건드리지 않은 값 유지 | `node scripts/test-local-native.mjs` | 1회차 실패(검사 선택자가 숨은 WSL 탭까지 잡음) → 고친 뒤 종료 0 |
+
+`test-assistant-native.mjs`는 성공 전까지 다섯 번 실패했다. 모두 검사 쪽 원인이며 제품 코드는 바꾸지 않았다.
+
+1. 이 PC의 PowerShell 프로필이 프롬프트를 바꿔 `PS C:`를 기다리다 실패(변경 전 단계). 첫 출력만 기다리게 했다.
+2. Bash는 bracketed paste로 받은 여러 줄을 입력줄에 두고 Enter를 기다린다. 붙여넣은 뒤 Enter를 누르게 했다. PowerShell은 바로 실행했다.
+3. WSL 배포판 이름이 `Ubuntu`로 고정돼 있었다. 설치된 첫 배포판을 고르게 했다.
+4. 독립 창의 스니펫 버튼이 TW.8에서 제목 줄 메뉴로 옮겨진 뒤 선택자가 고쳐지지 않았다.
+5. Zsh 탭을 연 직후 바로 vim을 실행해, 프롬프트가 조용해진 뒤 들어가는 훅보다 먼저 시작했다. 일반 안내가 나온 것은 의도된 동작이다. 경로 반영으로 훅 설치를 확인한 뒤 실행하게 했다.
+
+### 확인한 제약
+
+- **접속 직후 바로 실행한 프로그램:** 훅은 첫 프롬프트 뒤 출력·입력이 잠시 없을 때 들어간다. 그 전에 전체 화면 프로그램을 띄우면 훅 설치를 포기하고(최대 10초 대기), 그 셸에서는 조작표 자동 표시와 경로 따라가기가 동작하지 않는다(F.1부터의 동작). 파일 패널의 **셸 경로 알림 연결**로 다시 넣을 수 있고, 이 입력에도 조작표 알림이 함께 들어간다.
+
+### TW.5~TW.7 미실행·미검증
+
+- 선택자만 고치고 실행하지 않은 검사: `test-ftp-native.mjs`(입력 범위가 FTP 탭 두 개에서 숨겨지는지).
+- 우클릭·키 입력은 CDP 이벤트로 확인했다. 실제 마우스·키보드로 상태바 입력 범위와 탭 바 체크를 누르는 것은 확인하지 않았다.
+- 실제 macOS의 `/bin/bash` 3.2와 로컬 Zsh(입력해 넣는 훅), Mac 실기기 전체는 대기다([macos-readiness](macos-readiness.md) M.14).
+- 전체 게이트, 전체 Vitest·Playwright, 게임 테스트, `verify-windows.ps1 -Native`.
+
 ## 알려진 실패
 
 `verify-windows.ps1 -Native`는 `run-ftp --native`에서 끝까지 가지 못했다. 변경 전에도 있던 실패이며, TW.4에서 원인(검사 경합)을 찾아 고쳤다. 아래는 당시 기록이다. 고친 뒤 `verify-windows.ps1 -Native` 전체는 아직 다시 실행하지 않았다.
