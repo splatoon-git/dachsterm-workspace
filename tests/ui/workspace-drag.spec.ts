@@ -25,8 +25,9 @@ async function open(page: Page, tabs: number, extra = '') {
 }
 /** Presses a tab and moves past the threshold, leaving the button down. */
 async function grab(page: Page, name: string) {
-  // A preset gives every group a new tab bar, so wait for the tab before reading its position.
-  await expect(tab(page, name)).toBeVisible();
+  // A preset gives every group a new tab bar. Hovering waits until the tab is attached and has
+  // stopped moving, so the position read next is where the press lands.
+  await tab(page, name).hover();
   const box = (await tab(page, name).boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
