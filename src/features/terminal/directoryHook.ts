@@ -91,7 +91,8 @@ export class DirectoryHookInstaller {
     this.run++;
     this.filter.flush();
   }
-  private atPrompt() {
+  /** Whether the shell waits at its prompt, idle, so text typed now reaches the shell. */
+  atPrompt() {
     const terminal = this.host.terminal();
     const buffer = terminal.buffer.active;
     const now = Date.now();

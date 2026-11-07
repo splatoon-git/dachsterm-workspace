@@ -302,3 +302,54 @@ Playwright는 1420·1431 포트를 다른 작업 트리의 dev 서버가 쓰고 
 | 실제 앱(WebView2) | `npm run tauri -- build --debug --no-bundle` 후 `node scripts/run-phase1.mjs --native --reuse-build --agent-only` | 종료 0. 서명 카드 승인·거부, 실패한 명령 막대, 프롬프트 이동, Git 상태 표시·숨김을 포함한 에이전트 단계 전부 PASS |
 
 미실행: 전체 게이트 `verify-windows.ps1 -Native`, CI(푸시하지 않음), Mac 실기기.
+
+## DX.7 에이전트 시작
+
+- 실행일: 2026-11-08. 대상: `feat/dx7-agent-launch` 브랜치의 **미커밋 트리**(기준 `9eacfc1`), Windows debug 앱과 예제, Docker OpenSSH fixture. CI, Mac, 전체 게이트는 실행하지 않았다.
+- 시작 명령은 실제 CLI 에이전트가 아니라 fixture에 둔 대역 스크립트(`/tmp/dx7-agent`)다. 시작한 폴더와 인자를 한 줄씩 기록하고 `exec cat`으로 계속 실행된다. 두 번 실행되면 기록이 두 줄이 되어 드러난다. 로그인한 실제 CLI 에이전트의 `--worktree`는 수동 확인 대기다.
+
+### 실제 프로토콜(`npm run probe:phase1`, 종료 0)
+
+`src-tauri/examples/launch_checks/`가 제품 엔진(`Connections`)에 `connect`와 같은 방식으로 일회성 `Launch`를 넘긴다. 폴더는 `/tmp/dx7 launch's 한글`(공백, 작은따옴표, 한글)이다.
+
+| 확인 | 결과 |
+|---|---|
+| tmux 프로필 + 시작 명령으로 첫 연결 | 새 세션에서 명령이 한 번 실행되고, 기록된 `$PWD`가 지정 폴더와 같음 |
+| 같은 세션이 있는 상태에서 다시 시작 명령으로 연결 | 붙기만 하고 실행 기록은 1줄 그대로 |
+| 시작 명령 없이 재접속 | 붙기만 하고 실행 기록 1줄, `dx7-probe` 세션은 1개, 남은 시작 값 없음 |
+
+같은 실행에서 기존 단계(전송 큐, Git 상태, agent 전달, 다중 연결, 백프레셔, 재접속 등)도 모두 PASS였다.
+
+### 실제 앱(`node scripts/run-phase1.mjs --native --reuse-build --agent-only`, 종료 0)
+
+`npm run tauri -- build --debug --no-bundle`로 만든 앱이다. 검사는 `scripts/verify-developer-workflow.mjs`의 `verifyAgentLaunch`이고 `test-native.mjs`의 agent 단계에서 DX.5·DX.9 다음에 실행된다(`test:native`를 거쳐 `verify-windows.ps1 -Native`에 연결).
+
+- 설정 창의 **에이전트** 분류에서 프리셋 1·4의 명령을 대역 스크립트로 바꿈.
+- 새 연결 폼으로 tmux 세션 `dx7-native` 프로필을 **저장**만 하고, 연결 트리의 우클릭 **에이전트 시작…** → 폴더 `/tmp/dx7 native 한글`, 프리셋 **새 worktree**, 이름 `feat-1` → 확인 대화상자의 **실행할 명령**이 `/tmp/dx7-agent --worktree feat-1`. 시작하면 새 탭이 연결되고 화면에 대역의 출력, 기록은 `<폴더>|--worktree feat-1` 1줄, tmux 패널의 프로그램은 `cat`.
+- 탭 메뉴 **연결 종료** → **재접속**: 같은 화면이 다시 보이고 2초 뒤에도 기록 1줄, 패널 프로그램 `cat`, tmux 세션 1개.
+- 세션이 있는 상태에서 같은 메뉴로 다시 시작: 대화상자에 "이미 있으면 붙기만" 문구, 두 번째 탭이 붙고 기록 1줄.
+- tmux가 없는 첫 SSH 탭에서 `/tmp`의 `dx7-plain` 폴더를 사이드바 파일 트리에서 우클릭 → **에이전트 시작…** → **입력할 줄**이 `cd /tmp/dx7-plain && /tmp/dx7-agent`. 새 탭에서 세션 훅 다음에 한 번 입력되어 기록이 한 줄 늘고, 재접속 뒤 3초가 지나도 늘지 않음.
+- 같은 실행에서 AT.5·AT.6·DX.2·DX.3·DX.4·DX.5·DX.9 단계도 모두 PASS. 화면: `test-results-native/agent-launch-tmux.png`(저장소에 넣지 않음).
+
+첫 실행은 `DX.7 reconnect only attaches` 단계에서 실패했다. 재접속 확인은 통과했고, 그다음 연결 트리의 카드를 우클릭하려 할 때 새 SSH 탭이 사이드바를 `파일` 보기로 바꿔 두어 카드가 보이지 않았다. 검사 스크립트에서 `연결` 보기로 돌아간 뒤 우클릭하도록 고쳤고, 같은 앱 빌드로 다시 실행해 위 결과를 얻었다. 제품 코드는 바꾸지 않았다.
+
+### 단위·UI
+
+| 명령 | 결과 |
+|---|---|
+| `cargo test -p dachsterm --lib --locked terminal_start` | 5/5. 시작 스크립트 형식(새 세션에만 `send-keys`, 폴더 인용, 로그인 폴더면 `-c` 없음, tmux 확인이 먼저), `Launch::check`(tmux 없는 프로필, 상대·`~` 경로, 빈 명령, 줄바꿈·CR·ESC, 4096바이트 초과, EUC-KR로 표현 못 하는 문자) |
+| `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과 |
+| `npx vitest run src/features/agents src/features/terminal/launch.test.ts src/features/terminal/promptAttachments.test.ts` | 17/17. 기본 프리셋, 저장값 항목별 검증과 기본값 대체, 막힌 저장소, `{name}` 검증, 입력 줄 인용, 훅 다음·프롬프트에서만 한 번 입력, 10초 안에 프롬프트가 없으면 입력 안 함, 탭 종료·재접속 시 중단, 로그인·훅 대기 상한 |
+| `npx vitest run src/features/terminal/directoryHook.test.ts src/app/connectionSections.test.ts` | 15/15 |
+| Playwright `agent-launch.spec.ts`, `navigation.spec.ts` | 8/8. tmux·일반 셸 확인 대화상자, 이름·폴더 오류 시 시작 꺼짐, 저장된 프리셋과 손상 항목, 380px 창에서 대화상자와 긴 명령이 화면 안, 설정 창 편집·저장·재시작 후 유지·기본값 복원 |
+| `npm run typecheck`, `npm run lint`, 바꾼 파일 `prettier --check` | 통과 |
+
+Playwright는 1420 포트를 이 PC의 다른 프로세스가 쓰고 있어(이 작업 트리가 아닌 코드가 응답했다) 이 트리의 서버를 1421 포트로 띄우는 임시 설정으로 실행했다. 설정 파일은 지웠다.
+
+### 대기와 미실행
+
+- **로그인한 실제 CLI 에이전트:** 기본 프리셋(`claude`, `--continue`, `--resume`, `--worktree {name}`)으로 시작, worktree 생성 위치, tmux 안 재접속. 대역 스크립트로 대체하지 않는다.
+- **10초 안에 프롬프트가 없을 때의 대화상자:** 단위 테스트로만 확인했다. 실제 앱에서 프롬프트가 늦는 서버를 만들지 않았다.
+- **tmux가 없는 서버에서 시작:** DX.3의 대체 셸 경로는 기존 검사가 확인하지만, 시작 명령을 넘긴 경우는 실제로 실행하지 않았다.
+- **Mac 실기기:** 대화상자, 설정 창, 파일 트리 우클릭(두 손가락 클릭·Control+클릭), Zsh 프롬프트 입력.
+- **CI:** 푸시하지 않아 실행하지 않았다. **전체 게이트** `verify-windows.ps1 -Native`도 바꾼 범위만 실행했다.

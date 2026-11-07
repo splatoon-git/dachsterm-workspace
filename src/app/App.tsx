@@ -11,6 +11,7 @@ import {
 } from './WorkspaceGrid';
 import { useWorkspaceLayout, type Beside } from './useWorkspaceLayout';
 import { useTabMenu } from './useTabMenu';
+import { useAgentLaunch, type Opening } from './useAgentLaunch';
 import { useAppShortcuts } from './appShortcuts';
 import { SettingsDialog } from './SettingsDialog';
 import { StatusBar } from './StatusBar';
@@ -136,11 +137,8 @@ export function App() {
   const { open: openWorkspaceTab } = workspace;
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
-  const [pendingVault, setPendingVault] = useState<{
-    profile: Profile;
-    existing?: TerminalSession;
-    beside?: Beside;
-  } | null>(null);
+  /** The connection that waits for the vault to unlock. */
+  const [pendingVault, setPendingVault] = useState<(() => void) | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [gameTabs, setGameTabs] = useState<GameId[]>([]);
   const survivorClose = useRef<(() => boolean) | null>(null);
@@ -203,7 +201,7 @@ export function App() {
   const [auth, setAuth] = useState<{
     profile: Profile;
     session?: TerminalSession;
-    beside?: Beside;
+    opening?: Opening;
   } | null>(null);
   const secret = useRef<HTMLInputElement>(null);
   const [tabs, setTabs] = useState<TerminalSession[]>([]);
@@ -244,13 +242,13 @@ export function App() {
     value: string | null,
     existing?: TerminalSession,
     remember = false,
-    beside?: Beside,
+    opening: Opening = {},
   ) {
     if (value === null && profile.hasSecret) {
       try {
         const status = await call<VaultStatus>('vault_status');
         if (status.enabled && !status.unlocked) {
-          setPendingVault({ profile, existing, beside });
+          setPendingVault(() => () => void connect(profile, null, existing, false, opening));
           setVaultOpen(true);
           return;
         }
@@ -270,9 +268,10 @@ export function App() {
       if (profile.protocol === 'ssh') revealFiles();
     });
     setTabs((previous) => [...previous, session]);
-    workspace.open(sessionRef(session), beside);
-    void session.connect(value, remember);
+    workspace.open(sessionRef(session), opening.beside);
+    agent.connect(session, value, remember, opening.launch);
   }
+  const agent = useAgentLaunch((p, launch) => requestConnect(p, undefined, { launch }));
   function openLocal(target: LocalTarget, beside?: Beside) {
     const profile = { ...blankProfile(), id: target.id, name: target.name, host: 'localhost' };
     const session = new TerminalSession(profile, theme, () => {}, target);
@@ -319,7 +318,7 @@ export function App() {
         return setSettingsOpen(true);
     }
   });
-  function requestConnect(profile: Profile, existing?: TerminalSession, beside?: Beside) {
+  function requestConnect(profile: Profile, existing?: TerminalSession, opening?: Opening) {
     if (existing?.podtree) {
       setPodtreeOpen(true);
       return;
@@ -329,8 +328,8 @@ export function App() {
       return;
     }
     if (profile.hasSecret || ['agent', 'interactive'].includes(profile.auth))
-      connect(profile, null, existing, false, beside);
-    else setAuth({ profile, session: existing, beside });
+      connect(profile, null, existing, false, opening);
+    else setAuth({ profile, session: existing, opening });
   }
   async function detach(session: TerminalSession) {
     try {
@@ -367,7 +366,7 @@ export function App() {
   const splitTab = (t: TerminalSession, beside: Beside) =>
     t.localTarget
       ? openLocal(t.localTarget, beside)
-      : requestConnect(savedProfile(t), undefined, beside);
+      : requestConnect(savedProfile(t), undefined, { beside });
   const tabMenu = useTabMenu({
     workspace,
     narrow,
@@ -570,6 +569,7 @@ export function App() {
                 toggle={tree.toggle}
                 actions={{
                   connect: (p) => requestConnect(p),
+                  startAgent: (p) => agent.ask(p),
                   edit: setForm,
                   toggleFavorite: (p) =>
                     void action('save_session', {
@@ -600,6 +600,7 @@ export function App() {
             <SidebarFiles
               session={selected}
               showConnections={() => setSidebarView('connections')}
+              startAgent={(folder) => selected && agent.ask(savedProfile(selected), folder)}
             />
           </div>
         </div>
@@ -758,21 +759,10 @@ export function App() {
             setVaultOpen(false);
             setPendingVault(null);
           }}
-          unlocked={
-            pendingVault
-              ? () => {
-                  void connect(
-                    pendingVault.profile,
-                    null,
-                    pendingVault.existing,
-                    false,
-                    pendingVault.beside,
-                  );
-                }
-              : undefined
-          }
+          unlocked={pendingVault ?? undefined}
         />
       )}
+      {agent.dialogs}
       {settingsOpen && (
         <SettingsDialog
           snapshot={snapshot}
@@ -809,7 +799,7 @@ export function App() {
               const value = secret.current?.value ?? '';
               if (secret.current) secret.current.value = '';
               const remember = new FormData(e.currentTarget).get('rememberSecret') === 'on';
-              connect(auth.profile, value, auth.session, remember, auth.beside);
+              connect(auth.profile, value, auth.session, remember, auth.opening);
               setAuth(null);
             }}
           >

@@ -22,6 +22,8 @@ export type Profile = {
   lastConnected: number | null;
   hasSecret: boolean;
 };
+/** A one-time start command for a new tab, given to `connect` and never saved. */
+export type TerminalLaunch = { folder: string; command: string };
 export type Group = { id: string; name: string; parentId?: string | null; sortOrder?: number };
 export type Snapshot = { profiles: Profile[]; groups: Group[]; credentialWarning?: string | null };
 export const desktop = isTauri();

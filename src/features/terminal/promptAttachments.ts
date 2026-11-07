@@ -14,9 +14,8 @@ const approved = new Set<string>();
 export const clipboardApproved = (connectionId: string) => approved.has(connectionId);
 export const approveClipboard = (connectionId: string) => void approved.add(connectionId);
 
-export function posixQuote(path: string) {
-  return /^[A-Za-z0-9_./@%+=:,-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`;
-}
+import { posixQuote } from '../../lib/shell';
+export { posixQuote };
 
 const isUnc = (path: string) => /^[\\/]{2}/.test(path);
 

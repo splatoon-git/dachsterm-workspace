@@ -171,10 +171,9 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
     (folder: string) => call<Listing>('sftp_list', { id, path: folder }),
     [id],
   );
-  const { rows: visible, toggle } = useFileTree(listing, view, listFolder);
-  const selectedPaths = withoutNested(selection).map(
-    (name) => `${listing.path.replace(/\/$/, '')}/${name}`,
-  );
+  const { rows: visible, toggle, folderMenu } = useFileTree(listing, view, listFolder);
+  const base = listing.path.replace(/\/$/, '');
+  const selectedPaths = withoutNested(selection).map((name) => `${base}/${name}`);
   // Past transfers stay out of the way. Unfinished work opens the tray until the user closes it.
   const trayOpen =
     trayChoice ??
@@ -279,7 +278,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
       void load(listing.path);
     } else if (event.key === 'Escape') setContext(null);
   }
-  const target = selected ? `${listing.path.replace(/\/$/, '')}/${selected.name}` : listing.path;
+  const target = selected ? `${base}/${selected.name}` : listing.path;
   async function run(command: string, args: Record<string, unknown>) {
     try {
       await call(command, args);
@@ -667,6 +666,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                   .writeText(selectedPaths.join('\n'))
                   .catch(() => setError('경로 복사 실패')),
             },
+            ...folderMenu(selection.length === 1 && selected?.directory ? target : undefined),
             {
               label: '압축하기…',
               separated: true,

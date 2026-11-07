@@ -26,7 +26,7 @@ import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
-import { call, errorText, type Profile } from '../../lib/ipc';
+import { call, errorText, type Profile, type TerminalLaunch } from '../../lib/ipc';
 import { terminalTheme } from '../../themes/adapters/xterm';
 import type { ThemeDefinition } from '../../themes/contract';
 export class TerminalSession {
@@ -40,7 +40,7 @@ export class TerminalSession {
     this.lastFileLocation = path;
   }
   private autoDirectoryHook = false;
-  private readonly directoryHookInstaller = new DirectoryHookInstaller({
+  readonly directoryHookInstaller = new DirectoryHookInstaller({
     terminal: () => this.terminal,
     connected: () => this.current.status === 'connected',
     directory: () => this.current.directory,
@@ -100,7 +100,7 @@ export class TerminalSession {
   }
   private listeners = new Set<() => void>();
   private current: SessionState = { status: 'connecting', message: '연결 준비 중', hostKey: null };
-  private disposed = false;
+  disposed = false;
   private pending = false;
   private inputQueue: string[] = [];
   private sending = false;
@@ -207,7 +207,7 @@ export class TerminalSession {
     if (this.terminal.options.scrollback !== scrollback)
       this.terminal.options.scrollback = scrollback;
   }
-  async connect(secret: string | null, remember = false) {
+  async connect(secret: string | null, remember = false, launch?: TerminalLaunch) {
     if (this.pending || this.disposed) return;
     this.pending = true;
     this.autoDirectoryHook = true;
@@ -237,6 +237,7 @@ export class TerminalSession {
               expected: this.profile,
               secret,
               remember,
+              launch,
               onEvent: this.channel,
             }));
     } catch (e) {
