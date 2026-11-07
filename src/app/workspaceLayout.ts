@@ -5,7 +5,10 @@ import type { GameId } from '../features/games/catalog';
  * untouched. Unchanged calls return the same object, so callers can skip saving and rendering.
  */
 export type TabRef =
-  { kind: 'session'; tabId: string } | { kind: 'game'; id: GameId } | { kind: 'preview' };
+  | { kind: 'session'; tabId: string }
+  | { kind: 'game'; id: GameId }
+  | { kind: 'preview' }
+  | { kind: 'review'; id: string };
 export type GroupNode = {
   type: 'group';
   id: string;
@@ -40,9 +43,9 @@ const emptyGroup = (id: string): GroupNode => ({ type: 'group', id, tabs: [], ac
 export const tabKey = (tab: TabRef) =>
   tab.kind === 'session'
     ? `session:${tab.tabId}`
-    : tab.kind === 'game'
-      ? `game:${tab.id}`
-      : 'preview';
+    : tab.kind === 'preview'
+      ? 'preview'
+      : `${tab.kind}:${tab.id}`;
 
 export function groups(node: LayoutNode): GroupNode[] {
   return node.type === 'group' ? [node] : node.children.flatMap(groups);

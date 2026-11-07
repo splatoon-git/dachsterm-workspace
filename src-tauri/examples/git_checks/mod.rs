@@ -5,6 +5,7 @@ use dachsterm::{
     ssh::Connections,
 };
 use russh::ChannelMsg;
+mod diff;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Fixture setup and checks the app itself never runs, on a channel of their own.
@@ -82,5 +83,5 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
     shell(manager, id, &cleanup).await?;
     result?;
     println!("PASS product Git status: repository read, fsmonitor not run, non-repository quiet");
-    Ok(())
+    diff::run(manager, id).await
 }

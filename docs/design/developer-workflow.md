@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.10**, 설계일: **2026-11-07**.
-- 현재 상태: **DX.1·DX.2·DX.3·DX.4·DX.5·DX.9 구현, 나머지 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **DX.1·DX.2·DX.3·DX.4·DX.5·DX.6·DX.9 구현, 나머지 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -314,6 +314,18 @@ git -c core.fsmonitor=false -c diff.noprefix=false -c diff.mnemonicPrefix=false 
 서버 파일을 외부 편집기로 여는 동작은 1차에서 뺀다. 편집기 선택이 `FilePanel` 소유이고 U2 분리가 먼저 필요하다. 경로 복사와 터미널 입력은 제공한다.
 
 **합격:** 수정, 추가, 삭제, 이름 변경, 추적되지 않은 파일, 바이너리, 공백이 포함된 경로, 한글 경로가 올바르게 표시된다. 악성 `diff.external`과 `core.fsmonitor`가 있는 저장소에서 프로그램이 실행되지 않는다. 의견이 Enter 없이 프롬프트에 들어간다.
+
+**TW 반영과 구현에서 정한 것(2026-11-08):**
+
+- **도킹 패널이 아니라 탭 종류다.** `TabRef`에 `{ kind: 'review'; id }`를 더했고 키는 `review:<id>`다. 상태와 터미널 연결은 `app/useReviewTabs.tsx`, 화면은 `features/git/ReviewPane.tsx`(`DiffView.tsx`, `ReviewNotes.tsx`, `useReviewData.ts`, `review.css`)다. 그래서 §3.1의 `ReviewPanel.tsx`, `app/ReviewDock.tsx`, `git.css`는 만들지 않았다. 진입점은 SSH 탭 우클릭 메뉴의 **변경 검토**와 `Ctrl/Cmd+Shift+G`다. 셸 폴더를 모르거나 연결 전이면 메뉴 항목이 비활성이다. 기본 위치는 원래 터미널 칸의 오른쪽 분할(`openBeside`)이고, 700px 이하 좁은 창에서는 같은 칸에 연다. 끌기·분할·확대는 다른 탭과 같고 탭 메뉴에 분리 항목이 없다(§10 후속).
+- **대상 고정:** 검토 탭은 열 때의 탭 ID, 연결 ID, 셸 폴더, 세션 이름을 기억하고 탭 제목에 `변경 검토 · 이름`을 표시한다. 같은 탭·연결·폴더에서 다시 열면 있던 탭을 보여 준다. 조회도 기억한 연결로 한다. 대상 탭이 닫혔거나, 연결 ID가 바뀌었거나(재접속), 연결이 끊겼거나, 동시 입력 대상(`inputReach > 1`)이면 넣지 않고 사유와 **복사**를 보여 준다. 넣은 뒤에는 대상 탭을 선택하고 포커스를 옮긴다. 목록은 보낸 뒤에도 남고 **비우기**로 지운다.
+- **붙여넣기 형식:** xterm `paste`로 넣는다. 대상이 bracketed paste 모드이면 의견마다 한 줄, 아니면 줄바꿈이 Enter가 되므로 ` / `로 이어 한 줄로 넣는다. 서버가 준 경로와 의견의 제어 문자는 공백으로 바꾼다. ESC로 bracketed paste를 일찍 끝내고 뒤 글자를 실행시키는 경로를 막기 위해서다. 삭제된 줄만 고른 의견은 이전 파일 번호에 `(삭제된 줄)`을 붙인다. 행 선택에 새 파일 줄이 있으면 새 번호를 쓴다.
+- **명령에서 더한 것:** `GIT_LITERAL_PATHSPECS=1`(`:(top)`, `*` 같은 이름이 패턴으로 해석되지 않게), `-c diff.relative=false`, `-c core.quotePath=false`, `--find-renames`. `core.quotePath`는 기본값이면 diff 머리말의 한글 경로가 `"ì…"` 8진 표기로 나온다. Docker 실측에서 이름 변경 머리말로 발견했다. 목록은 원격 실행 한 번에 `--name-status -z`, `--numstat -z`, `ls-files --others --exclude-standard -z`를 NUL 하나로 구분해 받는다. 작업 트리 기준은 `HEAD^{commit}`이고 첫 커밋 전에는 빈 트리(`hash-object -t tree /dev/null`)다. 브랜치는 `refs/heads/`, `refs/remotes/` 아래 이름만 받고 이름 규칙을 검사한 뒤, 스크립트가 `show-ref --verify --end-of-options`로 그 시점 서버의 ref와 대조하고 `merge-base --end-of-options HEAD <ref>`를 구한다. 백엔드는 목록을 기억하지 않는다.
+- **`git_refs`는 폴더를 받는다.** `rev-parse --show-toplevel`로 루트를 함께 돌려주므로 셸이 하위 폴더에 있어도 된다. worktree 경로가 UTF-8이 아니면 목록에서 빼고, ref는 2,000개까지다.
+- **크기:** 작업 트리 파일 크기를 `wc -c`로 먼저 보고 2MiB를 넘으면 diff를 실행하지 않고 크기를 돌려준다. diff 출력 상한은 양쪽을 담을 수 있게 4MiB+64KiB, 목록 출력은 8MiB다. 시간·출력 초과는 `remote_exec::Failure` 종류로 받아 `stopped`·`tooLarge`·`timedOut`으로 돌려준다. 오류 문구는 종료 코드(2 폴더, 3 브랜치)와 stderr 첫 줄로만 만들고 diff 내용은 넣지 않는다.
+- **비UTF-8 경로:** `readable: false`로 목록에만 표시하고 diff 요청에서 뺀다(DX.5 메모의 후속).
+- **표시:** 칸 너비 900px 이상은 좌우, 미만은 위아래다. 640px 미만에서는 파일 목록이 드롭다운이 된다. 행 높이 20px 고정 가상화(앞뒤 20행)다. 좌우 보기의 긴 줄은 칸 안에서 말줄임과 툴팁, 위아래 보기는 가로 스크롤이다. 4,000자를 넘는 줄은 잘린 글자 수를 표시한다. 조회는 탭을 열 때, 기준·작업 폴더·파일을 바꿀 때, 새로 고침 때만 하고, 파일 diff는 탭 안 메모리에 둔다.
+- **공용화와 줄 수:** `git_status.rs`의 `check_folder`, `first_line`을 `pub(crate)`로 함께 쓴다(문구는 "Git 저장소 폴더가 올바르지 않습니다."로 일반화). `App.tsx`는 그룹 대화상자를 `app/GroupDialog.tsx`로 옮겨 945줄에서 872줄이 됐다. `workspaceLayout.ts`는 탭 타입과 키만 바뀌어 381줄에서 384줄이다. `FilePanel.tsx`, `ssh.rs`, `session.ts`는 수정하지 않았다.
 
 ### DX.7 — 에이전트 시작
 

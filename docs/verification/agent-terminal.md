@@ -302,3 +302,40 @@ Playwright는 1420·1431 포트를 다른 작업 트리의 dev 서버가 쓰고 
 | 실제 앱(WebView2) | `npm run tauri -- build --debug --no-bundle` 후 `node scripts/run-phase1.mjs --native --reuse-build --agent-only` | 종료 0. 서명 카드 승인·거부, 실패한 명령 막대, 프롬프트 이동, Git 상태 표시·숨김을 포함한 에이전트 단계 전부 PASS |
 
 미실행: 전체 게이트 `verify-windows.ps1 -Native`, CI(푸시하지 않음), Mac 실기기.
+
+## DX.6 diff 검토와 프롬프트 전달
+
+- 실행일: 2026-11-08. 대상: 브랜치 `feat/dx6-diff-review`(`9eacfc1` 위)의 **미커밋 트리**. 실제 앱은 마지막 제품 코드 변경(01:11, `review.css`) 뒤 `npm run tauri -- build --debug --no-bundle`로 만든 `target/debug/dachsterm.exe`(01:11)다. 그 뒤에는 검사 스크립트와 테스트만 바뀌었다.
+- 같은 PC에서 다른 세션의 개발 서버가 1420 포트를 쓰고 있어, Playwright는 저장소 설정과 같은 내용에 포트만 1431로 바꾼 임시 설정(커밋하지 않음)으로 실행했다.
+
+| 범위 | 명령 | 결과 |
+|---|---|---|
+| Rust 단위 | `cargo test -p dachsterm --lib --locked git_` | 첫 실행 17건 중 16 통과, 1건 실패(테스트의 기대 문구 조사 오타). 고친 뒤와 `core.quotePath` 추가 뒤 `cargo test … git_diff` 10/10. `git_status` 7건은 첫 실행에서 통과 |
+| Rust 정적 | `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` | 통과 |
+| 실제 OpenSSH | `node scripts/run-phase1.mjs --native --agent-only`(probe 예제 포함) | 첫 실행: `git_checks/diff.rs`의 이름 변경 머리말 검사 실패. Git 기본 `core.quotePath`가 한글 경로를 8진 표기로 바꿨다. `-c core.quotePath=false`를 더한 뒤 재실행에서 `PASS product Git diff: all change kinds, spaced and Korean paths, branch base, size limit; external diff, textconv and fsmonitor not run`과 `PASS Phase 1 product engine probes`. 이후 Rust 변경 없음 |
+| Vitest | `npx vitest run src/features/git src/app/tabMenu.test.ts src/app/appShortcuts.test.ts src/app/workspaceLayout.test.ts` | 6파일 106건 통과. `broadcastStatus` 변경 뒤 `useInputScope.test.tsx`와 git 3파일 30건 통과 |
+| Playwright | `npx playwright test tests/ui/review.spec.ts` | 8/8. `navigation.spec.ts`, `workspace.spec.ts` 11/11 |
+| 정적 | `npm run typecheck`, 바꾼 파일 eslint, `npm run format:check` | 통과 |
+| 실제 앱(WebView2) | `node scripts/run-phase1.mjs --native --reuse-build --agent-only` | 종료 0. 새 단계 `PASS native change review: list, line comment pasted without Enter, fsmonitor not run` 포함 PASS 22줄 |
+
+Docker에서 확인한 것(`src-tauri/examples/git_checks/diff.rs`, 저장소 경로에 공백과 한글):
+
+- 목록: 수정(`tracked.txt` +1), 추가(`new file.txt`), 삭제(`removed.txt`), 이름 변경(`old name.txt` → `새 이름.txt`), 바이너리 수정(`image.bin`, 줄 수 없음), 추적 안 함(`추적 안 함.txt`, 3MiB `big.log`).
+- 파일 diff: `a/`, `b/` 접두사와 ESC 없음(저장소에 `diff.noprefix true`, `color.ui always`를 넣어도), 추가·삭제 모드 줄, 이름 변경 머리말의 한글, `Binary files … differ`, 추적 안 함 파일의 `--no-index` diff, 3MiB 파일은 diff를 실행하지 않고 `TooLarge { size: 3145728 }`.
+- 기준 `refs/heads/base`: merge-base 이후 커밋된 줄까지 +2. 없는 브랜치는 오류.
+- 저장소에 `core.fsmonitor`, `diff.external`, `diff.evil.textconv`·`diff.evil.command`(`.gitattributes`의 `*.txt`, `*.bin`)를 각각 다른 프로그램으로 설정했다. 앱 조회 동안 셋 다 실행되지 않았고, 같은 저장소에서 일반 `git status`, `git diff`, `git diff --no-ext-diff`를 실행하면 셋 다 실행되어 픽스처가 유효함을 확인했다.
+
+실제 앱에서 확인한 것(`scripts/verify-developer-workflow.mjs`, DX.5와 같은 저장소):
+
+- 터미널에서 `Ctrl+Shift+G` → 탭 `변경 검토 · OpenSSH 테스트`가 새 칸(오른쪽 분할)으로 열림. 확대(`Ctrl+Shift+Enter`) 뒤 파일 목록 `a.txt` M, `new.txt` A, `src/s.txt` M.
+- 새 2행을 고르고 의견을 Enter로 추가, 확대 복원 뒤 **프롬프트로 보내기**: 안내 문구가 나오고 1.5초 동안 셸이 그 줄을 실행하지 않음. 이 실행은 앞 단계가 `stty -echo`를 켜 두어 입력이 화면에 보이지 않으므로, 검사가 직접 Enter를 누른 뒤에야 `a.txt:2: command not found`가 정확히 한 번 나오는 것으로 "Enter 없이 입력 줄에 들어감"을 판정했다.
+- 검토 조회 동안 저장소의 `core.fsmonitor` 프로그램이 실행되지 않음. 탭 메뉴 **탭 닫기**로 닫으면 칸이 접혀 원래 칸 수로 돌아감.
+- 실제 앱이 찾은 결함: 칸(`.pane-cell`)이 flex 행이라 검토 화면이 내용 폭으로 줄어, 짧은 diff에서는 넓은 칸에서도 좁은 배치(파일 드롭다운, 위아래 diff)가 됐다. `review.css`에 `flex: 1`을 더했고, 픽스처가 실제 칸 CSS를 읽도록 바꿔 `fills a wide cell even when the diff is short`로 재현(수정 전 실패, 수정 후 통과)했다.
+- 검사 결함으로 세 번 다시 실행했다: 화면에 입력이 보인다고 가정한 판정, 접근성 텍스트 전체 비교, `탭 닫기`가 `다른 탭 닫기`와도 맞던 이름 일치. 정리 단계 오류가 원래 오류를 가리지 않도록 스크립트도 고쳤다.
+
+대기와 미실행:
+
+- **실제 CLI 에이전트 수동 확인**(에이전트 입력 줄에 여러 줄 의견이 bracketed paste로 들어가는지): 실행하지 않았다. 여러 줄·한 줄 형식 선택은 단위 테스트와 픽스처뿐이다.
+- **재접속·끊김·동시 입력 중 복사 안내:** 픽스처(`changed`)와 단위 테스트뿐이다. 실제 앱에서 대상이 바뀐 상태로 보내 본 확인은 없다.
+- **worktree 선택, 브랜치 기준, 시간 초과·크기 초과 표시:** 백엔드는 Docker, 화면은 픽스처뿐이다.
+- **Mac 실기기**(`Cmd+Shift+G`, WKWebView의 가상화·`color-mix`), **전체 게이트** `verify-windows.ps1 -Native`, 전체 Vitest·Playwright·`cargo test --workspace`, **CI**(푸시하지 않음)는 실행하지 않았다.

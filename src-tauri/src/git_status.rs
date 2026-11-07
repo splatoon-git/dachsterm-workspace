@@ -72,9 +72,9 @@ pub enum GitStatus {
 
 /// The folder comes from a terminal report or a file listing. It is quoted, so only what a
 /// shell argument cannot carry is refused.
-fn check_folder(folder: &str) -> Result<()> {
+pub(crate) fn check_folder(folder: &str) -> Result<()> {
     if !folder.starts_with('/') || folder.len() > 4096 || folder.contains('\0') {
-        return Err("Git 상태를 조회할 폴더가 올바르지 않습니다.".into());
+        return Err("Git 저장소 폴더가 올바르지 않습니다.".into());
     }
     Ok(())
 }
@@ -86,7 +86,7 @@ pub fn status_script(folder: &str) -> String {
     )
 }
 
-fn first_line(stderr: &[u8]) -> String {
+pub(crate) fn first_line(stderr: &[u8]) -> String {
     let text = String::from_utf8_lossy(stderr);
     let line = text.lines().map(str::trim).find(|l| !l.is_empty());
     line.unwrap_or_default()

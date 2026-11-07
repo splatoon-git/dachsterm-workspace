@@ -14,6 +14,7 @@ export type AppShortcut =
   | { name: 'files' }
   | { name: 'inputScope' }
   | { name: 'splitRight' }
+  | { name: 'review' }
   | { name: 'commands' }
   | { name: 'tunnels' }
   | { name: 'help' }
@@ -36,6 +37,7 @@ const withShift: Record<string, AppShortcut> = {
   KeyE: { name: 'files' },
   KeyM: { name: 'inputScope' },
   Backslash: { name: 'splitRight' },
+  KeyG: { name: 'review' },
   KeyS: { name: 'commands' },
   KeyU: { name: 'tunnels' },
   // Ctrl+? as most apps write it. F1 stays with the terminal, where programs such as mc use it.

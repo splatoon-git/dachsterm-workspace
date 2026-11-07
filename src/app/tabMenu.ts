@@ -6,6 +6,7 @@ export type TabCommand =
   | 'search'
   | 'log'
   | 'guide'
+  | 'review'
   | 'splitRight'
   | 'splitDown'
   | 'zoom'
@@ -18,6 +19,8 @@ export type TabCommand =
 export type TabMenuState = {
   /** What the tab's session supports, or null for a game or the preview. */
   capabilities: SessionCapabilities | null;
+  /** Change review: null when the tab has none (not SSH), false while it cannot open yet. */
+  review: boolean | null;
   /** The state of the tab's connection, or null for a tab without one. */
   connection: 'live' | 'ended' | null;
   recording: boolean;
@@ -47,6 +50,13 @@ export function tabMenuEntries(state: TabMenuState): TabMenuEntry[] {
   if (can?.log)
     view.push({ command: 'log', label: state.recording ? '세션 기록 · 기록 중…' : '세션 기록…' });
   if (can?.guide) view.push({ command: 'guide', label: '조작표 보기·고정' });
+  if (state.review !== null)
+    view.push({
+      command: 'review',
+      label: '변경 검토',
+      shortcut: modKey('Shift+G'),
+      disabled: !state.review,
+    });
   const layout: TabMenuEntry[] = [];
   if (can?.split)
     layout.push(

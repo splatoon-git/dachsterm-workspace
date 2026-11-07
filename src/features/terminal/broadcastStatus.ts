@@ -31,8 +31,12 @@ export async function setBroadcast(ids: string[]) {
   await poller.reload();
 }
 
+const reach = (selected: string[], connectionId: string) =>
+  selected.includes(connectionId) ? selected.length : 1;
+
 /** How many panes a paste into this connection reaches, or 1 when it reaches only its own. */
 export function useInputReach(connectionId: string) {
-  const { selected } = useBroadcastStatus();
-  return selected.includes(connectionId) ? selected.length : 1;
+  return reach(useBroadcastStatus().selected, connectionId);
 }
+/** The same, read once at the moment of a paste the app makes for the user. */
+export const inputReach = (connectionId: string) => reach(poller.value.selected, connectionId);

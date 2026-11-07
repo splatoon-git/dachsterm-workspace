@@ -280,6 +280,7 @@ try {
     docker,
     probe,
     command,
+    screenshots,
     setStage: (value) => {
       stage = value;
     },
