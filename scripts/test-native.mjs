@@ -202,12 +202,14 @@ async function connected() {
 const showConnections = () => showSidebarView(page, '연결');
 // The click returns before the tab exists because connecting first awaits vault_status.
 // Until then pane() is the previous connected tab, so connected() alone would pass early.
-async function connectNewTab() {
+// A name picks one card when the list still shows profiles a check removed through IPC.
+async function connectNewTab(name) {
   const tabs = page.locator('.tab-strip').getByRole('tab');
   const count = await tabs.count();
   const previousId = await pane().getAttribute('data-connection-id');
   await showConnections();
-  await page.locator('.profile-card .profile-target').dblclick();
+  const cards = page.locator('.profile-card');
+  await (name ? cards.filter({ hasText: name }) : cards).locator('.profile-target').dblclick();
   await expect(tabs).toHaveCount(count + 1);
   await expect.poll(() => pane().getAttribute('data-connection-id')).not.toBe(previousId);
   await connected();
@@ -280,6 +282,8 @@ try {
     docker,
     probe,
     command,
+    connectNewTab,
+    invoke,
     setStage: (value) => {
       stage = value;
     },

@@ -302,3 +302,32 @@ Playwright는 1420·1431 포트를 다른 작업 트리의 dev 서버가 쓰고 
 | 실제 앱(WebView2) | `npm run tauri -- build --debug --no-bundle` 후 `node scripts/run-phase1.mjs --native --reuse-build --agent-only` | 종료 0. 서명 카드 승인·거부, 실패한 명령 막대, 프롬프트 이동, Git 상태 표시·숨김을 포함한 에이전트 단계 전부 PASS |
 
 미실행: 전체 게이트 `verify-windows.ps1 -Native`, CI(푸시하지 않음), Mac 실기기.
+
+## DX.8 에이전트 현황판
+
+- 실행일: 2026-11-08. 대상: `feat/dx8-agent-board` 브랜치(기준 `9eacfc1`)의 **미커밋 트리**. 실제 앱은 모든 제품 코드 변경 뒤 `run-phase1 --native`가 빌드한 `target/debug/dachsterm.exe`(Windows debug)다. 이후 바뀐 것은 검사 스크립트뿐이다.
+- 백엔드 변경은 `capabilities/main.json`의 창 권한 두 개(`core:window:allow-set-focus`, `allow-unminimize`)뿐이고 새 IPC 명령과 원격 명령은 없다. 그래서 `probe:phase1`에 새 검사를 넣지 않았다. 앱 빌드가 권한 파일을 검증했다.
+
+| 범위 | 명령 | 결과 |
+|---|---|---|
+| typecheck·lint | `npm run typecheck`, `npm run lint` | 통과 |
+| 형식 | `npx prettier --check`(바꾼 파일) | 통과 |
+| Vitest | `npx vitest run src/app/agentRows.test.ts src/app/appShortcuts.test.ts src/features/terminal/agentSign.test.ts src/app/SessionTab.test.tsx`, 이어서 `npx vitest run src/app/agentStatus.test.ts` | 19/19, 4/4. `agentRows` 5건(정렬, 개수, 경과 시간, 다음 대기 순환, 이벤트 검증), `agentStatus` 4건(연결된 탭만·툴팁 글, 상태 시작 시각 유지, 같은 연결의 서명 대기 우선, 구독 해제) |
+| Playwright(새) | `tests/ui/agent-board.spec.ts` | 4/4. 상태별 개수와 접근성 이름, 긴급도 순 목록·툴팁·독립 창 표시·경과 시간, 행 선택·`Esc`(포커스 복귀)·바깥 클릭으로 닫힘, 보고 없으면 숨김, 380px 창 |
+| Playwright(회귀) | `navigation.spec.ts`, `layout.spec.ts`, `workspace.spec.ts` | 3/3, 14/14(두 스펙 합). `App`의 좁은 창 판정 이동과 상태바·단축키 목록 변경 확인 |
+| 실제 앱(WebView2) | `node scripts/run-phase1.mjs --native --agent-only`(빌드 포함) | 종료 1. 앞 단계(probe 포함) 전부 PASS, `DX.8 agent list`의 새 탭 열기에서 실패. 원인은 검사: 앞 단계가 IPC로 지운 프로필 카드가 화면 목록에 남아 `.profile-card .profile-target`이 여러 개였다. `connectNewTab`에 이름 인자를 더했다 |
+| 실제 앱(WebView2) | `node scripts/run-phase1.mjs --native --reuse-build --agent-only` | 종료 0, PASS 23줄. 아래 두 줄이 새 단계 |
+
+실제 앱에서 확인한 것(`scripts/verify-developer-workflow.mjs`의 `verifyAgentList`):
+
+- `PASS native agent count in the status bar and the next-waiting-tab shortcut`: 상태 보고가 없을 때 상태바에 항목 없음. 첫 SSH 탭에서 `OSC 7501 state=blocked:kind=question`을 보내고 명령을 계속 실행하면 상태바 `입력 대기 1`. 같은 서버로 새 탭을 연 뒤 `Ctrl+Shift+.`을 누르면 첫 탭이 활성화된다. 목록에 한 행, 툴팁 `입력 대기 · 답변 필요`.
+- `PASS native independent window listed, focused from its row, dropped on close`: 두 번째 탭을 탭 메뉴로 독립 창에 분리하고 그 창에서 `state=working`을 보내면 메인 창 상태바가 `입력 대기 1 · 작업 중 1`. 메인 창에 포커스를 준 뒤(`set_focus`) 목록의 `독립 창` 행을 누르면 그 창의 `is_focused`가 참이 된다. 독립 창을 닫으면 메인 창이 `입력 대기 1`로 돌아가고, 첫 탭에서 `Ctrl+C`로 프롬프트에 돌아오면 항목이 사라진다.
+
+대기와 미실행:
+
+- **Mac 실기기:** 상태바 항목, `⌘⇧.`, 독립 창 포커스(`setFocus`)와 최소화 해제. WKWebView에는 자동 UI 검사 경로가 없다.
+- **실제 CLI 에이전트:** 로그인한 에이전트의 훅·OSC 7501 상태로 목록을 본 수동 확인은 하지 않았다. 검사는 셸의 `printf`로 같은 시퀀스를 보냈다.
+- **최소화된 독립 창:** `unminimize`는 실제 최소화 상태에서 확인하지 않았다(검사는 포커스만 확인).
+- **경과 시간 갱신(30초)과 Git 표시가 있는 행:** 단위·Playwright 픽스처로만 확인했다. 실제 앱 검사의 탭은 저장소 밖(`/tmp`)이었다.
+- **전체 게이트** `verify-windows.ps1 -Native`, 전체 Vitest·Playwright, CI(푸시하지 않음).
+- Playwright는 1420 포트를 다른 작업 트리의 dev 서버가 쓰고 있어, 이 트리의 서버를 1521 포트로 띄우는 임시 설정으로 실행했다(설정 파일은 지웠다).

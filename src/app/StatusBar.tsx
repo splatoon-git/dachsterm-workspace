@@ -4,7 +4,9 @@ import { ProgramGuide } from '../features/terminal/CommandGuide';
 import { isRecording, useLogStatus } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
 import { capabilities, sessionKind } from '../features/terminal/sessionKind';
+import { AgentBoard } from './AgentBoard';
 import { GitStatusItem } from './GitStatusItem';
+import type { AgentBoardState } from './useAgentBoard';
 import './statusBar.css';
 
 function where(session: TerminalSession) {
@@ -74,6 +76,7 @@ export function StatusBar({
   game,
   input,
   sending,
+  agents,
 }: {
   session?: TerminalSession;
   /** The title of the focused game, when a game has the focus. */
@@ -82,6 +85,8 @@ export function StatusBar({
   input?: ReactNode;
   /** Typing reaches several panes, which the whole bar warns about. */
   sending?: boolean;
+  /** Every tab's program state. Only the main window gathers them. */
+  agents?: AgentBoardState;
 }) {
   const can = session && capabilities(session);
   return (
@@ -105,6 +110,7 @@ export function StatusBar({
         {session && can?.guide && <ProgramGuide key={session.tabId} session={session} />}
       </div>
       <div className="status-right">
+        {agents && <AgentBoard board={agents} />}
         {session && can?.log && <Recording key={session.connectionId} session={session} />}
         {input}
         {session && can?.monitor && <MonitorBar key={session.connectionId} session={session} />}

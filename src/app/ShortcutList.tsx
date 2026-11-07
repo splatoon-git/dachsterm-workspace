@@ -16,6 +16,7 @@ const rows: [string, string][] = [
   ['칸 사이 포커스 이동', `${modKey('Alt')} + 방향키`],
   ['같은 연결로 오른쪽에 분할', modKey('Shift+\\')],
   ['동시 입력 중지 / 입력 받을 창 선택', modKey('Shift+M')],
+  ['다음 입력 대기 탭으로 이동', modKey('Shift+.')],
   ['탭 이동 (탭에 포커스)', '← / → · Home / End'],
   ['탭 메뉴 · 모든 탭 배치 (탭에 포커스)', 'Shift+F10 · 메뉴 키 · 우클릭'],
   ['터미널 복사 / 붙여넣기', `${modKey('Shift+C')} / V · Shift+Insert`],

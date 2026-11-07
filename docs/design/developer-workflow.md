@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.10**, 설계일: **2026-11-07**.
-- 현재 상태: **DX.1·DX.2·DX.3·DX.4·DX.5·DX.9 구현, 나머지 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **DX.1·DX.2·DX.3·DX.4·DX.5·DX.8·DX.9 구현, 나머지 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -56,7 +56,7 @@ AT의 원칙을 그대로 따른다: 전용 모드 없음, 화면 글자 해석 
 | `features/git/unifiedDiff.ts` | diff 파서와 좌우 행 구성. 순수 로직 | DX.6 |
 | `features/git/ReviewPanel.tsx`, `DiffView.tsx`, `git.css` | 검토 패널 | DX.6 |
 | `features/agents/AgentLauncher.tsx`, `presets.ts` | 에이전트 시작 대화상자와 프리셋 | DX.7 |
-| `features/agents/AgentBoard.tsx`, `board.ts` | 현황판과 합치기 로직 | DX.8 |
+| `app/AgentBoard.tsx`, `agentRows.ts`, `agentStatus.ts`, `useAgentBoard.ts` | 현황판과 합치기 로직. 탭 상태와 Git 결과를 잇는 코드라 `app/`에 둔다(DX.8 절) | DX.8 |
 | `features/terminal/commandMarks.ts` | OSC 133 표식, 이동, 긴 명령 판단 | DX.9 |
 | `components/fileDecorations.ts` | 파일 트리 행 표시용 컨텍스트 | DX.5 |
 | `app/SessionTab.tsx`, `app/ReviewDock.tsx` | `Tab` 이동과 검토 패널 연결 | AT.2, DX.6 |
@@ -360,6 +360,17 @@ exec tmux attach -t '=<이름>'
 - 클릭하면 해당 탭을 활성화한다. 독립 창이면 그 창에 포커스한다. **다음 입력 대기로 이동** 단축키를 둔다. 터미널 입력과 겹치지 않는 키를 구현 시 확인한다.
 - **독립 창:** 해당 창이 Tauri 이벤트 `agent-status`로 상태를 메인 창에 보내고, 창이 닫히면 항목을 지운다. `storage` 이벤트는 쓰지 않는다(규칙 §7). 보내는 값은 이미 정리된 표시용 문자열뿐이다. 창 포커스 권한은 `capabilities/main.json`에서 확인한다.
 - 토큰 사용량, 화면 글자 해석, 서버 원격 제어는 넣지 않는다.
+
+**TW 반영과 구현에서 정한 것(2026-11-08):**
+
+- **사이드바 보기를 만들지 않았다.** TW.9에서 사이드바를 연결·파일 두 탭으로 줄였기 때문이다. 대신 상태바 오른쪽에 상태가 있는 탭이 하나라도 있을 때만 `입력 대기 2 · 작업 중 1`처럼 상태별 개수를 표시한다(`app/AgentBoard.tsx`). 누르면 서버 모니터처럼 상태바 위에 목록이 열린다. 바깥 클릭과 `Esc`로 닫히고 `Esc`는 포커스를 버튼으로 돌린다. 상태바는 메인 창에서만 이 항목을 받는다.
+- **행:** 상태 글자, 세션 이름, 독립 창 표시, 브랜치와 변경 수(`main ●3`, 좁은 창에서는 숨김), 경과 시간(`1분 미만`, `5분`, `1시간 5분`, 목록이 열려 있는 동안 30초마다 다시 그림). 메시지는 탭 툴팁과 같은 글(`programSummaryText`)을 행 툴팁에 넣는다. 정렬은 `blocked > error > working > done`이고 같은 상태에서는 오래된 것이 위다. 경과 시간은 그 상태가 시작된 때부터다.
+- **탭과 같은 기준:** 연결된 탭만, 서명 대기(DX.2)를 프로그램 상태보다 먼저, 사용자가 이미 본 `done`·`error`(탭 활성화로 확인한 것)는 넣지 않는다. 탭 표시와 목록이 어긋나지 않게 탭과 같은 값(`signWaiting`, `ProgramStatus.snapshot`)을 쓴다. 브랜치는 그 탭의 마지막 `useGitStatus` 결과(`scheduler.view`)를 읽기만 하고 새로 조회하지 않는다.
+- **모으는 코드는 `app/`에 둔다.** `agentRows.ts`(정렬, 개수, 경과 시간, 다음 대기, 이벤트 검증. 순수), `agentStatus.ts`(탭 하나의 보고와 변경 구독, 독립 창의 전송), `useAgentBoard.ts`(메인 창의 탭과 독립 창 행 합치기, 이동). `features/terminal`과 `features/git`을 서로 import하지 않는다.
+- **독립 창:** `DetachedWindow`가 탭 보고가 바뀔 때마다 `emitTo('main', 'agent-status', { window, report })`를 보낸다. 보고는 이름, 상태 단어, 시작 시각(숫자), Git 표시 글, 툴팁 글뿐이다. 메인 창은 창 이름(`terminal-…`)과 길이·형식을 검사한 뒤 행으로 만들고, 그 창의 `tauri://destroyed`를 창 대상(`{ kind: 'Window', label }`)으로 구독해 창이 닫히면 행을 지운다. 구독 전에 닫힌 창은 `Window.getByLabel`로 한 번 확인한다. 보고할 것이 없어지면 `report: null`을 보낸다. `storage` 이벤트는 쓰지 않는다.
+- **이동:** 행을 누르면 메인 창 탭은 `openTab`으로 그 칸과 탭을 활성화하고 터미널에 포커스한다. 독립 창은 `unminimize`와 `setFocus`를 부른다. 이를 위해 `capabilities/main.json`에 `core:window:allow-set-focus`, `core:window:allow-unminimize`를 추가했다(이 권한 파일은 `terminal-*` 창에도 적용된다). 이벤트 권한은 `core:default`의 `core:event:default`(`emit-to`, `listen` 포함)로 충분하다.
+- **다음 입력 대기로 이동:** `Ctrl/Cmd+Shift+.`(`Period`). 목록 순서로 현재 탭 다음의 `입력 대기` 행으로 가고 끝에서 처음으로 돈다. Ctrl+Shift 조합의 빈 키 중 제어 문자가 없고 셸·편집기·터미널 프로그램이 흔히 쓰지 않는 키라 골랐다. `J`·`I`는 웹뷰 개발자 도구 키, `A`·`W`는 셸(`Ctrl+A`)과 창 닫기 관례와 겹쳐 뺐다. 메인 창에서만 동작한다. 독립 창은 `appShortcuts`를 쓰지 않고 F11과 터미널 검색만 직접 받는다.
+- `App.tsx` 순증을 막으려고 좁은 창 판정을 `app/useNarrowViewport.ts`로 옮겼다(945줄 → 938줄).
 
 ### DX.9 — 명령 경계 (OSC 133)
 

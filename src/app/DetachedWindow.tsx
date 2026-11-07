@@ -15,6 +15,7 @@ import { TerminalSettings } from '../features/terminal/TerminalSettings';
 import { CommandPanel } from '../features/terminal/CommandPanel';
 import { StatusBadge, useProgramSummary } from '../features/terminal/StatusBadge';
 import { useSignWaiting } from '../features/terminal/agentSign';
+import { useAgentStatusReport } from './agentStatus';
 function DetachedProgramStatus({ session }: { session: TerminalSession }) {
   const summary = useProgramSummary(session.programStatus);
   const shown = useSignWaiting(session.agentSign, session.connectionId) ?? summary;
@@ -29,6 +30,7 @@ export function DetachedWindow({ id }: { id: string }) {
   const { fullscreen, toggleFullscreen } = useFullscreen(setError);
   // One pane is never a group of its own, but a group that reaches it still shows and can stop.
   const input = useInputScope(session ? [session.connectionId] : []);
+  useAgentStatusReport(session);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (document.querySelector('dialog[open]')) return;

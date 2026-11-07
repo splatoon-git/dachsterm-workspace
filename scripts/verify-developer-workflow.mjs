@@ -1,13 +1,22 @@
-// Command boundaries (DX.9) and Git status (DX.5) in the real app against the OpenSSH fixture.
-// Runs in the first SSH tab, whose Bash 5.2 already has the session hook.
+// Command boundaries (DX.9), Git status (DX.5) and the agent list (DX.8) in the real app against
+// the OpenSSH fixture. Runs in the first SSH tab, whose Bash 5.2 already has the session hook.
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { showSidebarView } from './native-workspace.mjs';
+import { chooseTabMenu, showSidebarView } from './native-workspace.mjs';
 
 const repo = '/tmp/dachsterm-git-ui';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function verifyDeveloperWorkflow({ page, pane, docker, probe, command, setStage }) {
+export async function verifyDeveloperWorkflow({
+  page,
+  pane,
+  docker,
+  probe,
+  command,
+  connectNewTab,
+  invoke,
+  setStage,
+}) {
   const container = probe('CONTAINER');
   const shell = (script) => docker(['exec', '-u', 'probe', container, 'sh', '-c', script]).trim();
   const viewport = () => pane().locator('.xterm-accessibility-tree').innerText();
@@ -92,4 +101,79 @@ export async function verifyDeveloperWorkflow({ page, pane, docker, probe, comma
     await command('cd /tmp');
     await showSidebarView(page, '연결');
   }
+  await verifyAgentList({ page, pane, command, connectNewTab, invoke, setStage });
+}
+
+/**
+ * The status bar counts tabs that report a program state, the shortcut goes to the next waiting
+ * tab, and an independent window's tab is listed, focused from its row, and dropped on close.
+ */
+async function verifyAgentList({ page, pane, command, connectNewTab, invoke, setStage }) {
+  setStage('DX.8 agent list');
+  const board = page.locator('.status-bar .agent-board-toggle');
+  const list = page.getByRole('region', { name: '에이전트 현황' });
+  // printf turns \033 into ESC, so the shell sends OSC 7501 ... ESC \ and then keeps running.
+  const report = (state) => `printf '\\033]7501;state=${state}:id=dx8\\033\\\\'; sleep 600`;
+  await expect(board).toHaveCount(0);
+  const first = await pane().getAttribute('data-connection-id');
+  await command(report('blocked:kind=question'));
+  await expect(board).toHaveText('입력 대기 1');
+  await connectNewTab('OpenSSH 테스트');
+  const second = await pane().getAttribute('data-connection-id');
+  await page.keyboard.press('Control+Shift+Period');
+  await expect.poll(() => pane().getAttribute('data-connection-id')).toBe(first);
+  await board.click();
+  await expect(list.getByRole('button')).toHaveCount(1);
+  await expect(list.getByRole('button')).toContainText('입력 대기');
+  await expect(list.getByRole('button')).toHaveAttribute('title', /입력 대기 · 답변 필요/);
+  await page.keyboard.press('Escape');
+  console.log('PASS native agent count in the status bar and the next-waiting-tab shortcut');
+
+  setStage('DX.8 independent window');
+  await page.locator(`.tab-strip [data-tab-key]`).last().getByRole('tab').click();
+  await expect.poll(() => pane().getAttribute('data-connection-id')).toBe(second);
+  await chooseTabMenu(page, '새 창으로 분리');
+  let detached;
+  await expect
+    .poll(() => {
+      detached = page
+        .context()
+        .browser()
+        .contexts()
+        .flatMap((c) => c.pages())
+        .find((p) => p.url().includes(`detached=${second}`));
+      return Boolean(detached);
+    })
+    .toBe(true);
+  const detachedPane = detached.locator('.detached-grid > .terminal-pane');
+  await expect(detachedPane.locator('.connection-message')).toContainText('연결됨', {
+    timeout: 15000,
+  });
+  await command(report('working'), detachedPane);
+  await expect(board).toHaveText('입력 대기 1 · 작업 중 1');
+  const label = `terminal-${second}`;
+  const focused = () =>
+    detached.evaluate(
+      (label) => window.__TAURI_INTERNALS__.invoke('plugin:window|is_focused', { label }),
+      label,
+    );
+  await invoke('plugin:window|set_focus', { label: 'main' });
+  await expect.poll(focused).toBe(false);
+  await board.click();
+  const row = list.getByRole('button', { name: /독립 창/ });
+  await expect(row).toContainText('작업 중');
+  await row.click();
+  await expect.poll(focused).toBe(true);
+  const closed = detached.waitForEvent('close');
+  await detached
+    .getByRole('button', { name: '닫기', exact: true })
+    .click()
+    .catch((error) => {
+      if (!detached.isClosed()) throw error;
+    });
+  await closed;
+  await expect(board).toHaveText('입력 대기 1');
+  await pane().locator('.xterm-helper-textarea').press('Control+c');
+  await expect(board).toHaveCount(0);
+  console.log('PASS native independent window listed, focused from its row, dropped on close');
 }
