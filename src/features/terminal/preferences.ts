@@ -4,13 +4,29 @@ export type TerminalPreferences = {
   rightClickPaste: boolean;
   followDirectory: boolean;
   backspace: 'del' | 'bs';
+  /** Off by default: on a Mac, Option also types special characters. */
+  macOptionAsMeta: boolean;
+  /** Answers OSC 7501 and shows what the running program reports on its tab. */
+  programStatus: boolean;
+  /** Lets the focused program copy through OSC 52. Reading is never allowed. */
+  clipboardWrite: boolean;
+  /** OS notifications for status changes and notification sequences. */
+  osNotifications: boolean;
+  /** Treats the terminal bell as a notification too. */
+  bellNotifications: boolean;
 };
 const defaults: TerminalPreferences = {
   copyOnSelect: true,
   rightClickPaste: true,
   followDirectory: true,
   backspace: 'del',
+  macOptionAsMeta: false,
+  programStatus: true,
+  clipboardWrite: true,
+  osNotifications: true,
+  bellNotifications: true,
 };
+export const isMacPlatform = /Macintosh|Mac OS X/.test(navigator.userAgent);
 const key = 'dachsterm.terminalPreferences';
 function read(): TerminalPreferences {
   try {
@@ -20,6 +36,12 @@ function read(): TerminalPreferences {
       rightClickPaste: typeof saved.rightClickPaste === 'boolean' ? saved.rightClickPaste : true,
       followDirectory: typeof saved.followDirectory === 'boolean' ? saved.followDirectory : true,
       backspace: saved.backspace === 'bs' ? 'bs' : 'del',
+      macOptionAsMeta: saved.macOptionAsMeta === true,
+      programStatus: typeof saved.programStatus === 'boolean' ? saved.programStatus : true,
+      clipboardWrite: typeof saved.clipboardWrite === 'boolean' ? saved.clipboardWrite : true,
+      osNotifications: typeof saved.osNotifications === 'boolean' ? saved.osNotifications : true,
+      bellNotifications:
+        typeof saved.bellNotifications === 'boolean' ? saved.bellNotifications : true,
     };
   } catch {
     return defaults;

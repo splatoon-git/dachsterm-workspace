@@ -3,6 +3,7 @@ pub mod broadcast;
 mod commands;
 mod config_includes;
 pub mod credentials;
+mod desktop_bridge;
 pub mod editor;
 mod editor_location;
 pub mod encoding;
@@ -83,6 +84,8 @@ pub fn run() {
         context
     };
     let app = tauri::Builder::default()
+        // Only desktop_bridge uses this. The webview gets no notification permission.
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let directory = app.path().app_data_dir()?;
             // Integration tests isolate all local state; release builds ignore this variable.
@@ -183,6 +186,9 @@ pub fn run() {
             local_files::local_files_batch,
             local_files::local_files_edit,
             shell_probe::terminal_supports_directory_hook,
+            desktop_bridge::clipboard_write_text,
+            desktop_bridge::url_open,
+            desktop_bridge::notification_show,
             broadcast::broadcast_status,
             broadcast::broadcast_set,
             vault::vault_status,

@@ -1,0 +1,15 @@
+.program-status.blocked {
+  color: var(--color-status-warning);
+  font-weight: 700;
+}
+.program-status.error {
+  color: var(--color-status-error);
+  font-weight: 700;
+}
+.program-status.working {
+  color: var(--color-status-info);
+}
+.program-status.done {
+  color: var(--color-status-success);
+  font-weight: 700;
+}

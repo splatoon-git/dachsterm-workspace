@@ -12,6 +12,7 @@ import { attachFontSizeWheel } from './fontWheel';
 import { PasteConfirm } from './PasteConfirm';
 import {
   fontSizeChoices,
+  isMacPlatform,
   needsPasteConfirmation,
   saveTerminalDisplay,
   saveTerminalPreferences,
@@ -63,12 +64,15 @@ export function TerminalPane({
       }
     };
     element.addEventListener('paste', intercept, true);
+    const seen = () => session.programStatus.acknowledge();
+    element.addEventListener('focusin', seen);
     const detachWheel = attachFontSizeWheel(element, () =>
       session.notice('터미널 설정을 저장하지 못했습니다.'),
     );
     return () => {
       observer.disconnect();
       element.removeEventListener('paste', intercept, true);
+      element.removeEventListener('focusin', seen);
       detachWheel();
     };
   }, [session]);
@@ -76,8 +80,7 @@ export function TerminalPane({
     const element = host.current!;
     const copy = () => {
       const selected = session.terminal.getSelection();
-      if (selected)
-        void navigator.clipboard.writeText(selected).catch((e) => session.notice(errorText(e)));
+      if (selected) session.copyText(selected);
     };
     const paste = async () => {
       if (session.snapshot().status !== 'connected') return;
@@ -109,6 +112,12 @@ export function TerminalPane({
     };
     session.terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown' || event.isComposing) return true;
+      const enter = session.enterSequence(event);
+      if (enter) {
+        event.preventDefault();
+        session.send(enter);
+        return false;
+      }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.code === 'KeyC') {
         event.preventDefault();
         copy();
@@ -143,6 +152,9 @@ export function TerminalPane({
       element.removeEventListener('contextmenu', context);
     };
   }, [session, preferences]);
+  useEffect(() => {
+    session.useOptionAsMeta(preferences.macOptionAsMeta);
+  }, [session, preferences.macOptionAsMeta]);
   useEffect(() => {
     session.applyTheme(theme);
   }, [session, theme]);
@@ -224,11 +236,8 @@ export function TerminalPane({
             <SessionLog session={session} connected={state.status === 'connected'} />
           )}
           <button
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(session.terminal.getSelection())
-                .catch((e) => session.notice(errorText(e)));
-            }}
+            title="마우스를 쓰는 프로그램에서는 Shift+드래그로 선택합니다"
+            onClick={() => session.copyText(session.terminal.getSelection())}
           >
             복사
           </button>
@@ -257,6 +266,13 @@ export function TerminalPane({
                 ['copyOnSelect', '마우스 선택 시 자동 복사'],
                 ['rightClickPaste', '마우스 우클릭 붙여넣기'],
                 ['followDirectory', '새 SFTP 탐색기의 터미널 경로 따라가기'],
+                ['programStatus', '실행 중인 프로그램 상태를 탭에 표시'],
+                ['clipboardWrite', '프로그램의 클립보드 복사 허용'],
+                ['osNotifications', '다른 작업 중일 때 프로그램 상태를 OS 알림으로 표시'],
+                ['bellNotifications', '터미널 벨도 OS 알림으로 표시'],
+                ...(isMacPlatform
+                  ? ([['macOptionAsMeta', 'Option 키를 Meta로 사용']] as const)
+                  : []),
               ] as const
             ).map(([key, label]) => (
               <label className="checkbox" key={key}>

@@ -37,7 +37,7 @@ SSH 서버와 로컬 탭에서 Claude Code 같은 CLI 에이전트를 쓸 때 �
 
 ### 3.1 파일 배치
 
-`session.ts`(392줄)는 TS 상한 400줄에 가깝고, `App.tsx`와 `TunnelPanel.tsx`는 이미 상한을 넘어 순증이 금지되어 있다. 새 기능은 새 파일에 두고 기존 파일에는 연결만 추가한다.
+`session.ts`(399줄, 2026-11-07 기준)는 TS 상한 400줄에 닿아 있으므로 기존 OSC 등록을 `integrations.ts`로 옮겨 여유를 만든 뒤 연결한다. `App.tsx`와 `TunnelPanel.tsx`는 이미 상한을 넘어 순증이 금지되어 있다. 새 기능은 새 파일에 두고 기존 파일에는 연결만 추가한다.
 
 | 파일 | 역할 |
 |---|---|
@@ -51,7 +51,7 @@ SSH 서버와 로컬 탭에서 Claude Code 같은 CLI 에이전트를 쓸 때 �
 | `features/terminal/AgentPreferences.tsx` | 설정 UI. `TerminalPane`에는 삽입 한 줄만 추가 |
 | `features/terminal/promptFiles.ts`, `PromptUploadConfirm.tsx` | 이미지 붙여넣기, 파일 드롭, 경로 입력 |
 | `features/tunnels/ForwardPortDialog.tsx`, `remotePorts.ts` | 포트 목록, 임시 터널, 브라우저 열기 |
-| `app/SessionTab.tsx` | `App.tsx`의 `SessionTab`을 옮긴다. 순증 금지를 지키면서 배지를 넣기 위한 이동이다 |
+| `app/SessionTab.tsx` | `App.tsx:59`의 `Tab`을 옮긴다. 순증 금지를 지키면서 배지를 넣기 위한 이동이다 |
 | `src-tauri/src/desktop_bridge.rs` | 클립보드 쓰기, URL 열기, OS 알림 |
 | `src-tauri/src/prompt_files.rs` | 프롬프트 첨부 업로드와 7일 경과 파일 정리 |
 | `src-tauri/src/remote_ports.rs` | 서버 수신 포트 조회 |
@@ -84,7 +84,7 @@ terminal 기능이 tunnels 기능을 직접 import하지 않는다(규칙 §7). 
 | 환경 | 상태 표시 | OS 알림 | Shift+Enter |
 |---|---|---|---|
 | SSH 직접 | OSC 7501 | 상태 전환에서 앱이 발송. 서버 설정 불필요 | AT.1 |
-| tmux | **불가.** tmux 안에서는 Claude Code가 tmux 지원 여부를 확인한다 | 사용자가 `allow-passthrough`와 `preferredNotifChannel`을 설정하면 OSC 경로로 동작 | 사용자의 `extended-keys` 설정 필요 |
+| tmux | **OSC 7501 불가.** tmux 안에서는 Claude Code가 tmux 지원 여부를 확인한다. 훅 경로는 [DX.4](developer-workflow.md)에서 검토 | 사용자가 `allow-passthrough`와 `preferredNotifChannel`을 설정하면 OSC 경로로 동작 | 사용자의 `extended-keys` 설정 필요 |
 | 로컬·WSL | OSC 7501 | SSH와 동일 | AT.1 |
 | Claude Code 백그라운드 세션 | 불가(문서 명시) | 해당 설정에 따름 | AT.1 |
 
@@ -128,7 +128,7 @@ kitty 프로토콜에서 다음 부분만 구현한다. 시퀀스는 구현 시 
 | `CSI < <개수> u` | 스택에서 뺀다 |
 | `CSI = <플래그> ; <모드> u` | 현재 값을 바꾼다 |
 
-- 지원 플래그는 1(disambiguate)만 보고한다. 일반 화면과 대체 화면의 상태를 분리한다.
+- 지원 플래그는 1(disambiguate)만 보고한다. 일반 화면과 대체 화면의 상태를 분리한다. 실측에서 Claude Code 2.1.319는 `CSI >5u`(1 + 4)로 요청했다. 지원하지 않는 비트는 저장할 때 버린다. tmux는 kitty 대신 `CSI >4;1m`(modifyOtherKeys)을 요청하므로 이 요청이 있으면 수식키가 있는 Enter를 `CSI 27;2;13~` 형식으로 보낸다. 둘 다 요청되면 kitty 형식을 쓴다([실측 기록](../verification/agent-terminal.md)).
 - 플래그 1이 켜져 있으면 수식키가 있는 Enter를 `CSI 13 ; <수식값> u`로 보낸다(Shift는 `13;2u`). 그 밖의 키는 기존 인코딩을 유지한다. 전체 구현이 아니므로 이 사실을 코드 주석에 남긴다.
 - 전체 재설정(RIS)과 재접속 시 상태를 지운다. 프로그램이 해제 없이 죽어도 영향은 Shift+Enter에 한정된다.
 - `isComposing`을 먼저 확인하는 기존 순서를 유지해 한글 조합을 깨지 않는다.
@@ -272,7 +272,7 @@ Claude Code가 서버에 띄운 개발 서버를 PC 브라우저로 여는 흐�
 | 명령 | 입력 | 동작 | 작업 |
 |---|---|---|---|
 | `notification_show` | 제목, 본문 | OS 알림. 길이 제한 재검증 | AT.3 |
-| `clipboard_write_text` | 문자열 | 1MiB 상한, 포커스된 창만 허용 | AT.4 |
+| `clipboard_write_text` | 문자열 | 1MiB 상한. 포커스 검사는 OSC 52 처리에서 한다 | AT.4 |
 | `url_open` | URL | §4 AT.4의 검증 후 열기 | AT.4 |
 | `prompt_clipboard_image` | 연결 ID | 이미지 없으면 `null`, 있으면 업로드한 경로 | AT.5 |
 | `prompt_files_upload` | 연결 ID, 로컬 경로 목록 | 업로드한 경로 목록 | AT.5 |
@@ -328,7 +328,7 @@ Claude Code가 서버에 띄운 개발 서버를 PC 브라우저로 여는 흐�
 
 ## 9. 구현 순서
 
-시작 전: `session.ts`, `App.tsx`, `FilePanel.tsx`, `local.rs`, `preferences.ts`에 다른 작업의 미커밋 변경이 있다. 해당 파일을 건드리는 단계는 그 변경이 정리된 뒤 시작한다.
+시작 전: `git status`로 `session.ts`, `App.tsx`, `FilePanel.tsx`, `local.rs`, `preferences.ts`에 다른 작업의 미커밋 변경이 없는지 확인한다. DX 작업과의 전체 순서는 [개발자 작업 흐름 §9](developer-workflow.md)를 따른다.
 
 | ID | 범위 | 선행 | 완료 기준 |
 |---|---|---|---|
@@ -343,18 +343,20 @@ Claude Code가 서버에 띄운 개발 서버를 PC 브라우저로 여는 흐�
 
 AT.3, AT.4, AT.5는 서로 독립적이다. AT.1~AT.3만으로도 탭 여러 개에서 Claude Code를 돌리는 핵심 문제가 해결되므로, 일정이 부족하면 이 지점에서 중간 출시할 수 있다.
 
-**사용 안내서에 넣을 내용:** Claude Code 최소 버전, 환경별 동작(§3.4), tmux 설정 네 줄, `preferredNotifChannel` 예시, 줄바꿈 키(Shift+Enter, Ctrl+J), 이미지 첨부 방법과 서버 저장 위치, 큰 붙여넣기는 파일로 전달할 것.
+**사용 안내서에 넣을 내용(외부 제품명 없이, 규칙 §3):** 지원하는 프로그램 버전 조건, 환경별 동작(§3.4), tmux 설정 네 줄, `preferredNotifChannel` 예시, 줄바꿈 키(Shift+Enter, Ctrl+J), 이미지 첨부 방법과 서버 저장 위치, 큰 붙여넣기는 파일로 전달할 것.
 
 ## 10. 이번 범위에서 제외
 
 | 항목 | 판단 |
 |---|---|
 | 파일 경로 클릭 | 후속. AT.4 참고 |
-| 모든 탭 현황판, 터미널 제목 표시 | 후속. 탭 배지로 핵심은 해결된다 |
-| "Claude로 시작" 버튼, tmux 시작, `--continue` | 후속. 기존 스니펫으로 대체 가능 |
+| 모든 탭 현황판 | [DX.8](developer-workflow.md)로 이동 |
+| 터미널 제목 표시 | 후속. 탭 배지로 핵심은 해결된다 |
+| "Claude로 시작" 버튼, tmux 시작, `--continue` | [DX.3, DX.7](developer-workflow.md)로 이동 |
 | WebGL 렌더러 | AT.0에서 성능 문제가 측정될 때만. `screenReaderMode: true`의 비용도 함께 본다 |
-| 파일 읽기 미리보기, Git 브랜치·변경 수 표시, Git 스니펫, Git 색상 테마 | 후속 후보. 작은 범위로 가능 |
-| Git 그래프, Git 전용 명령 UI | 제외. Git 클라이언트 영역이고 `lazygit`이나 `git log --graph`로 대체된다 |
+| Git 브랜치·변경 수 표시, Git 기본 명령, 읽기 전용 diff 검토 | [DX.5, DX.6](developer-workflow.md)으로 이동 |
+| 파일 읽기 미리보기, Git 색상 테마 | 후속 후보. 작은 범위로 가능 |
+| Git 그래프, Git 쓰기 명령 UI | 제외. Git 클라이언트 영역이고 `lazygit`이나 `git log --graph`로 대체된다 |
 | 로컬 모델 내장 | 제외. 리버스 터널과 환경 변수를 쓰는 연결 프리셋만 후속 후보 |
 | 앱 안 AI 호출, 서버 훅 자동 설치, 화면 글자 해석, 토큰 사용량 표시, 내장 브라우저, 외부 제어 API | 제외. 제품 경계 또는 유지보수 부담 |
 | OSC 9;4 진행률, OSC 99 | 제외. 필요가 확인되면 재검토 |

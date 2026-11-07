@@ -39,6 +39,7 @@ import { TerminalPane } from '../features/terminal/TerminalPane';
 import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
+import { SessionTab } from './SessionTab';
 import type { CSSProperties } from 'react';
 import { SidebarFiles } from '../features/sftp/SidebarFiles';
 import { Icon } from '../components/Icon';
@@ -55,42 +56,6 @@ function subscribeNarrowViewport(listener: () => void) {
   const media = window.matchMedia('(max-width: 700px)');
   media.addEventListener('change', listener);
   return () => media.removeEventListener('change', listener);
-}
-function Tab({
-  session,
-  active,
-  select,
-  close,
-}: {
-  session: TerminalSession;
-  active: boolean;
-  select: () => void;
-  close: () => void;
-}) {
-  const state = useSyncExternalStore(session.subscribe, session.snapshot);
-  const labels: Record<string, string> = {
-    connecting: '접속 중',
-    authenticating: '인증 중',
-    trust: '키 확인',
-    connected: '연결됨',
-    closed: '종료',
-    error: '오류',
-  };
-  return (
-    <div
-      className={`session-tab ${active ? 'selected' : ''}`}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('text/dachsterm-tab', session.tabId)}
-    >
-      <button role="tab" aria-selected={active} onClick={select}>
-        {session.profile.name}
-        <small>{labels[state.status]}</small>
-      </button>
-      <button aria-label={`${session.profile.name} 탭 닫기`} onClick={close}>
-        ×
-      </button>
-    </div>
-  );
 }
 function ActiveStatus({ session }: { session: TerminalSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
@@ -802,7 +767,7 @@ export function App() {
           >
             {tabs.length ? (
               tabs.map((t) => (
-                <Tab
+                <SessionTab
                   key={t.tabId}
                   session={t}
                   active={active === t.tabId && !preview && !activeGame}

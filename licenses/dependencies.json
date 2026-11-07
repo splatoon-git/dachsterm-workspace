@@ -91,6 +91,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "arboard",
+      "version": "3.6.1",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/1Password/arboard",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "argon2",
       "version": "0.5.3",
       "license": "MIT OR Apache-2.0",
@@ -384,6 +392,14 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/traits",
       "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "clipboard-win",
+      "version": "5.4.3",
+      "license": "BSL-1.0",
+      "repository": "https://github.com/DoumanAsh/clipboard-win",
+      "licenseTextsFound": 1
     },
     {
       "ecosystem": "cargo",
@@ -832,6 +848,14 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/erased-serde",
       "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "error-code",
+      "version": "3.4.0",
+      "license": "BSL-1.0",
+      "repository": "https://github.com/DoumanAsh/error-code",
+      "licenseTextsFound": 1
     },
     {
       "ecosystem": "cargo",
@@ -1571,6 +1595,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "notify-rust",
+      "version": "4.18.2",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/hoodie/notify-rust",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "num-bigint",
       "version": "0.5.1",
       "license": "MIT OR Apache-2.0",
@@ -1616,6 +1648,14 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/utils",
       "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "open",
+      "version": "5.3.3",
+      "license": "MIT",
+      "repository": "https://github.com/Byron/open-rs",
+      "licenseTextsFound": 1
     },
     {
       "ecosystem": "cargo",
@@ -2635,6 +2675,22 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "tauri-plugin-notification",
+      "version": "2.8.0",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/tauri-apps/plugins-workspace",
+      "licenseTextsFound": 3
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tauri-plugin",
+      "version": "2.7.2",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/tauri-apps/tauri",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "tauri-runtime-wry",
       "version": "2.12.3",
       "license": "Apache-2.0 OR MIT",
@@ -2664,6 +2720,14 @@
       "license": "MIT",
       "repository": "https://github.com/tauri-apps/winres",
       "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tauri-winrt-notification",
+      "version": "0.8.1",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/tauri-apps/winrt-notification",
+      "licenseTextsFound": 3
     },
     {
       "ecosystem": "cargo",

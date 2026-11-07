@@ -10,6 +10,11 @@ import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { Icon } from '../components/Icon';
 import { SnippetDialog } from '../features/terminal/SnippetDialog';
 import { CommandCatalog } from '../features/terminal/CommandGuide';
+import { StatusBadge, useProgramSummary } from '../features/terminal/StatusBadge';
+function DetachedProgramStatus({ session }: { session: TerminalSession }) {
+  const summary = useProgramSummary(session.programStatus);
+  return summary && <StatusBadge summary={summary} />;
+}
 export function DetachedWindow({ id }: { id: string }) {
   const theme = useTheme();
   const [session, setSession] = useState<TerminalSession | null>(null);
@@ -53,6 +58,7 @@ export function DetachedWindow({ id }: { id: string }) {
         <div className="brand">
           <Icon name="terminal" />
           <strong>{session?.profile.name ?? '터미널 인계 중'}</strong>
+          {session && <DetachedProgramStatus session={session} />}
         </div>
         <div className="tools">
           <button aria-pressed={filesOpen} onClick={() => setFilesOpen((v) => !v)}>

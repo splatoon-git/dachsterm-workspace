@@ -73,12 +73,22 @@ describe('terminal paths and clipboard safety', () => {
       rightClickPaste: false,
       followDirectory: false,
       backspace: 'bs',
+      macOptionAsMeta: true,
+      programStatus: false,
+      clipboardWrite: false,
+      osNotifications: false,
+      bellNotifications: false,
     });
     expect(JSON.parse(localStorage.getItem('dachsterm.terminalPreferences')!)).toEqual({
       copyOnSelect: false,
       rightClickPaste: false,
       followDirectory: false,
       backspace: 'bs',
+      macOptionAsMeta: true,
+      programStatus: false,
+      clipboardWrite: false,
+      osNotifications: false,
+      bellNotifications: false,
     });
   });
 });

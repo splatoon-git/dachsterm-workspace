@@ -95,6 +95,13 @@ export async function verifyTerminalBasics({
     await command("printf 'PASTE_CANCELLED_OK\\n'");
     await output('PASTE_CANCELLED_OK');
     await expect(pane().locator('.xterm-accessibility-tree')).not.toContainText('MULTILINE_TWO');
+    // A program copying through OSC 52, in the form a real program sent when measured.
+    await page.evaluate(() => navigator.clipboard.writeText('BEFORE_OSC52'));
+    await command(`printf '\\033]52;c;%s\\007' "$(printf 'OSC52_OK' | base64)"`);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('OSC52_OK');
+    await command(`printf '\\033]52;c;?\\007'`);
+    await command("printf 'OSC52_READ_REFUSED\\n'");
+    await output('OSC52_READ_REFUSED');
     await command('stty -echo');
     console.log('PASS native drag-copy, right-click paste, shortcut paste, multiline cancellation');
   } finally {
@@ -134,6 +141,11 @@ export async function verifyTerminalBasics({
     rightClickPaste: false,
     followDirectory: false,
     backspace: 'bs',
+    macOptionAsMeta: false,
+    programStatus: true,
+    clipboardWrite: true,
+    osNotifications: true,
+    bellNotifications: true,
   });
   await pane().getByRole('button', { name: '터미널 설정', exact: true }).click();
   await preferences.getByLabel('Backspace 전송', { exact: true }).selectOption('del');
@@ -148,6 +160,45 @@ export async function verifyTerminalBasics({
   console.log(
     'PASS native arrows/Home/End/Backspace and Ctrl+H compatibility; settings persistence',
   );
+
+  setStage('terminal agent signals');
+  const activeTab = page.locator('.tab-strip').getByRole('tab', { selected: true });
+  await command(`printf '\\033]7501;state=blocked:kind=permission:app=check\\033\\\\'; sleep 3`);
+  await expect(activeTab).toContainText('입력 대기');
+  await expect(activeTab).toHaveAttribute('aria-label', /승인 필요/);
+  // The shell prompt that follows means the program has ended.
+  await expect(activeTab).toContainText('연결됨', { timeout: 8000 });
+  // Read one key press while the program has opted in, and again after it has opted out.
+  const readKey = (label) =>
+    `IFS= read -r -s -t 3 -n 7 k; printf '\\033[<u'; printf '${label}<%q>\\n' "$k"`;
+  await command(`printf '\\033[>5u'; ${readKey('KITTY')}`);
+  await page.waitForTimeout(500);
+  await page.keyboard.press('Shift+Enter');
+  await output("KITTY<$'\\E[13;2u'>");
+  await command(`read -r -s -t 3 -n 1 k; printf 'PLAIN<%q>\\n' "$k"`);
+  await page.waitForTimeout(500);
+  await page.keyboard.press('Shift+Enter');
+  await output("PLAIN<''>");
+  // tmux asks with modifyOtherKeys instead of the kitty protocol.
+  await command(
+    `printf '\\033[>4;1m'; IFS= read -r -s -t 3 -n 10 k; printf '\\033[>4m'; printf 'OTHER<%q>\\n' "$k"`,
+  );
+  await page.waitForTimeout(500);
+  await page.keyboard.press('Shift+Enter');
+  await output("OTHER<$'\\E[27;2;13~'>");
+  console.log('PASS native program status on the tab; Shift+Enter differs only when requested');
+
+  setStage('terminal notifications');
+  // Which reports notify is covered by terminalNotify.test.ts. The IPC cannot be intercepted here,
+  // so this shows one real OS notification and checks that the app reports no failure.
+  const status = "printf '\\033]7501;state=blocked:app=check\\033\\\\'";
+  await command(`sleep 2; ${status}; sleep 1`);
+  await pane().getByRole('textbox', { name: '터미널 검색', exact: true }).focus();
+  await page.waitForTimeout(2600);
+  await expect(pane().locator('.connection-message')).not.toContainText('OS 알림');
+  await pane().locator('.xterm-helper-textarea').focus();
+  await page.waitForTimeout(1500);
+  console.log('PASS native OS notification away from the pane reports no failure');
 
   setStage('S1 authentication');
   const keyPath = path.join(directory, 'rsa-ui-key');

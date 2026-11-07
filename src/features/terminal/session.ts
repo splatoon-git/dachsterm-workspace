@@ -1,12 +1,24 @@
 import { TerminalDecoder } from '../../lib/encoding';
-import { DirectoryHookInstaller, type DirectoryHookStatus } from './directoryHook';
-import {
-  directoryFromOsc,
-  directoryHook,
-  terminalDisplay,
-  terminalPreferences,
-} from './preferences';
-import { programMetadata, type GuideProgram } from './guideData';
+import { DirectoryHookInstaller } from './directoryHook';
+import { directoryHook, terminalDisplay, terminalPreferences } from './preferences';
+import { attachTerminalIntegrations } from './integrations';
+import { attachTerminalLinks } from './terminalLinks';
+import { programNotifier } from './terminalNotify';
+import { KittyKeyboard, modifiedEnter } from './kittyKeyboard';
+import { ProgramStatus } from './programStatus';
+import type {
+  LocalTarget,
+  PodTreeLaunch,
+  SessionEvent as Event,
+  SessionState,
+} from './sessionTypes';
+export type {
+  AuthPrompt,
+  LocalCatalog,
+  LocalTarget,
+  PodTreeLaunch,
+  SessionState,
+} from './sessionTypes';
 import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -14,52 +26,6 @@ import { SearchAddon } from '@xterm/addon-search';
 import { call, errorText, type Profile } from '../../lib/ipc';
 import { terminalTheme } from '../../themes/adapters/xterm';
 import type { ThemeDefinition } from '../../themes/contract';
-export type PodTreeLaunch = {
-  location: { kind: 'ssh' | 'local'; id: string };
-  context: string;
-  namespace: string;
-  operational: boolean;
-};
-export type LocalTarget = {
-  id: string;
-  name: string;
-  kind: 'shell' | 'wsl';
-  follow: 'launch' | 'typed' | 'none';
-};
-export type LocalCatalog = { targets: LocalTarget[]; warning: string | null };
-type HostKey = {
-  type: 'hostKey';
-  challenge: string;
-  host: string;
-  port: number;
-  algorithm: string;
-  fingerprint: string;
-};
-type Event =
-  | { type: 'replay'; active: boolean }
-  | AuthPrompt
-  | HostKey
-  | { type: 'state'; status: string; message: string }
-  | { type: 'data'; seq: number; bytes: number[] };
-export type AuthPrompt = {
-  type: 'authPrompt';
-  challenge: string;
-  name: string;
-  instructions: string;
-  prompts: { prompt: string; echo: boolean }[];
-};
-export type SessionState = {
-  status: string;
-  message: string;
-  hostKey: HostKey | null;
-  authPrompt?: AuthPrompt | null;
-  directory?: string | null;
-  directoryHook?: DirectoryHookStatus;
-  guideEnabled?: boolean;
-  guideProgram?: GuideProgram | null;
-  guideRun?: number;
-  replaying?: boolean;
-};
 export class TerminalSession {
   followDirectory?: boolean;
   /** Where the local file panel was, since switching tabs remounts it. */
@@ -107,6 +73,18 @@ export class TerminalSession {
   readonly terminal: Terminal;
   readonly fit = new FitAddon();
   readonly search = new SearchAddon();
+  private readonly keyboard = new KittyKeyboard();
+  readonly programStatus = new ProgramStatus();
+  enterSequence(event: KeyboardEvent) {
+    const flags = this.keyboard.flags(this.terminal.buffer.active.type);
+    return modifiedEnter(event, flags, this.keyboard.otherKeys);
+  }
+  useOptionAsMeta(value: boolean) {
+    this.terminal.options.macOptionIsMeta = value;
+  }
+  copyText(text: string) {
+    void call('clipboard_write_text', { text }).catch((e) => this.notice(errorText(e)));
+  }
   private listeners = new Set<() => void>();
   private current: SessionState = { status: 'connecting', message: '연결 준비 중', hostKey: null };
   private disposed = false;
@@ -132,27 +110,42 @@ export class TerminalSession {
     });
     this.terminal.loadAddon(this.fit);
     this.terminal.loadAddon(this.search);
-    const directory = (value: string, uri: boolean) => {
-      const path = directoryFromOsc(value, uri, this.localTarget?.kind === 'shell');
-      if (path && this.current.directory !== path)
-        this.update({ ...this.current, directory: path, directoryHook: undefined });
-      return true;
-    };
-    this.terminal.parser.registerOscHandler(7, (value) => directory(value, true));
-    this.terminal.parser.registerOscHandler(777, (value) => {
-      const program = programMetadata(value);
-      if (program === undefined) return false;
-      if (this.current.guideEnabled && !this.podtree)
-        this.update({
-          ...this.current,
-          guideProgram: program,
-          guideRun: (this.current.guideRun ?? 0) + 1,
-        });
-      return true;
+    attachTerminalIntegrations(this.terminal, {
+      windowsPaths: this.localTarget?.kind === 'shell',
+      directory: (path) => {
+        if (this.current.directory !== path)
+          this.update({ ...this.current, directory: path, directoryHook: undefined });
+      },
+      program: (program) => {
+        if (this.current.guideEnabled && !this.podtree)
+          this.update({
+            ...this.current,
+            guideProgram: program,
+            guideRun: (this.current.guideRun ?? 0) + 1,
+          });
+      },
+      agent:
+        this.podtree || this.profile.protocol !== 'ssh'
+          ? undefined
+          : {
+              keyboard: this.keyboard,
+              status: this.programStatus,
+              replaying: () => this.replaying,
+              copy: (text) => this.copyText(text),
+              attention: programNotifier({
+                terminal: this.terminal,
+                sessionName: () => this.profile.name,
+                replaying: () => this.replaying,
+                notice: (message) => this.notice(message),
+              }),
+            },
+      respond: (data) => this.send(data),
     });
-    this.terminal.parser.registerOscHandler(1337, (value) =>
-      value.startsWith('CurrentDir=') ? directory(value.slice(11), false) : false,
-    );
+    if (!this.podtree && this.profile.protocol === 'ssh')
+      attachTerminalLinks(this.terminal, {
+        remote: () => !this.localTarget,
+        notice: (message) => this.notice(message),
+      });
     this.terminal.onData((data) => this.send(data));
     this.terminal.onResize(({ cols, rows }) => {
       if (this.current.status === 'connected' && this.profile.protocol === 'ssh')
@@ -284,6 +277,8 @@ export class TerminalSession {
           authPrompt: null,
           guideProgram: null,
         });
+        if (event.status === 'closed' || event.status === 'error')
+          this.programStatus.programEnded();
         if (event.status === 'connected') {
           if (this.profile.protocol === 'ssh')
             void call(
@@ -384,6 +379,8 @@ export class TerminalSession {
     this.inputQueue = [];
     this.directoryHookInstaller.cancel();
     this.terminal.reset();
+    this.keyboard.reset();
+    this.programStatus.reset();
     this.terminal.writeln('\r\n── 새 연결 · 이전 명령은 재실행하지 않습니다 ──\r\n');
     this.update({ status: 'connecting', message: '재접속 중', hostKey: null });
     await this.connect(secret, remember);
