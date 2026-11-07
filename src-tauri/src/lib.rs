@@ -37,7 +37,7 @@ pub mod snippets;
 pub mod ssh;
 mod ssh_auth;
 pub mod storage;
-mod terminal_start;
+pub mod terminal_start;
 pub mod transfer_queue;
 pub mod tunnels;
 pub mod vault;

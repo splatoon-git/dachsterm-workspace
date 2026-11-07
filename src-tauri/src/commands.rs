@@ -94,6 +94,8 @@ pub fn save_group(state: State<AppState>, id: Option<String>, name: Option<Strin
     }
     state.store.group(id, name)
 }
+// Tauri passes each IPC argument separately; `launch` is the one-time start command (DX.7).
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn connect(
     app: tauri::AppHandle,
@@ -102,6 +104,7 @@ pub async fn connect(
     expected: Profile,
     secret: Option<String>,
     remember: Option<bool>,
+    launch: Option<crate::terminal_start::Launch>,
     on_event: Channel<Event>,
 ) -> Result<()> {
     let state = app.state::<AppState>();
@@ -124,6 +127,9 @@ pub async fn connect(
         || profile.jump_ids != expected.jump_ids
     {
         return Err("저장된 연결 대상이 변경되었습니다. 세션 목록에서 다시 연결하세요.".into());
+    }
+    if let Some(launch) = &launch {
+        launch.check(&profile)?;
     }
     let remember = remember.unwrap_or(false)
         && secret.is_some()
@@ -170,7 +176,11 @@ pub async fn connect(
             })
             .collect::<Result<Vec<_>>>()?
     };
-    state.connections.start_route(
+    if let Some(launch) = launch {
+        state.connections.launches.put(&id, launch);
+    }
+    let launch_id = id.clone();
+    let started = state.connections.start_route(
         id,
         profile,
         secret,
@@ -218,7 +228,11 @@ pub async fn connect(
                 .map_err(|_| "터미널 구독이 종료되었습니다.".into())
         }),
         state.store.clone(),
-    )
+    );
+    if started.is_err() {
+        state.connections.launches.take(&launch_id);
+    }
+    started
 }
 fn same_credential_target(a: &Profile, b: &Profile) -> bool {
     a.id == b.id

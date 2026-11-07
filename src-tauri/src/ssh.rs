@@ -82,6 +82,7 @@ pub struct Connections {
     pub host_lock: Mutex<()>,
     pub forwards: Mutex<HashMap<(String, u16), crate::tunnels::Forwarded>>,
     pub live: Mutex<HashMap<String, std::sync::Weak<client::Handle<Host>>>>,
+    pub launches: crate::terminal_start::Launches,
 }
 impl Connections {
     pub fn ftp_session(&self, id: &str) -> Result<Arc<crate::ftp::Session>> {
@@ -233,6 +234,7 @@ impl Connections {
             manager.ftp.lock().unwrap().remove(&id);
             manager.live.lock().unwrap().remove(&id);
             manager.entries.lock().unwrap().remove(&id);
+            manager.launches.take(&id);
             let (status, message) = match result {
                 Ok(()) => ("closed", "연결이 종료되었습니다.".into()),
                 Err(e) => ("error", e),
@@ -264,14 +266,10 @@ impl client::Handler for Host {
         &mut self,
         key: &PublicKeyOrCertificate,
     ) -> std::result::Result<bool, Self::Error> {
-        let result = self.verify(key).await;
-        match result {
-            Ok(value) => Ok(value),
-            Err(message) => {
-                *self.failure.lock().unwrap() = Some(message);
-                Ok(false)
-            }
-        }
+        Ok(self.verify(key).await.unwrap_or_else(|message| {
+            *self.failure.lock().unwrap() = Some(message);
+            false
+        }))
     }
     async fn server_channel_open_forwarded_tcpip(
         &mut self,
@@ -462,7 +460,7 @@ async fn run(
                 &[(russh::Pty::VERASE, 127), (russh::Pty::IUTF8, 1)],
             )
             .await?;
-        crate::terminal_start::begin(&channel, &p).await?;
+        crate::terminal_start::begin(&channel, &p, manager.launches.take(&id)).await?;
         Ok::<_, russh::Error>(channel)
     })
     .await

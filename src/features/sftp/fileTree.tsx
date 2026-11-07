@@ -1,6 +1,7 @@
 import { formatBytes } from '../../lib/formatBytes';
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes } from 'react';
 import { Icon, type IconName } from '../../components/Icon';
+import type { MenuItem } from '../../components/ContextMenu';
 import { fileMarkLabels, useFileDecorations } from '../../components/fileDecorations';
 import {
   childPath,
@@ -83,6 +84,8 @@ export function useFileTree<T extends FileEntry>(
   }, [listing.entries, listing.path, tree, view]);
   return {
     rows,
+    /** The app's own menu items for one selected folder; none for anything else. */
+    folderMenu: (path?: string): MenuItem[] => (path && decorations?.folderActions?.(path)) || [],
     toggle(folder: string) {
       const expanded = new Set(tree.expanded);
       if (!expanded.delete(folder)) expanded.add(folder);

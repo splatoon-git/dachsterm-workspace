@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.10**, 설계일: **2026-11-07**.
-- 현재 상태: **DX.1·DX.2·DX.3·DX.4·DX.5·DX.6·DX.9 구현, 나머지 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **DX.1·DX.2·DX.3·DX.4·DX.5·DX.6·DX.7·DX.9 구현, 나머지 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -55,7 +55,7 @@ AT의 원칙을 그대로 따른다: 전용 모드 없음, 화면 글자 해석 
 | `features/git/gitStatus.ts`, `useGitStatus.ts` | 조회 일정(단일 요청, 사건 기반)과 요약 | DX.5 |
 | `features/git/unifiedDiff.ts` | diff 파서와 좌우 행 구성. 순수 로직 | DX.6 |
 | `features/git/ReviewPanel.tsx`, `DiffView.tsx`, `git.css` | 검토 패널 | DX.6 |
-| `features/agents/AgentLauncher.tsx`, `presets.ts` | 에이전트 시작 대화상자와 프리셋 | DX.7 |
+| `features/agents/AgentLaunchDialog.tsx`, `AgentPresetSettings.tsx`, `presets.ts`, `features/terminal/launch.ts`, `app/useAgentLaunch.tsx` | 에이전트 시작 확인, 프리셋 편집, 프롬프트 입력, 두 기능 연결 (계획 이름 `AgentLauncher.tsx`에서 바꿈) | DX.7 |
 | `features/agents/AgentBoard.tsx`, `board.ts` | 현황판과 합치기 로직 | DX.8 |
 | `features/terminal/commandMarks.ts` | OSC 133 표식, 이동, 긴 명령 판단 | DX.9 |
 | `components/fileDecorations.ts` | 파일 트리 행 표시용 컨텍스트 | DX.5 |
@@ -364,6 +364,22 @@ exec tmux attach -t '=<이름>'
 
 **제한:** 탭마다 새 SSH 연결이다. 저장된 인증은 그대로 쓰이지만 OTP 서버는 다시 묻고, 동시 연결 32개 상한을 쓴다.
 
+**TW 반영과 구현에서 정한 것(2026-11-08):**
+
+- **진입점(설계 수정):** 연결 트리에서 SSH 연결을 우클릭한 **에이전트 시작…**(폴더를 입력, 비우면 로그인 폴더)과 사이드바 파일 트리에서 폴더를 우클릭한 같은 항목(그 폴더로 고정)이다. 도구 메뉴에는 넣지 않았다. TW.9에서 도구 메뉴는 게임 같은 도구용으로 정했다. 상시 버튼과 단축키는 더하지 않았다.
+- **확인:** Dialog M(`features/agents/AgentLaunchDialog.tsx`). 폴더, 프리셋(선택 목록), `{name}`이 있으면 이름, 최종 텍스트를 보여 준다. tmux면 **실행할 명령**, 일반 셸이면 **입력할 줄**(`cd <폴더> && <명령>`)이다. 언제 실행되고 언제 실행되지 않는지를 한 문단으로 적는다. 이름이나 폴더가 틀리면 **시작**이 꺼진다.
+- **프리셋 편집 위치:** 설정 창의 **새 분류 "에이전트"**(`AgentPresetSettings.tsx`). 터미널 분류는 표시·입력 설정 모음이고, 같은 패널이 독립 창의 터미널 설정에도 쓰이는데 독립 창에서는 에이전트를 시작할 수 없다. 또 터미널 패널(`features/terminal`)이 `features/agents`를 import하면 기능 간 import가 생긴다. DX.4 훅 예시는 터미널 분류의 "CLI 에이전트" 구역에 그대로 두었다.
+- **프리셋 저장:** `dachsterm.agentPresets`. 최대 20개, 이름 40자, 명령 1000자, 제어 문자 금지. 읽을 때 항목마다 검사해 틀린 항목은 버리고, 남는 것이 없거나 읽을 수 없으면 기본값을 쓴다. 편집 중 틀린 행이 있으면 저장하지 않고 이유를 표시한다. 반쯤 입력한 행이 쓰던 목록을 덮지 않게 하기 위해서다.
+- **`{name}`:** 설계의 문자 집합에 **첫 글자는 영문·숫자** 조건을 더했다. `-rf`가 옵션으로, `.`·`..`가 경로로 읽히는 것을 막는다. 64자까지.
+- **tmux 켬:** `connect`의 일회성 `launch {folder, command}`를 `Connections.launches`에 연결 ID로 두고, 터미널 채널을 시작할 때 한 번 꺼낸다(`terminal_start::begin`). 연결이 끝나면 남은 값도 지운다. DX.3의 `tmux_command`를 확장했다. tmux 확인과 대체 셸은 그대로이고, `new-session -A` 대신 `has-session`으로 확인한 뒤 없을 때만 `new-session -d -s <이름> -c <폴더>`, `send-keys -l -- <명령>`, `send-keys Enter`를 보내고 `exec tmux attach-session -t =<이름>`으로 붙는다. UTF-8 세션의 `-u`도 같다.
+- **세션 이름은 프로필의 tmux 세션 이름이다.** 그 세션이 이미 있으면 붙기만 하고 실행하지 않는다(확인 대화상자에 표시). 에이전트마다 다른 tmux 세션을 쓰려면 지금은 프로필을 나눠야 한다. 시작할 때 세션 이름을 따로 고르는 기능은 후속이다(재접속이 그 이름을 기억해야 해서 탭 상태가 늘어난다).
+- **보내기 전 검사(`Launch::check`):** 프로필에 tmux 세션이 있어야 하고, 폴더는 비었거나 `/`로 시작, 폴더·명령 각 4096바이트, 줄바꿈 등 제어 문자 금지, 세션 인코딩으로 표현 가능해야 한다. 명령은 `quote`로 감싸 `send-keys`에 그대로 넘기므로 셸이 해석하는 것은 사용자가 확인한 텍스트뿐이다. 비UTF-8 세션은 시작 스크립트를 세션 인코딩으로 바꿔 보낸다.
+- **tmux 끔:** `DirectoryHookInstaller.atPrompt()`를 공개했고 `features/terminal/launch.ts`의 `typeAtPrompt`가 쓴다. 연결된 뒤 세션 훅 입력이 끝나기를 기다리고(최대 40초), 그 뒤 10초 안에 프롬프트가 보이면 줄과 Enter를 한 번 입력한다. 훅과 같은 순간에 입력하면 둘이 섞이거나 한쪽이 다른 쪽이 시작한 프로그램에 들어가므로 순서를 정했다. 시간 안에 프롬프트를 찾지 못하면 입력하지 않고 **명령을 입력하지 않았습니다** 대화상자(S)에 줄을 보여 주며 복사를 제공한다. 탭이 닫히거나 재접속하면 그만둔다.
+- **재접속:** `reconnect`가 `connect`를 `launch` 없이 부르므로 어느 경우에도 다시 입력하지 않는다. tmux는 같은 세션에 붙기만 한다.
+- **tmux가 없는 서버:** DX.3의 대체 셸만 열리고 시작 명령은 실행하지 않는다(확인 대화상자에 표시).
+- **연결 경로와 순증:** `App.tsx`의 새 탭 인자 `beside`를 `Opening { beside, launch }`(`app/useAgentLaunch.tsx`)로 바꿔 인증과 보관함 잠금 해제를 지나도 같은 값이 이어진다. 보관함 대기 상태를 재개 함수 하나로 줄여 `App.tsx`는 945→935줄이다. 파일 트리 폴더 메뉴는 앱이 `FileDecorations.folderActions`로 항목을 주고, `FilePanel.tsx`는 그 항목을 한 줄로 펼치며 경로 계산 중복을 합쳐 914줄 그대로다. `ssh.rs`는 `check_server_key`를 줄여 730→728줄, `session.ts`는 399→400줄(상한 안)이다.
+- `posixQuote`를 `lib/shell.ts`로 내렸다. 일반 셸의 입력 줄과 AT.5의 첨부 경로가 같은 인용을 쓴다.
+
 ### DX.8 — 에이전트 현황판
 
 사이드바에 **에이전트** 보기를 추가한다. 서버 도구 현황이 아니라 **탭별 프로그램 상태**를 모아 보여준다.
@@ -406,7 +422,7 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 | `git_diff_files` | 연결 ID, 루트, 기준 | 변경 파일 목록 | DX.6 |
 | `git_diff_file` | 연결 ID, 루트, 기준, 경로 | 한 파일의 diff | DX.6 |
 
-`connect`에는 일회성 `launch`(폴더, 명령) 인자를 추가한다. 새 크레이트는 없다. tokio의 named pipe 기능 활성화 여부는 구현 시 확인한다.
+`connect`에는 일회성 `launch`(폴더, 명령) 인자를 추가한다(DX.7 구현, tmux 세션에만 받는다). 새 크레이트는 없다. tokio의 named pipe 기능 활성화 여부는 구현 시 확인한다.
 
 ## 6. 설정
 
@@ -414,7 +430,7 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 |---|---|---|
 | `gitStatus` | 켜짐 | Git 자동 조회. 끄면 수동 새로고침만 남는다 |
 | `longCommandNotify` | 30초 | 0이면 끈다 |
-| `agentPresets` | §DX.7 | 프리셋 목록 |
+| `agentPresets` | §DX.7 | 프리셋 목록. 저장 키 `dachsterm.agentPresets`, 설정 창의 "에이전트" 분류에서 편집 |
 
 `forwardAgent`, `tmuxSession`은 세션별 설정이다. **서명 승인은 끌 수 없다.**
 

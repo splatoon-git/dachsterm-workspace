@@ -25,7 +25,7 @@ import {
 } from './native-workspace.mjs';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
-import { verifyDeveloperWorkflow } from './verify-developer-workflow.mjs';
+import { verifyAgentLaunch, verifyDeveloperWorkflow } from './verify-developer-workflow.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-native-'));
 const screenshots = path.resolve('test-results-native');
@@ -280,6 +280,19 @@ try {
     docker,
     probe,
     command,
+    screenshots,
+    setStage: (value) => {
+      stage = value;
+    },
+  });
+  await verifyAgentLaunch({
+    page,
+    pane,
+    invoke,
+    docker,
+    probe,
+    command,
+    output,
     screenshots,
     setStage: (value) => {
       stage = value;

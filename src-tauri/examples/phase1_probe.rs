@@ -4,6 +4,7 @@ mod queue_checks;
 mod agent_checks;
 mod git_checks;
 mod jump_checks;
+mod launch_checks;
 mod workspace_checks;
 use dachsterm::{
     credentials, hostkeys,
@@ -121,7 +122,21 @@ fn begin(
     profile: Profile,
     secret: String,
 ) -> Result<Client> {
+    begin_with(manager, store, paths, profile, secret, None)
+}
+/// Like `begin`, with the one-time start command `connect` would hand over.
+fn begin_with(
+    manager: &Arc<Connections>,
+    store: &Arc<Store>,
+    paths: &[PathBuf],
+    profile: Profile,
+    secret: String,
+    launch: Option<dachsterm::terminal_start::Launch>,
+) -> Result<Client> {
     let id = uuid::Uuid::new_v4().to_string();
+    if let Some(launch) = launch {
+        manager.launches.put(&id, launch);
+    }
     let (tx, rx) = mpsc::channel(64);
     manager.start(
         id.clone(),
@@ -292,6 +307,7 @@ async fn run() -> Result<()> {
     workspace_checks::files(manager.clone(), &first.id, &store.list()?.profiles[0].id).await?;
     workspace_checks::services(manager.clone(), &first.id, &p.id).await?;
     git_checks::run(&manager, &first.id).await?;
+    launch_checks::run(&manager, &store, &paths, &first.id).await?;
     first.send("stty -echo; printf '\\nREADY_ONE\\n'\n").await?;
     first.marker("READY_ONE\r\n").await?;
     first
