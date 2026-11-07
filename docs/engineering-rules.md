@@ -74,6 +74,7 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 
 ## 7. 프런트엔드
 
+- 기능을 상시 버튼으로 나열하지 않는다. 대상별 조작은 그 대상의 우클릭 메뉴, 단축키, 기존 메뉴에 두고, 상태는 있을 때만 표시한다. 터미널 안 우클릭은 바로 붙여넣기로 두고 터미널 관련 메뉴는 탭 헤더 우클릭에 둔다.
 - 의존 방향은 `app → features → components·lib·themes`다. `components`, `lib`, `themes`는 `features`를 import하지 않는다.
 - 기능 간 직접 import를 새로 추가하지 않는다. 공유할 코드는 아래 계층으로 내린다.
 - 탭은 `app/workspaceTabs.ts`의 `insertTab`으로 넣는다. 분할 화면은 앞쪽 `paneCapacity`개만 표시한다.
