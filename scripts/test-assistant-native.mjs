@@ -7,7 +7,13 @@ import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
 import { commands } from '../src/features/terminal/guideData.ts';
-import { chooseTabMenu, openNewConnectionForm, showSidebarView } from './native-workspace.mjs';
+import {
+  arrangeTabs,
+  chooseTabMenu,
+  inputScope,
+  openNewConnectionForm,
+  showSidebarView,
+} from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-assistant-'));
 const fixture = `dachsterm-assistant-${randomUUID()}`;
@@ -134,7 +140,8 @@ try {
   await launch();
   await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
   const local = page.getByRole('region', { name: 'Windows PowerShell 터미널', exact: true });
-  await expect(text(local)).toContainText('PS C:');
+  // The prompt depends on the user's PowerShell profile, so wait for any first output.
+  await expect(text(local)).toContainText(/\S/, { timeout: 15000 });
   const localId = await local.getAttribute('data-connection-id');
   stage = 'local-snippet';
   await tools('스니펫');
@@ -291,20 +298,61 @@ try {
   await expect(zsh.locator('.connection-message')).toContainText('연결됨');
   await enter(zsh, 'echo "ZSH_$ZSH_VERSION"');
   await expect(text(zsh)).toContainText(/ZSH_5\.\d/);
+  // The hook goes in once the new shell has been quiet for a moment; the folder report shows it
+  // is there, so the programs below do not race it.
+  await enter(zsh, 'cd /var');
+  await expect(page.getByLabel('원격 경로')).toHaveValue('/var', { timeout: 15000 });
   await run(zsh, 'vim /tmp/guide-file', 'vim', ':q!', 'vim');
   await run(zsh, 'less /tmp/guide-pages', 'less', 'q', 'less');
   await run(zsh, 'tail -f /etc/hostname', 'tail', null, 'tail');
   await run(zsh, 'command vim /tmp/guide-file', general, ':q!', 'vim');
-  await enter(zsh, 'cd /var');
-  await expect(page.getByLabel('원격 경로')).toHaveValue('/var');
   await chooseTabMenu(page, '탭 닫기', zsh);
   result.checks.push(
     'Real Zsh guide without opt-in: vim/less/tail entry/exit, command vim general notice, folder follow kept',
   );
+  stage = 'input-scope';
+  // Real SSH and a local shell side by side: everything typed or pasted reaches both.
+  await arrangeTabs(page, '좌우');
+  await expect(ssh).toBeVisible();
+  await expect(local).toBeVisible();
+  await inputScope(page, '전체').check();
+  await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(2);
+  await ssh.locator('.xterm-helper-textarea').evaluate((e) => {
+    const d = new DataTransfer();
+    d.setData(
+      'text/plain',
+      'echo SCOPE_ALL_A' + String.fromCharCode(13) + 'echo SCOPE_ALL_B' + String.fromCharCode(13),
+    );
+    e.dispatchEvent(
+      new ClipboardEvent('paste', { clipboardData: d, bubbles: true, cancelable: true }),
+    );
+  });
+  await expect(ssh.locator('.paste-reach')).toContainText('동시 입력 중 · 2개 창');
+  await ssh.getByRole('button', { name: '붙여넣기 실행', exact: true }).click();
+  // Bash takes a bracketed paste into the line and waits for Enter; PowerShell runs it at once.
+  await ssh.locator('.xterm-helper-textarea').press('Enter');
+  await expect(text(ssh)).toContainText('SCOPE_ALL_B');
+  await expect(text(local)).toContainText('SCOPE_ALL_B');
+  await page.getByRole('button', { name: '동시 입력 중지', exact: true }).click();
+  await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
+  await enter(ssh, 'echo SCOPE_OFF_ONLY');
+  await expect(text(ssh)).toContainText('SCOPE_OFF_ONLY');
+  expect(await text(local).innerText()).not.toContain('SCOPE_OFF_ONLY');
+  await arrangeTabs(page, '하나로');
+  result.checks.push(
+    'Real SSH and PowerShell input scope: all, multi-line paste names two panes and reaches both, stop isolates again',
+  );
   stage = 'wsl';
   await showSidebarView(page, '연결');
-  await page.locator('.local-targets').getByTitle('Ubuntu 새 터미널 열기').click();
-  const wsl = page.getByRole('region', { name: 'Ubuntu 터미널', exact: true });
+  // The first user distribution, whatever its name on this PC.
+  const distribution = page
+    .locator('.local-targets .local-target')
+    .filter({ hasText: 'WSL' })
+    .filter({ hasNotText: 'docker-desktop' })
+    .first();
+  const distributionName = await distribution.locator('span').textContent();
+  await distribution.click();
+  const wsl = page.getByRole('region', { name: `${distributionName} 터미널`, exact: true });
   const wslId = await wsl.getAttribute('data-connection-id');
   await expect(wsl.locator('.connection-message')).toContainText('로컬');
   await invoke('snippet_send', {
@@ -334,6 +382,8 @@ try {
       return !!detached;
     })
     .toBe(true);
+  // The detached window keeps its tools in the title bar menu.
+  await detached.locator('.toolbar-menu > summary').filter({ hasText: '메뉴' }).click();
   await detached.getByRole('button', { name: '스니펫', exact: true }).click();
   const detachedDialog = detached.getByRole('dialog', { name: '스니펫', exact: true });
   await detachedDialog.getByLabel('명령 본문', { exact: true }).fill('echo DETACHED_ONCE');

@@ -311,7 +311,9 @@ try {
   // Ctrl+Shift+\ opens the same shell again on the right, without typing into the terminal.
   await page.keyboard.press('Control+Shift+Backslash');
   await expect(page.locator('.tab-strip')).toHaveCount(2);
-  const splitShell = page.locator(`.terminal-pane:not([data-connection-id="${originalId}"])`);
+  const splitShell = page.locator(
+    `.pane-cell:not([hidden]) .terminal-pane:not([data-connection-id="${originalId}"])`,
+  );
   await expect(splitShell.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
