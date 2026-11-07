@@ -11,8 +11,8 @@ export async function arrangeTabs(page, label) {
     .click({ button: 'right' });
   const item = page.getByRole('menuitem', { name: `모든 탭 ${label}`, exact: true });
   await page.getByRole('menu').waitFor();
-  // One tab in one group has nothing to lay out, so the menu leaves the items out.
-  if (await item.count()) await item.click();
+  // With nothing to lay out the menu leaves the items out (one tab) or disables them (one group).
+  if ((await item.count()) && (await item.isEnabled())) await item.click();
   else await page.keyboard.press('Escape');
 }
 

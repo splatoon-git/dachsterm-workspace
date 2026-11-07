@@ -18,6 +18,7 @@ import {
   inputScope,
   openNewConnectionForm,
   openTerminalSearch,
+  openSettings,
   openTerminalSettings,
   showSidebarView,
   openGame,
@@ -256,6 +257,15 @@ try {
   await output('NATIVE_한글_OK');
   await page.screenshot({ path: path.join(screenshots, 'connected.png') });
   console.log('PASS native UI -> IPC -> host trust -> password -> Korean PTY output');
+  // Connecting shows the files and starts following. Checked here because the agent stages
+  // below change the sidebar view and the shell folder.
+  await expect(page.getByRole('tab', { name: '파일', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/home/probe', {
+    timeout: 20000,
+  });
   stage = 'U3 tunnel visual editor and real forwarding';
   await verifyTunnels({ page, invoke, docker, probe, screenshots });
   stage = 'AT agent terminal';
@@ -755,7 +765,8 @@ try {
   await page.keyboard.press('F11');
   await expect.poll(() => invoke('plugin:window|is_fullscreen')).toBe(false);
   await expect(page.locator('.files')).toBeVisible();
-  await mainPage.getByRole('button', { name: '설정', exact: true }).click();
+  // The settings window reopens on the category seen last, so pick the themes.
+  await openSettings(mainPage, '테마');
   await mainPage.getByRole('radio', { name: /Terminal Green/ }).check();
   await expect
     .poll(() => detachedPage.evaluate(() => localStorage.getItem('dachsterm.theme')))
