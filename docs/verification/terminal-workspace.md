@@ -70,6 +70,36 @@ FTP 단계는 Python FTP 픽스처를 원래 작업 폴더의 `.tools/ftp-fixtur
 - 우클릭과 드래그는 CDP가 보낸 마우스 이벤트로 확인했다. 실제 마우스, `Shift+F10`과 메뉴 키로 탭 메뉴 열기는 실제 앱에서 확인하지 않았다.
 - Mac 실기기 전체: 두 손가락 클릭과 Control+클릭의 `contextmenu`, 상태바 팝오버, WKWebView 포인터 캡처.
 
+## TW.8
+
+대상은 `4818754` 위의 미커밋 TW.8 트리이며, 실제 앱은 이 트리로 만든 `target/debug/dachsterm.exe`다.
+
+| 항목 | 명령 | 결과 |
+|---|---|---|
+| 형식·타입·린트 | `npm run format:check`, `npm run typecheck`, `npm run lint` | 통과 |
+| 단위 | `npx vitest run src/app src/components src/features/terminal src/features/sftp src/features/sessions src/features/monitoring src/lib` | 24파일 263/263 |
+| UI(바꾼 영역) | `npx playwright test` workspace, navigation, layout, session-form, themes, terminal-font, workspace-drag, workspace-grid | 통과(수정 뒤 재실행 포함). 게임 스펙은 선택자만 고쳤고 실행하지 않았다 |
+| Rust | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test -p dachsterm --lib --locked windows` | 통과. 플랫폼 창 설정 일치 테스트 포함 3건 |
+| 실제 OpenSSH 전체 회귀, 독립 창의 제목 줄(시스템 틀 없음, 최대화·복원, 그린 닫기 버튼으로 닫기) | `node scripts/run-phase1.mjs --native --skip-app-build` | 종료 0 |
+| 주 창: 시스템 틀 없음, 36px 제목 줄, 최대화·복원 버튼, 빈 곳 더블클릭 최대화·복원, 닫기 버튼으로 정상 종료, 최소화 | `node scripts/test-workspace-native.mjs` | 종료 0 |
+| 로컬 탭, ＋ 메뉴, 세로 아이콘 줄 | `node scripts/test-local-native.mjs` | 종료 0 |
+| FTP·FTPS 탭 | `node scripts/run-ftp.mjs --native-only --reuse-build` | 종료 0 |
+
+실제 OS 입력(사용자 마우스·키보드 이벤트, 임시 데이터 폴더의 별도 인스턴스)으로 확인한 것: 제목 줄 빈 곳과 앱 이름을 끌어 창 이동, 오른쪽·아래 가장자리를 끌어 크기 조절, 빈 곳 더블클릭 최대화·복원, `Win+←` 왼쪽 절반 스냅, `Win+↑`·`Win+↓` 크기 변경. 이 확인은 저장소에 넣지 않은 일회성 스크립트로 했다.
+
+### TW.8에서 찾아 고친 것
+
+- **사이드바 240px에서 파일 도구 줄이 두 줄로 넘침:** 파일 패널을 컨테이너로 두고 너비 300px 이하에서 버튼을 23px로 줄여 한 줄을 유지한다.
+- **검사의 보기 전환:** 열린 보기의 아이콘을 다시 누르면 접히므로, 검사는 그 보기가 이미 열려 있으면 누르지 않는다(`showSidebarView`).
+- `taskkill`은 최소화된 창을 닫지 못한다. 앱 문제는 아니다: 작업 표시줄의 닫기(`SC_CLOSE`)는 최소화 상태에서도 바로 종료된다. 검사는 창 API로 닫는다.
+
+### TW.8 미검증
+
+- Windows 11 최대화 버튼 호버 스냅 레이아웃(직접 그린 버튼이라 나오지 않을 것으로 예상, 설계에서 수용), `Win+Z`, 창 끌기로 화면 가장자리 스냅, 다중 모니터·DPI 변경.
+- 서바이버 정산 중 닫기 버튼 가드: 닫기 버튼은 시스템 닫기와 같은 `close()` 요청을 거치며 가드 코드는 바꾸지 않았다. 게임 검사는 실행하지 않았다.
+- 전체화면 진입·복귀 뒤 제목 줄과 세로 아이콘 줄 표시는 Playwright로만 확인했다.
+- Mac 실기기 전체(macos-readiness M.14): 신호등 겹침, 패키지 앱, 독립 창.
+
 ## 알려진 실패
 
 `verify-windows.ps1 -Native`는 `run-ftp --native`에서 끝까지 가지 못했다. 변경 전에도 있던 실패이며, TW.4에서 원인(검사 경합)을 찾아 고쳤다. 아래는 당시 기록이다. 고친 뒤 `verify-windows.ps1 -Native` 전체는 아직 다시 실행하지 않았다.

@@ -41,37 +41,6 @@ button:disabled {
   display: flex;
   flex-direction: column;
 }
-.toolbar {
-  height: 68px;
-  flex-shrink: 0;
-  padding: 0 var(--space-xl);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: var(--border-width-default) solid var(--color-border-default);
-  background: var(--color-surface-panel);
-  gap: var(--space-md);
-}
-.brand,
-.tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-}
-.brand strong {
-  font-size: 19px;
-}
-.brand img {
-  object-fit: contain;
-}
-.phase-badge {
-  background: var(--color-action-accent);
-  color: var(--color-action-on-accent);
-  font-size: 10px;
-  border-radius: var(--radius-small);
-  padding: var(--space-xs) var(--space-sm);
-  letter-spacing: 1px;
-}
 .workspace-grid {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr) 260px;
@@ -87,6 +56,8 @@ button:disabled {
   flex-direction: column;
   min-width: 0;
   background: var(--color-surface-subtle);
+  /* Its rows adapt to the panel's own width, which the sidebar width sets. */
+  container-type: inline-size;
 }
 .sessions {
   border-right: var(--border-width-default) solid var(--color-border-default);
@@ -335,21 +306,6 @@ small {
   }
 }
 @media (max-width: 700px) {
-  .toolbar {
-    height: auto;
-    min-height: 68px;
-    padding: var(--space-md);
-    flex-wrap: wrap;
-  }
-  .phase-badge {
-    display: none;
-  }
-  .tools {
-    gap: var(--space-sm);
-  }
-  .tools button {
-    font-size: var(--font-small);
-  }
   .workspace-grid,
   .workspace-grid.files-hidden {
     grid-template-columns: 148px minmax(0, 1fr);
@@ -556,30 +512,6 @@ button {
   align-items: center;
   justify-content: center;
   gap: 6px;
-}
-.toolbar {
-  height: 60px;
-  padding: 0 20px;
-}
-.brand {
-  gap: 9px;
-}
-.brand strong {
-  letter-spacing: -0.6px;
-  font-size: 20px;
-}
-.phase-badge {
-  background: var(--color-surface-header);
-  color: var(--color-text-secondary);
-  font-size: 9px;
-  letter-spacing: 1.4px;
-}
-.tools button {
-  font-size: 12px;
-  padding: 7px 10px;
-}
-.tools .primary {
-  padding: 8px 14px;
 }
 .workspace-grid {
   grid-template-columns: var(--sidebar-width, 232px) 4px minmax(0, 1fr) 4px var(
@@ -1008,19 +940,6 @@ main {
   }
 }
 @media (max-width: 700px) {
-  .toolbar {
-    height: auto;
-    min-height: 60px;
-    flex-wrap: wrap;
-    padding: 10px 12px;
-  }
-  .tools {
-    gap: 4px;
-  }
-  .tools button {
-    font-size: 10px;
-    padding: 5px 7px;
-  }
   .workspace-grid,
   .workspace-grid.files-hidden {
     grid-template-columns: 148px 3px minmax(0, 1fr);
@@ -1397,9 +1316,10 @@ main {
 .toolbar-menu[open] > summary {
   background: var(--color-action-selected);
 }
+/* Menus sit at the left of the title bar, so they open to the right. */
 .toolbar-menu-items {
   position: absolute;
-  right: 0;
+  left: 0;
   top: calc(100% + 8px);
   z-index: 20;
   display: flex;
@@ -1482,14 +1402,6 @@ main {
   }
 }
 @media (max-width: 700px) {
-  .tools {
-    flex-wrap: wrap;
-  }
-  .tools > button,
-  .toolbar-menu > summary {
-    min-height: 32px;
-    font-size: 12px;
-  }
   .toolbar-menu-items button {
     font-size: 12px;
   }

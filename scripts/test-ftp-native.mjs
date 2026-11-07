@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import { arrangeTabs, chooseTabMenu, dragTab } from './native-workspace.mjs';
+import { arrangeTabs, chooseTabMenu, dragTab, openNewConnectionForm } from './native-workspace.mjs';
 const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-ftp-native-'));
 let app, browser, page;
 let stage = 'launch';
@@ -61,7 +61,7 @@ try {
   await expect(page.getByRole('heading', { name: '서버 작업의 편안한 시작' })).toBeVisible();
   for (const protocol of ['ftp', 'ftps']) {
     stage = `${protocol} form`;
-    await page.getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+    await openNewConnectionForm(page);
     stage = `${protocol} profile fields`;
     const form = page.getByRole('dialog');
     await form.getByLabel('이름', { exact: true }).fill(`${protocol} UI fixture`);

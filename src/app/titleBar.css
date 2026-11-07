@@ -1,0 +1,102 @@
+/* One 36px line: the window's title bar and the app header together. */
+.toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 36px;
+  min-height: 36px;
+  padding: 0 0 0 var(--space-md);
+  border-bottom: var(--border-width-default) solid var(--color-border-default);
+  background: var(--color-surface-panel);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.toolbar.mac {
+  padding-left: 0;
+}
+/* The macOS window buttons are drawn here by the system. */
+.traffic-space {
+  flex: 0 0 78px;
+  align-self: stretch;
+}
+.title-brand {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 13px;
+}
+.title-brand strong {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title-brand img {
+  object-fit: contain;
+  pointer-events: none;
+}
+.tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.tools > button,
+.tools .toolbar-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 28px;
+  min-height: 28px;
+  padding: 0 var(--space-sm);
+  border: var(--border-width-default) solid transparent;
+  border-radius: var(--radius-small);
+  background: transparent;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.tools > button:hover,
+.tools .toolbar-menu > summary:hover {
+  background: var(--color-surface-subtle);
+}
+.title-note {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.title-drag {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: var(--space-xl);
+}
+.window-buttons {
+  display: flex;
+  align-self: stretch;
+}
+.window-buttons button {
+  width: 46px;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+}
+.window-buttons button:hover {
+  background: var(--color-surface-subtle);
+}
+.window-buttons .window-close:hover {
+  background: var(--color-status-error);
+  color: var(--color-text-on-action);
+}
+@media (max-width: 700px) {
+  .title-brand strong,
+  .title-note,
+  .tools > button span {
+    display: none;
+  }
+  .window-buttons button {
+    width: 40px;
+  }
+}

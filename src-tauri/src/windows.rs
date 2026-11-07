@@ -111,6 +111,13 @@ pub async fn detach_terminal(
             .title(format!("{} — DachsTerm", profile.name))
             .inner_size(1000.0, 700.0)
             .min_inner_size(560.0, 480.0);
+    // The page draws one title bar, as in the main window (tauri.windows/macos.conf.json).
+    #[cfg(windows)]
+    let builder = builder.decorations(false);
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
     // WebView2 requires the same environment options for windows sharing a user data folder.
     #[cfg(windows)]
     let builder = {
@@ -208,5 +215,31 @@ mod tests {
         assert_eq!(*new.lock().unwrap(), vec![1, 2]);
         assert!(broker.check("main").is_err());
         assert!(broker.check("terminal-1").is_ok());
+    }
+
+    /// A platform file replaces the whole window list, so it must repeat the main window as is.
+    #[test]
+    fn platform_window_config_only_changes_the_title_bar() {
+        let window = |text: &str| -> serde_json::Map<String, serde_json::Value> {
+            let config: serde_json::Value = serde_json::from_str(text).unwrap();
+            config["app"]["windows"][0].as_object().unwrap().clone()
+        };
+        let base = window(include_str!("../tauri.conf.json"));
+        for (text, own) in [
+            (
+                include_str!("../tauri.windows.conf.json"),
+                &["decorations"][..],
+            ),
+            (
+                include_str!("../tauri.macos.conf.json"),
+                &["titleBarStyle", "hiddenTitle"][..],
+            ),
+        ] {
+            let mut platform = window(text);
+            for key in own {
+                assert!(platform.remove(*key).is_some(), "{key} must be set");
+            }
+            assert_eq!(platform, base);
+        }
     }
 }

@@ -5,7 +5,7 @@ import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { chooseTabMenu } from './native-workspace.mjs';
+import { chooseTabMenu, openNewConnectionForm } from './native-workspace.mjs';
 
 const promptFolder = '/home/probe/.cache/dachsterm/prompt';
 const tmuxName = 'dachs-native';
@@ -259,7 +259,7 @@ export async function verifyAgentTerminal({
   console.log('PASS native Ctrl+click on a server address asks before opening a tunnel');
 
   setStage('DX.3 tmux session');
-  await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+  await openNewConnectionForm(page);
   const form = page.getByRole('dialog');
   await form.getByLabel('이름', { exact: true }).fill('tmux 테스트');
   await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');

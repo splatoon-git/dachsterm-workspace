@@ -14,8 +14,10 @@ import {
   closeTerminalSettings,
   dragTab,
   expectPtyMatchesTerminal,
+  openNewConnectionForm,
   openTerminalSearch,
   openTerminalSettings,
+  showSidebarView,
 } from './native-workspace.mjs';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
@@ -192,7 +194,7 @@ async function connected() {
   await sleep(150);
 }
 // A server connection switches the sidebar to its files.
-const showConnections = () => page.getByRole('tab', { name: '연결', exact: true }).click();
+const showConnections = () => showSidebarView(page, '연결');
 // The click returns before the tab exists because connecting first awaits vault_status.
 // Until then pane() is the previous connected tab, so connected() alone would pass early.
 async function connectNewTab() {
@@ -217,7 +219,7 @@ try {
   await page.getByRole('button', { name: '그룹 추가', exact: true }).click();
   await page.getByLabel('그룹 이름', { exact: true }).fill('개발');
   await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
-  await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+  await openNewConnectionForm(page);
   const form = page.getByRole('dialog');
   await form.getByLabel('이름', { exact: true }).fill('OpenSSH 테스트');
   await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
@@ -408,7 +410,7 @@ try {
   console.log('PASS native mixed local/SSH input in both directions and local close resets group');
   await arrangeTabs(page, '하나로');
   stage = 'workspace SFTP and monitoring';
-  await page.getByRole('tab', { name: '파일', exact: true }).click();
+  await showSidebarView(page, '파일');
   const workspaceId = await pane().getAttribute('data-connection-id');
   const listing = await invoke('sftp_list', { id: workspaceId, path: '.' });
   assert(listing.path.startsWith('/'));
@@ -513,15 +515,15 @@ try {
   assert(treeShare > 0.25, `Tree share with the tray open: ${treeShare}`);
   assert.equal(toolbarRows, 1);
   const preservedPath = await files.getByLabel('원격 경로').inputValue();
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   await expect(files).toBeHidden();
-  await page.getByRole('tab', { name: '파일', exact: true }).click();
+  await showSidebarView(page, '파일');
   await expect(files.getByLabel('원격 경로')).toHaveValue(preservedPath);
   await expect(edited).toBeVisible();
   const fileBounds = await files.boundingBox();
   const terminalBounds = await pane().boundingBox();
   assert(fileBounds.x < terminalBounds.x, 'SFTP must occupy the unified left sidebar');
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   console.log(
     'PASS native permissions, archive/extract, external executable launch, save prompt/cancel/preserve/retry and automatic upload',
   );
@@ -752,10 +754,18 @@ try {
   await mainPage.keyboard.press('Escape');
   console.log('PASS native SSH detached window theme synchronization without disconnect');
 
+  // One title bar: no system frame, the app's own buttons and the connection's name.
+  expect(await invoke('plugin:window|is_decorated')).toBe(false);
+  await expect(page.locator('header.toolbar')).toContainText('OpenSSH 테스트');
+  await page.getByRole('button', { name: '최대화', exact: true }).click();
+  await expect.poll(() => invoke('plugin:window|is_maximized')).toBe(true);
+  await page.getByRole('button', { name: '이전 크기로', exact: true }).click();
+  await expect.poll(() => invoke('plugin:window|is_maximized')).toBe(false);
   await page.screenshot({ path: path.join(screenshots, 'detached-window.png') });
   const closedWindow = page.waitForEvent('close');
   await page
-    .evaluate(() => window.__TAURI_INTERNALS__.invoke('plugin:window|close', {}))
+    .getByRole('button', { name: '닫기', exact: true })
+    .click()
     .catch((error) => {
       if (!page.isClosed()) throw error;
     });
@@ -766,7 +776,9 @@ try {
     .toBe('disconnected');
   await page.locator('.tab-strip').getByRole('tab').first().click();
   await connected();
-  console.log('PASS native independent window keeps SSH output/input, closed window cleanup');
+  console.log(
+    'PASS native independent window keeps SSH output/input, own title bar buttons, closed window cleanup',
+  );
   stage = 'disconnect reconnect';
   await chooseTabMenu(page, '연결 종료');
   await expect(pane().getByRole('button', { name: '재접속', exact: true })).toBeVisible();

@@ -6,7 +6,12 @@ import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
-import { chooseTabMenu } from './native-workspace.mjs';
+import {
+  chooseTabMenu,
+  foldSidebar,
+  openNewConnectionForm,
+  showSidebarView,
+} from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-phase63-67-'));
 const fixture = `dachsterm-podtree-${randomUUID()}`;
@@ -144,7 +149,7 @@ try {
     daily: true,
   };
   stage = 'local-open';
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
   const local = page.getByRole('region', { name: 'Windows PowerShell 터미널', exact: true });
   await expect(local.locator('.xterm-accessibility-tree')).toContainText('PS C:');
@@ -183,7 +188,7 @@ try {
   expect(localText).not.toContain('\x1b');
   result.checks.push('Windows local PTY: UI start, UTF-8, masking, pause/resume, flush');
   stage = 'ssh-connect';
-  await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+  await openNewConnectionForm(page);
   const form = page.getByRole('dialog');
   await form.getByLabel('이름', { exact: true }).fill('로그 PodTree 검사');
   await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
@@ -447,7 +452,7 @@ try {
   expect((await readdir(path.dirname(bulk.path))).length).toBe(2);
   result.checks.push('Actual SSH: >3MiB output, 1MiB rotation, two-file retention');
   stage = 'cp949-connect';
-  await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+  await openNewConnectionForm(page);
   const cpform = page.getByRole('dialog');
   await cpform.getByLabel('이름', { exact: true }).fill('CP949 검사');
   await cpform.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
@@ -475,7 +480,7 @@ try {
   result.checks.push('Actual OpenSSH: split CP949 bytes decoded into UTF-8 log');
   stage = 'wsl-auto-log';
   await invoke('log_auto', { key: 'local:wsl:Ubuntu', options });
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   await page.locator('.local-targets').getByTitle('Ubuntu 새 터미널 열기').click();
   const wslPane = page.getByRole('region', { name: 'Ubuntu 터미널', exact: true });
   await expect(wslPane.locator('.connection-message')).toContainText('로컬');
@@ -584,7 +589,7 @@ try {
   page.setDefaultTimeout(15000);
   page.on('pageerror', () => result.errors.push('pageerror'));
   expect(await invoke('log_auto_get', { key: 'local:powershell' })).toEqual(options);
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
   const restartedPane = page.getByRole('region', {
     name: 'Windows PowerShell 터미널',
@@ -618,7 +623,7 @@ try {
     localStorage.setItem('dachsterm.theme', 'github-dark');
     window.dispatchEvent(new StorageEvent('storage', { key: 'dachsterm.theme' }));
   });
-  await page.getByRole('button', { name: '사이드바', exact: true }).click();
+  await foldSidebar(page);
   await chooseTabMenu(page, '세션 기록', restartedPane);
   const logDialog = page.getByRole('dialog', { name: '세션 로그' });
   await expect(logDialog).toBeVisible();

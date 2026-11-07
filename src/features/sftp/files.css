@@ -46,6 +46,24 @@
   margin-inline: 2px;
   background: var(--color-border-default);
 }
+/* The default 240px sidebar: keep each row of actions on one line with slightly smaller buttons. */
+@container (max-width: 300px) {
+  .file-actions {
+    flex-wrap: nowrap;
+    gap: 1px;
+    padding-inline: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .file-actions button {
+    width: 23px;
+    flex-basis: 23px;
+  }
+  .file-actions-gap {
+    flex: 0 0 1px;
+    margin-inline: 1px;
+  }
+}
 .file-options {
   display: flex;
   flex-wrap: wrap;

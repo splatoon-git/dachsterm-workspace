@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
+import { openNewConnectionForm } from './native-workspace.mjs';
 const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-queue-native-'));
 const evidence = path.resolve('target/verification/transfer-queue-native');
 await mkdir(evidence, { recursive: true });
@@ -88,7 +89,7 @@ async function stop(force = false) {
 try {
   await launch();
   stage = 'create FTPS profile';
-  await page.getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+  await openNewConnectionForm(page);
   const form = page.getByRole('dialog');
   await form.getByLabel('이름', { exact: true }).fill('Queue native fixture');
   await form.getByLabel('프로토콜').selectOption('ftps');

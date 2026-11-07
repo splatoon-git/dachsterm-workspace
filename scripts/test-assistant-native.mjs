@@ -7,7 +7,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
 import { commands, guideHook } from '../src/features/terminal/guideData.ts';
-import { chooseTabMenu } from './native-workspace.mjs';
+import { chooseTabMenu, openNewConnectionForm, showSidebarView } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-assistant-'));
 const fixture = `dachsterm-assistant-${randomUUID()}`;
@@ -155,7 +155,7 @@ try {
   await expect(text(local)).toContainText('LOCAL_한글');
   result.checks.push('Native snippet CRUD, literal variable, PowerShell input-only then Enter');
   stage = 'ssh-auth';
-  await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+  await openNewConnectionForm(page);
   dialog = page.getByRole('dialog');
   await dialog.getByLabel('이름', { exact: true }).fill('스니펫 SSH');
   await dialog.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
@@ -264,7 +264,7 @@ try {
     'Real Bash vi/vim/less/cat/tail entry/exit including Ctrl+C, manual pin survives, tab isolation',
   );
   stage = 'wsl';
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   await page.locator('.local-targets').getByTitle('Ubuntu 새 터미널 열기').click();
   const wsl = page.getByRole('region', { name: 'Ubuntu 터미널', exact: true });
   const wslId = await wsl.getAttribute('data-connection-id');

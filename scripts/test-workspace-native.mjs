@@ -131,7 +131,7 @@ try {
   await page.mouse.down();
   await page.mouse.move(rect.x + 42, rect.y + 80, { steps: 8 });
   await page.mouse.up();
-  await expect(handle).toHaveAttribute('aria-valuenow', '344');
+  await expect(handle).toHaveAttribute('aria-valuenow', '280');
   await page.keyboard.press('F11');
   await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(true);
   await expect(page.locator('.toolbar')).toBeHidden();
@@ -148,7 +148,7 @@ try {
   await expect(page.locator('footer.status-bar')).toBeVisible();
   await page.keyboard.press('F11');
   await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(false);
-  await expect(handle).toHaveAttribute('aria-valuenow', '344');
+  await expect(handle).toHaveAttribute('aria-valuenow', '280');
   for (const id of ids)
     await expect(pane(id).locator('.xterm')).toHaveAttribute('data-instance', 'original');
   await arrangeTabs(page, '하나로');
@@ -204,10 +204,50 @@ try {
     .first()
     .evaluate((e) => e.offsetWidth);
   expect(Math.abs(restoredWidth - leftWidth)).toBeLessThanOrEqual(1);
-  await shutdown();
+  // One title bar: no system frame, and the drawn buttons and the empty bar act on the window.
+  const windowIs = (state) => invoke(`plugin:window|is_${state}`);
+  expect(await windowIs('decorated')).toBe(false);
+  const titleBar = page.locator('header.toolbar');
+  expect(Math.round((await titleBar.boundingBox()).height)).toBe(36);
+  await page.getByRole('button', { name: '최대화', exact: true }).click();
+  await expect.poll(() => windowIs('maximized')).toBe(true);
+  await page.getByRole('button', { name: '이전 크기로', exact: true }).click();
+  await expect.poll(() => windowIs('maximized')).toBe(false);
+  await titleBar.locator('.title-drag').dblclick();
+  await expect.poll(() => windowIs('maximized')).toBe(true);
+  await titleBar.locator('.title-drag').dblclick();
+  await expect.poll(() => windowIs('maximized')).toBe(false);
+  // The drawn close button asks to close like the system one and the app exits cleanly.
+  const exited = new Promise((resolve) => app.once('exit', resolve));
+  await page
+    .getByRole('button', { name: '닫기', exact: true })
+    .click()
+    .catch(() => {
+      // The page may go away before the click reports back.
+    });
+  await exited;
   expect(app.exitCode).toBe(0);
+  await browser?.close().catch(() => {});
+  page = await launch();
+  await page.getByRole('button', { name: '최소화', exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__TAURI_INTERNALS__.invoke('plugin:window|is_minimized')),
+    )
+    .toBe(true);
+  // taskkill does not reach a minimized window; the taskbar's close does, as this request does.
+  const closedMinimized = new Promise((resolve) => app.once('exit', resolve));
+  await page
+    .evaluate(() => window.__TAURI_INTERNALS__.invoke('plugin:window|close'))
+    .catch(() => {
+      // The page may go away before the call reports back.
+    });
+  await closedMinimized;
+  expect(app.exitCode).toBe(0);
+  await browser?.close().catch(() => {});
+  browser = undefined;
   console.log(
-    'PASS real local all/subset/outsider input, scope/close reset, mouse resize, native fullscreen single/multi, zoom, renderer preservation, group focus keys and restart restore.',
+    'PASS real local all/subset/outsider input, scope/close reset, mouse resize, native fullscreen single/multi, zoom, renderer preservation, group focus keys, restart restore, title bar maximize/restore/double-click/close/minimize.',
   );
 } catch (e) {
   if (page)

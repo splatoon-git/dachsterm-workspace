@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 async function openAdventure(page: Page) {
   await page.goto('/');
   if (!(await page.locator('.sidebar-games summary').isVisible()))
-    await page.getByRole('button', { name: '사이드바', exact: true }).click();
+    await page.getByRole('tab', { name: '연결', exact: true }).click();
   await page.locator('.sidebar-games summary').click();
   await page
     .getByRole('navigation', { name: '게임 목록' })

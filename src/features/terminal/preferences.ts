@@ -26,7 +26,7 @@ const defaults: TerminalPreferences = {
   osNotifications: true,
   bellNotifications: true,
 };
-export const isMacPlatform = /Macintosh|Mac OS X/.test(navigator.userAgent);
+export { isMac as isMacPlatform } from '../../lib/platform';
 const key = 'dachsterm.terminalPreferences';
 function read(): TerminalPreferences {
   try {

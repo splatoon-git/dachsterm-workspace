@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 async function openGame(page: Page, name: string) {
   const launcher = page.locator('.sidebar-games summary');
   if (!(await launcher.isVisible()))
-    await page.getByRole('button', { name: '사이드바', exact: true }).click();
+    await page.getByRole('tab', { name: '연결', exact: true }).click();
   if (!(await page.locator('.sidebar-games').getAttribute('open'))) {
     if (!(await page.getByRole('navigation', { name: '게임 목록' }).isVisible()))
       await launcher.click();

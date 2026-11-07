@@ -12,6 +12,7 @@ import {
   closeTerminalSettings,
   focusedTab,
   openTerminalSettings,
+  showSidebarView,
 } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
@@ -122,7 +123,7 @@ try {
     'aria-selected',
     'true',
   );
-  await page.getByRole('tab', { name: '파일', exact: true }).click();
+  await showSidebarView(page, '파일');
   const localFiles = page.getByRole('complementary', { name: '로컬 파일 탐색' });
   const localPath = localFiles.getByLabel('로컬 경로', { exact: true });
   await expect(localPath).toHaveValue(/^[A-Z]:\\/i, { timeout: 15000 });
@@ -197,7 +198,7 @@ try {
   await expect(fileDialog).toHaveCount(0);
   await expect(localFiles.getByRole('button', { name: /renamed\.txt/ })).toHaveCount(0);
   console.log('PASS local file create, rename, copy, no-overwrite paste and delete');
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   await expect(pane).toHaveAttribute('data-connection-id', originalId);
   await expect(pane.locator('.xterm')).toHaveAttribute('data-instance', 'original');
   // No tool rows: a connected pane has nothing to press around its terminal.
@@ -230,7 +231,7 @@ try {
     ...(await pane.locator('.xterm-accessibility-tree').innerText()).matchAll(/RESIZE:(\d+)/g),
   ];
   expect(Number(widths.at(-1)?.[1])).toBeLessThan(initialWidth);
-  await page.getByRole('button', { name: '로컬 터미널', exact: true }).click();
+  await page.keyboard.press('Control+Shift+L');
   await page
     .getByRole('dialog', { name: '로컬 터미널 열기' })
     .getByRole('button', { name: '명령 프롬프트 로컬 셸' })
@@ -239,9 +240,9 @@ try {
   await expect(cmd.locator('.xterm-accessibility-tree')).toContainText('>', { timeout: 15000 });
   await command(cmd, 'echo DACHSTERM^CMD_OK', 'DACHSTERMCMD_OK');
   await command(cmd, `cd /d "${scratch}" & echo CMD^_CD`, 'CMD_CD');
-  await page.getByRole('tab', { name: '파일', exact: true }).click();
+  await showSidebarView(page, '파일');
   await expect(localPath).toHaveValue(scratch);
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   console.log('PASS cmd directory follow');
   await arrangeTabs(page, '좌우');
   await expect(pane).toBeVisible();
@@ -279,7 +280,7 @@ try {
       timeout: 15000,
     });
     await command(linux, "printf 'DACHSTERM%s\\n' WSL_OK", 'DACHSTERMWSL_OK');
-    await page.getByRole('tab', { name: '파일', exact: true }).click();
+    await showSidebarView(page, '파일');
     await expect(localPath).toHaveValue(/^\//, { timeout: 15000 });
     await command(linux, "cd /usr/bin; printf 'WSL%s\\n' _CD", 'WSL_CD');
     await expect(localPath).toHaveValue('/usr/bin');
@@ -288,7 +289,7 @@ try {
     });
     await command(linux, 'false', '');
     await command(linux, "printf 'EXIT:%s\\n' $?", 'EXIT:1');
-    await page.getByRole('tab', { name: '연결', exact: true }).click();
+    await showSidebarView(page, '연결');
     console.log('PASS WSL directory follow, Linux path listing and preserved exit status');
     await command(linux, 'exit', '');
     await expect(linux.locator('.connection-message')).toContainText('종료', { timeout: 15000 });

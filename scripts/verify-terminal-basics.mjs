@@ -5,8 +5,10 @@ import path from 'node:path';
 import {
   chooseProfileMenu,
   closeTerminalSettings,
+  openNewConnectionForm,
   openTerminalSearch,
   openTerminalSettings,
+  showSidebarView,
 } from './native-workspace.mjs';
 
 export async function verifyTerminalBasics({
@@ -40,14 +42,14 @@ export async function verifyTerminalBasics({
   await command('cd /home/probe');
   await output('probe@');
   await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/tmp');
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
-  await page.getByRole('tab', { name: '파일', exact: true }).click();
+  await showSidebarView(page, '연결');
+  await showSidebarView(page, '파일');
   await expect(page.getByLabel('터미널 경로 따라가기', { exact: true })).not.toBeChecked();
   await page.getByLabel('터미널 경로 따라가기', { exact: true }).check();
   await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/home/probe');
   // Disable for the existing file tests, which intentionally navigate independently.
   await page.getByLabel('터미널 경로 따라가기', { exact: true }).uncheck();
-  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await showSidebarView(page, '연결');
   console.log('PASS SFTP follows actual Bash cwd; off/on and sidebar remount preserve choice');
 
   const cdp = await page.context().newCDPSession(page);
@@ -216,7 +218,7 @@ export async function verifyTerminalBasics({
     ['S1 MFA', 'key', probe('MFA_PORT')],
   ]) {
     setStage(`S1 authentication ${auth}`);
-    await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+    await openNewConnectionForm(page);
     const form = page.getByRole('dialog', { name: '새 연결', exact: true });
     await form.getByLabel('이름', { exact: true }).fill(name);
     await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
@@ -262,7 +264,7 @@ export async function verifyTerminalBasics({
     console.log(`PASS native authentication mode ${auth}; no stored secret reference`);
     await expect(pane().getByRole('form', { name: '서버 추가 인증', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: `${name} 탭 닫기`, exact: true }).click();
-    await page.getByRole('tab', { name: '연결', exact: true }).click();
+    await showSidebarView(page, '연결');
     const profile = page.locator('.profile-card').filter({ hasText: name });
     await chooseProfileMenu(page, profile, '삭제');
     await page.getByRole('button', { name: '세션 삭제', exact: true }).click();

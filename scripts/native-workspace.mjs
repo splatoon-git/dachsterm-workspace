@@ -113,3 +113,23 @@ export async function chooseProfileMenu(page, card, item) {
     .getByRole('menuitem', { name: new RegExp(`^${item}`) })
     .click();
 }
+
+/** Opens the new connection form from the title bar's ＋ menu. */
+export async function openNewConnectionForm(page) {
+  await page.getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^새 연결…/ }).click();
+}
+
+/** Shows a sidebar view. Pressing the icon of the view already open would fold the sidebar. */
+export async function showSidebarView(page, name) {
+  const tab = page.getByRole('tab', { name, exact: true });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
+/** Folds the sidebar by pressing the icon of the open view. */
+export async function foldSidebar(page) {
+  const open = page.locator('.sidebar-rail [role="tab"][aria-selected="true"]');
+  if (await open.count()) await open.click();
+  await expect(page.locator('#workspace-sidebar')).toBeHidden();
+}

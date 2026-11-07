@@ -6,7 +6,7 @@ for (const width of [1280, 560, 360]) {
     await page.goto('/');
     const sidebar = page.getByRole('complementary', { name: '세션 탐색' });
     if (!(await sidebar.isVisible()))
-      await page.getByRole('button', { name: '사이드바', exact: true }).click();
+      await page.getByRole('tab', { name: '연결', exact: true }).click();
     await expect(sidebar.getByRole('region', { name: '로컬 환경' })).toBeVisible();
     await page.keyboard.press('Control+Shift+L');
     const local = page.getByRole('dialog', { name: '로컬 터미널 열기' });
@@ -15,7 +15,8 @@ for (const width of [1280, 560, 360]) {
     await page.keyboard.press('Control+Shift+N');
     await expect(page.getByRole('dialog')).toHaveCount(1);
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: '사이드바', exact: true }).click();
+    // The icon of the open view folds the sidebar.
+    await page.getByRole('tab', { name: '연결', exact: true }).click();
     await expect(sidebar).toBeHidden();
     await page.reload();
     await expect(sidebar).toBeHidden();

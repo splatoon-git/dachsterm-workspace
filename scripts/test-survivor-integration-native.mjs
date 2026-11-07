@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
+import { openNewConnectionForm } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-integration-'));
 const fixture = `dachsterm-survivor-${randomUUID()}`;
@@ -120,7 +121,7 @@ try {
   await expect(local.locator('.xterm-accessibility-tree')).toContainText('PS C:');
   const localId = await local.getAttribute('data-connection-id');
   stage = 'ssh-connect';
-  await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+  await openNewConnectionForm(page);
   const form = page.getByRole('dialog');
   await form.getByLabel('이름', { exact: true }).fill('서바이버 격리 검사');
   await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');

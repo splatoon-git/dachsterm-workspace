@@ -4,7 +4,8 @@ for (const width of [1280, 800, 560, 360]) {
   test(`unified left sidebar, shortcuts and restart view at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 820 });
     await page.goto('/');
-    const toggle = page.getByRole('button', { name: '사이드바', exact: true });
+    // The rail's icons open the sidebar; the icon of the open view folds it.
+    const toggle = page.getByRole('tab', { name: '연결', exact: true });
     const sidebar = page.locator('#workspace-sidebar');
     if (width <= 700) {
       await expect(sidebar).toBeHidden();
@@ -13,23 +14,24 @@ for (const width of [1280, 800, 560, 360]) {
     const connections = page.getByRole('tab', { name: '연결', exact: true });
     const files = page.getByRole('tab', { name: '파일', exact: true });
     await connections.focus();
-    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowDown');
     await expect(files).toBeFocused();
     await expect(files).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('complementary', { name: '세션 탐색' })).toBeHidden();
     await expect(page.getByRole('complementary', { name: 'SFTP 파일 탐색' })).toBeVisible();
     const bounds = await sidebar.boundingBox();
-    expect(bounds!.x).toBe(0);
-    expect(bounds!.width).toBeGreaterThanOrEqual(280);
+    const rail = await page.getByRole('navigation', { name: '사이드바 보기' }).boundingBox();
+    expect(bounds!.x).toBe(rail!.x + rail!.width);
+    expect(bounds!.width).toBeGreaterThanOrEqual(200);
     expect(await sidebar.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     if (width > 700) {
       const main = await page.locator('main').boundingBox();
-      expect(main!.x).toBeGreaterThan(bounds!.width);
+      expect(main!.x).toBeGreaterThan(bounds!.x + bounds!.width);
       expect(main!.width).toBeGreaterThan(400);
       const handle = page.getByRole('separator', { name: '사이드바 너비' });
       await handle.focus();
       await page.keyboard.press('ArrowRight');
-      await expect(handle).toHaveAttribute('aria-valuenow', '314');
+      await expect(handle).toHaveAttribute('aria-valuenow', '250');
     }
     await page.reload();
     if (width <= 700) await toggle.click();
@@ -44,9 +46,10 @@ for (const width of [1280, 800, 560, 360]) {
     await expect(page.getByRole('searchbox')).toHaveValue('missing-server');
     await page.screenshot({ path: `test-results/unified-sidebar-${width}.png` });
     if (width <= 700) {
-      await page
-        .getByRole('button', { name: '사이드바 닫기', exact: true })
-        .click({ position: { x: width - 5, y: 40 } });
+      // The backdrop starts after the icon rail; press its far right, outside the drawer.
+      const backdrop = page.getByRole('button', { name: '사이드바 닫기', exact: true });
+      const area = (await backdrop.boundingBox())!;
+      await backdrop.click({ position: { x: area.width - 5, y: 40 } });
       await expect(sidebar).toBeHidden();
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -116,7 +119,9 @@ test('switching the sidebar preserves the existing terminal renderer', async ({ 
   await terminal.evaluate((e) => e.setAttribute('data-instance', 'original'));
   await page.getByRole('tab', { name: '파일', exact: true }).click();
   await page.getByRole('tab', { name: '연결', exact: true }).click();
-  await page.getByRole('button', { name: '사이드바', exact: true }).click();
+  // Pressing the open view's icon again folds the sidebar.
+  await page.getByRole('tab', { name: '연결', exact: true }).click();
+  await expect(page.locator('#workspace-sidebar')).toBeHidden();
   await expect(terminal).toHaveAttribute('data-instance', 'original');
   await expect(terminal).toBeVisible();
 });

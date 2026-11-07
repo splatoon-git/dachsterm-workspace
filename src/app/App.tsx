@@ -67,7 +67,9 @@ import { SidebarFiles } from '../features/sftp/SidebarFiles';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
 import { ToolbarMenu } from '../components/ToolbarMenu';
-import face from '../assets/brand/dachshund-face.png';
+import { anchorBelow, ContextMenu, type MenuPoint } from '../components/ContextMenu';
+import { TitleBar } from './TitleBar';
+import { SidebarRail } from './SidebarRail';
 const TerminalPreview = lazy(() =>
   import('../features/terminal/TerminalPreview').then((m) => ({ default: m.TerminalPreview })),
 );
@@ -106,6 +108,7 @@ export function App() {
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [newMenu, setNewMenu] = useState<MenuPoint | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth > 700 && localStorage.getItem('dachsterm.sidebar') !== 'false',
   );
@@ -234,7 +237,7 @@ export function App() {
     }
   }
   const [leftWidth, setLeftWidth] = useState(() =>
-    Math.max(280, Math.min(420, Number(localStorage.getItem('dachsterm.leftWidth')) || 304)),
+    Math.max(200, Math.min(420, Number(localStorage.getItem('dachsterm.leftWidth')) || 240)),
   );
   useEffect(() => {
     localStorage.setItem('dachsterm.leftWidth', String(leftWidth));
@@ -551,71 +554,73 @@ export function App() {
           전체화면 종료 · F11
         </button>
       )}
-      <header className="toolbar">
-        <div className="brand">
-          <img src={face} alt="" width="32" height="32" />
-          <strong>DachsTerm</strong>
-          <span className="phase-badge">DESKTOP</span>
-        </div>
-        <div className="tools">
+      <TitleBar
+        fail={setError}
+        end={
           <button
-            aria-label="사이드바"
-            title="사이드바 · Ctrl/Cmd+Shift+B"
-            aria-expanded={sidebarOpen}
-            aria-controls="workspace-sidebar"
-            onClick={() => setSidebarOpen((v) => !v)}
-          >
-            ☰
-          </button>
-          <button onClick={() => setLocalOpen(true)} title="로컬 터미널 · Ctrl/Cmd+Shift+L">
-            <Icon name="terminal" size={16} />
-            로컬 터미널
-          </button>
-          <ToolbarMenu label="보기">
-            <button
-              aria-pressed={sidebarOpen && sidebarView === 'files'}
-              onClick={() => showSidebar('files')}
-            >
-              <Icon name="folder" size={16} /> 파일
-            </button>
-            <button
-              onClick={() =>
-                hasPreview ? workspace.close('preview') : workspace.open({ kind: 'preview' })
-              }
-            >
-              {hasPreview ? '작업 화면' : '터미널 미리보기'}
-            </button>
-            {presets.map(([preset, label]) => (
-              <button key={preset} onClick={() => void arrange(preset)}>
-                {label}
-              </button>
-            ))}
-            <button onClick={() => void toggleFullscreen()}>
-              {fullscreen ? '전체화면 종료' : '전체화면'}
-            </button>
-            <button onClick={() => setHelpOpen(true)}>키보드 단축키</button>
-          </ToolbarMenu>
-          <ToolbarMenu label="도구">
-            <button onClick={() => setSnippetsOpen(true)}>스니펫</button>
-            <button onClick={() => setCommandsOpen(true)}>기본 명령·로그 필터</button>
-            <button onClick={() => setPodtreeOpen(true)}>PodTree 열기</button>
-            <button onClick={() => setTunnelsOpen(true)}>
-              <Icon name="tunnel" size={16} />
-              터널
-            </button>
-          </ToolbarMenu>
-          <button aria-label="설정" title="설정" onClick={() => setSettingsOpen('workspace')}>
-            <Icon name="settings" size={16} />
-          </button>
-          <button
-            className="primary"
             aria-label="＋ 새 연결"
-            onClick={() => setForm(blankProfile())}
+            aria-haspopup="menu"
+            title="새 연결 · 로컬 터미널"
+            onClick={(e) => setNewMenu(anchorBelow(e.currentTarget))}
           >
             <Icon name="plus" size={16} /> <span>새 연결</span>
           </button>
-        </div>
-      </header>
+        }
+      >
+        <ToolbarMenu label="보기">
+          <button
+            aria-pressed={sidebarOpen && sidebarView === 'files'}
+            onClick={() => showSidebar('files')}
+          >
+            <Icon name="folder" size={16} /> 파일
+          </button>
+          <button
+            onClick={() =>
+              hasPreview ? workspace.close('preview') : workspace.open({ kind: 'preview' })
+            }
+          >
+            {hasPreview ? '작업 화면' : '터미널 미리보기'}
+          </button>
+          {presets.map(([preset, label]) => (
+            <button key={preset} onClick={() => void arrange(preset)}>
+              {label}
+            </button>
+          ))}
+          <button onClick={() => void toggleFullscreen()}>
+            {fullscreen ? '전체화면 종료' : '전체화면'}
+          </button>
+          <button onClick={() => setHelpOpen(true)}>키보드 단축키</button>
+        </ToolbarMenu>
+        <ToolbarMenu label="도구">
+          <button onClick={() => setSnippetsOpen(true)}>스니펫</button>
+          <button onClick={() => setCommandsOpen(true)}>기본 명령·로그 필터</button>
+          <button onClick={() => setPodtreeOpen(true)}>PodTree 열기</button>
+          <button onClick={() => setTunnelsOpen(true)}>
+            <Icon name="tunnel" size={16} />
+            터널
+          </button>
+        </ToolbarMenu>
+      </TitleBar>
+      {newMenu && (
+        <ContextMenu
+          label="새 연결"
+          at={newMenu}
+          close={() => setNewMenu(null)}
+          items={[
+            { label: '새 연결…', shortcut: 'Ctrl/Cmd+Shift+N', run: () => setForm(blankProfile()) },
+            {
+              label: '로컬 터미널…',
+              shortcut: 'Ctrl/Cmd+Shift+L',
+              separated: true,
+              run: () => setLocalOpen(true),
+            },
+            ...localCatalog.targets.map((target) => ({
+              label: target.kind === 'wsl' ? `WSL · ${target.name}` : target.name,
+              run: () => openLocal(target),
+            })),
+          ]}
+        />
+      )}
       {error && (
         <div className="app-error" role="alert">
           {error}
@@ -624,270 +629,241 @@ export function App() {
           </button>
         </div>
       )}
-      <div
-        className={`workspace-grid unified-workspace ${sidebarOpen ? '' : 'sidebar-hidden'}`}
-        style={
-          {
-            '--sidebar-width': `${leftWidth}px`,
-          } as CSSProperties
-        }
-      >
-        {sidebarOpen && (
-          <button
-            className="sidebar-backdrop"
-            aria-label="사이드바 닫기"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-        <div
-          id="workspace-sidebar"
-          className="workspace-sidebar"
-          hidden={!sidebarOpen}
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Escape' &&
-              window.innerWidth <= 700 &&
-              !document.querySelector('dialog[open]')
-            ) {
-              e.stopPropagation();
-              setSidebarOpen(false);
-              document
-                .querySelector<HTMLButtonElement>('button[aria-controls="workspace-sidebar"]')
-                ?.focus();
-            }
+      <div className="workspace-row">
+        <SidebarRail
+          view={sidebarView}
+          open={sidebarOpen}
+          choose={(view) => {
+            if (sidebarOpen && sidebarView === view) setSidebarOpen(false);
+            else void showSidebar(view);
           }}
+          settings={() => setSettingsOpen('workspace')}
+        />
+        <div
+          className={`workspace-grid unified-workspace ${sidebarOpen ? '' : 'sidebar-hidden'}`}
+          style={
+            {
+              '--sidebar-width': `${leftWidth}px`,
+            } as CSSProperties
+          }
         >
+          {sidebarOpen && (
+            <button
+              className="sidebar-backdrop"
+              aria-label="사이드바 닫기"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
           <div
-            className="sidebar-switcher"
-            role="tablist"
-            aria-label="사이드바 보기"
+            id="workspace-sidebar"
+            className="workspace-sidebar"
+            hidden={!sidebarOpen}
             onKeyDown={(e) => {
-              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-              e.preventDefault();
-              const view =
-                e.key === 'Home'
-                  ? 'connections'
-                  : e.key === 'End'
-                    ? 'files'
-                    : sidebarView === 'files'
-                      ? 'connections'
-                      : 'files';
-              setSidebarView(view);
-              document.getElementById(`sidebar-tab-${view}`)?.focus();
+              if (
+                e.key === 'Escape' &&
+                window.innerWidth <= 700 &&
+                !document.querySelector('dialog[open]')
+              ) {
+                e.stopPropagation();
+                setSidebarOpen(false);
+                document.getElementById(`sidebar-tab-${sidebarView}`)?.focus();
+              }
             }}
           >
-            {(['connections', 'files'] as const).map((view) => (
-              <button
-                key={view}
-                id={`sidebar-tab-${view}`}
-                role="tab"
-                aria-selected={sidebarView === view}
-                aria-controls={view === 'connections' ? 'session-sidebar' : 'file-sidebar'}
-                tabIndex={sidebarView === view ? 0 : -1}
-                onClick={() => setSidebarView(view)}
-              >
-                <Icon name={view === 'connections' ? 'server' : 'folder'} size={16} />
-                {view === 'connections' ? '연결' : '파일'}
-              </button>
-            ))}
-          </div>
-          <aside
-            id="session-sidebar"
-            className="sessions"
-            aria-label="세션 탐색"
-            hidden={sidebarView !== 'connections'}
-          >
-            <div className="panel-title">
-              <h2>워크스페이스</h2>
-              <span className="count">{snapshot.profiles.length}</span>
-            </div>
-            <label className="search">
-              <span>세션 검색</span>
-              <input
-                ref={searchInput}
-                type="search"
-                placeholder="이름 또는 호스트 검색"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </label>
-            <div className="connections-scroll">
-              <section className="local-targets" aria-label="로컬 환경">
-                <div className="group-heading">
-                  <span>로컬 터미널</span>
-                  <button
-                    aria-label="로컬 환경 새로고침"
-                    disabled={!desktop || localLoading}
-                    onClick={() => void refreshLocal()}
-                  >
-                    ↻
-                  </button>
-                </div>
-                {localLoading && <p role="status">로컬 환경 탐색 중…</p>}
-                {!desktop && <p>데스크톱 앱에서 자동 탐색합니다.</p>}
-                {localCatalog.targets.map((target) => (
-                  <button
-                    key={target.id}
-                    className="nav-item local-target"
-                    onClick={() => openLocal(target)}
-                    title={`${target.name} 새 터미널 열기`}
-                  >
-                    <Icon name="terminal" size={15} />
-                    <span>{target.name}</span>
-                    <small>{target.kind === 'wsl' ? 'WSL' : '로컬'}</small>
-                  </button>
-                ))}
-                {localCatalog.warning && <p role="status">{localCatalog.warning}</p>}
-              </section>
-              <div className="group-heading">
-                <span>저장된 연결</span>
-                <button aria-label="서버 추가" onClick={() => setForm(blankProfile())}>
-                  ＋
-                </button>
-              </div>
-
-              <nav aria-label="세션 분류">
-                <div className="session-filters">
-                  {[
-                    ['all', '전체'],
-                    ['favorite', '즐겨찾기'],
-                    ['recent', '최근'],
-                  ].map(([id, label]) => (
+            <aside
+              id="session-sidebar"
+              className="sessions"
+              aria-label="세션 탐색"
+              hidden={sidebarView !== 'connections'}
+            >
+              <label className="search">
+                <span>세션 검색</span>
+                <input
+                  ref={searchInput}
+                  type="search"
+                  placeholder="이름 또는 호스트 검색"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </label>
+              <div className="connections-scroll">
+                <section className="local-targets" aria-label="로컬 환경">
+                  <div className="group-heading">
+                    <span>로컬 터미널</span>
                     <button
-                      key={id}
-                      className="nav-item"
-                      aria-current={filter === id ? 'page' : undefined}
-                      onClick={() => setFilter(id)}
+                      aria-label="로컬 환경 새로고침"
+                      disabled={!desktop || localLoading}
+                      onClick={() => void refreshLocal()}
                     >
-                      {label}
+                      ↻
+                    </button>
+                  </div>
+                  {localLoading && <p role="status">로컬 환경 탐색 중…</p>}
+                  {!desktop && <p>데스크톱 앱에서 자동 탐색합니다.</p>}
+                  {localCatalog.targets.map((target) => (
+                    <button
+                      key={target.id}
+                      className="nav-item local-target"
+                      onClick={() => openLocal(target)}
+                      title={`${target.name} 새 터미널 열기`}
+                    >
+                      <Icon name="terminal" size={15} />
+                      <span>{target.name}</span>
+                      <small>{target.kind === 'wsl' ? 'WSL' : '로컬'}</small>
                     </button>
                   ))}
-                </div>
+                  {localCatalog.warning && <p role="status">{localCatalog.warning}</p>}
+                </section>
                 <div className="group-heading">
-                  <span>그룹</span>
-                  <button aria-label="그룹 추가" onClick={() => setGroup({ id: '', name: '' })}>
+                  <span>저장된 연결</span>
+                  <button aria-label="서버 추가" onClick={() => setForm(blankProfile())}>
                     ＋
                   </button>
                 </div>
-                {snapshot.groups.map((g) => (
-                  <div className="group-row" key={g.id}>
-                    <button
-                      className="nav-item"
-                      aria-current={filter === g.id ? 'page' : undefined}
-                      onClick={() => setFilter(g.id)}
-                    >
-                      ▱ {groupPath(g.id, snapshot.groups)}
-                    </button>
-                    <button aria-label={`${g.name} 그룹 수정`} onClick={() => setGroup(g)}>
-                      ⋯
+
+                <nav aria-label="세션 분류">
+                  <div className="session-filters">
+                    {[
+                      ['all', '전체'],
+                      ['favorite', '즐겨찾기'],
+                      ['recent', '최근'],
+                    ].map(([id, label]) => (
+                      <button
+                        key={id}
+                        className="nav-item"
+                        aria-current={filter === id ? 'page' : undefined}
+                        onClick={() => setFilter(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="group-heading">
+                    <span>그룹</span>
+                    <button aria-label="그룹 추가" onClick={() => setGroup({ id: '', name: '' })}>
+                      ＋
                     </button>
                   </div>
-                ))}
-              </nav>
-              <ProfileList
-                profiles={profiles}
-                showRecent={filter === 'recent'}
-                empty={query ? '검색 결과가 없습니다.' : '등록된 서버가 없습니다.'}
-                connect={(p) => requestConnect(p)}
-                edit={setForm}
-                toggleFavorite={(p) =>
-                  void action('save_session', {
-                    profile: { ...p, favorite: !p.favorite },
-                    secretAction: 'keep',
-                    secret: null,
-                  })
-                }
-                duplicate={(p) => void action('duplicate_session', { id: p.id })}
-                remove={setRemove}
-              />
-              <details className="sidebar-games">
-                <summary>게임</summary>
-                <nav aria-label="게임 목록">
-                  {games.map((game) => (
-                    <button
-                      key={game.id}
-                      className="nav-item"
-                      aria-current={activeGame === game.id ? 'page' : undefined}
-                      onClick={() => openGame(game.id)}
-                    >
-                      <Icon name="terminal" size={14} />
-                      {game.title}
-                    </button>
+                  {snapshot.groups.map((g) => (
+                    <div className="group-row" key={g.id}>
+                      <button
+                        className="nav-item"
+                        aria-current={filter === g.id ? 'page' : undefined}
+                        onClick={() => setFilter(g.id)}
+                      >
+                        ▱ {groupPath(g.id, snapshot.groups)}
+                      </button>
+                      <button aria-label={`${g.name} 그룹 수정`} onClick={() => setGroup(g)}>
+                        ⋯
+                      </button>
+                    </div>
                   ))}
                 </nav>
-              </details>
-            </div>
-            <div className="local-note">
-              <span className="status-dot" />
-              로컬 워크스페이스
-            </div>
-          </aside>
-          <div
-            id="file-sidebar"
-            className="sidebar-file-panel"
-            role="tabpanel"
-            aria-labelledby="sidebar-tab-files"
-            hidden={sidebarView !== 'files'}
-          >
-            <SidebarFiles
-              session={selected}
-              showConnections={() => setSidebarView('connections')}
-            />
-          </div>
-        </div>
-        {sidebarOpen && (
-          <ResizeHandle
-            value={leftWidth}
-            min={280}
-            max={420}
-            onChange={setLeftWidth}
-            label="사이드바 너비"
-          />
-        )}
-        <main id="workspace" tabIndex={-1} inert={narrow && sidebarOpen && !fullscreen}>
-          <WorkspaceGrid
-            workspace={workspace}
-            narrow={narrow}
-            order={[
-              ...tabs.map(sessionRef),
-              ...(hasPreview ? [{ kind: 'preview' } as const] : []),
-              ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
-            ]}
-            renderTab={renderTab}
-            renderCell={renderCell}
-            detach={(key) => {
-              const session = tabs.find((t) => sessionKey(t) === key);
-              if (session && capabilities(session).detach) void detach(session);
-            }}
-            openMenu={tabMenu.open}
-            cellClass={(tab) =>
-              tabs.some(
-                (t) => sessionKey(t) === tabKey(tab) && broadcastIds.includes(t.connectionId),
-              )
-                ? 'broadcast-target'
-                : ''
-            }
-            start={
-              tabs.length || hasPreview
-                ? undefined
-                : {
-                    tab: (active, select) => (
-                      <PlainTab title="시작하기" active={active} select={select} />
-                    ),
-                    page: (
-                      <Welcome
-                        newConnection={() => setForm(blankProfile())}
-                        openLocal={() => setLocalOpen(true)}
-                        showRecent={() => {
-                          setFilter('recent');
-                          showSidebar('connections');
-                        }}
-                      />
-                    ),
+                <ProfileList
+                  profiles={profiles}
+                  showRecent={filter === 'recent'}
+                  empty={query ? '검색 결과가 없습니다.' : '등록된 서버가 없습니다.'}
+                  connect={(p) => requestConnect(p)}
+                  edit={setForm}
+                  toggleFavorite={(p) =>
+                    void action('save_session', {
+                      profile: { ...p, favorite: !p.favorite },
+                      secretAction: 'keep',
+                      secret: null,
+                    })
                   }
-            }
-          />
-        </main>
+                  duplicate={(p) => void action('duplicate_session', { id: p.id })}
+                  remove={setRemove}
+                />
+                <details className="sidebar-games">
+                  <summary>게임</summary>
+                  <nav aria-label="게임 목록">
+                    {games.map((game) => (
+                      <button
+                        key={game.id}
+                        className="nav-item"
+                        aria-current={activeGame === game.id ? 'page' : undefined}
+                        onClick={() => openGame(game.id)}
+                      >
+                        <Icon name="terminal" size={14} />
+                        {game.title}
+                      </button>
+                    ))}
+                  </nav>
+                </details>
+              </div>
+              <div className="local-note">
+                <span className="status-dot" />
+                로컬 워크스페이스
+              </div>
+            </aside>
+            <div
+              id="file-sidebar"
+              className="sidebar-file-panel"
+              role="tabpanel"
+              aria-labelledby="sidebar-tab-files"
+              hidden={sidebarView !== 'files'}
+            >
+              <SidebarFiles
+                session={selected}
+                showConnections={() => setSidebarView('connections')}
+              />
+            </div>
+          </div>
+          {sidebarOpen && (
+            <ResizeHandle
+              value={leftWidth}
+              min={200}
+              max={420}
+              onChange={setLeftWidth}
+              label="사이드바 너비"
+            />
+          )}
+          <main id="workspace" tabIndex={-1} inert={narrow && sidebarOpen && !fullscreen}>
+            <WorkspaceGrid
+              workspace={workspace}
+              narrow={narrow}
+              order={[
+                ...tabs.map(sessionRef),
+                ...(hasPreview ? [{ kind: 'preview' } as const] : []),
+                ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
+              ]}
+              renderTab={renderTab}
+              renderCell={renderCell}
+              detach={(key) => {
+                const session = tabs.find((t) => sessionKey(t) === key);
+                if (session && capabilities(session).detach) void detach(session);
+              }}
+              openMenu={tabMenu.open}
+              cellClass={(tab) =>
+                tabs.some(
+                  (t) => sessionKey(t) === tabKey(tab) && broadcastIds.includes(t.connectionId),
+                )
+                  ? 'broadcast-target'
+                  : ''
+              }
+              start={
+                tabs.length || hasPreview
+                  ? undefined
+                  : {
+                      tab: (active, select) => (
+                        <PlainTab title="시작하기" active={active} select={select} />
+                      ),
+                      page: (
+                        <Welcome
+                          newConnection={() => setForm(blankProfile())}
+                          openLocal={() => setLocalOpen(true)}
+                          showRecent={() => {
+                            setFilter('recent');
+                            showSidebar('connections');
+                          }}
+                        />
+                      ),
+                    }
+              }
+            />
+          </main>
+        </div>
       </div>
       <StatusBar
         session={activeGame ? undefined : selected}

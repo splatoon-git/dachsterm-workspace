@@ -4,6 +4,7 @@ for (const width of [1280, 560])
     await page.setViewportSize({ width, height: 820 });
     await page.goto('/');
     await page.locator('header').getByRole('button', { name: '＋ 새 연결', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^새 연결…/ }).click();
     const dialog = page.getByRole('dialog', { name: '새 연결' });
     await expect(dialog.getByLabel('이름', { exact: true })).toBeFocused();
     const actionHeights = await dialog

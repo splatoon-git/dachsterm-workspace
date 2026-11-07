@@ -6,7 +6,7 @@ for (const width of [1280, 560, 360]) {
     await page.goto('/');
     const launcher = page.locator('.sidebar-games summary');
     if (!(await launcher.isVisible()))
-      await page.getByRole('button', { name: '사이드바', exact: true }).click();
+      await page.getByRole('tab', { name: '연결', exact: true }).click();
     await launcher.click();
     await page
       .getByRole('navigation', { name: '게임 목록' })
@@ -35,7 +35,7 @@ for (const width of [1280, 560, 360]) {
     await page.screenshot({ path: `test-results/games-blocks-${width}.png` });
 
     if (!(await launcher.isVisible()))
-      await page.getByRole('button', { name: '사이드바', exact: true }).click();
+      await page.getByRole('tab', { name: '연결', exact: true }).click();
     await page
       .getByRole('navigation', { name: '게임 목록' })
       .getByRole('button', { name: '스네이크', exact: true })
@@ -47,7 +47,7 @@ for (const width of [1280, 560, 360]) {
     await expect(dialog.getByRole('status')).toContainText('일시정지');
 
     if (!(await launcher.isVisible()))
-      await page.getByRole('button', { name: '사이드바', exact: true }).click();
+      await page.getByRole('tab', { name: '연결', exact: true }).click();
     await page
       .getByRole('navigation', { name: '게임 목록' })
       .getByRole('button', { name: '2048', exact: true })
@@ -61,7 +61,7 @@ for (const width of [1280, 560, 360]) {
     await expect(tiles.locator('.number-tile').filter({ hasText: /^[24]$/ })).toHaveCount(2);
 
     if (!(await launcher.isVisible()))
-      await page.getByRole('button', { name: '사이드바', exact: true }).click();
+      await page.getByRole('tab', { name: '연결', exact: true }).click();
     await page
       .getByRole('navigation', { name: '게임 목록' })
       .getByRole('button', { name: '지뢰찾기', exact: true })

@@ -35,15 +35,6 @@ dialog select {
 .danger-action {
   color: var(--color-status-error);
 }
-.toolbar {
-  min-height: 60px;
-  padding-inline: 16px;
-}
-.tools {
-  gap: var(--control-gap);
-}
-.tools > button,
-.toolbar-menu > summary,
 .file-toolbar button,
 .path-form input,
 .path-form button,
@@ -56,8 +47,6 @@ dialog select {
   line-height: 1;
   border-radius: var(--radius-small);
 }
-.tools > button,
-.toolbar-menu > summary,
 .file-toolbar button,
 .path-form button {
   display: inline-flex;
@@ -65,9 +54,6 @@ dialog select {
   justify-content: center;
   gap: var(--control-gap);
   white-space: nowrap;
-}
-.tools .primary span {
-  margin: 0;
 }
 .toolbar-menu > summary::marker {
   content: '';
@@ -99,31 +85,6 @@ dialog select {
 .workspace-sidebar[hidden],
 .workspace-sidebar [hidden] {
   display: none;
-}
-.sidebar-switcher {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-.sidebar-switcher button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 8px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-.sidebar-switcher button[aria-selected='true'] {
-  background: var(--color-action-selected);
-  color: var(--color-text-primary);
-  font-weight: 600;
 }
 .workspace-sidebar .sessions {
   flex: 1;
@@ -199,21 +160,6 @@ dialog select {
 .workspace-sidebar .search {
   padding: 0 12px 8px;
   flex-shrink: 0;
-}
-@media (max-width: 420px) {
-  .tools {
-    gap: 4px;
-  }
-  .tools > .primary {
-    width: 32px;
-    padding: 0;
-  }
-  .tools > .primary span {
-    display: none;
-  }
-  .toolbar-menu > summary {
-    padding-inline: 8px;
-  }
 }
 .workspace-sidebar .search input {
   height: 36px;
@@ -412,18 +358,6 @@ dialog select {
   .sidebar-backdrop:hover:enabled {
     background: var(--color-overlay-backdrop);
   }
-  .toolbar {
-    gap: 8px;
-    padding: 10px 12px;
-  }
-  .tools {
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .tools > button,
-  .toolbar-menu > summary {
-    font-size: 12px;
-  }
   .detached-grid,
   .detached-grid:not(.files-hidden) {
     position: relative;
@@ -442,19 +376,6 @@ dialog select {
 }
 
 /* The terminal is the primary surface: compact shared chrome, explicit input scope. */
-.toolbar {
-  height: 52px;
-  min-height: 52px;
-}
-.toolbar .brand strong {
-  font-size: 17px;
-}
-.sidebar-switcher {
-  padding: 6px 10px;
-}
-.sidebar-switcher button {
-  height: 32px;
-}
 .workspace-sidebar .panel-title {
   min-height: 38px;
   padding-block: 8px;
@@ -505,6 +426,7 @@ dialog select {
   background: var(--color-surface-subtle);
 }
 .terminal-fullscreen > .toolbar,
+.terminal-fullscreen .sidebar-rail,
 .terminal-fullscreen .workspace-sidebar,
 .terminal-fullscreen .sidebar-backdrop,
 .terminal-fullscreen .unified-workspace > .resize-handle {
@@ -523,10 +445,6 @@ dialog select {
   padding: 0 8px;
 }
 @media (max-width: 700px) {
-  .toolbar {
-    height: auto;
-    padding-block: 8px;
-  }
   .split-input {
     flex-wrap: wrap;
   }
