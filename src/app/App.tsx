@@ -634,8 +634,12 @@ export function App() {
           view={sidebarView}
           open={sidebarOpen}
           choose={(view) => {
+            // The press already put focus on the icon; showSidebar would move it a frame later.
             if (sidebarOpen && sidebarView === view) setSidebarOpen(false);
-            else void showSidebar(view);
+            else {
+              setSidebarView(view);
+              setSidebarOpen(true);
+            }
           }}
           settings={() => setSettingsOpen('workspace')}
         />
