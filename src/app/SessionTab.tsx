@@ -7,6 +7,8 @@ import {
 } from '../features/terminal/StatusBadge';
 import { isRecording, useLogStatus } from '../features/terminal/logStatus';
 import { capabilities } from '../features/terminal/sessionKind';
+import { gitSentence, gitTooltip } from '../features/git/gitStatus';
+import { gitStatusOf, useGitStatus } from '../features/git/useGitStatus';
 import { tabKey } from './workspaceLayout';
 
 /** A shape with the word, so a state never depends on color alone. Connected is the quiet dot. */
@@ -48,7 +50,19 @@ export function SessionTab({
   useEffect(() => {
     if (active) session.programStatus.acknowledge();
   }, [active, session]);
+  const git = useGitStatus(session);
+  const gitView = git?.view;
+  const repo = gitView && 'repo' in gitView ? gitView.repo : null;
+  useEffect(() => {
+    if (active) gitStatusOf(session)?.request('activate');
+  }, [active, session]);
   const program = state.status === 'connected' ? summary : null;
+  // The branch shows in the status bar; the tab carries it only for its name and tooltip.
+  const label = [
+    session.profile.name,
+    program && programSummaryText(program),
+    repo && gitSentence(repo),
+  ].filter(Boolean);
   return (
     <div
       className={`session-tab ${active ? 'selected' : ''}`}
@@ -57,7 +71,8 @@ export function SessionTab({
       <button
         role="tab"
         aria-selected={active}
-        aria-label={program ? `${session.profile.name} ${programSummaryText(program)}` : undefined}
+        aria-label={label.length > 1 ? label.join(' ') : undefined}
+        title={repo ? gitTooltip(repo) : undefined}
         onClick={select}
       >
         {!program && state.status === 'connected' && (

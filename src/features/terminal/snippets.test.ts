@@ -41,7 +41,8 @@ describe('snippet literal expansion and metadata boundaries', () => {
       expect(programMetadata(value)).toBeUndefined();
   });
   it('keeps catalog copy text plain and without a trailing Enter', () => {
-    expect(commands.filter((c) => c.group !== '로그 필터')).toHaveLength(26);
+    expect(commands.filter((c) => !['로그 필터', 'Git'].includes(c.group))).toHaveLength(26);
+    expect(commands.filter((c) => c.group === 'Git')).toHaveLength(7);
     expect(new Set(commands.map((c) => c.title)).size).toBe(commands.length);
     for (const c of commands) expect(c.command).not.toMatch(/[\r\n]|<mark>/);
   });

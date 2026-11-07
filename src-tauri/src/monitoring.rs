@@ -1,4 +1,8 @@
-use crate::{ssh::Connections, storage::Result};
+use crate::{
+    remote_exec::{self, Failure, Limits},
+    ssh::Connections,
+    storage::Result,
+};
 use serde::Serialize;
 use std::{
     collections::HashMap,
@@ -178,36 +182,25 @@ fn sample(raw: &Raw, previous: Option<&Raw>, interface: &str) -> Sample {
         interfaces,
     }
 }
+/// `/proc` is Linux only; other servers report the unsupported message below.
+const COLLECT: &str = r"LC_ALL=C; export LC_ALL; cat /proc/stat; printf '\nDACHSTERM_SECTION\n'; cat /proc/meminfo; printf '\nDACHSTERM_SECTION\n'; cat /proc/net/dev; printf '\nDACHSTERM_SECTION\n'; cat /proc/loadavg; printf '\nDACHSTERM_SECTION\n'; df -Pk";
 async fn collect(connections: &Connections, id: &str) -> Result<Raw> {
     let handle = connections.handle(id)?;
-    let work = async {
-        let mut channel = handle
-            .channel_open_session()
-            .await
-            .map_err(|_| "수집 채널 생성 실패")?;
-        channel.exec(true,"LC_ALL=C; export LC_ALL; cat /proc/stat; printf '\\nDACHSTERM_SECTION\\n'; cat /proc/meminfo; printf '\\nDACHSTERM_SECTION\\n'; cat /proc/net/dev; printf '\\nDACHSTERM_SECTION\\n'; cat /proc/loadavg; printf '\\nDACHSTERM_SECTION\\n'; df -Pk").await.map_err(|_|"수집 명령 실패")?;
-        let mut bytes = Vec::new();
-        let mut exit = None;
-        while let Some(message) = channel.wait().await {
-            match message {
-                russh::ChannelMsg::Data { data } => {
-                    if bytes.len() + data.len() > 256 * 1024 {
-                        return Err("수집 출력 제한 초과".into());
-                    }
-                    bytes.extend_from_slice(&data);
-                }
-                russh::ChannelMsg::ExitStatus { exit_status } => exit = Some(exit_status),
-                _ => {}
-            }
-        }
-        if exit != Some(0) {
-            return Err("수집 명령을 지원하지 않거나 거부되었습니다.".into());
-        }
-        parse(&String::from_utf8_lossy(&bytes))
+    let limits = Limits {
+        timeout: Duration::from_secs(10),
+        max_output: 256 * 1024,
     };
-    tokio::time::timeout(Duration::from_secs(10), work)
-        .await
-        .map_err(|_| "지표 수집 시간 초과")?
+    let output =
+        remote_exec::run(&handle, COLLECT, limits)
+            .await
+            .map_err(|failure| match failure {
+                Failure::TimedOut => "지표 수집 시간 초과".into(),
+                other => String::from(other),
+            })?;
+    if output.exit != Some(0) {
+        return Err("수집 명령을 지원하지 않거나 거부되었습니다.".into());
+    }
+    parse(&String::from_utf8_lossy(&output.stdout))
 }
 impl Monitors {
     pub fn get(&self, id: &str) -> Option<Monitor> {

@@ -34,6 +34,22 @@ describe('command panel', () => {
     expect(found.every((c) => c.command.includes('grep'))).toBe(true);
   });
 
+  it('lists Git commands that only read the repository', () => {
+    const git = basicSections('').find((s) => s.title === 'Git')?.items ?? [];
+    expect(git.map((c) => c.command.split(' ')[1])).toEqual([
+      'status',
+      'diff',
+      'log',
+      'branch',
+      'stash',
+      'worktree',
+      'reflog',
+    ]);
+    // Subcommands that would change something are never listed.
+    for (const c of git)
+      expect(c.command).not.toMatch(/\b(add|commit|push|reset|checkout|rm|drop|pop|prune)\b/);
+  });
+
   it('turns the parts to replace into variables when a basic command is saved', () => {
     expect(snippetBody("grep -F -C 3 -- '검색어' 파일명")).toBe(
       "grep -F -C 3 -- '{{검색어}}' {{파일명}}",

@@ -1,6 +1,7 @@
 import { formatBytes } from '../../lib/formatBytes';
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes } from 'react';
 import { Icon, type IconName } from '../../components/Icon';
+import { fileMarkLabels, useFileDecorations } from '../../components/fileDecorations';
 import {
   childPath,
   flattenTree,
@@ -27,6 +28,11 @@ export function useFileTree<T extends FileEntry>(
   view: FileListView,
   list: (path: string) => Promise<{ entries: T[] }>,
 ) {
+  const decorations = useFileDecorations();
+  // Each listing, the first one and every refresh, may bring new marks.
+  useEffect(() => {
+    if (listing.path.startsWith('/')) decorations?.listed(listing.path);
+  }, [decorations, listing]);
   const [state, setState] = useState<Tree<T>>({
     root: listing.path,
     expanded: new Set(),
@@ -70,8 +76,11 @@ export function useFileTree<T extends FileEntry>(
   }, [list, listing, tree]);
   const rows = useMemo(() => {
     const entries = new Map([...tree.children].map(([k, v]) => [k, v.entries]));
-    return flattenTree(listing.entries, entries, tree.expanded, view);
-  }, [listing.entries, tree, view]);
+    return flattenTree(listing.entries, entries, tree.expanded, view).map((row) => ({
+      ...row,
+      path: childPath(listing.path, row.name),
+    }));
+  }, [listing.entries, listing.path, tree, view]);
   return {
     rows,
     toggle(folder: string) {
@@ -88,10 +97,12 @@ export function FileTreeRow<T extends FileEntry>({
   toggle,
   ...button
 }: {
-  row: TreeRow<T>;
+  row: TreeRow<T> & { path?: string };
   selected: boolean;
   toggle: () => void;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
+  const decorations = useFileDecorations();
+  const mark = row.path ? decorations?.mark(row.path) : undefined;
   return (
     <div className="file-tree-row" style={{ '--file-depth': row.depth } as React.CSSProperties}>
       {row.directory ? (
@@ -117,6 +128,12 @@ export function FileTreeRow<T extends FileEntry>({
           {row.label}
           {row.symlink ? ' ↗' : ''}
         </span>
+        {mark && (
+          <small className="file-git-mark" data-mark={mark} title={`Git ${fileMarkLabels[mark]}`}>
+            <span aria-hidden="true">{mark === 'folder' ? '•' : mark}</span>
+            <span className="sr-only">, Git {fileMarkLabels[mark]}</span>
+          </small>
+        )}
         {!row.directory && <small>{formatBytes(row.size)}</small>}
       </button>
     </div>

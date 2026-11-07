@@ -16,7 +16,12 @@ export type TerminalPreferences = {
   bellNotifications: boolean;
   /** Shows the keys of vi, vim, less and tail in the status bar while they run. */
   programGuide: boolean;
+  /** Queries Git status of SSH folders when something happens. Off leaves the manual refresh. */
+  gitStatus: boolean;
+  /** Seconds a command must run before its end is notified. 0 turns this off. */
+  longCommandNotify: number;
 };
+export const longCommandChoices = [0, 10, 30, 60, 300];
 const defaults: TerminalPreferences = {
   copyOnSelect: true,
   rightClickPaste: true,
@@ -28,6 +33,8 @@ const defaults: TerminalPreferences = {
   osNotifications: true,
   bellNotifications: true,
   programGuide: true,
+  gitStatus: true,
+  longCommandNotify: 30,
 };
 export { isMac as isMacPlatform } from '../../lib/platform';
 const key = 'dachsterm.terminalPreferences';
@@ -46,6 +53,10 @@ function read(): TerminalPreferences {
       bellNotifications:
         typeof saved.bellNotifications === 'boolean' ? saved.bellNotifications : true,
       programGuide: typeof saved.programGuide === 'boolean' ? saved.programGuide : true,
+      gitStatus: typeof saved.gitStatus === 'boolean' ? saved.gitStatus : true,
+      longCommandNotify: longCommandChoices.includes(saved.longCommandNotify)
+        ? saved.longCommandNotify
+        : 30,
     };
   } catch {
     return defaults;

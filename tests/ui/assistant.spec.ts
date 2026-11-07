@@ -156,6 +156,20 @@ for (const width of [360, 800])
     await page.getByRole('button', { name: '조작표 닫기', exact: true }).click();
     await expect(page.getByLabel('조작표 선택·고정')).toHaveCount(0);
   });
+test('basic commands include the read-only Git group, found by search too', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/assistant.html');
+  const dialog = page.getByRole('dialog', { name: '명령', exact: true });
+  await dialog.getByRole('tab', { name: '기본 명령' }).click();
+  const git = dialog.getByRole('group', { name: 'Git', exact: true });
+  await expect(git).toBeVisible();
+  await expect(git.getByRole('button', { name: '변경 상태 git status' })).toBeVisible();
+  await dialog.getByLabel('명령 검색').fill('worktree');
+  await expect(dialog.getByRole('group', { name: 'Git', exact: true })).toContainText(
+    'git worktree list',
+  );
+  await dialog.getByRole('button', { name: '작업 폴더(worktree) 목록 복사' }).click();
+  expect(await page.evaluate(() => window.__clipboard)).toBe('git worktree list');
+});
 test('the search box moves through the list with the arrow keys', async ({ page }) => {
   await page.goto('/tests/ui/fixtures/assistant.html');
   const dialog = page.getByRole('dialog', { name: '명령', exact: true });

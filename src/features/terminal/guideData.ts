@@ -145,6 +145,29 @@ export const commands: CommandExample[] = [
       "tail -F -- '파일명' | grep --line-buffered -F -- '문구1' | grep --line-buffered -F -- '문구2'",
     note: 'GNU tail/grep 기준. 각 필터에 --line-buffered를 적용합니다. Ctrl+C 종료.',
   },
+  // Git: reading only. Writing to a repository is the user's own typed command.
+  { group: 'Git', title: '변경 상태', command: 'git status' },
+  { group: 'Git', title: '변경 파일과 줄 수', command: 'git diff --stat' },
+  {
+    group: 'Git',
+    title: '최근 커밋 그래프',
+    command: 'git log --oneline --graph -20',
+    note: '-20을 지우면 전체 기록을 봅니다.',
+  },
+  {
+    group: 'Git',
+    title: '브랜치와 업스트림',
+    command: 'git branch -vv',
+    note: '업스트림 대비 앞섬·뒤처짐을 함께 보여줍니다.',
+  },
+  { group: 'Git', title: '보관한 변경(stash) 목록', command: 'git stash list' },
+  { group: 'Git', title: '작업 폴더(worktree) 목록', command: 'git worktree list' },
+  {
+    group: 'Git',
+    title: 'HEAD 이동 기록',
+    command: 'git reflog -20',
+    note: '되돌린 커밋을 찾을 때 씁니다.',
+  },
 ];
 export const guideKeys: Record<GuideProgram, [string, string][]> = {
   vi: [

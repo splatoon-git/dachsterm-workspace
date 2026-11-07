@@ -94,3 +94,14 @@
     display: none;
   }
 }
+/* The branch of the focused SSH tab's folder: plain text that refreshes on click. */
+.status-bar .status-git {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}
+.status-bar .status-git:hover {
+  background: var(--color-action-hover);
+}

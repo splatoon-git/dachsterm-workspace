@@ -3,6 +3,7 @@ import { AgentHookGuide } from './AgentHookGuide';
 import {
   fontSizeChoices,
   isMacPlatform,
+  longCommandChoices,
   saveTerminalDisplay,
   saveTerminalPreferences,
   useTerminalDisplay,
@@ -140,13 +141,14 @@ export function TerminalSettingsPanel() {
       </Group>
       <Group
         title="프로그램 연동"
-        note="경로 따라가기와 조작표 자동 표시는 Bash·Zsh에 지금 세션에만 함수를 더합니다. 셸 설정 파일은 바꾸지 않고 입력한 키, 명령 인자, 이력은 수집하지 않습니다. 둘 다 끄면 아무것도 넣지 않으며, 켜면 새로 여는 셸부터 적용됩니다."
+        note="경로 따라가기와 조작표 자동 표시는 Bash·Zsh에 지금 세션에만 함수를 더합니다. 이 함수는 명령 경계(프롬프트 이동, 실패한 명령 표시)와 종료 코드도 알립니다. 셸 설정 파일은 바꾸지 않고 입력한 키, 명령 인자, 이력은 수집하지 않습니다. 둘 다 끄면 아무것도 넣지 않으며, 켜면 새로 여는 셸부터 적용됩니다. Git 자동 조회는 SSH 탭의 폴더가 바뀌거나 명령이 끝날 때 서버에서 읽기 전용 git status를 실행합니다. 끄면 상태바의 Git 버튼으로만 조회합니다."
       >
         {toggles([
           ['programGuide', 'vi·vim·less·tail 실행 중 조작표 자동 표시'],
           ['followDirectory', '새 파일 패널에서 터미널 경로 따라가기'],
           ['programStatus', '실행 중인 프로그램 상태를 탭에 표시'],
           ['clipboardWrite', '프로그램의 클립보드 복사 허용'],
+          ['gitStatus', 'SSH 폴더의 Git 상태 자동 조회'],
         ])}
       </Group>
       <Group title="알림">
@@ -154,6 +156,23 @@ export function TerminalSettingsPanel() {
           ['osNotifications', '다른 작업 중일 때 프로그램 상태를 OS 알림으로 표시'],
           ['bellNotifications', '터미널 벨도 OS 알림으로 표시'],
         ])}
+        <Row label="긴 명령 완료 알림 (다른 작업 중일 때)">
+          <select
+            aria-label="긴 명령 완료 알림"
+            value={preferences.longCommandNotify}
+            onChange={(e) => save({ longCommandNotify: Number(e.target.value) })}
+          >
+            {longCommandChoices.map((seconds) => (
+              <option key={seconds} value={seconds}>
+                {seconds === 0
+                  ? '끔'
+                  : seconds < 60
+                    ? `${seconds}초 이상`
+                    : `${seconds / 60}분 이상`}
+              </option>
+            ))}
+          </select>
+        </Row>
       </Group>
       <section className="dialog-section" aria-label="CLI 에이전트">
         <h3>CLI 에이전트</h3>

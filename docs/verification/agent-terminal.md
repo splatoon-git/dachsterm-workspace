@@ -183,6 +183,38 @@ Windows debug 앱의 SSH 탭에서 로그인한 Claude Code 2.1.319를 실행했
 - **`test-local-native`, `test-assistant-native`:** 이 PC에서 실패한다. 둘 다 첫 단계에서 `PS C:` 프롬프트를 기다리는데 PowerShell 프롬프트 테마가 다르게 표시한다. 제품 동작 검사 전에 멈추므로 결과로 삼지 않는다. `test-workspace-native`는 통과했다.
 - **PodTree:** `session.ts`의 명령 이름 공용화(`podtree_*`)를 실제 클러스터로 실행하지 않았다. 코드상 이름은 그대로다.
 
+## DX.1 나머지, DX.5, DX.9 구현 후 결과
+
+- 실행일: 2026-11-07. 대상: `eb2a16b` 위의 미커밋 트리. 실제 앱은 모든 제품 코드 변경 뒤 `npm run tauri -- build --debug --no-bundle`로 만든 `target/debug/dachsterm.exe`다. 이후 바뀐 것은 테스트와 검사 스크립트뿐이다.
+- 픽스처 이미지(`tests/openssh/Dockerfile`)에 `git`(Debian bookworm 2.39)을 더해 다시 빌드했다.
+
+| 범위 | 명령 | 결과 |
+|---|---|---|
+| Rust 단위 | `cargo test -p dachsterm --lib --locked -- git_status remote_exec monitoring` | 통과. `git_status` 7건(porcelain v2 헤더·모든 항목 종류·이름 변경 원본 건너뛰기·5,000개 상한·폴더 검증과 인용·실패 단계는 `notRepo`·오류 첫 줄 정리), `remote_exec` 2건, `monitoring` 2건 |
+| Rust 정적 | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과 |
+| 실제 OpenSSH | `npm run probe:phase1` | 종료 0. 기존 PASS 전부와 새 `PASS product Git status: repository read, fsmonitor not run, non-repository quiet`. `remote_exec`로 옮긴 모니터링도 `PASS product Linux metrics independent exec, initial sample, CPU/NET delta, memory and disk` |
+| 셸 훅(실제 셸, Docker pty) | `script -q -c "<셸> -i"`에 훅 한 줄을 넣고 `false`, 빈 줄, `true`, `(exit 3)`, `sleep 0`, 훅 재입력 후 명령 실행 | Bash 5.2.15, Zsh 5.9: 명령마다 `C … D;<코드> A`, 빈 줄은 `C` 없이 `D;1 A`(앱이 버림), 코드 1·3 정확, 두 번 넣어도 `C` 하나. Bash 3.2.57(`bash:3.2` + util-linux): `D;<코드> A`만 나오고 `C`는 없음(앱의 Enter 방식) |
+| Vitest | `npx vitest run` | 543건 중 542 통과, 1건 실패: 기본 명령 개수(26)를 세는 `snippets.test.ts`가 Git 7개 추가로 33을 받음. 테스트를 Git 분류 제외 26, Git 7로 고친 뒤 `npx vitest run src/features/terminal/snippets.test.ts` 4/4. 전체 재실행은 하지 않았다 |
+| Vitest(새·변경) | `commandMarks`, `gitStatus`, `shellHook`, `commandItems`, `preferences` | 11, 10, 5, 6, 7건 통과 |
+| Playwright | `npx playwright test` | 142/142. 새 검사: 명령 창 기본 명령에 Git 분류와 검색 |
+| typecheck·lint·format | `npm run typecheck`, `npm run lint`, `npm run format:check` | 통과 |
+| 실제 앱(WebView2) | `node scripts/run-phase1.mjs --native --reuse-build --agent-only` | 종료 0. 아래 네 줄이 새로 추가된 단계(`scripts/verify-developer-workflow.mjs`) |
+
+실제 앱에서 확인한 것:
+
+- `PASS native failed commands marked with their code, empty line and success not`: `false` 뒤 막대 1개(툴팁 `종료 코드 1`), 빈 Enter·`true` 뒤 그대로, `(exit 3)` 뒤 2개.
+- `PASS native Ctrl+Shift+Up/Down moves between prompts`: `seq 1 200` 출력 아래에서 위로 이동하면 그 명령의 프롬프트가 보이고 아래로 이동하면 끝으로 간다.
+- `PASS native Git status bar, tab name and tooltip, tree marks, fsmonitor not run`: 저장소로 `cd`하면 상태바 `main ●3`, 접근성 이름 `Git main, 변경 3개. 새로 고침`, 툴팁 `업스트림 없음`·`수정 2 · 추적 안 함 1`, 탭 접근성 이름과 툴팁. 셸에서 `git add` 뒤 5초가 지나 다음 프롬프트에서 툴팁이 `수정 2 · 추가 1`로 바뀜. 파일 트리 `a.txt` M, `new.txt` A, `src` 폴더 표시. 저장소에 설정한 `core.fsmonitor` 프로그램은 앱 조회 동안 실행되지 않음(사용자가 셸에서 실행한 `git add`는 실행하므로 그 흔적은 지우고 다음 앱 조회 뒤 다시 확인).
+- `PASS native Git status stays hidden outside a repository and without Git`: `/tmp`에서 표시 없음, 서버의 `git`을 숨기고 저장소로 들어가도 표시와 오류 문구 없음.
+- 첫 실행은 위 fsmonitor 단계에서 실패했다. 검사가 셸에서 실행한 `git add`가 fsmonitor를 실행한 것을 앱의 실행으로 잘못 판정한 검사 결함이어서 순서를 고쳐 다시 실행했다.
+
+대기와 미실행:
+
+- **긴 명령 OS 알림:** 실제 토스트는 확인하지 않았다. 판정(시간, 재생 중, 설정 0)은 단위 테스트, 알림 경로는 AT.3과 같다.
+- **Bash 3.2 Enter 방식:** 단위 테스트와 셸 단독 확인뿐이다. 실제 앱에서 Bash 3.2 서버에 접속한 확인은 없다(macOS 원격·로컬 셸은 M 항목).
+- **자동 조회 끔, 시간 초과로 멈춤, 수동 조회 오류 표시:** 단위 테스트뿐이다.
+- **전체 게이트** `verify-windows.ps1 -Native`, 푸시 후 CI, Mac 실기기는 실행하지 않았다.
+
 ## tmux (DX.0)
 
 `script ... -c "tmux new-session -s at0 'claude'"`로 확인했다.

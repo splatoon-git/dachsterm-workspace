@@ -2,7 +2,7 @@ import type { Terminal } from '@xterm/xterm';
 import { call, errorText } from '../../lib/ipc';
 import { terminalPreferences } from './preferences';
 
-export type AttentionReason = 'blocked' | 'done' | 'error' | 'bell' | 'message';
+export type AttentionReason = 'blocked' | 'done' | 'error' | 'bell' | 'message' | 'command';
 
 const tabIntervalMs = 5000;
 const appIntervalMs = 2000;
@@ -13,6 +13,7 @@ const reasonLabels: Record<AttentionReason, string> = {
   error: '오류',
   bell: '알림',
   message: '알림',
+  command: '명령 완료',
 };
 const unsafeCharacters =
   // eslint-disable-next-line no-control-regex -- removing these is the point.
@@ -64,7 +65,12 @@ type NotifierHost = {
 export function programNotifier(host: NotifierHost, limiter = sharedLimiter) {
   return (reason: AttentionReason, detail = '') => {
     const preferences = terminalPreferences();
-    const enabled = reason === 'bell' ? preferences.bellNotifications : preferences.osNotifications;
+    const enabled =
+      reason === 'bell'
+        ? preferences.bellNotifications
+        : reason === 'command'
+          ? preferences.longCommandNotify > 0
+          : preferences.osNotifications;
     if (!enabled || host.replaying()) return;
     // The user is already looking at this pane.
     if (document.hasFocus() && document.activeElement === host.terminal.textarea) return;

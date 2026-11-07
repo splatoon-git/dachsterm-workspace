@@ -79,6 +79,8 @@ describe('terminal paths and clipboard safety', () => {
       osNotifications: false,
       bellNotifications: false,
       programGuide: false,
+      gitStatus: false,
+      longCommandNotify: 0,
     });
     expect(JSON.parse(localStorage.getItem('dachsterm.terminalPreferences')!)).toEqual({
       copyOnSelect: false,
@@ -91,6 +93,8 @@ describe('terminal paths and clipboard safety', () => {
       osNotifications: false,
       bellNotifications: false,
       programGuide: false,
+      gitStatus: false,
+      longCommandNotify: 0,
     });
   });
 });

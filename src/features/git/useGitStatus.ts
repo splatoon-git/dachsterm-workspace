@@ -1,0 +1,135 @@
+import { useMemo, useSyncExternalStore } from 'react';
+import { call, errorText } from '../../lib/ipc';
+import { commandMarksOf } from '../terminal/commandMarks';
+import { terminalPreferences, useTerminalPreferences } from '../terminal/preferences';
+import type { TerminalSession } from '../terminal/session';
+import { sessionKind } from '../terminal/sessionKind';
+import { GitScheduler, treeMarks, type GitEvent, type GitResult } from './gitStatus';
+
+/**
+ * The Git status of one SSH tab. It listens to what the tab already reports (folder changes,
+ * prompts, program states) and the views report tab switches and file tree refreshes.
+ */
+class GitStatusStore {
+  private listeners = new Set<() => void>();
+  private version = 0;
+  readonly scheduler: GitScheduler;
+  constructor(private readonly session: TerminalSession) {
+    this.scheduler = new GitScheduler({
+      query: async (folder) => {
+        const id = session.connectionId;
+        const result = await call<GitResult>('git_status', { id, folder });
+        return id === session.connectionId ? result : null;
+      },
+      auto: () => terminalPreferences().gitStatus && this.connected,
+      now: () => Date.now(),
+      later: (run, ms) => {
+        const timer = setTimeout(run, ms);
+        return () => clearTimeout(timer);
+      },
+      changed: () => this.changed(),
+      failed: errorText,
+    });
+    let { directory, status } = session.snapshot();
+    let connection = session.connectionId;
+    session.subscribe(() => {
+      const now = session.snapshot();
+      if (session.connectionId !== connection) {
+        connection = session.connectionId;
+        this.scheduler.clear();
+        this.changed();
+      }
+      if (now.status === 'connected' && (now.directory !== directory || status !== 'connected'))
+        this.request('folder', now.directory);
+      ({ directory, status } = now);
+    });
+    let program = session.programStatus.snapshot()?.state;
+    session.programStatus.subscribe(() => {
+      const state = session.programStatus.snapshot()?.state;
+      if (state !== program && (state === 'done' || state === 'blocked'))
+        this.request('program', this.directory);
+      program = state;
+    });
+    // A prompt drawn again from old output says nothing about the folder now.
+    commandMarksOf(session.terminal)?.onPrompt((replaying) => {
+      if (!replaying) this.request('prompt', this.directory);
+    });
+  }
+  private get connected() {
+    return this.session.snapshot().status === 'connected';
+  }
+  get directory() {
+    return this.session.snapshot().directory;
+  }
+  /** The folder the sidebar's file tree lists. */
+  treeFolder: string | null = null;
+  listed = (folder: string) => {
+    if (folder !== this.treeFolder) {
+      this.treeFolder = folder;
+      this.changed();
+    }
+    this.request('refresh', folder);
+  };
+  request(event: GitEvent, folder = this.directory) {
+    if (event === 'manual' && !this.connected) return;
+    this.scheduler.request(event, folder);
+  }
+  private changed() {
+    this.version++;
+    this.listeners.forEach((listener) => listener());
+  }
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+  snapshot = () => this.version;
+}
+
+const stores = new WeakMap<TerminalSession, GitStatusStore>();
+
+/** SSH tabs only. FTP and PodTree have no shell folder, and local tabs differ (design DX.5). */
+export function gitStatusOf(session: TerminalSession | undefined) {
+  if (!session || sessionKind(session) !== 'ssh') return null;
+  let store = stores.get(session);
+  if (!store) stores.set(session, (store = new GitStatusStore(session)));
+  return store;
+}
+
+const noStore = { subscribe: () => () => {}, snapshot: () => 0 };
+const noSession = { subscribe: () => () => {}, snapshot: () => undefined };
+
+/** The status of the folder the tab's shell is in. */
+export function useGitStatus(session: TerminalSession | undefined) {
+  const store = gitStatusOf(session);
+  useSyncExternalStore((store ?? noStore).subscribe, (store ?? noStore).snapshot);
+  const directory = useSyncExternalStore(
+    session?.subscribe ?? noSession.subscribe,
+    () => session?.snapshot().directory,
+  );
+  const { gitStatus: auto } = useTerminalPreferences();
+  if (!store) return null;
+  return {
+    view: store.scheduler.view(directory),
+    error: store.scheduler.error,
+    /** The folder is known, so a manual query is possible. */
+    directory,
+    auto,
+    refresh: () => store.request('manual', directory),
+  };
+}
+
+/** File tree marks for the folder the sidebar lists, and the event of listing it again. */
+export function useGitFileMarks(session: TerminalSession | undefined) {
+  const store = gitStatusOf(session);
+  useSyncExternalStore((store ?? noStore).subscribe, (store ?? noStore).snapshot);
+  const view = store?.treeFolder ? store.scheduler.view(store.treeFolder) : null;
+  const repo = view && 'repo' in view ? view.repo : null;
+  const marks = useMemo(() => (repo ? treeMarks(repo) : null), [repo]);
+  const listed = store?.listed;
+  return useMemo(
+    () => (listed ? { mark: (path: string) => marks?.get(path), listed } : null),
+    [listed, marks],
+  );
+}

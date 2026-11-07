@@ -38,6 +38,7 @@ fn main() {
             "prompt_files_upload",
             "remote_ports",
             "tmux_current_path",
+            "git_status",
             "archive_run",
             "file_batch",
             "file_clipboard",
