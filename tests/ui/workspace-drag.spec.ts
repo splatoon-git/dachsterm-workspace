@@ -25,6 +25,8 @@ async function open(page: Page, tabs: number, extra = '') {
 }
 /** Presses a tab and moves past the threshold, leaving the button down. */
 async function grab(page: Page, name: string) {
+  // A preset gives every group a new tab bar, so wait for the tab before reading its position.
+  await expect(tab(page, name)).toBeVisible();
   const box = (await tab(page, name).boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
@@ -110,6 +112,7 @@ test('dropping on a tab bar reorders with an insertion bar and crosses groups', 
   const before = await bars(page);
   expect(before[0]).toContain('b');
   await grab(page, 'b');
+  await expect(page.getByRole('tablist')).toHaveCount(2);
   const target = (await page.getByRole('tablist').nth(1).boundingBox())!;
   await dropAt(page, target.x + target.width - 20, target.y + 12);
   const after = await bars(page);
