@@ -35,7 +35,7 @@ for (const width of [1280, 800, 560, 360]) {
     if (width <= 700) await toggle.click();
     // No tab survives a restart, so the empty file view must not be what opens.
     await expect(connections).toHaveAttribute('aria-selected', 'true');
-    await page.keyboard.press('Control+Shift+F');
+    await page.keyboard.press('Control+Shift+O');
     await expect(page.getByRole('searchbox')).toBeFocused();
     await page.getByRole('searchbox').fill('missing-server');
     await page.keyboard.press('Control+Shift+E');
@@ -99,6 +99,8 @@ test('the start page opens in a saved split and a preset menu closes after use',
   await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
   await expect(page.locator('.tab-strip')).toHaveCount(4);
   await expect(page.getByRole('tab', { name: '시작하기', exact: true })).toHaveCount(0);
+  await expect(menu).not.toHaveAttribute('open');
+  await menu.locator('summary').click();
   await page.getByRole('button', { name: '모든 탭 상하', exact: true }).click();
   await expect(menu).not.toHaveAttribute('open');
   await expect(page.locator('.tab-strip')).toHaveCount(2);
@@ -136,7 +138,8 @@ test('fullscreen focuses the workspace and restores the sidebar without replacin
   await expect(page.locator('#workspace-sidebar')).toBeVisible();
   await expect(page.locator('.xterm')).toHaveAttribute('data-instance', 'original');
   await page.keyboard.press('F11');
-  await page.keyboard.press('Control+Shift+F');
+  await expect(page.locator('footer')).toBeVisible();
+  await page.keyboard.press('Control+Shift+O');
   await expect(page.locator('.toolbar')).toBeVisible();
   await expect(page.getByRole('searchbox')).toBeFocused();
 });

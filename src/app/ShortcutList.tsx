@@ -8,6 +8,8 @@ export function ShortcutList() {
       <dt>사이드바 접기 / 펼치기</dt>
       <dd>Ctrl + Shift + B</dd>
       <dt>세션 검색</dt>
+      <dd>Ctrl + Shift + O</dd>
+      <dt>터미널 검색</dt>
       <dd>Ctrl + Shift + F</dd>
       <dt>파일</dt>
       <dd>Ctrl + Shift + E</dd>
@@ -19,6 +21,8 @@ export function ShortcutList() {
       <dd>Ctrl + Alt + 방향키</dd>
       <dt>탭 이동 (탭에 포커스)</dt>
       <dd>← / → · Home / End</dd>
+      <dt>탭 메뉴 (탭에 포커스)</dt>
+      <dd>Shift + F10 · 메뉴 키 · 우클릭</dd>
       <dt>터미널 복사 / 붙여넣기</dt>
       <dd>Ctrl + Shift + C / V · Shift + Insert</dd>
       <dt>터미널 글꼴 크기</dt>

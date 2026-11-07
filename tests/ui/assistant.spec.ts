@@ -11,21 +11,25 @@ test('narrow snippet editor and explicit program metadata expand/clear without l
   await dialog.getByLabel('명령 본문', { exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'target/verification/snippet-360.png' });
   await page.keyboard.press('Escape');
-  const guide = page.getByRole('complementary');
-  await guide.getByRole('button', { name: '조작표 열기', exact: true }).click();
-  await guide.getByLabel('실행 알림 사용').check();
-  await guide.getByRole('button', { name: '조작표 접기', exact: true }).click();
+  const guide = page.getByRole('group', { name: '프로그램 조작표' });
+  const full = page.getByRole('region', { name: '조작표 전체 보기' });
+  await page.getByRole('button', { name: '조작표 전체 보기', exact: true }).click();
+  await full.getByLabel('실행 알림 사용').check();
+  await full.getByRole('button', { name: '조작표 닫기', exact: true }).click();
+  await expect(full).toHaveCount(0);
   await page.evaluate(() => window.__guide('cat'));
-  await expect(guide.getByRole('button', { name: '조작표 · cat 접기', exact: true })).toBeVisible();
+  await expect(guide).toContainText('cat');
+  await expect(guide.getByRole('button', { name: '전체 보기', exact: true })).toBeVisible();
   await page.evaluate(() => window.__guide(null));
-  await expect(guide.getByRole('button', { name: '조작표 열기', exact: true })).toBeVisible();
-  await guide.getByRole('button', { name: '조작표 열기', exact: true }).click();
-  await guide.getByLabel('조작표 선택·고정').selectOption('vim');
+  await expect(guide.getByRole('button', { name: '전체 보기', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '조작표 전체 보기', exact: true }).click();
+  await full.getByLabel('조작표 선택·고정').selectOption('vim');
   await page.evaluate(() => {
     window.__guide('cat');
     window.__guide(null);
   });
-  await expect(guide.getByRole('button', { name: '조작표 · vim 접기', exact: true })).toBeVisible();
+  await expect(guide.locator('.guide-inline strong')).toHaveText('vim');
+  await expect(guide.getByRole('button', { name: '고정 해제', exact: true })).toBeVisible();
 });
 test('explicit multi-target review cancels without sending and sends once after confirmation', async ({
   page,
@@ -122,9 +126,11 @@ for (const width of [360, 800])
     expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await page.screenshot({ path: `target/verification/assistant-${width}.png` });
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: /조작표 .*열기/ }).click();
+    await page.getByRole('button', { name: '조작표 전체 보기', exact: true }).click();
     await page.getByLabel('조작표 선택·고정').selectOption('vim');
-    await expect(page.getByRole('complementary')).toContainText(':q! + Enter');
+    await expect(page.getByRole('region', { name: '조작표 전체 보기' })).toContainText(
+      ':q! + Enter',
+    );
     await page.getByRole('button', { name: '끄기', exact: true }).click();
     await expect(page.getByLabel('조작표 선택·고정')).toHaveCount(0);
   });

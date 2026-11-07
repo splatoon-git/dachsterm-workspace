@@ -19,6 +19,7 @@ import {
   groups,
   leaveTab,
   moveTab,
+  openBeside,
   openTab,
   parseSaved,
   selectTab,
@@ -228,6 +229,28 @@ describe('splitting', () => {
   it('splits a group using one of its own tabs when more remain', () => {
     const layout = splitWith(withTabs('a', 'b', 'c'), key('c'), 'root', 'left', ids());
     expect(shape(layout.root)).toEqual({ row: [['c'], ['a', 'b']] });
+  });
+});
+
+describe('opening beside a group', () => {
+  it('puts a new tab in a new group on the chosen side and focuses it', () => {
+    const layout = openBeside(withTabs('a'), session('b'), 'root', 'right', ids());
+    expect(shape(layout.root)).toEqual({ row: [['a'], ['b']] });
+    expect(groupOfTab(layout.root, key('b'))!.id).toBe(layout.focused);
+    const below = openBeside(withTabs('a'), session('b'), 'root', 'bottom', ids());
+    expect(shape(below.root)).toEqual({ column: [['a'], ['b']] });
+  });
+
+  it('leaves empty restored groups for later tabs', () => {
+    const restored = applyPreset(withTabs('a'), 'columns', ids());
+    const layout = openBeside(restored, session('b'), groups(restored.root)[0].id, 'bottom', ids());
+    expect(shape(layout.root)).toEqual({ row: [{ column: [['a'], ['b']] }, []] });
+  });
+
+  it('falls back to a plain open when the target is gone or the tab is open', () => {
+    const layout = withTabs('a');
+    expect(shape(openBeside(layout, session('b'), 'missing', 'right').root)).toEqual(['a', 'b']);
+    expect(openBeside(layout, session('a'), 'root', 'right')).toBe(layout);
   });
 });
 

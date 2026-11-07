@@ -6,6 +6,7 @@ import { attachTerminalLinks } from './terminalLinks';
 import { programNotifier } from './terminalNotify';
 import { KittyKeyboard, modifiedEnter } from './kittyKeyboard';
 import { ProgramStatus } from './programStatus';
+import { PaneView } from './paneView';
 import type {
   LocalTarget,
   PodTreeLaunch,
@@ -78,6 +79,7 @@ export class TerminalSession {
   readonly search = new SearchAddon();
   private readonly keyboard = new KittyKeyboard();
   readonly programStatus = new ProgramStatus();
+  readonly view = new PaneView();
   enterSequence(event: KeyboardEvent) {
     const flags = this.keyboard.flags(this.terminal.buffer.active.type);
     return modifiedEnter(event, flags, this.keyboard.otherKeys);

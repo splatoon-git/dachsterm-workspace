@@ -27,7 +27,8 @@ function setup() {
       ),
     );
   const report = (body: string) => act(() => programStatus.report(body));
-  const label = () => host.querySelector('[role=tab] small')?.textContent;
+  // A connected tab shows a dot and names its state for screen readers; a program shows its badge.
+  const label = () => host.querySelector('[role=tab] small, [role=tab] .sr-only')?.textContent;
   return { programStatus, render, report, label };
 }
 const roots: Root[] = [];

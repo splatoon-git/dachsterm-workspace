@@ -44,16 +44,11 @@ dialog select {
 }
 .tools > button,
 .toolbar-menu > summary,
-.workspace-controls button,
-.terminal-tools button,
-.terminal-tools input,
 .file-toolbar button,
 .path-form input,
 .path-form button,
 .file-filter input,
-.file-filter select,
-.profile-actions > button,
-.profile-actions summary {
+.file-filter select {
   min-height: var(--control-height);
   height: var(--control-height);
   padding: 0 10px;
@@ -63,11 +58,8 @@ dialog select {
 }
 .tools > button,
 .toolbar-menu > summary,
-.workspace-controls button,
-.terminal-tools button,
 .file-toolbar button,
-.path-form button,
-.profile-actions summary {
+.path-form button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -77,8 +69,7 @@ dialog select {
 .tools .primary span {
   margin: 0;
 }
-.toolbar-menu > summary::marker,
-.profile-actions summary::marker {
+.toolbar-menu > summary::marker {
   content: '';
 }
 .toolbar-menu > summary::after {
@@ -240,20 +231,6 @@ dialog select {
 .profile-target span {
   font-size: 11px;
 }
-.profile-actions {
-  gap: 6px;
-  padding: 0 10px 10px;
-}
-.profile-actions details {
-  margin-left: auto;
-}
-.profile-actions summary {
-  width: 32px;
-  border: 1px solid var(--color-border-subtle);
-}
-.profile-actions details[open] button {
-  min-height: 32px;
-}
 .workspace-sidebar .local-note {
   flex-shrink: 0;
   padding: 12px 16px;
@@ -343,47 +320,34 @@ dialog select {
 .transfer-tray .file-toolbar {
   padding-inline: 0;
 }
-.workspace-controls {
-  gap: 8px;
-  padding: 8px 12px;
-}
-.workspace-controls > span {
-  min-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.terminal-tools {
-  gap: 8px;
-  padding: 8px 10px;
-  justify-content: space-between;
-}
 .terminal-search {
+  position: absolute;
+  z-index: 6;
+  top: var(--space-sm);
+  right: var(--space-lg);
   display: flex;
-  flex: 1 1 160px;
-  min-width: 0;
-  max-width: 340px;
   gap: 4px;
   align-items: center;
+  width: min(340px, calc(100% - 2 * var(--space-lg)));
+  padding: var(--space-xs);
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface-panel);
+  box-shadow: var(--shadow-popup);
 }
 .terminal-search input {
   min-width: 40px;
   width: 100%;
   flex: 1;
+  height: 28px;
   font-size: 12px;
 }
 .terminal-search button {
-  width: 32px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
   flex-shrink: 0;
   padding: 0;
-}
-.terminal-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.terminal-actions button {
-  padding-inline: 8px;
 }
 .terminal-preferences {
   display: grid;
@@ -399,14 +363,6 @@ dialog select {
 }
 .terminal-preferences select {
   height: 36px;
-}
-.connection-message {
-  padding: 5px 12px;
-  font-size: 11px;
-  color: var(--color-text-secondary);
-}
-.connection-message.error {
-  color: var(--color-status-error);
 }
 .detached-grid,
 .detached-grid:not(.files-hidden) {
@@ -468,15 +424,6 @@ dialog select {
   .toolbar-menu > summary {
     font-size: 12px;
   }
-  .terminal-tools {
-    padding: 8px;
-  }
-  .workspace-controls {
-    gap: 6px;
-  }
-  .workspace-controls > span {
-    flex-basis: 100%;
-  }
   .detached-grid,
   .detached-grid:not(.files-hidden) {
     position: relative;
@@ -525,25 +472,11 @@ dialog select {
 .sidebar-empty {
   padding: 18px 12px;
 }
-.workspace-controls {
-  gap: 6px;
-  padding: 5px 8px;
-}
-.workspace-controls button {
-  height: 28px;
-  min-height: 28px;
-  font-size: 11px;
-  padding-inline: 7px;
-}
-.workspace-controls .detach-button {
-  width: 28px;
-  padding: 0;
-}
+/* Lives in the 24px status bar, so every control fits in it. */
 .split-input {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-right: auto;
   font-size: 11px;
 }
 .split-input > label {
@@ -551,8 +484,10 @@ dialog select {
   align-items: center;
   gap: 6px;
 }
-.split-input select {
-  height: 28px;
+.split-input select,
+.split-input button {
+  height: 20px;
+  min-height: 20px;
   padding: 0 5px;
   font-size: 11px;
 }
@@ -570,7 +505,6 @@ dialog select {
   background: var(--color-surface-subtle);
 }
 .terminal-fullscreen > .toolbar,
-.terminal-fullscreen > footer,
 .terminal-fullscreen .workspace-sidebar,
 .terminal-fullscreen .sidebar-backdrop,
 .terminal-fullscreen .unified-workspace > .resize-handle {
@@ -606,9 +540,6 @@ dialog select {
 }
 .terminal-fullscreen .detached-grid > .terminal-pane {
   grid-column: 1;
-}
-.terminal-fullscreen > .monitor {
-  display: none;
 }
 
 .transfer-policy {

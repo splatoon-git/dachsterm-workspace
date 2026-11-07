@@ -91,11 +91,39 @@
   text-decoration: underline;
 }
 .program-guide {
-  flex: 0 0 auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   min-width: 0;
-  border-top: 1px solid var(--color-border-default);
-  padding: 4px 8px;
+}
+.guide-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.guide-key kbd {
+  font-size: 10px;
+}
+.guide-popover {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + var(--space-sm));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 2 * var(--space-lg)));
+  max-height: min(360px, 60vh);
+  overflow: auto;
+  padding: var(--space-md) var(--space-lg);
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-medium);
   background: var(--color-surface-panel);
+  box-shadow: var(--shadow-popup);
+  color: var(--color-text-primary);
+  font-size: var(--font-small);
 }
 .guide-controls {
   display: flex;
@@ -113,23 +141,18 @@
   align-items: center;
   gap: 4px;
 }
-.guide-content {
-  max-height: 150px;
-  overflow: auto;
-  font-size: var(--font-small);
-}
-.guide-content dl {
+.guide-popover dl {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 18px;
   margin: 8px 0;
 }
-.guide-content dl > div {
+.guide-popover dl > div {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-.guide-content dd {
+.guide-popover dd {
   margin: 0;
 }
 @media (max-width: 600px) {

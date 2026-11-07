@@ -144,7 +144,15 @@ export function MonitorBar({ session }: { session: TerminalSession }) {
   const memory = current ? (current.memoryUsed / current.memoryTotal) * 100 : null;
   const disk = current?.disks.find((d) => d.mount === '/');
   return (
-    <div className={`monitor ${stale ? 'stale' : ''}`}>
+    <div
+      className={`monitor ${stale ? 'stale' : ''}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && open) {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
       {open && (
         <section className="monitor-details" aria-label="서버 모니터링 상세">
           <div className="monitor-heading">
@@ -243,27 +251,15 @@ export function MonitorBar({ session }: { session: TerminalSession }) {
           </div>
         </section>
       )}
-      <button className="monitor-bar" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span className="monitor-host">
-          <Icon name="activity" size={15} />
-          {session.profile.host}
-        </span>
-        <span>
-          CPU <b>{percent(current?.cpu)}</b>
-        </span>
-        <span>
-          RAM <b>{percent(memory)}</b>
-        </span>
-        <span>
-          ↓ <b>{rate(current?.rx)}</b>
-        </span>
-        <span>
-          ↑ <b>{rate(current?.tx)}</b>
-        </span>
-        <span>
-          DISK <b>{disk ? percent((disk.used / disk.total) * 100) : '—'}</b>
-        </span>
-        <small>{stale ? '오래된 값' : view?.enabled === false ? '수집 꺼짐' : '상세 보기'}</small>
+      <button
+        className="monitor-bar"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        title={`${session.profile.host} 서버 모니터 · ↓ ${rate(current?.rx)} · ↑ ${rate(current?.tx)} · DISK ${disk ? percent((disk.used / disk.total) * 100) : '—'}`}
+      >
+        <Icon name="activity" size={13} />
+        CPU <b>{percent(current?.cpu)}</b> · RAM <b>{percent(memory)}</b>
+        {stale ? <small>오래된 값</small> : view?.enabled === false && <small>수집 꺼짐</small>}
       </button>
     </div>
   );

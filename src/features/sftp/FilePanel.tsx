@@ -7,15 +7,8 @@ import { TerminalSession } from '../terminal/session';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
 import { selectionAfterClick, withoutNested, type FileEntry } from './fileList';
-import {
-  FileAction,
-  fileMenuPosition,
-  FilePathBar,
-  FileTreeRow,
-  useFileMenuFocus,
-  useFileTree,
-  type FileMenuPosition,
-} from './fileTree';
+import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
+import { FileAction, FilePathBar, FileTreeRow, useFileTree } from './fileTree';
 import { FollowControl, useDirectoryFollow } from './follow';
 type FileClipboard = { sourceId: string; operation: 'copy' | 'move'; paths: string[] };
 type BatchOutcome = { completed: string[]; errors: string[] };
@@ -68,8 +61,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
   const [selected, setSelected] = useState<Entry | null>(null);
   const [selection, setSelection] = useState<string[]>([]);
   const [clipboard, setClipboard] = useState<FileClipboard | null>(null);
-  const [context, setContext] = useState<FileMenuPosition | null>(null);
-  const menu = useFileMenuFocus(context, () => setContext(null));
+  const [context, setContext] = useState<MenuPoint | null>(null);
   const anchor = useRef('');
   const [filter, setFilter] = useState('');
   const [sort, setSort] = useState('name');
@@ -463,7 +455,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                 setSelected(e);
                 setSelection([e.name]);
               }
-              setContext(fileMenuPosition(event));
+              setContext({ x: event.clientX, y: event.clientY });
             }}
             onDoubleClick={() => {
               if (e.directory || e.symlink) void load(`${listing.path}/${e.name}`);
@@ -684,65 +676,40 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
         </p>
       )}
       {context && selection.length > 0 && (
-        <div
-          ref={menu}
-          role="menu"
-          className="file-context"
-          style={{ left: context.x, top: context.y }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setContext(null);
-          }}
-        >
-          <button role="menuitem" onClick={() => void copySelection('copy')}>
-            복사 <kbd>Ctrl+C</kbd>
-          </button>
-          <button role="menuitem" onClick={() => void copySelection('move')}>
-            잘라내기 <kbd>Ctrl+X</kbd>
-          </button>
-          <button role="menuitem" disabled={!clipboard} onClick={() => void paste()}>
-            붙여넣기 <kbd>Ctrl+V</kbd>
-          </button>
-          <button
-            role="menuitem"
-            disabled={isFtp || selection.length !== 1 || selected?.directory}
-            onClick={() => {
-              setContext(null);
-              setOperation('edit');
-            }}
-          >
-            다른 프로그램으로 편집
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(selectedPaths.join('\n'))
-                .catch(() => setError('경로 복사 실패'));
-              setContext(null);
-            }}
-          >
-            전체 경로 복사
-          </button>
-          <button role="menuitem" disabled={isFtp} onClick={() => archive('compress')}>
-            압축하기…
-          </button>
-          <button
-            role="menuitem"
-            disabled={isFtp || selection.length !== 1 || selected?.directory}
-            onClick={() => archive('extract')}
-          >
-            압축 해제…
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              setContext(null);
-              setOperation('delete');
-            }}
-          >
-            삭제 <kbd>Delete</kbd>
-          </button>
-        </div>
+        <ContextMenu
+          label="파일 작업"
+          at={context}
+          close={() => setContext(null)}
+          items={[
+            { label: '복사', shortcut: 'Ctrl+C', run: () => void copySelection('copy') },
+            { label: '잘라내기', shortcut: 'Ctrl+X', run: () => void copySelection('move') },
+            {
+              label: '붙여넣기',
+              shortcut: 'Ctrl+V',
+              disabled: !clipboard,
+              run: () => void paste(),
+            },
+            {
+              label: '다른 프로그램으로 편집',
+              disabled: isFtp || selection.length !== 1 || !!selected?.directory,
+              run: () => setOperation('edit'),
+            },
+            {
+              label: '전체 경로 복사',
+              run: () =>
+                void navigator.clipboard
+                  .writeText(selectedPaths.join('\n'))
+                  .catch(() => setError('경로 복사 실패')),
+            },
+            { label: '압축하기…', disabled: isFtp, run: () => archive('compress') },
+            {
+              label: '압축 해제…',
+              disabled: isFtp || selection.length !== 1 || !!selected?.directory,
+              run: () => archive('extract'),
+            },
+            { label: '삭제', shortcut: 'Delete', danger: true, run: () => setOperation('delete') },
+          ]}
+        />
       )}
       {operation && (
         <Dialog

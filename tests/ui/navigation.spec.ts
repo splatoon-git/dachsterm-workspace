@@ -19,7 +19,7 @@ for (const width of [1280, 560, 360]) {
     await expect(sidebar).toBeHidden();
     await page.reload();
     await expect(sidebar).toBeHidden();
-    await page.keyboard.press('Control+Shift+F');
+    await page.keyboard.press('Control+Shift+O');
     await expect(sidebar).toBeVisible();
     await expect(page.getByRole('searchbox')).toBeFocused();
     const view = page.locator('.toolbar-menu > summary').filter({ hasText: '보기' });

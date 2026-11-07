@@ -6,8 +6,10 @@ import { call, errorText, type Profile } from '../lib/ipc';
 import { TerminalSession } from '../features/terminal/session';
 import { SessionTerminal } from './SessionTerminal';
 import { FilePanel } from '../features/sftp/FilePanel';
-import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { Icon } from '../components/Icon';
+import { ToolbarMenu } from '../components/ToolbarMenu';
+import { StatusBar } from './StatusBar';
+import { TerminalSettings } from '../features/terminal/TerminalSettings';
 import { SnippetDialog } from '../features/terminal/SnippetDialog';
 import { CommandCatalog } from '../features/terminal/CommandGuide';
 import { StatusBadge, useProgramSummary } from '../features/terminal/StatusBadge';
@@ -21,18 +23,24 @@ export function DetachedWindow({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { fullscreen, toggleFullscreen } = useFullscreen(setError);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.code === 'F11' && !document.querySelector('dialog[open]')) {
+      if (document.querySelector('dialog[open]')) return;
+      if (e.code === 'F11') {
         e.preventDefault();
         e.stopPropagation();
         void toggleFullscreen();
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.code === 'KeyF') {
+        e.preventDefault();
+        e.stopPropagation();
+        session?.view.set({ search: true });
       }
     };
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);
-  }, [toggleFullscreen]);
+  }, [toggleFullscreen, session]);
   const [filesOpen, setFilesOpen] = useState(true);
   useEffect(() => {
     let disposed = false;
@@ -61,23 +69,29 @@ export function DetachedWindow({ id }: { id: string }) {
           {session && <DetachedProgramStatus session={session} />}
         </div>
         <div className="tools">
-          <button aria-pressed={filesOpen} onClick={() => setFilesOpen((v) => !v)}>
-            <Icon name="folder" size={16} />
-            원격 파일
-          </button>
+          <ToolbarMenu label="메뉴">
+            <button aria-pressed={filesOpen} onClick={() => setFilesOpen((v) => !v)}>
+              <Icon name="folder" size={16} />
+              원격 파일
+            </button>
+            <button disabled={!session} onClick={() => session?.view.set({ search: true })}>
+              터미널 검색
+            </button>
+            <button disabled={!session} onClick={() => session?.view.set({ log: true })}>
+              세션 기록
+            </button>
+            <button disabled={!session} onClick={() => setSnippetsOpen(true)}>
+              스니펫
+            </button>
+            <button onClick={() => setCommandsOpen(true)}>기본 명령·로그 필터</button>
+            <button onClick={() => setSettingsOpen(true)}>터미널 설정</button>
+            <button onClick={() => void toggleFullscreen()}>
+              {fullscreen ? '전체화면 종료' : '전체화면'}
+            </button>
+          </ToolbarMenu>
           <small>독립 창 · 닫으면 이 연결 종료</small>
         </div>
       </header>
-      <div className="workspace-controls detached-controls">
-        <BroadcastControl />
-        <button disabled={!session} onClick={() => setSnippetsOpen(true)}>
-          스니펫
-        </button>
-        <button onClick={() => setCommandsOpen(true)}>기본 명령·로그 필터</button>
-        <button onClick={() => void toggleFullscreen()}>
-          {fullscreen ? '전체화면 종료' : '전체화면'}
-        </button>
-      </div>
       {error && (
         <p role="alert" className="inline-error">
           {error}
@@ -94,7 +108,8 @@ export function DetachedWindow({ id }: { id: string }) {
         )}
         {filesOpen && <FilePanel session={session ?? undefined} />}
       </div>
-      {session && <MonitorBar session={session} />}
+      <StatusBar session={session ?? undefined} input={<BroadcastControl />} />
+      {settingsOpen && <TerminalSettings close={() => setSettingsOpen(false)} />}
       {session && snippetsOpen && (
         <SnippetDialog
           sessions={[session]}

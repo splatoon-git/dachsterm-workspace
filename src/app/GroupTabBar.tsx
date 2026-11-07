@@ -6,6 +6,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
+import { anchorBelow, isMenuKey, type MenuPoint } from '../components/ContextMenu';
 import { tabKey, type GroupNode, type TabRef } from './workspaceLayout';
 
 /** A tab with a title and an optional close button, for anything that is not a live session. */
@@ -50,6 +51,7 @@ export function GroupTabBar({
   toggleZoom,
   nextGroup,
   onTabPointerDown,
+  openMenu,
 }: {
   group: GroupNode;
   focused: boolean;
@@ -62,7 +64,11 @@ export function GroupTabBar({
   /** Present in a narrow window, where the other groups are off screen. */
   nextGroup?: () => void;
   onTabPointerDown?: (event: PointerEvent<HTMLDivElement>) => void;
+  /** Opens a tab's menu. Right-click, Shift+F10, the menu key and the ⋯ button all use it. */
+  openMenu?: (key: string, at: MenuPoint) => void;
 }) {
+  const tabOf = (target: EventTarget) =>
+    (target as HTMLElement).closest<HTMLElement>('[data-tab-key]')?.dataset.tabKey;
   const strip = useRef<HTMLDivElement>(null);
   useEffect(() => {
     strip.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({
@@ -86,7 +92,19 @@ export function GroupTabBar({
       onDoubleClick={(e) => {
         if (e.target === e.currentTarget) toggleZoom();
       }}
+      onContextMenu={(e) => {
+        const key = tabOf(e.target) ?? group.active;
+        if (!openMenu || !key) return;
+        e.preventDefault();
+        openMenu(key, { x: e.clientX, y: e.clientY });
+      }}
       onKeyDown={(e) => {
+        const key = tabOf(e.target);
+        if (openMenu && key && isMenuKey(e)) {
+          e.preventDefault();
+          openMenu(key, anchorBelow(e.target as Element));
+          return;
+        }
         if (
           !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) ||
           (e.target as HTMLElement).getAttribute('role') !== 'tab'
@@ -111,6 +129,17 @@ export function GroupTabBar({
       {group.tabs.map((tab) => (
         <Fragment key={tabKey(tab)}>{renderTab(tab, group)}</Fragment>
       ))}
+      {openMenu && group.active && (
+        <button
+          className="tab-menu-button"
+          aria-label="탭 메뉴"
+          aria-haspopup="menu"
+          title="탭 메뉴 · Shift+F10"
+          onClick={(e) => openMenu(group.active, anchorBelow(e.currentTarget))}
+        >
+          ⋯
+        </button>
+      )}
       {nextGroup && (
         <button className="next-group" aria-label="다음 칸" onClick={nextGroup}>
           ⇥

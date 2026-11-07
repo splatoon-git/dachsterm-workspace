@@ -2,16 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, errorText } from '../../lib/ipc';
 import type { LocalTarget, TerminalSession } from '../terminal/session';
 import { childPath, selectionAfterClick, withoutNested, type FileEntry } from './fileList';
-import {
-  FileAction,
-  fileMenuPosition,
-  FilePathBar,
-  FileTreeRow,
-  formatBytes,
-  useFileMenuFocus,
-  useFileTree,
-  type FileMenuPosition,
-} from './fileTree';
+import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
+import { FileAction, FilePathBar, FileTreeRow, formatBytes, useFileTree } from './fileTree';
 import { FollowControl, useDirectoryFollow } from './follow';
 import {
   LocalFileDialog,
@@ -51,8 +43,7 @@ export function LocalFilePanel({
   const [operation, setOperation] = useState<LocalFileOperation | null>(null);
   const anchor = useRef('');
   const requestId = useRef(0);
-  const [context, setContext] = useState<FileMenuPosition | null>(null);
-  const menu = useFileMenuFocus(context, () => setContext(null));
+  const [context, setContext] = useState<MenuPoint | null>(null);
   const load = useCallback(
     async (next: string) => {
       const request = ++requestId.current;
@@ -291,7 +282,7 @@ export function LocalFilePanel({
             onContextMenu={(event) => {
               event.preventDefault();
               if (!selection.includes(row.name)) setSelection([row.name]);
-              setContext(fileMenuPosition(event));
+              setContext({ x: event.clientX, y: event.clientY });
             }}
             onDoubleClick={() => {
               if (row.directory) void load(childPath(listing.path, row.name));
@@ -341,43 +332,39 @@ export function LocalFilePanel({
         </div>
       </div>
       {context && (
-        <div
-          ref={menu}
-          role="menu"
-          className="file-context"
-          style={{ left: context.x, top: context.y }}
-        >
-          <button role="menuitem" onClick={() => remember('copy')}>
-            복사 <kbd>Ctrl+C</kbd>
-          </button>
-          <button role="menuitem" onClick={() => remember('move')}>
-            잘라내기 <kbd>Ctrl+X</kbd>
-          </button>
-          <button role="menuitem" disabled={!clipboard} onClick={() => void paste()}>
-            붙여넣기 <kbd>Ctrl+V</kbd>
-          </button>
-          <button
-            role="menuitem"
-            disabled={!editable}
-            onClick={() => ask({ kind: 'edit', program: savedEditor() })}
-          >
-            외부 편집기로 열기
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(selectedPaths.join('\n'))
-                .catch(() => setError('경로 복사 실패'));
-              setContext(null);
-            }}
-          >
-            전체 경로 복사
-          </button>
-          <button role="menuitem" onClick={() => ask({ kind: 'delete' })}>
-            삭제 <kbd>Delete</kbd>
-          </button>
-        </div>
+        <ContextMenu
+          label="파일 작업"
+          at={context}
+          close={() => setContext(null)}
+          items={[
+            { label: '복사', shortcut: 'Ctrl+C', run: () => remember('copy') },
+            { label: '잘라내기', shortcut: 'Ctrl+X', run: () => remember('move') },
+            {
+              label: '붙여넣기',
+              shortcut: 'Ctrl+V',
+              disabled: !clipboard,
+              run: () => void paste(),
+            },
+            {
+              label: '외부 편집기로 열기',
+              disabled: !editable,
+              run: () => ask({ kind: 'edit', program: savedEditor() }),
+            },
+            {
+              label: '전체 경로 복사',
+              run: () =>
+                void navigator.clipboard
+                  .writeText(selectedPaths.join('\n'))
+                  .catch(() => setError('경로 복사 실패')),
+            },
+            {
+              label: '삭제',
+              shortcut: 'Delete',
+              danger: true,
+              run: () => ask({ kind: 'delete' }),
+            },
+          ]}
+        />
       )}
       {operation && (
         <LocalFileDialog

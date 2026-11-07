@@ -3,10 +3,11 @@ import '@xterm/xterm/css/xterm.css';
 import type { ThemeDefinition } from '../../themes/contract';
 import type { TerminalSession } from './session';
 import { errorText } from '../../lib/ipc';
-import { Icon } from '../../components/Icon';
-import { SessionLog } from './SessionLog';
-import { TerminalSettings } from './TerminalSettings';
-import { ProgramGuide } from './CommandGuide';
+import { EndedCard } from '../../components/EndedCard';
+import { SessionLogDialog } from './SessionLog';
+import { TerminalSearch } from './TerminalSearch';
+import { usePaneView } from './paneView';
+import { capabilities } from './sessionKind';
 import { AuthenticationPrompt } from './AuthenticationPrompt';
 import { attachFontSizeWheel } from './fontWheel';
 import { afterRendererResumes, throttleTrailing } from './fitThrottle';
@@ -31,17 +32,19 @@ export function TerminalPane({
   focused = active,
   theme,
   reconnect,
+  close,
 }: {
   session: TerminalSession;
   active: boolean;
   focused?: boolean;
   theme: ThemeDefinition;
   reconnect: () => void;
+  /** Closes the tab, offered when the connection has ended. */
+  close?: () => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
-  const [query, setQuery] = useState('');
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const view = usePaneView(session.view);
   const { fontSize, scrollback } = useTerminalDisplay();
   const [paste, setPaste] = useState<{ id: string; text: string } | null>(null);
   const preferences = useTerminalPreferences();
@@ -193,82 +196,25 @@ export function TerminalPane({
       hidden={!active}
       aria-label={`${session.profile.name} 터미널`}
     >
-      <div className="terminal-tools">
-        <div className="terminal-search" role="search" aria-label="터미널 출력 검색">
-          <input
-            aria-label="터미널 검색"
-            placeholder="터미널 검색"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                if (e.shiftKey) session.search.findPrevious(query);
-                else session.search.findNext(query);
-              }
-              if (e.key === 'Escape') {
-                setQuery('');
-                session.search.clearDecorations();
-                session.terminal.focus();
-              }
-            }}
-          />
-          <button
-            disabled={!query}
-            title="이전 검색 결과 · Shift+Enter"
-            onClick={() => session.search.findPrevious(query)}
-            aria-label="이전 검색 결과"
-          >
-            ↑
-          </button>
-          <button
-            disabled={!query}
-            title="다음 검색 결과 · Enter"
-            onClick={() => session.search.findNext(query)}
-            aria-label="다음 검색 결과"
-          >
-            ↓
-          </button>
-        </div>
-        <div className="terminal-actions">
-          {!session.podtree && (
-            <SessionLog session={session} connected={state.status === 'connected'} />
-          )}
-          <button
-            title="마우스를 쓰는 프로그램에서는 Shift+드래그로 선택합니다"
-            onClick={() => session.copyText(session.terminal.getSelection())}
-          >
-            복사
-          </button>
-          <button onClick={() => void pasteClipboard()} disabled={state.status !== 'connected'}>
-            붙여넣기
-          </button>
-          <button
-            aria-label="터미널 설정"
-            title="글꼴 크기 · 스크롤 기록"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Icon name="settings" size={16} />
-          </button>
-          {ended ? (
-            <button onClick={reconnect}>재접속</button>
-          ) : (
-            <button onClick={() => void session.disconnect()}>연결 종료</button>
-          )}
-        </div>
-      </div>
-      {settingsOpen && <TerminalSettings session={session} close={() => setSettingsOpen(false)} />}
-      <div
-        className={`connection-message ${state.status === 'error' ? 'error' : ''}`}
-        role="status"
-      >
+      {/* The status bar shows the focused pane; this keeps every pane's state for screen readers. */}
+      <div className="connection-message sr-only" role="status">
         {state.message}{' '}
         <span className="encoding-badge">{session.profile.encoding?.toUpperCase() ?? 'UTF-8'}</span>
         {session.profile.tmuxSession && (
-          <span className="encoding-badge" title="탭을 닫아도 서버의 tmux 세션은 유지됩니다">
-            tmux {session.profile.tmuxSession}
-          </span>
+          <span className="encoding-badge">tmux {session.profile.tmuxSession}</span>
         )}
       </div>
+      {view.search && <TerminalSearch session={session} />}
+      {view.log && capabilities(session).log && (
+        <SessionLogDialog
+          session={session}
+          connected={state.status === 'connected'}
+          close={() => session.view.set({ log: false })}
+        />
+      )}
+      {ended && !state.hostKey && (
+        <EndedCard message={state.message} reconnect={reconnect} close={close} />
+      )}
       {state.hostKey && (
         <div className="trust-card" role="alert" aria-label="최초 호스트키 확인">
           <h2>이 서버를 신뢰하시겠습니까?</h2>
@@ -314,7 +260,6 @@ export function TerminalPane({
         />
       )}
       <div className="live-terminal" ref={host} />
-      {!session.podtree && <ProgramGuide key={session.connectionId} session={session} />}
     </section>
   );
 }

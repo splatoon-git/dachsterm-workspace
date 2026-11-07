@@ -8,17 +8,14 @@ import {
   useTerminalDisplay,
   useTerminalPreferences,
 } from './preferences';
-import type { TerminalSession } from './session';
+import { useState } from 'react';
 
-export function TerminalSettings({
-  session,
-  close,
-}: {
-  session: TerminalSession;
-  close: () => void;
-}) {
+/** Settings shared by every terminal. Problems show inside the dialog, which has no pane. */
+export function TerminalSettings({ close }: { close: () => void }) {
   const { fontSize, scrollback } = useTerminalDisplay();
   const preferences = useTerminalPreferences();
+  const [message, setMessage] = useState('');
+  const failed = () => setMessage('터미널 설정을 저장하지 못했습니다.');
   return (
     <Dialog title="터미널 설정" close={close}>
       <div className="terminal-preferences">
@@ -42,7 +39,7 @@ export function TerminalSettings({
                 try {
                   saveTerminalPreferences({ [key]: e.target.checked });
                 } catch {
-                  session.notice('터미널 설정을 저장하지 못했습니다.');
+                  failed();
                 }
               }}
             />
@@ -58,7 +55,7 @@ export function TerminalSettings({
               try {
                 saveTerminalPreferences({ backspace: e.target.value as 'del' | 'bs' });
               } catch {
-                session.notice('터미널 설정을 저장하지 못했습니다.');
+                failed();
               }
             }}
           >
@@ -75,7 +72,7 @@ export function TerminalSettings({
               try {
                 saveTerminalDisplay({ fontSize: Number(e.target.value) });
               } catch {
-                session.notice('터미널 설정을 저장하지 못했습니다.');
+                failed();
               }
             }}
           >
@@ -93,7 +90,7 @@ export function TerminalSettings({
               try {
                 saveTerminalDisplay({ scrollback: Number(e.target.value) });
               } catch {
-                session.notice('터미널 설정을 저장하지 못했습니다.');
+                failed();
               }
             }}
           >
@@ -109,7 +106,8 @@ export function TerminalSettings({
         Shift+드래그/우클릭으로 선택·붙여넣기합니다. 방향키·Home/End·Delete·Tab·Ctrl+C는 터미널 표준
         모드를 따릅니다.
       </p>
-      <AgentHookGuide notice={(message) => session.notice(message)} />
+      {message && <p role="status">{message}</p>}
+      <AgentHookGuide notice={setMessage} />
     </Dialog>
   );
 }

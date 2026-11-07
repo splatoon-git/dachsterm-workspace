@@ -5,6 +5,7 @@ import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { chooseTabMenu } from './native-workspace.mjs';
 
 const promptFolder = '/home/probe/.cache/dachsterm/prompt';
 const tmuxName = 'dachs-native';
@@ -124,11 +125,15 @@ export async function verifyAgentTerminal({
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     });
-  const pasteButton = () => pane().getByRole('button', { name: '붙여넣기', exact: true });
+  // The paste shortcut, as the paste button it replaced: reads the clipboard into the terminal.
+  const pasteClipboard = async () => {
+    await pane().locator('.xterm-helper-textarea').focus();
+    await page.keyboard.press('Control+Shift+V');
+  };
   try {
     await writeImage();
     await readTyped('IMAGE');
-    await pasteButton().click();
+    await pasteClipboard();
     await expect(attachCard()).toContainText('clipboard.png');
     await attachCard().getByRole('checkbox').check();
     await attachCard().getByRole('button', { name: '서버로 보내기', exact: true }).click();
@@ -142,7 +147,7 @@ export async function verifyAgentTerminal({
     );
     // "Do not ask again" lasts for this connection, and a changed image goes straight through.
     await readTyped('AGAIN');
-    await pasteButton().click();
+    await pasteClipboard();
     await expect.poll(() => stored().filter((n) => n.endsWith('-clipboard.png')).length).toBe(2);
     await expect(attachCard()).toHaveCount(0);
     await finishTyped('AGAIN');
@@ -286,7 +291,7 @@ export async function verifyAgentTerminal({
 
   setStage('DX.3 reconnect');
   const widthBefore = tmux('display-message', '-p', '-t', `=${tmuxName}:`, '#{window_width}');
-  await pane().getByRole('button', { name: '연결 종료', exact: true }).click();
+  await chooseTabMenu(page, '연결 종료');
   await expect(pane().getByRole('button', { name: '재접속', exact: true })).toBeVisible();
   assert(tmux('list-sessions', '-F', '#{session_name}').includes(tmuxName), 'session must survive');
   const alive = Number(shell('wc -l < /tmp/dx-alive'));
@@ -351,8 +356,8 @@ export async function verifyAgentTerminal({
     await page
       .locator('.profile-card')
       .filter({ hasText: 'tmux 테스트' })
-      .getByRole('button', { name: '연결', exact: true })
-      .click();
+      .locator('.profile-target')
+      .dblclick();
     await expect(pane().locator('.connection-message')).toContainText('tmux가 없어', {
       timeout: 15000,
     });

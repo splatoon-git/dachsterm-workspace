@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import type { MenuPoint } from '../components/ContextMenu';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { GroupTabBar } from './GroupTabBar';
 import { useTabDrag } from './useTabDrag';
@@ -104,6 +105,7 @@ export function WorkspaceGrid({
   cellClass,
   start,
   detach,
+  openMenu,
 }: {
   workspace: Workspace;
   narrow: boolean;
@@ -116,6 +118,8 @@ export function WorkspaceGrid({
   start?: { tab: (selected: boolean, select: () => void) => ReactNode; page: ReactNode };
   /** A tab dropped outside the app window. Tabs that cannot leave simply stay. */
   detach: (key: string) => void;
+  /** Opens a tab's header menu. */
+  openMenu?: (key: string, at: MenuPoint) => void;
 }) {
   const { layout, zoomed } = workspace;
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -160,6 +164,7 @@ export function WorkspaceGrid({
             toggleZoom={workspace.toggleZoom}
             nextGroup={narrow && workspace.groupCount > 1 ? () => nextGroup(group) : undefined}
             onTabPointerDown={drag.onTabPointerDown}
+            openMenu={openMenu}
           />
         );
       })}

@@ -1,12 +1,5 @@
 import { formatBytes } from '../../lib/formatBytes';
-import {
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-  type ButtonHTMLAttributes,
-} from 'react';
+import { useEffect, useMemo, useState, type ButtonHTMLAttributes } from 'react';
 import { Icon, type IconName } from '../../components/Icon';
 import {
   childPath,
@@ -87,27 +80,6 @@ export function useFileTree<T extends FileEntry>(
       setState({ ...tree, expanded });
     },
   };
-}
-
-export type FileMenuPosition = { x: number; y: number };
-export const fileMenuPosition = (event: { clientX: number; clientY: number }) => ({
-  x: Math.min(event.clientX, window.innerWidth - 210),
-  y: Math.min(event.clientY, window.innerHeight - 330),
-});
-/** Focuses the open menu and closes it on an outside press. Returns the menu's ref. */
-export function useFileMenuFocus(context: FileMenuPosition | null, close: () => void) {
-  const menu = useRef<HTMLDivElement>(null);
-  const closeMenu = useEffectEvent(close);
-  useEffect(() => {
-    if (!context) return;
-    menu.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    const outside = (event: PointerEvent) => {
-      if (!menu.current?.contains(event.target as Node)) closeMenu();
-    };
-    window.addEventListener('pointerdown', outside);
-    return () => window.removeEventListener('pointerdown', outside);
-  }, [context]);
-  return menu;
 }
 
 export function FileTreeRow<T extends FileEntry>({

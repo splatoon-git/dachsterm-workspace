@@ -280,6 +280,21 @@ export function splitWith(
   return { root: detached.root, focused: created.id };
 }
 
+/** Opens a new tab in a new group beside the target, as "split right/down" does. */
+export function openBeside(
+  layout: Layout,
+  tab: TabRef,
+  targetId: string,
+  side: Side,
+  makeId: MakeId = defaultId,
+): Layout {
+  const key = tabKey(tab);
+  if (groupOfTab(layout.root, key) || !findGroup(layout.root, targetId))
+    return openTab(layout, tab);
+  const created: GroupNode = { type: 'group', id: makeId(), tabs: [tab], active: key };
+  return { root: insertBeside(layout.root, targetId, side, created), focused: created.id };
+}
+
 const presetShape = (preset: Preset, makeId: MakeId): LayoutNode => {
   const leaf = () => emptyGroup(makeId());
   const pair = (dir: SplitNode['dir'], a: LayoutNode, b: LayoutNode): SplitNode => ({

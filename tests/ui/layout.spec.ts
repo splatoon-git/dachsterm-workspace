@@ -41,6 +41,8 @@ for (const width of [1280, 800, 560])
       .click();
     await expect(page.locator('.xterm-screen')).toBeVisible();
     await page.screenshot({ path: `test-results/terminal-${width}.png` });
+    // A chosen menu item closes the menu, so open it again.
+    await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
     await page.getByRole('button', { name: '작업 화면', exact: true }).click();
     await page.screenshot({ path: `test-results/welcome-${width}.png` });
   });

@@ -6,7 +6,13 @@ import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import { arrangeTabs } from './native-workspace.mjs';
+import {
+  arrangeTabs,
+  chooseTabMenu,
+  closeTerminalSettings,
+  focusedTab,
+  openTerminalSettings,
+} from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-local-'));
@@ -72,7 +78,13 @@ try {
   await expect(pane.locator('.connection-message')).toContainText('로컬 · Windows PowerShell');
   await expect(page.locator('.monitor-bar')).toHaveCount(0);
   await expect(page.locator('.files')).toBeHidden();
-  await expect(page.getByRole('button', { name: '새 창으로 분리 ↗' })).toBeDisabled();
+  // A local terminal stays in this window, so its tab menu has no way out.
+  await focusedTab(page).click({ button: 'right' });
+  const tabMenu = page.getByRole('menu', { name: '탭 메뉴' });
+  await expect(tabMenu.getByRole('menuitem', { name: /^터미널 검색/ })).toBeVisible();
+  await expect(tabMenu.getByRole('menuitem', { name: /새 창으로 분리/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(tabMenu).toHaveCount(0);
   async function command(pane, text, expected) {
     const input = pane.locator('.xterm-helper-textarea');
     await input.focus();
@@ -188,29 +200,27 @@ try {
   await page.getByRole('tab', { name: '연결', exact: true }).click();
   await expect(pane).toHaveAttribute('data-connection-id', originalId);
   await expect(pane.locator('.xterm')).toHaveAttribute('data-instance', 'original');
-  const heights = await pane
-    .locator('.terminal-tools button, .terminal-tools input')
-    .evaluateAll((elements) => elements.map((e) => e.getBoundingClientRect().height));
-  expect(heights.every((height) => height === 32)).toBe(true);
-  await pane.getByRole('button', { name: '터미널 설정', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: '터미널 설정' })
-    .getByLabel('글꼴 크기')
-    .selectOption('16');
+  // No tool rows: a connected pane has nothing to press around its terminal.
+  await expect(pane.locator('button, input:not(.xterm-helper-textarea)')).toHaveCount(0);
+  let settings = await openTerminalSettings(page);
+  await settings.getByLabel('글꼴 크기').selectOption('16');
   await page.keyboard.press('Escape');
-  await expect(pane.getByRole('button', { name: '터미널 설정', exact: true })).toBeFocused();
-  await pane.getByRole('button', { name: '터미널 설정', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: '터미널 설정' })
-    .getByLabel('글꼴 크기')
-    .selectOption('14');
-  await page.keyboard.press('Escape');
+  const workspaceSettings = page.getByRole('dialog', { name: '워크스페이스 설정' });
+  await expect(workspaceSettings.getByRole('button', { name: '터미널 설정' })).toBeFocused();
+  await workspaceSettings.getByRole('button', { name: '터미널 설정' }).click();
+  await settings.getByLabel('글꼴 크기').selectOption('14');
+  await closeTerminalSettings(page);
   await page.screenshot({ path: path.resolve('test-results-native/unified-local.png') });
   await command(pane, "Write-Output ('SI' + 'ZE:' + $Host.UI.RawUI.WindowSize.Width)", 'SIZE:');
   const initialWidth = Number(
     (await pane.locator('.xterm-accessibility-tree').innerText()).match(/SIZE:(\d+)/)?.[1],
   );
+  const screenWidth = () =>
+    pane.locator('.xterm-screen').evaluate((e) => e.getBoundingClientRect().width);
+  const wideScreen = await screenWidth();
   await page.setViewportSize({ width: 900, height: 650 });
+  // The terminal refits on a short throttle; ask the shell only after it has.
+  await expect.poll(screenWidth).toBeLessThan(wideScreen);
   await command(
     pane,
     "Write-Output ('RESIZE' + ':' + $Host.UI.RawUI.WindowSize.Width)",
@@ -238,15 +248,12 @@ try {
   await expect(cmd).toBeVisible();
   // A font change in one pane must reach the other pane in the same window.
   for (const size of ['18', '14']) {
-    await pane.getByRole('button', { name: '터미널 설정', exact: true }).click();
-    await page
-      .getByRole('dialog', { name: '터미널 설정' })
-      .getByLabel('글꼴 크기')
-      .selectOption(size);
-    await page.keyboard.press('Escape');
+    settings = await openTerminalSettings(page);
+    await settings.getByLabel('글꼴 크기').selectOption(size);
+    await closeTerminalSettings(page);
     await expect(cmd.locator('.xterm-rows')).toHaveCSS('font-size', `${size}px`);
   }
-  await cmd.getByRole('button', { name: '연결 종료', exact: true }).click();
+  await chooseTabMenu(page, '연결 종료', cmd);
   await expect(cmd.locator('.connection-message')).toContainText('종료', { timeout: 15000 });
   await cmd.getByRole('button', { name: '재접속', exact: true }).click();
   await expect(cmd.locator('.connection-message')).toContainText('로컬 · 명령 프롬프트');
@@ -292,8 +299,14 @@ try {
   await page.getByRole('tab', { name: /Windows PowerShell/ }).click();
   await page.keyboard.press('Control+Shift+B');
   await expect(page.getByRole('complementary', { name: '세션 탐색' })).toBeHidden();
-  await page.keyboard.press('Control+Shift+F');
+  await page.keyboard.press('Control+Shift+O');
   await expect(page.getByRole('searchbox')).toBeFocused();
+  // The terminal search took over Ctrl+Shift+F and opens over the focused pane.
+  await page.keyboard.press('Control+Shift+F');
+  const terminalSearch = page.getByRole('textbox', { name: '터미널 검색', exact: true });
+  await expect(terminalSearch).toBeFocused();
+  await terminalSearch.press('Escape');
+  await expect(terminalSearch).toHaveCount(0);
   await page.getByRole('button', { name: 'Windows PowerShell 탭 닫기' }).click();
   await expect
     .poll(() =>

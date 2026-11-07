@@ -1,33 +1,29 @@
 import { useSyncExternalStore } from 'react';
+import { EndedCard } from '../../components/EndedCard';
 import { FilePanel } from './FilePanel';
 import { TerminalSession } from '../terminal/session';
+/** An FTP or FTPS tab: the file panel alone. Its target and state are in the status bar. */
 export function FtpPane({
   session,
   reconnect,
+  close,
 }: {
   session: TerminalSession;
   reconnect: () => void;
+  close?: () => void;
 }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
+  const ended = ['closed', 'error'].includes(state.status);
   return (
-    <section className="ftp-pane" data-connection-id={session.connectionId}>
-      <div className="ftp-heading">
-        <div>
-          <strong>{session.profile.name}</strong>
-          <small>
-            {session.profile.protocol.toUpperCase()} · {session.profile.username}@
-            {session.profile.host}:{session.profile.port}
-          </small>
-        </div>
-        <div>
-          <span role="status">{state.message}</span>
-          {['closed', 'error'].includes(state.status) ? (
-            <button onClick={reconnect}>재접속</button>
-          ) : (
-            <button onClick={() => void session.disconnect()}>연결 종료</button>
-          )}
-        </div>
+    <section
+      className="ftp-pane"
+      data-connection-id={session.connectionId}
+      aria-label={`${session.profile.name} 파일`}
+    >
+      <div className="connection-message sr-only" role="status">
+        {state.message}
       </div>
+      {ended && <EndedCard message={state.message} reconnect={reconnect} close={close} />}
       <FilePanel session={session} />
     </section>
   );

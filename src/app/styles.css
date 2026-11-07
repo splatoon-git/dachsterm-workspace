@@ -166,6 +166,15 @@ nav {
   font-size: var(--font-small);
   color: var(--color-text-secondary);
 }
+/* Read by screen readers, not drawn: per-pane status that the status bar shows only when focused. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .status-dot {
   display: inline-block;
   width: 7px;
@@ -276,20 +285,6 @@ small {
   line-height: 1.8;
   font-size: var(--font-small);
 }
-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-lg);
-  border-top: var(--border-width-default) solid var(--color-border-default);
-  background: var(--color-surface-panel);
-  color: var(--color-text-secondary);
-  font-size: var(--font-small);
-}
-footer i {
-  display: inline-block;
-  width: var(--space-lg);
-}
 .preview-wrap {
   display: flex;
   flex: 1;
@@ -374,9 +369,6 @@ footer i {
   }
   .welcome small {
     margin-top: var(--space-xl);
-  }
-  footer > span:last-child {
-    display: none;
   }
   .sidebar-empty {
     padding: var(--space-xl) var(--space-md);
@@ -497,35 +489,12 @@ label.checkbox {
   gap: var(--space-xs);
 }
 .profile-target strong,
-.profile-target span {
+.profile-target > span {
   overflow-wrap: anywhere;
 }
-.profile-target span {
+.profile-target > span {
   font-size: var(--font-small);
   color: var(--color-text-secondary);
-}
-.profile-actions {
-  display: flex;
-  gap: var(--space-xs);
-  padding: 0 var(--space-sm) var(--space-sm);
-}
-.profile-actions button {
-  font-size: var(--font-small);
-  padding: var(--space-xs) var(--space-sm);
-}
-.profile-actions details {
-  position: relative;
-}
-.profile-actions summary {
-  cursor: pointer;
-  padding: var(--space-xs);
-}
-.profile-actions details[open] {
-  z-index: 2;
-}
-.profile-actions details[open] button {
-  display: block;
-  width: 120px;
 }
 .group-heading {
   padding: var(--space-sm);
@@ -542,6 +511,7 @@ label.checkbox {
   margin: 0;
 }
 .terminal-pane {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -551,33 +521,6 @@ label.checkbox {
 }
 .terminal-pane[hidden] {
   display: none;
-}
-.terminal-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-sm);
-  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
-}
-.terminal-tools input {
-  width: 140px;
-}
-.terminal-tools button,
-.terminal-tools label,
-.terminal-tools select {
-  font-size: var(--font-small);
-}
-.terminal-tools button {
-  padding: var(--space-xs) var(--space-sm);
-}
-.terminal-tools label {
-  white-space: nowrap;
-}
-.connection-message {
-  padding: var(--space-sm) var(--space-md);
-  font-size: var(--font-small);
-  overflow-wrap: anywhere;
 }
 .live-terminal {
   flex: 1;
@@ -602,20 +545,9 @@ label.checkbox {
   overflow-wrap: anywhere;
   user-select: text;
 }
-footer > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 @media (max-width: 700px) {
   .form-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .profile-actions {
-    flex-wrap: wrap;
-  }
-  .terminal-tools input {
-    width: 100px;
   }
 }
 /* Workspace surfaces: one shared light token contract. */
@@ -726,13 +658,9 @@ button {
   font-size: 12px;
   gap: 5px;
 }
-.profile-target span {
+.profile-target > span {
   font-family: var(--font-mono);
   font-size: 10px;
-}
-.profile-actions button {
-  border-color: var(--color-border-subtle);
-  font-size: 11px;
 }
 .local-note {
   font-size: 10px;
@@ -1044,48 +972,6 @@ main {
   font-size: 11px;
   overflow-wrap: anywhere;
 }
-.workspace-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  font-size: 11px;
-}
-.workspace-controls > span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-}
-.terminal-tools {
-  gap: 3px;
-  padding: 5px;
-}
-.terminal-tools input {
-  width: 100px;
-}
-.terminal-tools button,
-.terminal-tools label,
-.terminal-tools select {
-  font-size: 10px;
-}
-.terminal-tools select {
-  padding: 3px;
-}
-.connection-message {
-  font-size: 10px;
-  padding: 5px 10px;
-}
-.terminal-tools button {
-  border-color: var(--color-border-subtle);
-}
-footer {
-  font-size: 10px;
-  padding: 7px 14px;
-  min-height: 30px;
-}
 @media (max-width: 1150px) {
   .welcome {
     padding: 24px;
@@ -1231,47 +1117,39 @@ footer {
   }
 }
 .monitor {
-  flex-shrink: 0;
-  border-top: 1px solid var(--color-border-default);
-  background: var(--color-surface-panel);
+  display: flex;
+  align-items: center;
 }
 .monitor-bar {
   display: flex;
-  width: 100%;
+  align-items: center;
+  gap: var(--space-xs);
   border: 0;
-  border-radius: 0;
-  justify-content: flex-start;
-  gap: 18px;
-  padding: 10px 14px;
-  font-size: 9px;
-  background: var(--color-surface-subtle);
+  background: transparent;
+  color: inherit;
   white-space: nowrap;
-  overflow: auto;
 }
 .monitor-bar b {
   font-weight: 500;
   color: var(--color-text-primary);
-  margin-left: 4px;
-}
-.monitor-host {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.monitor-bar small {
-  margin-left: auto;
-  font-size: 9px;
 }
 .monitor.stale .monitor-bar {
   color: var(--color-status-warning);
 }
 .monitor-details {
-  padding: 14px 16px;
-  max-height: 340px;
+  position: absolute;
+  z-index: 30;
+  right: var(--space-md);
+  bottom: calc(100% + var(--space-sm));
+  width: min(640px, calc(100vw - 2 * var(--space-lg)));
+  max-height: min(340px, 60vh);
   overflow: auto;
+  padding: 14px 16px;
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface-panel);
+  box-shadow: var(--shadow-popup);
+  white-space: normal;
 }
 .monitor-heading {
   display: flex;
@@ -1441,32 +1319,8 @@ footer {
   max-width: 98px;
   font-size: 11px;
 }
-.file-context {
-  position: fixed;
-  z-index: 100;
-  width: 200px;
-  padding: 6px;
-  background: var(--color-surface-panel);
-  border: 1px solid var(--color-border-default);
-  border-radius: 10px;
-  box-shadow: var(--shadow-popup);
-  display: grid;
-}
-.file-context button {
-  border: none;
-  text-align: left;
-  padding: 9px;
-  font-size: 12px;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-.file-context kbd {
-  color: var(--color-text-secondary);
-  font-size: 10px;
-}
-
 .ftp-pane {
+  position: relative;
   width: 100%;
   min-width: 0;
   flex: 1;
@@ -1475,26 +1329,6 @@ footer {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-}
-.ftp-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  background: var(--color-surface-panel);
-  border-bottom: 1px solid var(--color-border-default);
-}
-.ftp-heading small {
-  display: block;
-  margin-top: 4px;
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-}
-.ftp-heading > div:last-child {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 12px;
 }
 .ftp-pane > .files {
   display: flex;

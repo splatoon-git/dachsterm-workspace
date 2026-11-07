@@ -2,6 +2,12 @@ import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  chooseProfileMenu,
+  closeTerminalSettings,
+  openTerminalSearch,
+  openTerminalSettings,
+} from './native-workspace.mjs';
 
 export async function verifyTerminalBasics({
   page,
@@ -121,13 +127,12 @@ export async function verifyTerminalBasics({
   await command('stty -a');
   await output('erase = ^?');
   await command('stty erase ^H');
-  await pane().getByRole('button', { name: '터미널 설정', exact: true }).click();
-  const preferences = page.getByRole('dialog', { name: '터미널 설정', exact: true });
+  const preferences = await openTerminalSettings(page);
   await preferences.getByLabel('Backspace 전송', { exact: true }).selectOption('bs');
   await preferences.getByLabel('마우스 선택 시 자동 복사', { exact: true }).uncheck();
   await preferences.getByLabel('마우스 우클릭 붙여넣기', { exact: true }).uncheck();
   await preferences.getByLabel('새 SFTP 탐색기의 터미널 경로 따라가기', { exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await closeTerminalSettings(page);
   await pane().locator('.xterm-helper-textarea').focus();
   await page.keyboard.type("printf 'LEGACY_BS_OK\\n'X");
   await page.keyboard.press('Backspace');
@@ -147,7 +152,7 @@ export async function verifyTerminalBasics({
     osNotifications: true,
     bellNotifications: true,
   });
-  await pane().getByRole('button', { name: '터미널 설정', exact: true }).click();
+  await openTerminalSettings(page);
   await preferences.getByLabel('Backspace 전송', { exact: true }).selectOption('del');
   for (const label of [
     '마우스 선택 시 자동 복사',
@@ -155,7 +160,7 @@ export async function verifyTerminalBasics({
     '새 SFTP 탐색기의 터미널 경로 따라가기',
   ])
     await preferences.getByLabel(label, { exact: true }).check();
-  await page.keyboard.press('Escape');
+  await closeTerminalSettings(page);
   await command('stty erase ^?');
   console.log(
     'PASS native arrows/Home/End/Backspace and Ctrl+H compatibility; settings persistence',
@@ -193,7 +198,9 @@ export async function verifyTerminalBasics({
   // so this shows one real OS notification and checks that the app reports no failure.
   const status = "printf '\\033]7501;state=blocked:app=check\\033\\\\'";
   await command(`sleep 2; ${status}; sleep 1`);
-  await pane().getByRole('textbox', { name: '터미널 검색', exact: true }).focus();
+  // Focus outside the terminal, so the app counts as looking elsewhere.
+  const search = await openTerminalSearch(page, pane());
+  await search.focus();
   await page.waitForTimeout(2600);
   await expect(pane().locator('.connection-message')).not.toContainText('OS 알림');
   await pane().locator('.xterm-helper-textarea').focus();
@@ -257,8 +264,7 @@ export async function verifyTerminalBasics({
     await page.getByRole('button', { name: `${name} 탭 닫기`, exact: true }).click();
     await page.getByRole('tab', { name: '연결', exact: true }).click();
     const profile = page.locator('.profile-card').filter({ hasText: name });
-    await profile.locator('summary').click();
-    await profile.getByRole('button', { name: '삭제', exact: true }).click();
+    await chooseProfileMenu(page, profile, '삭제');
     await page.getByRole('button', { name: '세션 삭제', exact: true }).click();
     await expect(page.getByRole('dialog', { name: '세션 삭제', exact: true })).toBeHidden();
     await expect(profile).toHaveCount(0);

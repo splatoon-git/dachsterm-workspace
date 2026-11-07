@@ -24,7 +24,15 @@ export function ToolbarMenu({ label, children }: { label: string; children: Reac
       }}
     >
       <summary>{label}</summary>
-      <div className="toolbar-menu-items">{children}</div>
+      <div
+        className="toolbar-menu-items"
+        onClick={(e) => {
+          // A chosen action closes the menu, as a native menu would.
+          if ((e.target as HTMLElement).closest('button')) ref.current!.open = false;
+        }}
+      >
+        {children}
+      </div>
     </details>
   );
 }

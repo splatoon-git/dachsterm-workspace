@@ -54,6 +54,7 @@ const { blankProfile } = await import('../../../src/lib/ipc');
 const { SnippetDialog } = await import('../../../src/features/terminal/SnippetDialog');
 const { CommandCatalog, ProgramGuide } =
   await import('../../../src/features/terminal/CommandGuide');
+const { PaneView } = await import('../../../src/features/terminal/paneView');
 const states: SessionState[] = [
   { status: 'connected', message: '', hostKey: null, guideProgram: null, guideEnabled: false },
 ];
@@ -67,6 +68,7 @@ const first = {
   connectionId: 'id-one',
   profile: { ...blankProfile(), name: '테스트 SSH', host: 'example.test', username: 'test' },
   terminal: { modes: { bracketedPasteMode: true } },
+  view: new PaneView(),
   snapshot: () => states[0],
   subscribe: (fn: () => void) => {
     listeners.add(fn);
@@ -100,7 +102,11 @@ function Fixture() {
     <>
       <button onClick={() => setOpen('snippets')}>스니펫 열기</button>
       <button onClick={() => setOpen('commands')}>명령 열기</button>
-      <ProgramGuide session={first} />
+      {/* The app opens the full guide from the tab menu. */}
+      <button onClick={() => first.view.set({ guide: true })}>조작표 전체 보기</button>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 24 }}>
+        <ProgramGuide session={first} />
+      </div>
       {open === 'snippets' && (
         <SnippetDialog
           sessions={[first, second, excluded]}

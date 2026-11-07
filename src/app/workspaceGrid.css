@@ -23,11 +23,6 @@
 .pane-cell.broadcast-target {
   box-shadow: inset 0 2px var(--color-status-warning);
 }
-.pane-cell.broadcast-target .connection-message::before {
-  content: '동시 입력 · ';
-  color: var(--color-status-warning);
-  font-weight: 600;
-}
 .empty-cell {
   flex-direction: column;
   align-items: center;
@@ -73,11 +68,54 @@
   margin-left: var(--space-sm);
   font-size: 10px;
 }
-.tab-strip .next-group {
+.session-tab [role='tab'] {
+  gap: var(--space-xs);
+}
+/* Buttons appear only when the pointer or keyboard is there, so the bar stays plain. */
+.session-tab button:not([role='tab']),
+.tab-strip .tab-menu-button {
+  opacity: 0;
+}
+.session-tab:hover button:not([role='tab']),
+.session-tab:focus-within button:not([role='tab']),
+.tab-strip:hover .tab-menu-button,
+.tab-strip:focus-within .tab-menu-button {
+  opacity: 1;
+}
+.tab-dot {
   flex: 0 0 auto;
-  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-status-success);
+}
+.session-tab small.tab-state {
+  margin: 0;
+}
+.session-tab small.tab-state.error {
+  color: var(--color-status-error);
+}
+.session-tab small.tab-rec {
+  color: var(--color-status-error);
+  font-weight: 600;
+}
+.tab-strip .next-group,
+.tab-strip .tab-menu-button {
+  flex: 0 0 auto;
   border: none;
   background: transparent;
+}
+.tab-strip .tab-menu-button {
+  position: sticky;
+  right: 0;
+  margin-left: auto;
+  background: var(--color-surface-subtle);
+}
+.tab-strip .tab-menu-button + .next-group {
+  margin-left: 0;
+}
+.tab-strip .next-group {
+  margin-left: auto;
 }
 .session-tab.dragged {
   opacity: 0.45;

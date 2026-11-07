@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import { arrangeTabs } from './native-workspace.mjs';
+import { arrangeTabs, chooseTabMenu, dragTab } from './native-workspace.mjs';
 const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-ftp-native-'));
 let app, browser, page;
 let stage = 'launch';
@@ -82,7 +82,9 @@ try {
     stage = `${protocol} submit`;
     await form.getByRole('button', { name: '저장 후 연결', exact: true }).click();
     stage = `${protocol} connected`;
-    const pane = page.locator('.pane-cell:not([hidden]) .ftp-pane');
+    // By name: the previous tab's pane is still on screen until the new tab opens, and a
+    // locator that matches it passes every check before going stale once it is hidden.
+    const pane = page.getByRole('region', { name: `${protocol} UI fixture 파일`, exact: true });
     await expect(pane.getByRole('status')).toContainText('연결됨');
     stage = `${protocol} files`;
     await expect(pane.locator('.file-list')).toHaveAttribute('aria-busy', 'false');
@@ -160,13 +162,110 @@ try {
       `PASS native ${protocol} session form, connect, file view, Unicode mkdir/new file, context copy/paste, multi-delete, binary upload, narrow window and small group`,
     );
   }
+  // Both tabs are open now. A file tab behaves as a tab: drag, split, merge, reconnect.
+  // An attribute selector, which also finds a pane hidden behind another tab.
+  const panes = {
+    ftp: page.locator('.ftp-pane[aria-label="ftp UI fixture 파일"]'),
+    ftps: page.locator('.ftp-pane[aria-label="ftps UI fixture 파일"]'),
+  };
+  const tabOf = (protocol) =>
+    page
+      .locator('.session-tab')
+      .filter({ hasText: `${protocol} UI fixture` })
+      .getByRole('tab');
+  const idOf = (protocol) => panes[protocol].getAttribute('data-connection-id');
+  const strips = page.locator('.tab-strip');
+  async function uploadAndList(protocol, name) {
+    const local = path.join(root, name);
+    await writeFile(local, Buffer.from([0, 1, 2, 255, 13, 10]));
+    const [job] = await invoke('transfer_batch', {
+      id: await idOf(protocol),
+      // Into the folder the pane shows, so its own refresh lists the file.
+      path: await panes[protocol].getByLabel('원격 경로').inputValue(),
+      mode: 'drop',
+      paths: [local],
+      conflict: 'error',
+    });
+    await expect
+      .poll(async () => (await invoke('transfer_list')).find((t) => t.id === job)?.status)
+      .toBe('completed');
+    await panes[protocol].getByRole('button', { name: '파일 새로 고침', exact: true }).click();
+    await expect(panes[protocol].locator('.file-row').filter({ hasText: name })).toBeVisible();
+  }
+  stage = 'file tab status bar and menu';
+  await arrangeTabs(page, '하나로');
+  const bar = page.locator('footer.status-bar');
+  await tabOf('ftps').click();
+  await expect(bar).toContainText('FTPS · TLS 인증서 검증');
+  await tabOf('ftp').click();
+  await expect(bar).toContainText('FTP · TLS 없음');
+  await expect(bar.locator('.program-guide, .monitor-bar')).toHaveCount(0);
+  await tabOf('ftp').click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: '탭 메뉴' });
+  // No terminal items on a file tab: search, logs, guides and splitting with a new shell.
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    /^이 창 확대/,
+    '연결 종료',
+    '탭 닫기',
+    '다른 탭 닫기',
+  ]);
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  const before = { ftp: await idOf('ftp'), ftps: await idOf('ftps') };
+
+  stage = 'file tab drag to the right edge';
+  const grid = await page.locator('.terminal-grid').boundingBox();
+  await dragTab(page, tabOf('ftps'), grid.x + grid.width - 30, grid.y + grid.height / 2);
+  await expect(strips).toHaveCount(2);
+  for (const protocol of ['ftp', 'ftps']) {
+    await expect(panes[protocol]).toBeVisible();
+    await expect(panes[protocol].locator('.file-row').first()).toBeVisible();
+    expect(await idOf(protocol)).toBe(before[protocol]);
+  }
+  // File tabs take no typed input, so two of them on screen offer no input scope.
+  await expect(page.getByLabel('분할 입력 모드')).toBeHidden();
+  stage = 'file transfer in a split';
+  await uploadAndList('ftps', 'split upload.bin');
+  await page.screenshot({ path: path.resolve('test-results-native/ftp-split.png') });
+
+  stage = 'file tab merge and split down';
+  let box = await panes.ftp.boundingBox();
+  await dragTab(page, tabOf('ftps'), box.x + box.width / 2, box.y + box.height / 2);
+  await expect(strips).toHaveCount(1);
+  box = await panes.ftps.boundingBox();
+  await dragTab(page, tabOf('ftps'), box.x + box.width / 2, box.y + box.height - 20);
+  await expect(strips).toHaveCount(2);
+  await expect(panes.ftp).toBeVisible();
+  await expect(panes.ftps).toBeVisible();
+  for (const protocol of ['ftp', 'ftps']) expect(await idOf(protocol)).toBe(before[protocol]);
+
+  stage = 'file tab dragged out of the window stays';
+  const windows = browser.contexts().flatMap((c) => c.pages()).length;
+  await dragTab(page, tabOf('ftp'), -40, 200);
+  await expect(strips).toHaveCount(2);
+  await expect(panes.ftp).toBeVisible();
+  expect(browser.contexts().flatMap((c) => c.pages()).length).toBe(windows);
+
+  stage = 'file tab reconnect';
+  await chooseTabMenu(page, '연결 종료', panes.ftp);
+  const ended = panes.ftp.getByRole('group', { name: '연결 종료 안내' });
+  await expect(ended).toBeVisible();
+  await ended.getByRole('button', { name: '재접속', exact: true }).click();
+  await expect(panes.ftp.getByRole('status')).toContainText('연결됨');
+  await expect(ended).toHaveCount(0);
+  expect(await idOf('ftp')).not.toBe(before.ftp);
+  await uploadAndList('ftp', 'after reconnect.bin');
+  await page.screenshot({ path: path.resolve('test-results-native/ftp-reconnected.png') });
+  console.log(
+    'PASS native FTP/FTPS tabs: status bar security, file-only tab menu, drag split/merge/split down without reconnecting, transfer in a split, drag out cancelled, reconnect and transfer after it',
+  );
 } catch (error) {
   console.error(`FAIL native FTP stage: ${stage} (${error.name}; details redacted)`);
   if (page) {
     console.error(
       'UI states:',
       await page
-        .locator('.ftp-heading [role=status], .connection-message, [role=alert]')
+        .locator('.connection-message, [role=alert]')
         .allTextContents()
         .catch(() => []),
     );

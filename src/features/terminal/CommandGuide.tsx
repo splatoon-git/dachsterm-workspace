@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { commands, guideHook, guideKeys, type GuideProgram } from './guideData';
 import type { TerminalSession } from './session';
+import { usePaneView } from './paneView';
 import './assistant.css';
 const placeholders = /(파일명|프로그램명|검색어|제외어|문구1|문구2|경로|원본|대상|호스트)/g;
 export function CommandCatalog({ close }: { close: () => void }) {
@@ -81,10 +82,10 @@ export function CommandCatalog({ close }: { close: () => void }) {
       <details>
         <summary>Bash에서 프로그램 조작표 자동 표시 연결</summary>
         <p>
-          터미널의 조작표에서 “실행 알림 사용”을 켜고 아래 코드를 직접 검토·실행하세요. 현재 Bash
-          세션에만 vi/vim/less/tail/cat 함수를 만들며 명령 인자·입력·이력은 수집하지 않습니다. 기존
-          별칭/함수가 있으면 적용하지 않습니다. 셸 설정 파일은 바꾸지 않습니다. command vim처럼
-          함수를 우회하면 자동 표시되지 않습니다.
+          탭 메뉴의 “조작표 전체 보기”에서 “실행 알림 사용”을 켜고 아래 코드를 직접 검토·실행하세요.
+          현재 Bash 세션에만 vi/vim/less/tail/cat 함수를 만들며 명령 인자·입력·이력은 수집하지
+          않습니다. 기존 별칭/함수가 있으면 적용하지 않습니다. 셸 설정 파일은 바꾸지 않습니다.
+          command vim처럼 함수를 우회하면 자동 표시되지 않습니다.
         </p>
         <pre>{guideHook}</pre>
         <button onClick={() => void copy(guideHook, 'Bash 실행 알림 연결')}>
@@ -99,33 +100,61 @@ export function CommandCatalog({ close }: { close: () => void }) {
     </Dialog>
   );
 }
+/** Keys shown in the status bar itself; the rest are in the full table. */
+const INLINE_KEYS = 5;
+const guideNote = (program: GuideProgram) =>
+  program === 'vi' || program === 'vim'
+    ? '현재 모드는 추정하지 않습니다. 먼저 Esc를 누르세요. gg는 vim 기준이며 전통 vi는 1G를 사용합니다.'
+    : program === 'tail' || program === 'cat'
+      ? '자체 검색·페이지 키는 없습니다. 터미널 스크롤백 또는 less를 사용하세요.'
+      : '안내용입니다. 이 표는 서버에 키를 보내지 않습니다.';
+
+/**
+ * The program guide in the status bar. It shows a few keys while a known program runs and opens
+ * the full table on request. It only displays keys; it never sends or intercepts them.
+ */
 export function ProgramGuide({ session }: { session: TerminalSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
-  const [open, setOpen] = useState(false);
-  const [dismissedRun, setDismissedRun] = useState<number | undefined>(undefined);
-  const [manual, setManual] = useState<GuideProgram | ''>('');
-  const program = manual || (state.guideEnabled ? state.guideProgram : null);
-  const expanded =
-    open ||
-    (!!state.guideEnabled && !!state.guideProgram && !manual && dismissedRun !== state.guideRun);
+  const view = usePaneView(session.view);
+  const program = view.pinned ?? (state.guideEnabled ? state.guideProgram : null);
+  const close = () => session.view.set({ guide: false });
   return (
-    <aside className="program-guide" aria-label="프로그램 조작표">
-      <div className="guide-controls">
-        <button
-          aria-expanded={expanded}
-          onClick={() => {
-            setOpen(!expanded);
-            if (expanded) setDismissedRun(state.guideRun);
+    <div className="program-guide" role="group" aria-label="프로그램 조작표">
+      {program && (
+        <span className="guide-inline">
+          <strong>{program}</strong>
+          {guideKeys[program].slice(0, INLINE_KEYS).map(([name, key]) => (
+            <span key={name} className="guide-key">
+              <kbd>{key}</kbd> {name}
+            </span>
+          ))}
+        </span>
+      )}
+      {program && (
+        <button aria-expanded={view.guide} onClick={() => session.view.set({ guide: !view.guide })}>
+          전체 보기
+        </button>
+      )}
+      {view.pinned && <button onClick={() => session.view.set({ pinned: null })}>고정 해제</button>}
+      {view.guide && (
+        <section
+          className="guide-popover"
+          aria-label="조작표 전체 보기"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              close();
+            }
           }}
         >
-          조작표 {program ? `· ${program}` : ''} {expanded ? '접기' : '열기'}
-        </button>
-        {expanded && (
-          <>
+          <div className="guide-controls">
+            <strong>조작표{program ? ` · ${program}` : ''}</strong>
             <select
               aria-label="조작표 선택·고정"
-              value={manual}
-              onChange={(e) => setManual(e.target.value as GuideProgram | '')}
+              value={view.pinned ?? ''}
+              onChange={(e) =>
+                session.view.set({ pinned: (e.target.value || null) as GuideProgram })
+              }
             >
               <option value="">자동 · 고정 해제</option>
               {Object.keys(guideKeys).map((p) => (
@@ -144,18 +173,16 @@ export function ProgramGuide({ session }: { session: TerminalSession }) {
             </label>
             <button
               onClick={() => {
-                setManual('');
+                session.view.set({ pinned: null, guide: false });
                 session.enableGuide(false);
-                setOpen(false);
               }}
             >
               끄기
             </button>
-          </>
-        )}
-      </div>
-      {expanded && (
-        <div className="guide-content">
+            <button aria-label="조작표 닫기" onClick={close}>
+              ×
+            </button>
+          </div>
           {program ? (
             <>
               <dl>
@@ -168,13 +195,7 @@ export function ProgramGuide({ session }: { session: TerminalSession }) {
                   </div>
                 ))}
               </dl>
-              <p className="muted">
-                {program === 'vi' || program === 'vim'
-                  ? '현재 모드는 추정하지 않습니다. 먼저 Esc를 누르세요. gg는 vim 기준이며 전통 vi는 1G를 사용합니다.'
-                  : program === 'tail' || program === 'cat'
-                    ? '자체 검색·페이지 키는 없습니다. 터미널 스크롤백 또는 less를 사용하세요.'
-                    : '안내용입니다. 이 패널은 서버에 키를 보내지 않습니다.'}
-              </p>
+              <p className="muted">{guideNote(program)}</p>
             </>
           ) : (
             <p className="muted">
@@ -182,8 +203,8 @@ export function ProgramGuide({ session }: { session: TerminalSession }) {
               필요합니다. 도구 → 기본 명령·로그 필터에서 연결 방법을 볼 수 있습니다.
             </p>
           )}
-        </div>
+        </section>
       )}
-    </aside>
+    </div>
   );
 }

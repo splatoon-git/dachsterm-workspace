@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
+import { openTerminalSearch } from './native-workspace.mjs';
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-jump-'));
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 let app, browser, page;
@@ -158,7 +159,7 @@ try {
   }, "printf 'NATIVE_JUMP_OK\\n'");
   await terminal.press('Enter');
   stage = 'PTY search';
-  const search = pane().getByRole('textbox', { name: '터미널 검색', exact: true });
+  const search = await openTerminalSearch(page, pane());
   await search.fill('NATIVE_JUMP_OK');
   await expect
     .poll(async () => {

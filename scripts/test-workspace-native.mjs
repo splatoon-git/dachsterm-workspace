@@ -5,7 +5,7 @@ import { mkdtemp, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import { arrangeTabs } from './native-workspace.mjs';
+import { arrangeTabs, chooseTabMenu } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-workspace-'));
@@ -144,7 +144,9 @@ try {
   await expect(page.locator('.terminal-pane:visible')).toHaveCount(3);
   await mkdir('test-results-native', { recursive: true });
   await page.screenshot({ path: path.resolve('test-results-native/unified-fullscreen-multi.png') });
-  await page.getByRole('button', { name: '전체화면 종료', exact: true }).click();
+  // The status bar stays in fullscreen, where the input scope and program guide live.
+  await expect(page.locator('footer.status-bar')).toBeVisible();
+  await page.keyboard.press('F11');
   await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(false);
   await expect(handle).toHaveAttribute('aria-valuenow', '344');
   for (const id of ids)
@@ -153,6 +155,7 @@ try {
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
   await expect(inputMode).toHaveValue('off');
   await expect(inputMode).toBeDisabled();
+  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
   await page.getByRole('button', { name: '전체화면', exact: true }).click();
   await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(true);
   await expect(page.locator('.terminal-pane:visible')).toHaveCount(1);
@@ -163,7 +166,7 @@ try {
   await inputMode.selectOption('all');
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(2);
   // The focused tab stays on screen, sharing the left group with the first tab.
-  await pane(ids[2]).getByRole('button', { name: '연결 종료', exact: true }).click();
+  await chooseTabMenu(page, '연결 종료', pane(ids[2]));
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
   for (const id of ids)
     await expect(pane(id).locator('.xterm')).toHaveAttribute('data-instance', 'original');

@@ -5,16 +5,29 @@ import {
   StatusBadge,
   useProgramSummary,
 } from '../features/terminal/StatusBadge';
+import { isRecording, useLogStatus } from '../features/terminal/logStatus';
+import { capabilities } from '../features/terminal/sessionKind';
 import { tabKey } from './workspaceLayout';
 
-const labels: Record<string, string> = {
-  connecting: '접속 중',
-  authenticating: '인증 중',
-  trust: '키 확인',
-  connected: '연결됨',
-  closed: '종료',
-  error: '오류',
+/** A shape with the word, so a state never depends on color alone. Connected is the quiet dot. */
+const labels: Record<string, [string, string]> = {
+  connecting: ['◌', '접속 중'],
+  authenticating: ['◌', '인증 중'],
+  trust: ['◌', '키 확인'],
+  connected: ['', '연결됨'],
+  closed: ['■', '종료'],
+  error: ['▲', '오류'],
 };
+/** After the name, so a screen reader hears "server, connected" as before. */
+function ConnectionMark({ status }: { status: string }) {
+  const [shape, label] = labels[status] ?? ['◌', status];
+  if (!shape) return <span className="sr-only">{label}</span>;
+  return (
+    <small className={`tab-state ${status}`}>
+      {shape} {label}
+    </small>
+  );
+}
 
 export function SessionTab({
   session,
@@ -29,6 +42,7 @@ export function SessionTab({
 }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const summary = useProgramSummary(session.programStatus);
+  const log = useLogStatus(capabilities(session).log ? session.connectionId : null);
   // Opening the tab counts as seeing a result, whichever way the user got here. A result arriving
   // on the open tab stays until the user acts, since they may be looking at another window.
   useEffect(() => {
@@ -46,8 +60,16 @@ export function SessionTab({
         aria-label={program ? `${session.profile.name} ${programSummaryText(program)}` : undefined}
         onClick={select}
       >
+        {!program && state.status === 'connected' && (
+          <span className="tab-dot" aria-hidden="true" />
+        )}
         {session.profile.name}
-        {program ? <StatusBadge summary={program} /> : <small>{labels[state.status]}</small>}
+        {program ? <StatusBadge summary={program} /> : <ConnectionMark status={state.status} />}
+        {isRecording(log) && (
+          <small className="tab-rec" title="세션 기록 중">
+            REC
+          </small>
+        )}
       </button>
       <button aria-label={`${session.profile.name} 탭 닫기`} onClick={close}>
         ×

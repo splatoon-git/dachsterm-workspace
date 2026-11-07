@@ -7,6 +7,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
 import { commands, guideHook } from '../src/features/terminal/guideData.ts';
+import { chooseTabMenu } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-assistant-'));
 const fixture = `dachsterm-assistant-${randomUUID()}`;
@@ -221,8 +222,13 @@ try {
   );
   stage = 'guide';
   await enter(ssh, 'source /tmp/guide-hook.sh');
-  await ssh.getByRole('button', { name: /조작표 .*열기/ }).click();
-  await ssh.getByLabel('실행 알림 사용').check();
+  // The guide is in the status bar and shows the focused pane.
+  const guide = page.locator('footer .program-guide');
+  const shown = guide.locator('.guide-inline strong');
+  const fullGuide = page.getByRole('region', { name: '조작표 전체 보기' });
+  await chooseTabMenu(page, '조작표 전체 보기', ssh);
+  await fullGuide.getByLabel('실행 알림 사용').check();
+  await fullGuide.getByRole('button', { name: '조작표 닫기' }).click();
   for (const [program, command, exit] of [
     ['vi', 'vi /tmp/guide-file', ':q!'],
     ['vim', 'vim /tmp/guide-file', ':q!'],
@@ -231,9 +237,7 @@ try {
     ['tail', 'tail -f /etc/hostname', null],
   ]) {
     await enter(ssh, command);
-    await expect(
-      ssh.getByRole('button', { name: new RegExp(`조작표 · ${program} 접기`) }),
-    ).toBeVisible();
+    await expect(shown).toHaveText(program);
     expect(docker(['exec', fixture, 'pgrep', '-u', 'probe', '-x', program])).toMatch(/\d+/);
     const input = ssh.locator('.xterm-helper-textarea');
     await input.focus();
@@ -244,14 +248,18 @@ try {
       await input.type(exit);
       await input.press('Enter');
     }
-    await expect(ssh.getByRole('button', { name: '조작표 접기', exact: true })).toBeVisible();
+    await expect(shown).toHaveCount(0);
   }
-  await ssh.getByLabel('조작표 선택·고정').selectOption('vim');
+  await chooseTabMenu(page, '조작표 전체 보기', ssh);
+  await fullGuide.getByLabel('조작표 선택·고정').selectOption('vim');
+  await fullGuide.getByRole('button', { name: '조작표 닫기' }).click();
   await enter(ssh, 'cat /etc/hostname');
-  await expect(ssh.getByRole('button', { name: '조작표 · vim 접기', exact: true })).toBeVisible();
+  await expect(shown).toHaveText('vim');
   await page.getByRole('tab', { name: /Windows PowerShell/ }).click();
-  await expect(local.getByRole('button', { name: '조작표 열기', exact: true })).toBeVisible();
+  await expect(local).toBeVisible();
+  await expect(shown).toHaveCount(0);
   await page.getByRole('tab', { name: /스니펫 SSH/ }).click();
+  await expect(shown).toHaveText('vim');
   result.checks.push(
     'Real Bash vi/vim/less/cat/tail entry/exit including Ctrl+C, manual pin survives, tab isolation',
   );
@@ -264,8 +272,9 @@ try {
   const nativeHookPath = path.join(directory, 'guide-hook.sh').replaceAll('\\', '/');
   const linuxHookPath = '/mnt/' + nativeHookPath[0].toLowerCase() + nativeHookPath.slice(2);
   await enter(wsl, `source '${linuxHookPath}'`);
-  await wsl.getByRole('button', { name: '조작표 열기', exact: true }).click();
-  await wsl.getByLabel('실행 알림 사용').check();
+  await chooseTabMenu(page, '조작표 전체 보기', wsl);
+  await fullGuide.getByLabel('실행 알림 사용').check();
+  await fullGuide.getByRole('button', { name: '조작표 닫기' }).click();
   await invoke('snippet_send', {
     targets: [{ id: wslId, bracketed: true }],
     body: "printf 'WSL_한글\\n'",
@@ -273,13 +282,13 @@ try {
   });
   await expect(text(wsl)).toContainText('WSL_한글');
   await enter(wsl, 'cat');
-  await expect(wsl.getByRole('button', { name: '조작표 · cat 접기', exact: true })).toBeVisible();
+  await expect(shown).toHaveText('cat');
   await wsl.locator('.xterm-helper-textarea').press('Control+c');
-  await expect(wsl.getByRole('button', { name: '조작표 접기', exact: true })).toBeVisible();
+  await expect(shown).toHaveCount(0);
   result.checks.push('Actual local WSL snippet UTF-8 and Bash cat metadata/Ctrl+C');
   stage = 'detached';
   await page.getByRole('tab', { name: /스니펫 SSH/ }).click();
-  await page.getByRole('button', { name: '새 창으로 분리 ↗', exact: true }).click();
+  await chooseTabMenu(page, '새 창으로 분리');
   let detached;
   await expect
     .poll(() => {

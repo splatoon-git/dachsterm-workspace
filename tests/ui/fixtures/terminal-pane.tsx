@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { TerminalPane } from '../../../src/features/terminal/TerminalPane';
 import { TerminalSession } from '../../../src/features/terminal/session';
+import { TerminalSettings } from '../../../src/features/terminal/TerminalSettings';
 import type { Profile } from '../../../src/lib/ipc';
 import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
@@ -46,12 +47,16 @@ session.terminal.onData((data) => sent.push(data));
 
 function Fixture() {
   const [active, setActive] = useState(true);
+  const [settings, setSettings] = useState(false);
   useEffect(() => {
     window.__terminalPane = { session, sent, setActive };
   }, []);
   return (
     <>
       <input aria-label="터미널 밖 입력" />
+      {/* The app opens these settings from its settings dialog. */}
+      <button onClick={() => setSettings(true)}>터미널 설정</button>
+      {settings && <TerminalSettings close={() => setSettings(false)} />}
       <div style={{ height: 560, display: 'flex', flexDirection: 'column' }}>
         <TerminalPane session={session} active={active} theme={theme} reconnect={() => {}} />
       </div>

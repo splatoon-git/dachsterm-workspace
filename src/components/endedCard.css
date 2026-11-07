@@ -1,0 +1,22 @@
+.ended-card {
+  position: absolute;
+  z-index: 5;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  display: grid;
+  gap: var(--space-sm);
+  max-width: min(360px, calc(100% - 2 * var(--space-lg)));
+  padding: var(--space-md) var(--space-lg);
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface-panel);
+  box-shadow: var(--shadow-popup);
+  font-size: var(--font-small);
+}
+.ended-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ended-card .form-actions {
+  margin: 0;
+}

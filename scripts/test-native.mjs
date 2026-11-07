@@ -7,7 +7,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
-import { arrangeTabs, dragTab, expectPtyMatchesTerminal } from './native-workspace.mjs';
+import {
+  arrangeTabs,
+  chooseProfileMenu,
+  chooseTabMenu,
+  closeTerminalSettings,
+  dragTab,
+  expectPtyMatchesTerminal,
+  openTerminalSearch,
+  openTerminalSettings,
+} from './native-workspace.mjs';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
@@ -164,7 +173,7 @@ async function command(text, target = pane()) {
 async function output(text, target = pane()) {
   // Search the real terminal buffer: accessibility text covers only the viewport,
   // which may move when a split is resized or an old tab becomes active.
-  const search = target.getByRole('textbox', { name: '터미널 검색', exact: true });
+  const search = await openTerminalSearch(page, target);
   await search.fill(text);
   await expect
     .poll(
@@ -191,7 +200,7 @@ async function connectNewTab() {
   const count = await tabs.count();
   const previousId = await pane().getAttribute('data-connection-id');
   await showConnections();
-  await page.locator('.profile-card').getByRole('button', { name: '연결', exact: true }).click();
+  await page.locator('.profile-card .profile-target').dblclick();
   await expect(tabs).toHaveCount(count + 1);
   await expect.poll(() => pane().getAttribute('data-connection-id')).not.toBe(previousId);
   await connected();
@@ -358,7 +367,7 @@ try {
     ),
   );
   await page.locator('.tab-strip').getByRole('tab').nth(1).click();
-  await pane().getByRole('button', { name: '연결 종료', exact: true }).click();
+  await chooseTabMenu(page, '연결 종료');
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
   await pane().getByRole('button', { name: '재접속', exact: true }).click();
   await connected();
@@ -519,7 +528,7 @@ try {
 
   stage = 'legacy terminal encoding';
   await showConnections();
-  await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
+  await chooseProfileMenu(page, page.locator('.profile-card'), '수정');
   await page.getByRole('dialog').locator('summary', { hasText: '고급 옵션' }).click();
   await page.getByRole('dialog').getByLabel('터미널 인코딩').selectOption('euc-kr');
   await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
@@ -535,7 +544,7 @@ try {
   await output('c7d1b1db0a');
   await page.getByRole('button', { name: 'OpenSSH 테스트 탭 닫기', exact: true }).last().click();
   await showConnections();
-  await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
+  await chooseProfileMenu(page, page.locator('.profile-card'), '수정');
   await page.getByRole('dialog').getByLabel('터미널 인코딩').selectOption('utf-8');
   await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
   await page.locator('.tab-strip').getByRole('tab').first().click();
@@ -624,6 +633,8 @@ try {
     'PASS native 2x2 independent PTY input, per-group stty size after divider and tab drag, same connections and terminals',
   );
   stage = 'terminal controls';
+  // The tab menu path, where the shortcut is used elsewhere.
+  await chooseTabMenu(page, '터미널 검색');
   await pane().getByLabel('터미널 검색', { exact: true }).fill('NATIVE_한글_OK');
   await pane().getByRole('button', { name: '이전 검색 결과', exact: true }).click();
   stage = 'clipboard';
@@ -632,14 +643,15 @@ try {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   const previousClipboard = await page.evaluate(() => navigator.clipboard.readText());
   try {
-    await pane().getByRole('button', { name: '복사', exact: true }).click();
-    // The copy button writes asynchronously, so an immediate read can see the old value.
+    await pane().locator('.xterm-helper-textarea').focus();
+    await page.keyboard.press('Control+Shift+C');
+    // Copying writes asynchronously, so an immediate read can see the old value.
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe('NATIVE_한글_OK');
     await pane().locator('.xterm-helper-textarea').focus();
     await typeInput("printf '");
-    await pane().getByRole('button', { name: '붙여넣기', exact: true }).click();
+    await page.keyboard.press('Control+Shift+V');
     await pane().locator('.xterm-helper-textarea').focus();
     await typeInput("\\n'");
     await page.keyboard.press('Enter');
@@ -650,10 +662,10 @@ try {
   }
   console.log('PASS native clipboard copy/paste (previous clipboard restored)');
   stage = 'terminal controls';
-  await pane().getByRole('button', { name: '터미널 설정', exact: true }).click();
-  await pane().getByLabel('글꼴 크기', { exact: true }).selectOption('18');
-  await pane().getByLabel('스크롤백', { exact: true }).selectOption('1000');
-  await page.keyboard.press('Escape');
+  const settings = await openTerminalSettings(page);
+  await settings.getByLabel('글꼴 크기', { exact: true }).selectOption('18');
+  await settings.getByLabel('스크롤백', { exact: true }).selectOption('1000');
+  await closeTerminalSettings(page);
   await command("stty size; printf 'SIZE_DONE\\n'");
   await output('SIZE_DONE');
   const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
@@ -756,7 +768,7 @@ try {
   await connected();
   console.log('PASS native independent window keeps SSH output/input, closed window cleanup');
   stage = 'disconnect reconnect';
-  await pane().getByRole('button', { name: '연결 종료', exact: true }).click();
+  await chooseTabMenu(page, '연결 종료');
   await expect(pane().getByRole('button', { name: '재접속', exact: true })).toBeVisible();
   await pane().getByRole('button', { name: '재접속', exact: true }).click();
   await connected();
@@ -806,7 +818,7 @@ try {
   await vaultDialog.getByRole('button', { name: '대화상자 닫기' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '대화상자 닫기' }).click();
   await showConnections();
-  await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
+  await chooseProfileMenu(page, page.locator('.profile-card'), '수정');
   await page.getByRole('dialog').locator('summary', { hasText: '고급 옵션' }).click();
   await page.getByRole('button', { name: '저장된 암호 보기', exact: true }).click();
   vaultDialog = page.getByRole('dialog').last();
@@ -834,7 +846,7 @@ try {
   await vaultDialog.getByRole('button', { name: '대화상자 닫기' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '취소', exact: true }).click();
   await invoke('vault_lock');
-  await pane().getByRole('button', { name: '연결 종료', exact: true }).click();
+  await chooseTabMenu(page, '연결 종료');
   await pane().getByRole('button', { name: '재접속', exact: true }).click();
   vaultDialog = page.getByRole('dialog', { name: '마스터 패스워드', exact: true });
   // vault.rs rejects a second verification within 1s; the path here takes only about 1.1s.
@@ -877,10 +889,10 @@ try {
     'PASS native master encryption migration, reauthenticated reveal/hide, wrong password, lock, change and restart reconnect',
   );
   stage = 'bad authentication';
-  await pane().getByRole('button', { name: '연결 종료', exact: true }).click();
+  await chooseTabMenu(page, '연결 종료');
   await expect(pane().getByRole('button', { name: '재접속', exact: true })).toBeVisible();
   await showConnections();
-  await page.locator('.profile-card').getByRole('button', { name: '수정', exact: true }).click();
+  await chooseProfileMenu(page, page.locator('.profile-card'), '수정');
   await page
     .getByRole('dialog')
     .getByLabel('비밀번호', { exact: true })
@@ -892,8 +904,7 @@ try {
   await expect(page.locator('.profile-card')).toHaveCount(0);
   await page.getByLabel('세션 검색', { exact: true }).fill('OpenSSH');
   await showConnections();
-  await page.locator('.profile-actions summary').click();
-  await page.getByRole('button', { name: '복제', exact: true }).click();
+  await chooseProfileMenu(page, page.locator('.profile-card'), '복제');
   await expect(page.locator('.profile-card')).toHaveCount(2);
   const snapshot = await invoke('sessions');
   assert.equal(snapshot.profiles.filter((p) => p.hasSecret).length, 1);

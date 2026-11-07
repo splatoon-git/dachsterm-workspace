@@ -48,7 +48,7 @@ const order: TabRef[] = names.slice(0, count).map((tabId) => ({ kind: 'session',
 function Fixture() {
   const workspace = useWorkspaceLayout();
   const { open } = workspace;
-  useEffect(() => order.forEach(open), [open]);
+  useEffect(() => order.forEach((tab) => open(tab)), [open]);
   useEffect(() => {
     window.__grid = { workspace, mounts, detached };
   });

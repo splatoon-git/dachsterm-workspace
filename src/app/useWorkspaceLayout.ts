@@ -10,6 +10,7 @@ import {
   groupOfTab,
   groups,
   leaveTab,
+  openBeside,
   openTab,
   parseSaved,
   selectTab,
@@ -22,6 +23,7 @@ import {
 } from './workspaceLayout';
 
 const STORAGE_KEY = 'dachsterm.layout';
+export type Beside = { groupId: string; side: Side };
 
 function readSaved() {
   try {
@@ -49,7 +51,12 @@ export function useWorkspaceLayout() {
   }, [layout.root]);
   const actions = useMemo(
     () => ({
-      open: (tab: TabRef) => setLayout((l) => openTab(l, tab)),
+      /** Opens a tab, or with `beside` puts it in a new group next to that one. */
+      open: (tab: TabRef, beside?: Beside) => {
+        if (!beside) return setLayout((l) => openTab(l, tab));
+        setZoomRequested(false);
+        setLayout((l) => openBeside(l, tab, beside.groupId, beside.side));
+      },
       close: (key: string) => setLayout((l) => closeTab(l, key)),
       select: (groupId: string, key: string) => setLayout((l) => selectTab(l, groupId, key)),
       focus: (groupId: string) => setLayout((l) => focusGroup(l, groupId)),

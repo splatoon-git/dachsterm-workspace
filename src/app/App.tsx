@@ -9,7 +9,9 @@ import {
   WorkspaceGrid,
   type CellState,
 } from './WorkspaceGrid';
-import { useWorkspaceLayout } from './useWorkspaceLayout';
+import { useWorkspaceLayout, type Beside } from './useWorkspaceLayout';
+import { useTabMenu } from './useTabMenu';
+import { StatusBar } from './StatusBar';
 import {
   allTabs,
   groups,
@@ -54,10 +56,12 @@ import { SnippetDialog } from '../features/terminal/SnippetDialog';
 import { CommandCatalog } from '../features/terminal/CommandGuide';
 import { SessionTerminal } from './SessionTerminal';
 import { tmuxCloseNotice } from './tmuxNotice';
-import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { SessionTab } from './SessionTab';
+import { ProfileList } from '../features/sessions/ProfileList';
+import { capabilities } from '../features/terminal/sessionKind';
+import { TerminalSettings } from '../features/terminal/TerminalSettings';
 import type { CSSProperties } from 'react';
 import { SidebarFiles } from '../features/sftp/SidebarFiles';
 import { Icon } from '../components/Icon';
@@ -74,9 +78,6 @@ const sessionRef = (session: TerminalSession): TabRef => ({
   tabId: session.tabId,
 });
 const sessionKey = (session: TerminalSession) => tabKey(sessionRef(session));
-// A separate window takes over an SSH connection only. The other kinds stay in the main window.
-const canDetach = (session?: TerminalSession) =>
-  !!session && !session.podtree && !session.localTarget && session.profile.protocol === 'ssh';
 const presets: [Preset, string][] = [
   ['columns', '모든 탭 좌우'],
   ['rows', '모든 탭 상하'],
@@ -93,17 +94,6 @@ function subscribeNarrowViewport(listener: () => void) {
   const media = window.matchMedia('(max-width: 700px)');
   media.addEventListener('change', listener);
   return () => media.removeEventListener('change', listener);
-}
-function ActiveStatus({ session }: { session: TerminalSession }) {
-  const state = useSyncExternalStore(session.subscribe, session.snapshot);
-  return (
-    <span>
-      {session.localTarget
-        ? session.localTarget.name
-        : `${session.profile.username}@${session.profile.host}:${session.profile.port}`}{' '}
-      · {state.message}
-    </span>
-  );
 }
 export function App() {
   const theme = useTheme();
@@ -165,8 +155,9 @@ export function App() {
   const [pendingVault, setPendingVault] = useState<{
     profile: Profile;
     existing?: TerminalSession;
+    beside?: Beside;
   } | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState<'' | 'workspace' | 'terminal'>('');
   const [gameTabs, setGameTabs] = useState<GameId[]>([]);
   const survivorClose = useRef<(() => boolean) | null>(null);
   const registerSurvivorClose = useCallback((close: (() => boolean) | null) => {
@@ -225,7 +216,11 @@ export function App() {
   const [form, setForm] = useState<Profile | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
   const [remove, setRemove] = useState<Profile | null>(null);
-  const [auth, setAuth] = useState<{ profile: Profile; session?: TerminalSession } | null>(null);
+  const [auth, setAuth] = useState<{
+    profile: Profile;
+    session?: TerminalSession;
+    beside?: Beside;
+  } | null>(null);
   const secret = useRef<HTMLInputElement>(null);
   const [tabs, setTabs] = useState<TerminalSession[]>([]);
   async function arrange(preset: Preset) {
@@ -276,12 +271,13 @@ export function App() {
     value: string | null,
     existing?: TerminalSession,
     remember = false,
+    beside?: Beside,
   ) {
     if (value === null && profile.hasSecret) {
       try {
         const status = await call<VaultStatus>('vault_status');
         if (status.enabled && !status.unlocked) {
-          setPendingVault({ profile, existing });
+          setPendingVault({ profile, existing, beside });
           setVaultOpen(true);
           return;
         }
@@ -301,14 +297,14 @@ export function App() {
       if (profile.protocol === 'ssh') revealFiles();
     });
     setTabs((previous) => [...previous, session]);
-    workspace.open(sessionRef(session));
+    workspace.open(sessionRef(session), beside);
     void session.connect(value, remember);
   }
-  function openLocal(target: LocalTarget) {
+  function openLocal(target: LocalTarget, beside?: Beside) {
     const profile = { ...blankProfile(), id: target.id, name: target.name, host: 'localhost' };
     const session = new TerminalSession(profile, theme, () => {}, target);
     setTabs((previous) => [...previous, session]);
-    workspace.open(sessionRef(session));
+    workspace.open(sessionRef(session), beside);
     setLocalOpen(false);
     closeDrawer();
     void session.connect(null);
@@ -359,6 +355,10 @@ export function App() {
         break;
       case 'KeyF':
         e.preventDefault();
+        if (selected && capabilities(selected).terminal) selected.view.set({ search: true });
+        break;
+      case 'KeyO':
+        e.preventDefault();
         void showSidebar('connections', true);
         break;
       case 'KeyE':
@@ -375,7 +375,7 @@ export function App() {
     window.addEventListener('keydown', listener, true);
     return () => window.removeEventListener('keydown', listener, true);
   }, []);
-  function requestConnect(profile: Profile, existing?: TerminalSession) {
+  function requestConnect(profile: Profile, existing?: TerminalSession, beside?: Beside) {
     if (existing?.podtree) {
       setPodtreeOpen(true);
       return;
@@ -385,8 +385,8 @@ export function App() {
       return;
     }
     if (profile.hasSecret || ['agent', 'interactive'].includes(profile.auth))
-      connect(profile, null, existing);
-    else setAuth({ profile, session: existing });
+      connect(profile, null, existing, false, beside);
+    else setAuth({ profile, session: existing, beside });
   }
   async function detach(session: TerminalSession) {
     try {
@@ -403,8 +403,9 @@ export function App() {
       setError(errorText(e));
     }
   }
-  const reconnectTab = (t: TerminalSession) =>
-    requestConnect(snapshot.profiles.find((p) => p.id === t.profile.id) ?? t.profile, t);
+  const savedProfile = (t: TerminalSession) =>
+    snapshot.profiles.find((p) => p.id === t.profile.id) ?? t.profile;
+  const reconnectTab = (t: TerminalSession) => requestConnect(savedProfile(t), t);
   function closeTab(session: TerminalSession) {
     session.dispose();
     const notice = tmuxCloseNotice(session.profile);
@@ -412,6 +413,27 @@ export function App() {
     setTabs((previous) => previous.filter((t) => t !== session));
     workspace.close(sessionKey(session));
   }
+  const closeKey = (key: string) => {
+    const session = tabs.find((t) => sessionKey(t) === key);
+    const game = games.find((g) => tabKey({ kind: 'game', id: g.id }) === key);
+    if (session) closeTab(session);
+    else if (game) closeGame(game.id);
+    else workspace.close(key);
+  };
+  const tabMenu = useTabMenu({
+    workspace,
+    narrow,
+    sessionOf: (key) => tabs.find((t) => sessionKey(t) === key),
+    actions: {
+      split: (t, beside) =>
+        t.localTarget
+          ? openLocal(t.localTarget, beside)
+          : requestConnect(savedProfile(t), undefined, beside),
+      detach: (t) => void detach(t),
+      reconnect: reconnectTab,
+      close: closeKey,
+    },
+  });
   const focusedKey = workspace.focusedGroup.active;
   const focusedTab = workspace.focusedGroup.tabs.find((tab) => tabKey(tab) === focusedKey);
   const activeGame = focusedTab?.kind === 'game' ? focusedTab.id : null;
@@ -420,6 +442,7 @@ export function App() {
   // Zoom hides groups for a moment but keeps them in the input group; a narrow window shows one.
   const inputScope = (narrow ? [workspace.focusedGroup] : groups(workspace.layout.root))
     .flatMap((group) => tabs.filter((t) => sessionKey(t) === group.active))
+    .filter((t) => capabilities(t).terminal)
     .map((t) => t.connectionId)
     .sort();
   const renderTab = (tab: TabRef, group: GroupNode) => {
@@ -485,15 +508,20 @@ export function App() {
       );
     const session = tabs.find((t) => t.tabId === tab.tabId);
     if (!session) return null;
-    return session.profile.protocol && session.profile.protocol !== 'ssh' ? (
-      <FtpPane session={session} reconnect={() => reconnectTab(session)} />
-    ) : (
+    return capabilities(session).terminal ? (
       <SessionTerminal
         session={session}
         focused={focused}
         active={visible}
         theme={theme}
         reconnect={() => reconnectTab(session)}
+        close={() => closeTab(session)}
+      />
+    ) : (
+      <FtpPane
+        session={session}
+        reconnect={() => reconnectTab(session)}
+        close={() => closeTab(session)}
       />
     );
   };
@@ -558,16 +586,13 @@ export function App() {
               {hasPreview ? '작업 화면' : '터미널 미리보기'}
             </button>
             {presets.map(([preset, label]) => (
-              <button
-                key={preset}
-                onClick={(e) => {
-                  e.currentTarget.closest('details')!.open = false;
-                  void arrange(preset);
-                }}
-              >
+              <button key={preset} onClick={() => void arrange(preset)}>
                 {label}
               </button>
             ))}
+            <button onClick={() => void toggleFullscreen()}>
+              {fullscreen ? '전체화면 종료' : '전체화면'}
+            </button>
             <button onClick={() => setHelpOpen(true)}>키보드 단축키</button>
           </ToolbarMenu>
           <ToolbarMenu label="도구">
@@ -579,7 +604,7 @@ export function App() {
               터널
             </button>
           </ToolbarMenu>
-          <button aria-label="설정" title="설정" onClick={() => setSettingsOpen(true)}>
+          <button aria-label="설정" title="설정" onClick={() => setSettingsOpen('workspace')}>
             <Icon name="settings" size={16} />
           </button>
           <button
@@ -759,60 +784,22 @@ export function App() {
                   </div>
                 ))}
               </nav>
-              <div className="session-list">
-                {profiles.length ? (
-                  profiles.map((p) => (
-                    <article key={p.id} className="profile-card">
-                      <button
-                        className="profile-target"
-                        onDoubleClick={() => requestConnect(p)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') requestConnect(p);
-                        }}
-                        title="더블클릭 또는 Enter로 연결"
-                      >
-                        <strong>
-                          {p.favorite ? '★ ' : ''}
-                          {p.name}
-                        </strong>
-                        <span>
-                          {p.username}@{p.host}:{p.port}
-                        </span>
-                        {filter === 'recent' && p.lastConnected && (
-                          <small>{new Date(p.lastConnected * 1000).toLocaleString()}</small>
-                        )}
-                      </button>
-                      <div className="profile-actions">
-                        <button onClick={() => requestConnect(p)}>연결</button>
-                        <button onClick={() => setForm(p)}>수정</button>
-                        <details>
-                          <summary aria-label={`${p.name} 추가 작업`}>⋯</summary>
-                          <button
-                            onClick={() =>
-                              void action('save_session', {
-                                profile: { ...p, favorite: !p.favorite },
-                                secretAction: 'keep',
-                                secret: null,
-                              })
-                            }
-                          >
-                            {p.favorite ? '즐겨찾기 해제' : '즐겨찾기'}
-                          </button>
-                          <button onClick={() => void action('duplicate_session', { id: p.id })}>
-                            복제
-                          </button>
-                          <button onClick={() => setRemove(p)}>삭제</button>
-                        </details>
-                      </div>
-                    </article>
-                  ))
-                ) : (
-                  <div className="sidebar-empty">
-                    {query ? '검색 결과가 없습니다.' : '등록된 서버가 없습니다.'}
-                    <p>새 연결에서 서버를 등록하세요.</p>
-                  </div>
-                )}
-              </div>
+              <ProfileList
+                profiles={profiles}
+                showRecent={filter === 'recent'}
+                empty={query ? '검색 결과가 없습니다.' : '등록된 서버가 없습니다.'}
+                connect={(p) => requestConnect(p)}
+                edit={setForm}
+                toggleFavorite={(p) =>
+                  void action('save_session', {
+                    profile: { ...p, favorite: !p.favorite },
+                    secretAction: 'keep',
+                    secret: null,
+                  })
+                }
+                duplicate={(p) => void action('duplicate_session', { id: p.id })}
+                remove={setRemove}
+              />
               <details className="sidebar-games">
                 <summary>게임</summary>
                 <nav aria-label="게임 목록">
@@ -858,43 +845,6 @@ export function App() {
           />
         )}
         <main id="workspace" tabIndex={-1} inert={narrow && sidebarOpen && !fullscreen}>
-          {tabs.length > 0 && !activeGame && (
-            <div className="workspace-controls">
-              <button
-                className="detach-button"
-                aria-label="새 창으로 분리 ↗"
-                disabled={!canDetach(selected)}
-                title={
-                  selected?.localTarget
-                    ? '로컬 터미널은 현재 창의 탭과 분할을 지원합니다.'
-                    : '새 창으로 분리'
-                }
-                onClick={() => selected && void detach(selected)}
-              >
-                ↗
-              </button>
-              <BroadcastControl
-                enabled={inputScope.length > 1}
-                scope={inputScope}
-                onSelectionChange={setBroadcastIds}
-              />
-              <button
-                disabled={workspace.groupCount < 2}
-                aria-pressed={workspace.zoomed}
-                title="선택 터미널 확대 · Ctrl/Cmd+Shift+Enter"
-                onClick={workspace.toggleZoom}
-              >
-                {workspace.zoomed ? '분할 복원' : '선택 창 확대'}
-              </button>
-              <button
-                aria-pressed={fullscreen}
-                title="전체화면 · F11"
-                onClick={() => void toggleFullscreen()}
-              >
-                {fullscreen ? '전체화면 종료' : '전체화면'}
-              </button>
-            </div>
-          )}
           <WorkspaceGrid
             workspace={workspace}
             narrow={narrow}
@@ -907,8 +857,9 @@ export function App() {
             renderCell={renderCell}
             detach={(key) => {
               const session = tabs.find((t) => sessionKey(t) === key);
-              if (session && canDetach(session)) void detach(session);
+              if (session && capabilities(session).detach) void detach(session);
             }}
+            openMenu={tabMenu.open}
             cellClass={(tab) =>
               tabs.some(
                 (t) => sessionKey(t) === tabKey(tab) && broadcastIds.includes(t.connectionId),
@@ -936,27 +887,24 @@ export function App() {
                   }
             }
           />
-          {selected &&
-            !selected.podtree &&
-            !selected.localTarget &&
-            selected.profile.protocol === 'ssh' && (
-              <MonitorBar key={selected.connectionId} session={selected} />
-            )}
         </main>
       </div>
-      <footer>
-        {activeGame ? (
-          <span>로컬 · {games.find((game) => game.id === activeGame)?.title}</span>
-        ) : selected ? (
-          <ActiveStatus session={selected} />
-        ) : (
-          <span>
-            <span className="status-dot" />
-            연결 없음
-          </span>
-        )}
-        <span>DachsTerm · 로컬</span>
-      </footer>
+      <StatusBar
+        session={activeGame ? undefined : selected}
+        game={games.find((game) => game.id === activeGame)?.title}
+        input={
+          tabs.length > 0 && (
+            <span hidden={inputScope.length < 2 && !broadcastIds.length}>
+              <BroadcastControl
+                enabled={inputScope.length > 1}
+                scope={inputScope}
+                onSelectionChange={setBroadcastIds}
+              />
+            </span>
+          )
+        }
+      />
+      {tabMenu.element}
       {snippetsOpen && (
         <SnippetDialog
           sessions={tabs}
@@ -1035,19 +983,37 @@ export function App() {
           unlocked={
             pendingVault
               ? () => {
-                  void connect(pendingVault.profile, null, pendingVault.existing);
+                  void connect(
+                    pendingVault.profile,
+                    null,
+                    pendingVault.existing,
+                    false,
+                    pendingVault.beside,
+                  );
                 }
               : undefined
           }
         />
       )}
+      {settingsOpen === 'terminal' && (
+        <TerminalSettings close={() => setSettingsOpen('workspace')} />
+      )}
       {settingsOpen && (
         <Dialog
           title="워크스페이스 설정"
           className="settings-dialog"
-          close={() => setSettingsOpen(false)}
+          close={() => setSettingsOpen('')}
         >
           <ThemePicker />
+          <section className="settings-data">
+            <h3>터미널</h3>
+            <div className="form-actions">
+              <button onClick={() => setSettingsOpen('terminal')}>터미널 설정</button>
+            </div>
+            <p className="muted">
+              글꼴, 스크롤 기록, 마우스와 알림 동작은 모든 터미널에 적용됩니다.
+            </p>
+          </section>
           <section className="settings-data">
             <h3>암호 보관함</h3>
             <div className="form-actions">
@@ -1084,7 +1050,7 @@ export function App() {
               const value = secret.current?.value ?? '';
               if (secret.current) secret.current.value = '';
               const remember = new FormData(e.currentTarget).get('rememberSecret') === 'on';
-              connect(auth.profile, value, auth.session, remember);
+              connect(auth.profile, value, auth.session, remember, auth.beside);
               setAuth(null);
             }}
           >

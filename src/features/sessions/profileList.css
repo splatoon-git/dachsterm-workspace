@@ -1,0 +1,16 @@
+.protocol-badge {
+  display: inline-block;
+  margin-left: var(--space-sm);
+  padding: 0 var(--space-xs);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  color: var(--color-text-secondary);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+.protocol-badge.ftp {
+  border-color: var(--color-status-warning);
+  color: var(--color-status-warning);
+}

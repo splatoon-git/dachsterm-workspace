@@ -52,3 +52,64 @@ export async function expectPtyMatchesTerminal(target, command) {
   expect(measured.ptyCols, 'PTY columns match the terminal').toBe(measured.drawnCols);
   return { rows: measured.ptyRows, cols: measured.ptyCols };
 }
+
+/** The selected tab of the focused group: the tab whose pane has the keyboard. */
+export const focusedTab = (page) =>
+  page.locator('.tab-strip[data-focused-group="true"] .session-tab.selected [role="tab"]');
+
+/** Makes a pane's group the focused one without clicking into the terminal or file list. */
+export async function focusPane(pane) {
+  await pane.dispatchEvent('pointerdown');
+}
+
+/**
+ * Chooses an item from a tab's header menu. Without a pane it uses the focused tab. Item names
+ * match from the start, since an item may show its shortcut after the name.
+ */
+export async function chooseTabMenu(page, item, pane) {
+  if (pane) await focusPane(pane);
+  await focusedTab(page).click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: '탭 메뉴' });
+  await menu.getByRole('menuitem', { name: new RegExp(`^${item}`) }).click();
+  await expect(menu).toHaveCount(0);
+}
+
+/** Opens the search box over a terminal pane with its shortcut and returns it. */
+export async function openTerminalSearch(page, pane) {
+  await focusPane(pane);
+  await page.keyboard.press('ControlOrMeta+Shift+F');
+  const search = pane.getByRole('textbox', { name: '터미널 검색', exact: true });
+  await expect(search).toBeVisible();
+  return search;
+}
+
+/** Opens the settings shared by every terminal, from the app settings. */
+export async function openTerminalSettings(page) {
+  await page.getByRole('button', { name: '설정', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '워크스페이스 설정' })
+    .getByRole('button', { name: '터미널 설정', exact: true })
+    .click();
+  return page.getByRole('dialog', { name: '터미널 설정', exact: true });
+}
+
+/** Closes the terminal settings and the app settings behind them. */
+export async function closeTerminalSettings(page) {
+  await page
+    .getByRole('dialog', { name: '터미널 설정', exact: true })
+    .getByRole('button', { name: '대화상자 닫기' })
+    .click();
+  await page
+    .getByRole('dialog', { name: '워크스페이스 설정' })
+    .getByRole('button', { name: '대화상자 닫기' })
+    .click();
+}
+
+/** Chooses an item from a saved connection's right-click menu. */
+export async function chooseProfileMenu(page, card, item) {
+  await card.locator('.profile-target').click({ button: 'right' });
+  await page
+    .getByRole('menu')
+    .getByRole('menuitem', { name: new RegExp(`^${item}`) })
+    .click();
+}

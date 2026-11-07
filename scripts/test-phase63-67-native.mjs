@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
+import { chooseTabMenu } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-phase63-67-'));
 const fixture = `dachsterm-podtree-${randomUUID()}`;
@@ -149,7 +150,7 @@ try {
   await expect(local.locator('.xterm-accessibility-tree')).toContainText('PS C:');
   const localId = await local.getAttribute('data-connection-id');
   stage = 'local-log-ui';
-  await local.getByRole('button', { name: '세션 로그', exact: true }).click();
+  await chooseTabMenu(page, '세션 기록', local);
   let dialog = page.getByRole('dialog', { name: '세션 로그' });
   await dialog.getByLabel('저장 폴더', { exact: true }).fill(logs);
   await dialog
@@ -275,7 +276,7 @@ try {
     await invoke('podtree_resize', { id: podId, cols: 95, rows: 28 });
     await page.screenshot({ path: `target/verification/podtree-${location.kind}.png` });
     stage = `podtree-${location.kind}-close`;
-    await pod.getByRole('button', { name: '연결 종료', exact: true }).click();
+    await chooseTabMenu(page, '연결 종료', pod);
     await expect(pod.locator('.connection-message')).toContainText('PodTree 종료', {
       timeout: 10000,
     });
@@ -332,7 +333,7 @@ try {
     return { pane, id, temp };
   }
   async function closeExtra({ pane, temp }) {
-    await pane.getByRole('button', { name: '연결 종료', exact: true }).click();
+    await chooseTabMenu(page, '연결 종료', pane);
     await expect(pane.locator('.connection-message')).toContainText('PodTree 종료', {
       timeout: 10000,
     });
@@ -484,7 +485,7 @@ try {
     .toBe('recording');
   await paste(wslPane, "printf 'WSL_LOG_한글\\n'");
   await expect(wslPane.locator('.xterm-accessibility-tree')).toContainText('WSL_LOG_한글');
-  await wslPane.getByRole('button', { name: '연결 종료', exact: true }).click();
+  await chooseTabMenu(page, '연결 종료', wslPane);
   await expect.poll(async () => (await invoke('log_status', { id: wslId })).state).toBe('stopped');
   expect(await readFile((await invoke('log_status', { id: wslId })).path, 'utf8')).toContain(
     'WSL_LOG_한글',
@@ -504,7 +505,7 @@ try {
     .click();
   await invoke('log_start', { id: sshId, options, masks: [] });
   await paste(ssh, 'for i in $(seq 1 30); do printf "DETACH_%03d\\n" "$i"; sleep .1; done');
-  await page.getByRole('button', { name: '새 창으로 분리 ↗', exact: true }).click();
+  await chooseTabMenu(page, '새 창으로 분리', ssh);
   await expect.poll(() => browser.contexts().flatMap((c) => c.pages()).length).toBeGreaterThan(1);
   await page.waitForTimeout(4500);
   await invoke('log_action', { id: sshId, action: 'stop' });
@@ -618,7 +619,7 @@ try {
     window.dispatchEvent(new StorageEvent('storage', { key: 'dachsterm.theme' }));
   });
   await page.getByRole('button', { name: '사이드바', exact: true }).click();
-  await restartedPane.getByRole('button', { name: '세션 로그', exact: true }).click();
+  await chooseTabMenu(page, '세션 기록', restartedPane);
   const logDialog = page.getByRole('dialog', { name: '세션 로그' });
   await expect(logDialog).toBeVisible();
   const bounds = await logDialog.boundingBox();
