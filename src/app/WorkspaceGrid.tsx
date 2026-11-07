@@ -103,6 +103,7 @@ export function WorkspaceGrid({
   renderTab,
   renderCell,
   cellClass,
+  groupMark,
   start,
   detach,
   openMenu,
@@ -114,6 +115,8 @@ export function WorkspaceGrid({
   renderTab: (tab: TabRef, group: GroupNode) => ReactNode;
   renderCell: (tab: TabRef, state: CellState) => ReactNode;
   cellClass?: (tab: TabRef) => string;
+  /** Shown at the start of a visible group's tab bar. */
+  groupMark?: (group: GroupNode) => ReactNode;
   /** The start page and its tab, offered while no terminal or preview is open. */
   start?: { tab: (selected: boolean, select: () => void) => ReactNode; page: ReactNode };
   /** A tab dropped outside the app window. Tabs that cannot leave simply stay. */
@@ -165,6 +168,7 @@ export function WorkspaceGrid({
             nextGroup={narrow && workspace.groupCount > 1 ? () => nextGroup(group) : undefined}
             onTabPointerDown={drag.onTabPointerDown}
             openMenu={openMenu}
+            mark={groupMark?.(group)}
           />
         );
       })}

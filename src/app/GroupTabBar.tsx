@@ -52,6 +52,7 @@ export function GroupTabBar({
   nextGroup,
   onTabPointerDown,
   openMenu,
+  mark,
 }: {
   group: GroupNode;
   focused: boolean;
@@ -66,6 +67,8 @@ export function GroupTabBar({
   onTabPointerDown?: (event: PointerEvent<HTMLDivElement>) => void;
   /** Opens a tab's menu. Right-click, Shift+F10, the menu key and the ⋯ button all use it. */
   openMenu?: (key: string, at: MenuPoint) => void;
+  /** The group's part in the input scope, kept at the start of the bar. */
+  mark?: ReactNode;
 }) {
   const tabOf = (target: EventTarget) =>
     (target as HTMLElement).closest<HTMLElement>('[data-tab-key]')?.dataset.tabKey;
@@ -125,6 +128,7 @@ export function GroupTabBar({
         buttons[next]?.focus();
       }}
     >
+      {mark}
       {start}
       {group.tabs.map((tab) => (
         <Fragment key={tabKey(tab)}>{renderTab(tab, group)}</Fragment>

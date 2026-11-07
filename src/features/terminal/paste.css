@@ -44,3 +44,6 @@
 .attach-items small {
   color: var(--color-text-muted);
 }
+.paste-confirm .paste-reach strong {
+  color: var(--color-status-warning);
+}

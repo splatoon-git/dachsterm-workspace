@@ -14,6 +14,8 @@ import {
   closeTerminalSettings,
   dragTab,
   expectPtyMatchesTerminal,
+  inputPick,
+  inputScope,
   openNewConnectionForm,
   openTerminalSearch,
   openTerminalSettings,
@@ -343,21 +345,11 @@ try {
   await page.locator('.tab-strip').getByRole('tab').nth(1).click();
   const secondBroadcastId = await pane().getAttribute('data-connection-id');
   await arrangeTabs(page, '2 × 2');
-  await expect(page.getByLabel('분할 입력 모드')).toBeEnabled();
-  await page.getByLabel('분할 입력 모드').selectOption('selected');
-  const broadcastDialog = page.getByRole('dialog', { name: '멀티 입력 대상' });
-  await broadcastDialog
-    .locator('label')
-    .filter({ hasText: firstBroadcastId.slice(0, 8) })
-    .getByRole('checkbox')
-    .check();
-  await broadcastDialog
-    .locator('label')
-    .filter({ hasText: secondBroadcastId.slice(0, 8) })
-    .getByRole('checkbox')
-    .check();
-  await broadcastDialog.getByRole('button', { name: '선택한 2개에 입력 전달' }).click();
-  await expect(broadcastDialog).not.toBeVisible();
+  await expect(inputScope(page, '선택')).toBeEnabled();
+  await inputScope(page, '선택').check();
+  await inputPick(page, firstBroadcastId).check();
+  await inputPick(page, secondBroadcastId).check();
+  await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(2);
   await command("printf 'BROADCAST_SELECTED_ONLY\\n'");
   await output('BROADCAST_SELECTED_ONLY');
   await page.locator('.tab-strip').getByRole('tab').first().click();
@@ -386,17 +378,10 @@ try {
   await expect(mixedLocal.locator('.connection-message')).toContainText('로컬 ·');
   await expect(mixedLocal.locator('.xterm-accessibility-tree')).toContainText('>');
   const mixedLocalId = await mixedLocal.getAttribute('data-connection-id');
-  await expect(page.getByLabel('분할 입력 모드').locator('option[value="selected"]')).toBeEnabled();
-  await page.getByLabel('분할 입력 모드').selectOption('selected');
-  for (const id of [firstBroadcastId, mixedLocalId]) {
-    await broadcastDialog
-      .locator('label')
-      .filter({ hasText: id.slice(0, 8) })
-      .getByRole('checkbox')
-      .check();
-  }
-  await broadcastDialog.getByRole('button', { name: '선택한 2개에 입력 전달' }).click();
-  await expect(broadcastDialog).not.toBeVisible();
+  await expect(inputScope(page, '선택')).toBeEnabled();
+  await inputScope(page, '선택').check();
+  for (const id of [firstBroadcastId, mixedLocalId]) await inputPick(page, id).check();
+  await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(2);
   await command('echo MIXED_FROM_LOCAL');
   await output(
     'MIXED_FROM_LOCAL',
@@ -736,7 +721,7 @@ try {
   await page.keyboard.press('F11');
   await expect.poll(() => invoke('plugin:window|is_fullscreen')).toBe(true);
   await expect(page.locator('.files')).toBeHidden();
-  await expect(page.getByLabel('분할 입력 모드')).toBeVisible();
+  await expect(page.locator('footer.status-bar')).toBeVisible();
   await page.keyboard.press('F11');
   await expect.poll(() => invoke('plugin:window|is_fullscreen')).toBe(false);
   await expect(page.locator('.files')).toBeVisible();

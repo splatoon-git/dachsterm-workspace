@@ -1,0 +1,79 @@
+/* Lives in the 24px status bar, so every control fits in 20px. */
+.input-scope {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.input-scope-modes {
+  display: flex;
+  height: 20px;
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-small);
+  overflow: hidden;
+}
+.input-scope-modes label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-sm);
+  cursor: pointer;
+}
+.input-scope-modes label + label {
+  border-left: var(--border-width-default) solid var(--color-border-default);
+}
+/* The radio stays in the page for the keyboard and screen readers; the label is the button. */
+.input-scope-modes input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.input-scope-modes label.checked {
+  background: var(--color-action-primary);
+  color: var(--color-text-on-action);
+}
+.input-scope-modes label:has(input:disabled) {
+  cursor: default;
+  opacity: 0.5;
+}
+.input-scope-modes label:focus-within {
+  outline: var(--border-width-focus) solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+.input-scope-state {
+  white-space: nowrap;
+}
+.input-scope.sending .input-scope-state {
+  color: var(--color-text-primary);
+}
+.input-scope-notice {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+/* At the start of a tab bar, so it stays in view when the tabs scroll. */
+.tab-strip .input-mark {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 100%;
+  padding: 0 var(--space-sm);
+  background: var(--color-surface-subtle);
+  border-right: var(--border-width-default) solid var(--color-border-subtle);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.tab-strip .input-mark.pick {
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.tab-strip .input-mark.outside {
+  color: var(--color-text-secondary);
+}

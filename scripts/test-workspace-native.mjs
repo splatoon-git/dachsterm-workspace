@@ -5,7 +5,7 @@ import { mkdtemp, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import { arrangeTabs, chooseTabMenu } from './native-workspace.mjs';
+import { arrangeTabs, chooseTabMenu, inputPick, inputScope } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-workspace-'));
@@ -85,10 +85,9 @@ try {
       .locator('.xterm')
       .evaluate((e) => (e.dataset.instance = 'original'));
   await arrangeTabs(page, '2 × 2');
-  const inputMode = page.getByLabel('분할 입력 모드');
   await expect.poll(async () => (await invoke('broadcast_status')).targets.length).toBe(3);
-  await expect(inputMode.locator('option[value="all"]')).toBeEnabled();
-  await inputMode.selectOption('all');
+  await expect(inputScope(page, '전체')).toBeEnabled();
+  await inputScope(page, '전체').check();
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(3);
   async function command(id, marker) {
     const input = pane(id).locator('.xterm-helper-textarea');
@@ -106,15 +105,25 @@ try {
   await command(ids[0], 'ALL_OK');
   for (const id of ids)
     await expect(pane(id).locator('.xterm-accessibility-tree')).toContainText('DACHSTERMALL_OK');
-  await inputMode.selectOption('selected');
-  const dialog = page.getByRole('dialog', { name: '멀티 입력 대상' });
-  await dialog
-    .locator('label')
-    .filter({ hasText: ids[2].slice(0, 8) })
-    .getByRole('checkbox')
-    .uncheck();
-  await dialog.getByRole('button', { name: '선택한 2개에 입력 전달' }).click();
-  await expect(dialog).not.toBeVisible();
+  // A multi-line paste names how many panes it reaches before anything is sent.
+  await pane(ids[0])
+    .locator('.xterm-helper-textarea')
+    .evaluate((e) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', 'echo NOT_SENT_1\necho NOT_SENT_2\n');
+      e.dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+      );
+    });
+  await expect(pane(ids[0]).locator('.paste-reach')).toContainText('동시 입력 중 · 3개 창');
+  await pane(ids[0]).getByRole('button', { name: '취소', exact: true }).click();
+  await expect(page.locator('footer.status-bar')).toHaveClass(/input-sending/);
+  await expect(page.locator('.pane-cell.broadcast-target')).toHaveCount(3);
+  await page.getByRole('button', { name: '대상 변경', exact: true }).click();
+  await expect(inputPick(page, ids[2])).toBeChecked();
+  await inputPick(page, ids[2]).uncheck();
+  await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(2);
+  await expect(page.locator('.pane-cell.broadcast-target')).toHaveCount(2);
   await command(ids[0], 'SOME_OK');
   await expect(pane(ids[1]).locator('.xterm-accessibility-tree')).toContainText('DACHSTERMSOME_OK');
   await expect(pane(ids[2]).locator('.xterm-accessibility-tree')).not.toContainText(
@@ -140,6 +149,9 @@ try {
   await page.keyboard.press('Control+Shift+Enter');
   await expect(page.locator('.terminal-pane:visible')).toHaveCount(1);
   await expect(pane(ids[2])).toBeVisible();
+  // Zoom hides the other panes, so they stop taking input.
+  await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
+  await expect(page.locator('footer.status-bar')).toContainText('보이는 창이 바뀌어');
   await page.keyboard.press('Control+Shift+Enter');
   await expect(page.locator('.terminal-pane:visible')).toHaveCount(3);
   await mkdir('test-results-native', { recursive: true });
@@ -153,8 +165,7 @@ try {
     await expect(pane(id).locator('.xterm')).toHaveAttribute('data-instance', 'original');
   await arrangeTabs(page, '하나로');
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
-  await expect(inputMode).toHaveValue('off');
-  await expect(inputMode).toBeDisabled();
+  await expect(page.getByRole('radiogroup', { name: '입력 범위' })).toBeHidden();
   await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
   await page.getByRole('button', { name: '전체화면', exact: true }).click();
   await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(true);
@@ -163,11 +174,18 @@ try {
   await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(false);
   await expect(page.locator('.toolbar')).toBeVisible();
   await arrangeTabs(page, '좌우');
-  await inputMode.selectOption('all');
+  // The shortcut only opens the pick; it never starts sending by itself.
+  await page.keyboard.press('Control+Shift+M');
+  await expect(inputScope(page, '선택')).toBeChecked();
+  expect((await invoke('broadcast_status')).selected.length).toBe(0);
+  await page.keyboard.press('Control+Shift+M');
+  await expect(inputScope(page, '개별')).toBeChecked();
+  await inputScope(page, '전체').check();
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(2);
   // The focused tab stays on screen, sharing the left group with the first tab.
   await chooseTabMenu(page, '연결 종료', pane(ids[2]));
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
+  await expect(page.locator('footer.status-bar')).toContainText('대상 연결이 끊겨');
   for (const id of ids)
     await expect(pane(id).locator('.xterm')).toHaveAttribute('data-instance', 'original');
   await page.keyboard.press('Control+Alt+ArrowRight');

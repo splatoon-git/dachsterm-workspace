@@ -14,6 +14,7 @@ import { useTabMenu } from './useTabMenu';
 import { StatusBar } from './StatusBar';
 import {
   allTabs,
+  displayRoot,
   groups,
   tabKey,
   type GroupNode,
@@ -24,7 +25,8 @@ import {
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { MaintenancePanel } from '../features/settings/MaintenancePanel';
 import { SessionTransfer } from '../features/sessions/SessionTransfer';
-import { BroadcastControl } from '../features/terminal/BroadcastControl';
+import { InputScopeControl, InputScopeMark } from '../features/terminal/InputScope';
+import { useInputScope } from '../features/terminal/useInputScope';
 import { VaultDialog, type VaultStatus } from '../features/sessions/VaultDialog';
 import {
   lazy,
@@ -150,7 +152,6 @@ export function App() {
   useEffect(() => {
     localStorage.setItem('dachsterm.sidebar', String(sidebarOpen));
   }, [sidebarOpen]);
-  const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
   const workspace = useWorkspaceLayout();
   const { open: openWorkspaceTab } = workspace;
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
@@ -226,15 +227,9 @@ export function App() {
   } | null>(null);
   const secret = useRef<HTMLInputElement>(null);
   const [tabs, setTabs] = useState<TerminalSession[]>([]);
-  async function arrange(preset: Preset) {
-    try {
-      if (desktop) await call('broadcast_set', { ids: [] });
-      setBroadcastIds([]);
-      workspace.preset(preset);
-      focusActiveTerminal();
-    } catch (e) {
-      setError(errorText(e));
-    }
+  function arrange(preset: Preset) {
+    workspace.preset(preset);
+    focusActiveTerminal();
   }
   const [leftWidth, setLeftWidth] = useState(() =>
     Math.max(200, Math.min(420, Number(localStorage.getItem('dachsterm.leftWidth')) || 240)),
@@ -368,6 +363,10 @@ export function App() {
         e.preventDefault();
         showSidebar('files');
         break;
+      case 'KeyM':
+        e.preventDefault();
+        input.shortcut();
+        break;
       default:
         return;
     }
@@ -442,12 +441,13 @@ export function App() {
   const activeGame = focusedTab?.kind === 'game' ? focusedTab.id : null;
   const hasPreview = allTabs(workspace.layout.root).some((tab) => tab.kind === 'preview');
   const selected = tabs.find((t) => sessionKey(t) === focusedKey);
-  // Zoom hides groups for a moment but keeps them in the input group; a narrow window shows one.
-  const inputScope = (narrow ? [workspace.focusedGroup] : groups(workspace.layout.root))
-    .flatMap((group) => tabs.filter((t) => sessionKey(t) === group.active))
-    .filter((t) => capabilities(t).terminal)
-    .map((t) => t.connectionId)
-    .sort();
+  const activeSession = (group: GroupNode) => tabs.find((t) => sessionKey(t) === group.active);
+  // Only panes on screen take part: zoom and a narrow window leave one group in view.
+  const input = useInputScope(
+    groups(displayRoot(workspace.layout, { zoomed: workspace.zoomed, narrow })).map(
+      (group) => activeSession(group)?.connectionId ?? group.id,
+    ),
+  );
   const renderTab = (tab: TabRef, group: GroupNode) => {
     const key = tabKey(tab);
     const active = group.active === key;
@@ -582,7 +582,7 @@ export function App() {
             {hasPreview ? '작업 화면' : '터미널 미리보기'}
           </button>
           {presets.map(([preset, label]) => (
-            <button key={preset} onClick={() => void arrange(preset)}>
+            <button key={preset} onClick={() => arrange(preset)}>
               {label}
             </button>
           ))}
@@ -841,11 +841,19 @@ export function App() {
               openMenu={tabMenu.open}
               cellClass={(tab) =>
                 tabs.some(
-                  (t) => sessionKey(t) === tabKey(tab) && broadcastIds.includes(t.connectionId),
+                  (t) =>
+                    sessionKey(t) === tabKey(tab) && input.status.selected.includes(t.connectionId),
                 )
                   ? 'broadcast-target'
                   : ''
               }
+              groupMark={(group) => (
+                <InputScopeMark
+                  input={input}
+                  connectionId={activeSession(group)?.connectionId}
+                  name={activeSession(group)?.profile.name ?? ''}
+                />
+              )}
               start={
                 tabs.length || hasPreview
                   ? undefined
@@ -872,17 +880,8 @@ export function App() {
       <StatusBar
         session={activeGame ? undefined : selected}
         game={games.find((game) => game.id === activeGame)?.title}
-        input={
-          tabs.length > 0 && (
-            <span hidden={inputScope.length < 2 && !broadcastIds.length}>
-              <BroadcastControl
-                enabled={inputScope.length > 1}
-                scope={inputScope}
-                onSelectionChange={setBroadcastIds}
-              />
-            </span>
-          )
-        }
+        sending={input.sending}
+        input={tabs.length > 0 && <InputScopeControl input={input} />}
       />
       {tabMenu.element}
       {snippetsOpen && (

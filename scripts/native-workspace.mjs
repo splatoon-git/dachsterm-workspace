@@ -133,3 +133,11 @@ export async function foldSidebar(page) {
   if (await open.count()) await open.click();
   await expect(page.locator('#workspace-sidebar')).toBeHidden();
 }
+
+/** The status bar's input scope: 개별, 전체 or 선택. */
+export const inputScope = (page, name) =>
+  page.getByRole('radiogroup', { name: '입력 범위' }).getByRole('radio', { name, exact: true });
+
+/** The "입력 받기" box in the tab bar of the pane showing this connection, while picking. */
+export const inputPick = (page, connectionId) =>
+  page.locator(`.input-mark[data-connection-id="${connectionId}"] input`);

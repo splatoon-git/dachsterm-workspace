@@ -223,7 +223,7 @@ try {
     expect(await idOf(protocol)).toBe(before[protocol]);
   }
   // File tabs take no typed input, so two of them on screen offer no input scope.
-  await expect(page.getByLabel('분할 입력 모드')).toBeHidden();
+  await expect(page.getByRole('radiogroup', { name: '입력 범위' })).toBeHidden();
   stage = 'file transfer in a split';
   await uploadAndList('ftps', 'split upload.bin');
   await page.screenshot({ path: path.resolve('test-results-native/ftp-split.png') });

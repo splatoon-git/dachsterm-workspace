@@ -13,6 +13,11 @@
   font-size: 11px;
   white-space: nowrap;
 }
+.status-bar.input-sending {
+  border-top-color: var(--color-status-warning);
+  background: color-mix(in srgb, var(--color-status-warning) 22%, var(--color-surface-panel));
+  color: var(--color-text-primary);
+}
 .status-bar button,
 .status-bar select {
   min-height: 20px;

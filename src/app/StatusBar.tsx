@@ -69,16 +69,19 @@ export function StatusBar({
   session,
   game,
   input,
+  sending,
 }: {
   session?: TerminalSession;
   /** The title of the focused game, when a game has the focus. */
   game?: string;
   /** Input scope controls, shown only while several panes are on screen. */
   input?: ReactNode;
+  /** Typing reaches several panes, which the whole bar warns about. */
+  sending?: boolean;
 }) {
   const can = session && capabilities(session);
   return (
-    <footer className="status-bar" aria-label="작업 상태">
+    <footer className={`status-bar ${sending ? 'input-sending' : ''}`} aria-label="작업 상태">
       <div className="status-left">
         {game ? (
           <span>로컬 · {game}</span>

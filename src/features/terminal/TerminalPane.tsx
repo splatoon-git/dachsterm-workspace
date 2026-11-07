@@ -14,6 +14,7 @@ import { afterRendererResumes, throttleTrailing } from './fitThrottle';
 import { PasteConfirm } from './PasteConfirm';
 import { PromptAttachConfirm } from './PromptAttachConfirm';
 import { usePromptAttachments } from './usePromptAttachments';
+import { useInputReach } from './broadcastStatus';
 import { needsPasteConfirmation, useTerminalDisplay, useTerminalPreferences } from './preferences';
 const FIT_INTERVAL_MS = 60;
 const hasImage = (data: DataTransfer | null) =>
@@ -48,6 +49,7 @@ export function TerminalPane({
   const { fontSize, scrollback } = useTerminalDisplay();
   const [paste, setPaste] = useState<{ id: string; text: string } | null>(null);
   const preferences = useTerminalPreferences();
+  const reach = useInputReach(session.connectionId);
   const pane = useRef<HTMLElement>(null);
   const attachments = usePromptAttachments(session, active, pane);
   const { attachImage } = attachments;
@@ -243,6 +245,7 @@ export function TerminalPane({
       {paste !== null && paste.id === session.connectionId && state.status === 'connected' && (
         <PasteConfirm
           text={paste.text}
+          reach={reach}
           cancel={() => setPaste(null)}
           confirm={() => {
             session.terminal.paste(paste.text);

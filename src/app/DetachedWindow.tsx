@@ -1,4 +1,5 @@
-import { BroadcastControl } from '../features/terminal/BroadcastControl';
+import { InputScopeControl } from '../features/terminal/InputScope';
+import { useInputScope } from '../features/terminal/useInputScope';
 import { useFullscreen } from './useFullscreen';
 import { useEffect, useState } from 'react';
 import { useTheme } from '../themes/useTheme';
@@ -26,6 +27,8 @@ export function DetachedWindow({ id }: { id: string }) {
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { fullscreen, toggleFullscreen } = useFullscreen(setError);
+  // One pane is never a group of its own, but a group that reaches it still shows and can stop.
+  const input = useInputScope(session ? [session.connectionId] : []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (document.querySelector('dialog[open]')) return;
@@ -103,7 +106,11 @@ export function DetachedWindow({ id }: { id: string }) {
         )}
         {filesOpen && <FilePanel session={session ?? undefined} />}
       </div>
-      <StatusBar session={session ?? undefined} input={<BroadcastControl />} />
+      <StatusBar
+        session={session ?? undefined}
+        sending={input.sending}
+        input={<InputScopeControl input={input} />}
+      />
       {settingsOpen && <TerminalSettings close={() => setSettingsOpen(false)} />}
       {session && snippetsOpen && (
         <SnippetDialog

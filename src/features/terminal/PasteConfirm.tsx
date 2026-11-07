@@ -4,10 +4,13 @@ import './paste.css';
 
 export function PasteConfirm({
   text,
+  reach = 1,
   cancel,
   confirm,
 }: {
   text: string;
+  /** Panes the paste goes to; above one while input reaches several panes. */
+  reach?: number;
   cancel: () => void;
   confirm: () => void;
 }) {
@@ -19,6 +22,11 @@ export function PasteConfirm({
   return (
     <div className="trust-card paste-confirm" role="alert">
       <p>여러 줄 또는 제어문자가 포함되어 있습니다. 붙여넣으면 명령이 실행될 수 있습니다.</p>
+      {reach > 1 && (
+        <p className="paste-reach">
+          <strong>동시 입력 중 · {reach}개 창</strong>에 같은 내용이 들어갑니다.
+        </p>
+      )}
       <p className="paste-counts">{counts.join(' · ')}</p>
       <pre aria-label="붙여넣을 내용" tabIndex={0}>
         {preview.segments.map((segment, index) => {
