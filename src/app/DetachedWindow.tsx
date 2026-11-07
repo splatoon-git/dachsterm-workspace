@@ -14,9 +14,11 @@ import { TitleBar } from './TitleBar';
 import { TerminalSettings } from '../features/terminal/TerminalSettings';
 import { CommandPanel } from '../features/terminal/CommandPanel';
 import { StatusBadge, useProgramSummary } from '../features/terminal/StatusBadge';
+import { useSignWaiting } from '../features/terminal/agentSign';
 function DetachedProgramStatus({ session }: { session: TerminalSession }) {
   const summary = useProgramSummary(session.programStatus);
-  return summary && <StatusBadge summary={summary} />;
+  const shown = useSignWaiting(session.agentSign, session.connectionId) ?? summary;
+  return shown && <StatusBadge summary={shown} />;
 }
 export function DetachedWindow({ id }: { id: string }) {
   const theme = useTheme();

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import { rmSync } from 'node:fs';
 const name = `dachsterm-probe-${randomUUID()}`;
 const native = process.argv.includes('--native');
 const reuseBuild = process.argv.includes('--reuse-build');
@@ -36,6 +37,7 @@ async function run(command, args, options = {}) {
 }
 let created = false;
 let agentBridge;
+let agentSocketPath;
 const agentSockets = new Set();
 try {
   if (native && !reuseBuild && !process.argv.includes('--skip-app-build'))
@@ -82,8 +84,18 @@ try {
   if (!ready) throw new Error('OpenSSH fixture startup timeout');
   env.DACHSTERM_PROBE_PORT = capture(['port', name, '22/tcp']).split(':').at(-1);
   env.DACHSTERM_PROBE_MFA_PORT = capture(['port', name, '2223/tcp']).split(':').at(-1);
-  if (process.platform === 'win32') {
-    env.DACHSTERM_TEST_AGENT_PIPE = `\\\\.\\pipe\\dachsterm-agent-${randomUUID()}`;
+  // The fixture's agent stands in for this PC's agent, so no real key is offered or forwarded.
+  {
+    let listenAt;
+    if (process.platform === 'win32') {
+      env.DACHSTERM_TEST_AGENT_PIPE = `\\\\.\\pipe\\dachsterm-agent-${randomUUID()}`;
+      listenAt = env.DACHSTERM_TEST_AGENT_PIPE;
+    } else {
+      // /tmp keeps the path under the 104-byte socket limit on macOS.
+      agentSocketPath = `/tmp/dachsterm-agent-${randomUUID()}.sock`;
+      env.SSH_AUTH_SOCK = agentSocketPath;
+      listenAt = agentSocketPath;
+    }
     const agentPort = Number(capture(['port', name, '2222/tcp']).split(':').at(-1));
     agentBridge = net.createServer((client) => {
       const remote = net.connect(agentPort, '127.0.0.1');
@@ -99,7 +111,7 @@ try {
     });
     await new Promise((resolve, reject) => {
       agentBridge.once('error', reject);
-      agentBridge.listen(env.DACHSTERM_TEST_AGENT_PIPE, resolve);
+      agentBridge.listen(listenAt, resolve);
     });
   }
   for (const [key, file] of [
@@ -147,6 +159,7 @@ try {
 } finally {
   for (const socket of agentSockets) socket.destroy();
   agentBridge?.close();
+  if (agentSocketPath) rmSync(agentSocketPath, { force: true });
   if (created) {
     capture(['rm', '-f', name]);
     console.log('PASS fixture removed (keys, credentials and remote files destroyed)');

@@ -8,6 +8,7 @@ import { programNotifier } from './terminalNotify';
 import { KittyKeyboard, modifiedEnter } from './kittyKeyboard';
 import { ProgramStatus } from './programStatus';
 import { PaneView } from './paneView';
+import { AgentSignQueue } from './agentSign';
 import type {
   LocalTarget,
   PodTreeLaunch,
@@ -85,6 +86,7 @@ export class TerminalSession {
   readonly search = new SearchAddon();
   private readonly keyboard = new KittyKeyboard();
   readonly programStatus = new ProgramStatus();
+  readonly agentSign = new AgentSignQueue(this);
   readonly view = new PaneView();
   enterSequence(event: KeyboardEvent) {
     const flags = this.keyboard.flags(this.terminal.buffer.active.type);
@@ -164,6 +166,9 @@ export class TerminalSession {
   private get backend() {
     return this.podtree ? 'podtree' : this.localTarget ? 'local' : 'terminal';
   }
+  private get closeCommand() {
+    return this.podtree ? 'podtree_close' : this.localTarget ? 'local_close' : 'disconnect';
+  }
   private setDirectory(path: string) {
     if (this.current.directory !== path)
       this.update({ ...this.current, directory: path, directoryHook: undefined });
@@ -238,11 +243,7 @@ export class TerminalSession {
       this.update({ status: 'error', message: errorText(e), hostKey: null });
     } finally {
       this.pending = false;
-      if (this.disposed)
-        await call(
-          this.podtree ? 'podtree_close' : this.localTarget ? 'local_close' : 'disconnect',
-          { id },
-        ).catch(() => {});
+      if (this.disposed) await call(this.closeCommand, { id }).catch(() => {});
     }
   }
   private bindEvents(channel: Channel<Event>, id: string) {
@@ -276,6 +277,8 @@ export class TerminalSession {
           authPrompt: event,
           message: '서버의 추가 인증 응답을 입력하세요.',
         });
+      else if (event.type === 'agentSign') this.agentSign.add(event, id);
+      else if (event.type === 'agentNotice') this.notice(event.message);
       else if (event.type === 'hostKey')
         this.update({
           status: 'trust',
@@ -372,9 +375,9 @@ export class TerminalSession {
     }
   }
   async disconnect() {
-    await call(this.podtree ? 'podtree_close' : this.localTarget ? 'local_close' : 'disconnect', {
-      id: this.connectionId,
-    }).catch((e) => this.notice(errorText(e)));
+    await call(this.closeCommand, { id: this.connectionId }).catch((e) =>
+      this.notice(errorText(e)),
+    );
   }
   async reconnect(secret: string | null, profile: Profile, remember = false) {
     if (!['closed', 'error'].includes(this.current.status)) return;
@@ -390,11 +393,7 @@ export class TerminalSession {
     await this.connect(secret, remember);
   }
   dispose() {
-    this.disposed = true;
-    this.directoryHookInstaller.cancel();
-    this.inputQueue = [];
+    this.release();
     void this.disconnect();
-    this.terminal.dispose();
-    this.listeners.clear();
   }
 }

@@ -29,9 +29,23 @@ export type AuthPrompt = {
   instructions: string;
   prompts: { prompt: string; echo: boolean }[];
 };
+/** A server asks the local agent to sign. Every text field is already plain and short. */
+export type AgentSignRequest = {
+  type: 'agentSign';
+  request: string;
+  session: string;
+  key: string;
+  fingerprint: string;
+  loginUser: string | null;
+  namespace: string | null;
+  hostKey: string | null;
+  seconds: number;
+};
 export type SessionEvent =
   | { type: 'replay'; active: boolean }
   | AuthPrompt
+  | AgentSignRequest
+  | { type: 'agentNotice'; message: string }
   | HostKey
   | { type: 'state'; status: string; message: string }
   | { type: 'data'; seq: number; bytes: number[] };

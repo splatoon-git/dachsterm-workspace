@@ -215,6 +215,67 @@ Windows debug 앱의 SSH 탭에서 로그인한 Claude Code 2.1.319를 실행했
 - **자동 조회 끔, 시간 초과로 멈춤, 수동 조회 오류 표시:** 단위 테스트뿐이다.
 - **전체 게이트** `verify-windows.ps1 -Native`, 푸시 후 CI, Mac 실기기는 실행하지 않았다.
 
+## DX.2 agent forwarding과 서명 승인
+
+- 실행일: 2026-11-07. 대상: `feat/agent-forward` 브랜치의 **미커밋 트리**(기준 `eb2a16b`), Windows debug 앱과 예제, Docker OpenSSH(Debian bookworm, OpenSSH 9.2). CI, Mac, 전체 게이트는 실행하지 않았다.
+- 로컬 agent는 이 PC의 agent가 아니라 fixture 컨테이너의 `ssh-agent`다. `run-phase1.mjs`가 Windows에서는 격리된 named pipe(`DACHSTERM_TEST_AGENT_PIPE`, debug 빌드만 읽음), Unix에서는 `/tmp`의 소켓(`SSH_AUTH_SOCK`)으로 잇는다. Unix 경로는 이번에 추가했고 Mac·Linux에서 실행하지 않았다.
+- fixture 변경: `git` 설치, 22번 sshd `AllowAgentForwarding yes`, MFA용 2223번 sshd는 `no`(거부 서버 검사용).
+
+### 실제 프로토콜(`node scripts/run-phase1.mjs`, 종료 0)
+
+`src-tauri/examples/agent_checks/`가 제품 엔진(`Connections`)으로 실제 OpenSSH에 접속한다. 원격 `git push`는 컨테이너 안의 `ssh`가 전달된 agent로 같은 컨테이너의 sshd에 로그인해 bare 저장소에 push한다.
+
+| 확인 | 결과 |
+|---|---|
+| 거부 서버(`AllowAgentForwarding no`) | `CHANNEL_FAILURE` → russh `ChannelMsg::Failure`. 안내 1회, 셸은 정상(MFA 단계에 포함) |
+| 서버 `ssh-add -l` | 로컬 키의 SHA-256 지문 표시, 종료 0 |
+| 서버 `ssh-add -D` | 종료 0이 아님. 다시 `ssh-add -l`하면 키가 그대로 있음 |
+| 승인 후 `git push` | 성공, 원격 `main`이 로컬 HEAD와 같음. 요청에 키 지문·코멘트, 사용자 `probe`, 세션 이름, `session-bind`의 대상 호스트키 지문, 60초가 담김 |
+| 거부 후 `git push` | 실패, 원격 `main`이 움직이지 않음 |
+| 이 연결에서 10분 허용 | 다음 push는 묻지 않고 성공 |
+| 옵션을 끈 연결 | 셸에 agent 없음. 같은 연결에 별도 채널로 전달을 요청해 sshd가 agent 채널을 열게 해도 앱이 거부해 `ssh-add -l` 실패 |
+| 경유 경로(경유 프로필도 옵션 켬) | 최종 서버에서만 `ssh-add -l`이 키를 보여줌 |
+
+경유 서버 자체의 agent 채널 거부는 실제 OpenSSH로 재현할 수 없다. 앱은 경유 서버에 세션 채널을 열지 않으므로 sshd가 agent 소켓을 만들지 않는다. 거부 판단(`accepts`)은 단위 테스트로 확인했다.
+
+### 실제 앱(`node scripts/run-phase1.mjs --native --reuse-build --agent-only`, 종료 0)
+
+`npm run tauri -- build --debug --no-bundle`로 만든 앱이다. 검사는 `scripts/verify-agent-terminal.mjs`의 `DX.2 agent forwarding` 단계이고 `test:native`를 거쳐 `verify-windows.ps1 -Native`에 연결돼 있다.
+
+- 새 연결 폼: 고급 옵션의 "SSH 키 전달 (agent forwarding)"이 꺼진 상태로 시작, 켜고 저장하면 `forwardAgent: true`로 저장.
+- `ssh-add -l`에 fixture 키 지문. push하면 터미널 위에 카드가 뜨고 탭에 `입력 대기`. 카드에 지문, 세션 이름, `사용자 probe`. **이번만 허용** → push 성공, 카드와 탭 표시가 사라짐.
+- 두 번째 push에서 **거부** → push 실패, 원격 마지막 커밋이 `c1` 그대로.
+- 같은 실행에서 AT.5, AT.6, DX.3, DX.4 단계도 모두 통과했다. 화면: `test-results-native/agent-sign.png`(저장소에 넣지 않음).
+
+### 단위·UI
+
+| 명령 | 결과 |
+|---|---|
+| `cargo test -p dachsterm --lib --locked -- agent_ storage::tests settings::tests` | 24/24. 프레임 상한·분리, 허용 목록, 요청 해석, 숨김 문자 제거, 승인·거부·시간 초과·10분 허용과 만료, `Broker`가 서명 이벤트를 재생하지 않음, 경유·옵션 끔·거부 서버의 채널 거부, 채널 8개 상한, SSH 전용 검증, 세션 파일이 켜지도 끄지도 못함 |
+| `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과 |
+| `npx vitest run` `agentSign.test.ts`, `model.test.ts`, `SessionTab.test.tsx` | 6/6, 4/4, 4/4 |
+| Playwright `agent-sign.spec.ts`, `session-form.spec.ts` | 6/6, 5/5 |
+| Playwright `terminal-font`, `terminal-visibility`, `workspace-drag`(TerminalPane 변경 회귀) | 28/28 |
+| `npm run typecheck`, `npm run lint`, `prettier --check`(`format:check` 범위) | 통과 |
+
+Playwright는 1420·1431 포트를 다른 작업 트리의 dev 서버가 쓰고 있어, 이 트리의 서버를 1447 포트로 띄우는 임시 설정으로 실행했다(설정 파일은 지웠다).
+
+### 실행 중 찾은 문제
+
+- PowerShell 5.1의 `Get-Content`로 `agent_forward.rs`를 고쳐 쓰는 과정에서 한국어 안내 문구가 깨졌고, probe의 거부 서버 검사가 이를 잡았다. 문구를 복구하고 같은 probe를 다시 실행해 통과했다.
+- 좁은 칸에서 카드 버튼이 카드 안으로 밀려 보이지 않았다(Playwright). 붙여넣기 카드와 같이 상세만 줄어들게 고쳤다.
+
+### 대기와 미실행
+
+- **Mac 실기기:** Finder로 실행한 앱의 `SSH_AUTH_SOCK`, Unix 소켓 중계, 카드 표시. `#[cfg(unix)]` 경로는 이 PC에서 컴파일하지 않았다. macOS CI도 푸시하지 않아 실행하지 않았다.
+- **이 PC의 실제 Windows `ssh-agent` 서비스:** 검사는 fixture agent를 격리 pipe로 연결했다. 사용자 키를 등록한 서비스로는 실행하지 않았다.
+- **실제 외부 Git 호스팅으로 push**, **CLI 에이전트가 실행한 push의 승인**: 수동 확인 대기.
+- **`ssh-add -h` 제한 키**(DX.0): 미실측.
+- **알림:** 포커스 밖 알림은 Vitest로만 확인했다. 실제 OS 알림은 미확인.
+- **60초 시간 초과:** 단위 테스트(300ms로 단축)만. 실제 앱에서 60초를 기다리지 않았다.
+- **tmux 재접속 후 `SSH_AUTH_SOCK`:** 다시 붙은 기존 패널은 끊긴 연결의 소켓을 가리킬 수 있다(설계안 DX.3). 안내서 보강은 DX.10.
+- **전체 게이트** `verify-windows.ps1 -Native`: 바꾼 범위만 실행했다.
+
 ## tmux (DX.0)
 
 `script ... -c "tmux new-session -s at0 'claude'"`로 확인했다.
@@ -227,3 +288,17 @@ Windows debug 앱의 SSH 탭에서 로그인한 Claude Code 2.1.319를 실행했
 
 - 실제 앱: 앱에서 SSH 세션에 접속해 `script -q -f --log-out /tmp/at-out.log --log-in /tmp/at-in.log -c claude`를 실행하고 로그의 시퀀스 종류를 집계했다.
 - 응답 동작: 컨테이너 안에서 PTY 래퍼로 `CSI c`, `CSI ? u`, `OSC 7501 ; ?`에 응답하며 Claude Code를 실행했다. 이 항목은 앱이 아직 응답을 구현하지 않아 앱 밖에서 확인했다. AT.1 구현 후 앱으로 다시 확인한다.
+
+## DX.2와 DX.5·DX.9 병합 트리
+
+- 실행일: 2026-11-08. 대상: `53ba4eb`(DX.1·DX.5·DX.9)와 `91f9b1c`(DX.2)를 main에 병합한 **미커밋 병합 트리**. 위 두 절은 각각 병합 전 트리의 결과다.
+- 충돌: IPC 명령 등록 세 곳(`lib.rs`, `build.rs`, `capabilities/main.json`)에 `git_status`와 `agent_sign_reply`를 모두 두었고, `phase1_probe.rs`에 두 검사 모듈을 모두 두었다. `SessionTab.tsx`는 Git 접근성 이름·툴팁과 서명 대기 표시(`signing ?? summary`)를 함께 쓴다. `tests/openssh/Dockerfile`의 `git` 설치는 자동 병합됐다.
+
+| 범위 | 명령 | 결과 |
+|---|---|---|
+| Rust | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test -p dachsterm --lib --locked` | 통과, 단위 104/104 |
+| 프런트엔드 | `npm run typecheck`, `npm run lint`, `npm run format:check`, `npx vitest run`, `npx playwright test` | 통과, Vitest 550/550, Playwright 149/149 |
+| 실제 OpenSSH | `npm run probe:phase1` | 종료 0. Git 상태, agent 서명·거부 서버·`ssh-add -D` 차단·거부 후 push 실패·옵션 끔·경유 경로 PASS |
+| 실제 앱(WebView2) | `npm run tauri -- build --debug --no-bundle` 후 `node scripts/run-phase1.mjs --native --reuse-build --agent-only` | 종료 0. 서명 카드 승인·거부, 실패한 명령 막대, 프롬프트 이동, Git 상태 표시·숨김을 포함한 에이전트 단계 전부 PASS |
+
+미실행: 전체 게이트 `verify-windows.ps1 -Native`, CI(푸시하지 않음), Mac 실기기.

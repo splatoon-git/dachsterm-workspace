@@ -18,6 +18,8 @@ import { PromptAttachConfirm } from './PromptAttachConfirm';
 import { usePromptAttachments } from './usePromptAttachments';
 import { useInputReach } from './broadcastStatus';
 import { needsPasteConfirmation, useTerminalDisplay, useTerminalPreferences } from './preferences';
+import { AgentSignCard } from './AgentSignCard';
+import { currentSign } from './agentSign';
 const FIT_INTERVAL_MS = 60;
 const hasImage = (data: DataTransfer | null) =>
   Array.from(data?.items ?? []).some((item) => item.type.startsWith('image/'));
@@ -48,6 +50,7 @@ export function TerminalPane({
   const host = useRef<HTMLDivElement>(null);
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const view = usePaneView(session.view);
+  const signs = useSyncExternalStore(session.agentSign.subscribe, session.agentSign.snapshot);
   const { fontSize, scrollback } = useTerminalDisplay();
   const [paste, setPaste] = useState<{ id: string; text: string } | null>(null);
   const preferences = useTerminalPreferences();
@@ -193,6 +196,7 @@ export function TerminalPane({
       session.terminal.focus();
   }, [session, active, focused]);
   const ended = ['closed', 'error'].includes(state.status);
+  const sign = state.status === 'connected' ? currentSign(signs, session.connectionId) : null;
   return (
     <section
       ref={pane}
@@ -237,6 +241,13 @@ export function TerminalPane({
             </button>
           </div>
         </div>
+      )}
+      {sign && (
+        <AgentSignCard
+          key={sign.request}
+          request={sign}
+          answer={(decision) => void session.agentSign.answer(sign, decision)}
+        />
       )}
       {state.authPrompt && (
         <AuthenticationPrompt

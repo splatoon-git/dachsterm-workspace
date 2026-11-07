@@ -1,19 +1,33 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { Terminal } from '@xterm/xterm';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalSession } from '../features/terminal/session';
 import { ProgramStatus } from '../features/terminal/programStatus';
+import { AgentSignQueue } from '../features/terminal/agentSign';
 import { SessionTab } from './SessionTab';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+vi.mock('../lib/ipc', () => ({
+  call: vi.fn(() => Promise.resolve()),
+  errorText: (e: unknown) => String(e),
+}));
 
 function setup() {
   const programStatus = new ProgramStatus();
   const state = { status: 'connected' };
+  const profile = { name: 'server' };
+  const agentSign = new AgentSignQueue({
+    terminal: { textarea: null } as unknown as Terminal,
+    profile,
+    notice: () => {},
+  });
   const session = {
     programStatus,
-    profile: { name: 'server' },
+    agentSign,
+    connectionId: 'c1',
+    profile,
     subscribe: () => () => {},
     snapshot: () => state,
   } as unknown as TerminalSession;
@@ -29,7 +43,7 @@ function setup() {
   const report = (body: string) => act(() => programStatus.report(body));
   // A connected tab shows a dot and names its state for screen readers; a program shows its badge.
   const label = () => host.querySelector('[role=tab] small, [role=tab] .sr-only')?.textContent;
-  return { programStatus, render, report, label };
+  return { programStatus, agentSign, render, report, label };
 }
 const roots: Root[] = [];
 
@@ -65,5 +79,33 @@ describe('session tab status', () => {
     await report('state=blocked');
     await render(true);
     expect(label()).toBe('입력 대기');
+  });
+
+  it('shows a sign request on its own connection as waiting for the user', async () => {
+    const { agentSign, render, label } = setup();
+    await render(false);
+    const request = (id: string, connectionId: string) =>
+      act(() =>
+        agentSign.add(
+          {
+            type: 'agentSign',
+            request: id,
+            session: 'server',
+            key: 'k',
+            fingerprint: 'f',
+            loginUser: null,
+            namespace: null,
+            hostKey: null,
+            seconds: 60,
+          },
+          connectionId,
+        ),
+      );
+    await request('old', 'before-reconnect');
+    expect(label()).toBe('연결됨');
+    await request('now', 'c1');
+    expect(label()).toBe('입력 대기');
+    await act(() => agentSign.answer(agentSign.snapshot()[1], 'deny'));
+    expect(label()).toBe('연결됨');
   });
 });

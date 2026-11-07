@@ -39,6 +39,7 @@ fn main() {
             "remote_ports",
             "tmux_current_path",
             "git_status",
+            "agent_sign_reply",
             "archive_run",
             "file_batch",
             "file_clipboard",

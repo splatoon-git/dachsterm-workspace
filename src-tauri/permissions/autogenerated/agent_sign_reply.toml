@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-agent-sign-reply"
+description = "Enables the agent_sign_reply command without any pre-configured scope."
+commands.allow = ["agent_sign_reply"]
+
+[[permission]]
+identifier = "deny-agent-sign-reply"
+description = "Denies the agent_sign_reply command without any pre-configured scope."
+commands.deny = ["agent_sign_reply"]

@@ -22,8 +22,9 @@ python3 /echo.py &
 ssh-agent -a /run/probe/agent.sock >/dev/null
 SSH_AUTH_SOCK=/run/probe/agent.sock ssh-add /run/probe/rsa 2>/dev/null
 socat TCP-LISTEN:2222,reuseaddr,fork UNIX-CONNECT:/run/probe/agent.sock &
-# Separate real key + PAM keyboard-interactive server, with only an RSA host key.
-sed -e 's/^Port 22/Port 2223/' -e '\|^HostKey /run/probe/host$|d' -e 's/^UsePAM no/UsePAM yes/' -e 's/^KbdInteractiveAuthentication no/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config > /run/probe/mfa_config
+# Separate real key + PAM keyboard-interactive server, with only an RSA host key. It also refuses
+# agent forwarding, so a refusal is checked against real OpenSSH.
+sed -e 's/^Port 22/Port 2223/' -e 's/^AllowAgentForwarding yes/AllowAgentForwarding no/' -e '\|^HostKey /run/probe/host$|d' -e 's/^UsePAM no/UsePAM yes/' -e 's/^KbdInteractiveAuthentication no/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config > /run/probe/mfa_config
 printf '\nAuthenticationMethods publickey,keyboard-interactive\nPubkeyAcceptedAlgorithms rsa-sha2-256\n' >> /run/probe/mfa_config
 /usr/sbin/sshd -f /run/probe/mfa_config -E /run/probe/mfa.log
 touch /run/probe/ready

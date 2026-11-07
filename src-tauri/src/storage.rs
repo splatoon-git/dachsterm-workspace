@@ -36,10 +36,16 @@ pub struct Profile {
     /// Empty means off. Not part of session JSON and not part of "same connection target".
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub tmux_session: String,
+    /// Off unless the user turns it on in the form. Never taken from a session file either.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub forward_agent: bool,
     #[serde(default)]
     pub last_connected: Option<i64>,
     #[serde(default)]
     pub has_secret: bool,
+}
+fn is_false(value: &bool) -> bool {
+    !value
 }
 fn default_protocol() -> String {
     "ssh".into()
@@ -66,6 +72,7 @@ impl Profile {
             timeout: 15,
             keepalive: 15,
             tmux_session: String::new(),
+            forward_agent: false,
             last_connected: None,
             has_secret: false,
         }
@@ -75,6 +82,9 @@ impl Profile {
         crate::terminal_start::check_name(&self.tmux_session)?;
         if self.protocol != "ssh" && !self.tmux_session.is_empty() {
             return Err("tmux 세션은 SSH 연결에서만 사용할 수 있습니다.".into());
+        }
+        if self.protocol != "ssh" && self.forward_agent {
+            return Err("키 전달은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
         if self.jump_ids.len() > crate::routes::MAX_HOPS
             || (self.protocol != "ssh" && !self.jump_ids.is_empty())
@@ -399,9 +409,18 @@ pub(crate) mod tests {
             timeout: 15,
             keepalive: 15,
             tmux_session: String::new(),
+            forward_agent: false,
             last_connected: None,
             has_secret: false,
         }
+    }
+    #[test]
+    fn forward_agent_needs_ssh() {
+        let mut p = profile();
+        p.forward_agent = true;
+        assert!(p.validate().is_ok());
+        p.protocol = "ftps".into();
+        assert!(p.validate().is_err());
     }
     #[test]
     fn tmux_session_needs_ssh_and_a_safe_name() {

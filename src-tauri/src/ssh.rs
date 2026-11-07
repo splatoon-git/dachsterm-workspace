@@ -1,7 +1,4 @@
-use crate::{
-    hostkeys,
-    storage::{Profile, Result, Store},
-};
+use crate::storage::{Profile, Result, Store};
 use russh::{
     ChannelMsg, Disconnect, client,
     keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate, decode_secret_key},
@@ -18,6 +15,7 @@ use tokio::{
     time::timeout,
 };
 use zeroize::Zeroizing;
+mod host_key;
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -46,6 +44,10 @@ pub enum Event {
         seq: u64,
         bytes: Vec<u8>,
     },
+    AgentSign(crate::agent_forward::SignRequest),
+    AgentNotice {
+        message: String,
+    },
 }
 #[derive(Clone, Serialize)]
 pub struct AuthPrompt {
@@ -70,6 +72,7 @@ pub struct Control {
     pub trust_request: Arc<Mutex<Option<String>>>,
     pub ack: watch::Sender<u64>,
     pub broker: Arc<crate::windows::Broker>,
+    pub agent: Arc<crate::agent_forward::Agent>,
 }
 #[derive(Default)]
 pub struct Connections {
@@ -181,6 +184,7 @@ impl Connections {
                     trust_request: trust_request.clone(),
                     ack,
                     broker,
+                    agent: Arc::default(),
                 }),
             );
         }
@@ -252,6 +256,7 @@ pub struct Host {
     failure: Arc<Mutex<Option<String>>>,
     waiting: watch::Sender<bool>,
     stop: watch::Receiver<bool>,
+    forward_agent: bool,
 }
 impl client::Handler for Host {
     type Error = russh::Error;
@@ -292,44 +297,14 @@ impl client::Handler for Host {
         }
         Ok(())
     }
-}
-impl Host {
-    async fn verify(&mut self, key: &PublicKeyOrCertificate) -> Result<bool> {
-        if key.certificate().is_some() {
-            return Err("호스트 인증서는 아직 지원되지 않습니다.".into());
-        }
-        let key = &key.public_key();
-        if hostkeys::check(&self.paths, &self.profile.host, self.profile.port, key)? {
-            return Ok(true);
-        }
-        let _ = self.waiting.send(true);
-        let challenge = uuid::Uuid::new_v4().to_string();
-        *self.trust_request.lock().unwrap() = Some(challenge.clone());
-        (self.sink)(Event::HostKey {
-            challenge,
-            host: self.profile.host.clone(),
-            port: self.profile.port,
-            algorithm: key.algorithm().to_string(),
-            fingerprint: key.fingerprint(HashAlg::Sha256).to_string(),
-        })?;
-        tokio::select! {
-            biased;
-            _ = self.stop.changed() => return Err("호스트키 확인이 취소되었습니다.".into()),
-            result = timeout(Duration::from_secs(120), self.trust.changed()) => {
-                result.map_err(|_| "호스트키 확인 시간이 초과되었습니다.")?.map_err(|_| "호스트키 확인이 취소되었습니다.")?;
-            }
-        }
-        self.trust_request.lock().unwrap().take();
-        if *self.trust.borrow() != Some(true) {
-            return Err("호스트키 신뢰를 거부했습니다.".into());
-        }
-        let _ = self.waiting.send(false);
-        let _guard = self.manager.host_lock.lock().unwrap();
-        // Recheck under the writer lock: simultaneous first connections cannot overwrite trust.
-        if !hostkeys::check(&self.paths, &self.profile.host, self.profile.port, key)? {
-            hostkeys::remember(&self.paths[0], &self.profile.host, self.profile.port, key)?;
-        }
-        Ok(true)
+    async fn server_channel_open_agent_forward(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        reply: client::ChannelOpenHandle,
+        _: &mut client::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        crate::agent_forward::open(self.forward_agent, &self.manager, &self.id, channel, reply);
+        Ok(())
     }
 }
 // Cancellation and every early-return path explicitly disconnect the owned SSH task.
@@ -463,6 +438,7 @@ async fn run(
                 &stop,
                 &manager,
                 &handler_id,
+                hop.id == p.id && p.forward_agent,
                 &mut replies,
             )
             .await
@@ -473,7 +449,8 @@ async fn run(
     }
     let session = owned.pop().ok_or("경유 경로가 비어 있습니다.")?;
     let channel = timeout(Duration::from_secs(p.timeout), async {
-        let channel = session.channel_open_session().await?;
+        let mut channel = session.channel_open_session().await?;
+        crate::agent_forward::request(&mut channel, &manager, &id).await;
         channel
             .request_pty(
                 true,
@@ -595,6 +572,7 @@ async fn authenticate_hop(
     stop: &watch::Receiver<bool>,
     manager: &Arc<Connections>,
     id: &str,
+    forward_agent: bool,
     replies: &mut mpsc::Receiver<AuthReply>,
 ) -> Result<SessionGuard> {
     let mut preferred = russh::Preferred::default();
@@ -633,6 +611,7 @@ async fn authenticate_hop(
         failure: failure.clone(),
         waiting: waiting_tx,
         stop: stop.clone(),
+        forward_agent,
     };
     let handshake = client::connect_stream(Arc::new(config), stream, handler);
     tokio::pin!(handshake);

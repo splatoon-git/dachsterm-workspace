@@ -373,4 +373,74 @@ export async function verifyAgentTerminal({
   await invoke('delete_session', { id: profile.id });
   await page.locator('.tab-strip').getByRole('tab').first().click();
   console.log('PASS native first close note, and a server without tmux gets a plain shell');
+
+  // The local agent is the fixture's own agent behind the isolated pipe set by run-phase1.
+  setStage('DX.2 agent forwarding');
+  const mine = docker(['exec', container, 'ssh-keygen', '-lf', '/run/probe/rsa.pub']).split(' ')[1];
+  const work = '/home/probe/dx-native';
+  shell(
+    `rm -rf ${work} ${work}.git && git init -q --bare ${work}.git && git init -q ${work} && ` +
+      `git -C ${work} config user.email p@example.invalid && git -C ${work} config user.name probe`,
+  );
+  const forwardName = '키 전달 테스트';
+  await openNewConnectionForm(page);
+  const forwardForm = page.getByRole('dialog');
+  await forwardForm.getByLabel('이름', { exact: true }).fill(forwardName);
+  await forwardForm.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
+  await forwardForm.getByLabel('포트', { exact: true }).fill(probe('PORT'));
+  await forwardForm.getByLabel('사용자', { exact: true }).fill('probe');
+  await forwardForm.getByLabel('비밀번호', { exact: true }).fill(probe('PASSWORD'));
+  await forwardForm.getByLabel('인증정보 보관', { exact: true }).selectOption('replace');
+  await forwardForm.locator('summary', { hasText: '고급 옵션' }).click();
+  const forwardOption = forwardForm.getByLabel('SSH 키 전달 (agent forwarding)', { exact: true });
+  await expect(forwardOption).not.toBeChecked();
+  await forwardOption.check();
+  await forwardForm.getByRole('button', { name: '저장 후 연결', exact: true }).click();
+  await expect(page.getByRole('tab', { name: new RegExp(`^${forwardName}`) })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await connected();
+  await command('ssh-add -l');
+  await output(mine);
+  const signCard = () => pane().getByRole('alertdialog', { name: '키 서명 요청', exact: true });
+  const push = (n, marker) =>
+    command(
+      `cd ${work} && echo ${n} > f && git add f && git commit -qm c${n} && ` +
+        `GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ` +
+        `-o BatchMode=yes -o LogLevel=ERROR' git push -q ssh://probe@127.0.0.1${work}.git ` +
+        `HEAD:refs/heads/main && printf '${marker}_%s\\n' OK || printf '${marker}_%s\\n' FAIL`,
+    );
+  await push(1, 'ALLOWED');
+  await expect(signCard()).toContainText(mine, { timeout: 15000 });
+  await expect(signCard()).toContainText(forwardName);
+  await expect(signCard()).toContainText('사용자 probe');
+  await expect(page.locator('.session-tab.selected .program-status')).toHaveClass(/blocked/);
+  await page.screenshot({ path: path.join(screenshots, 'agent-sign.png') });
+  await signCard().getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await output('ALLOWED_OK');
+  await expect(signCard()).toHaveCount(0);
+  await expect(page.locator('.session-tab.selected .program-status')).toHaveCount(0);
+  console.log('PASS native sign card: key, session and user shown, approval lets git push work');
+
+  await push(2, 'DENIED');
+  await expect(signCard()).toBeVisible({ timeout: 15000 });
+  // The remote client may try the key once per signature algorithm. Every try is refused.
+  await expect
+    .poll(
+      async () => {
+        if (await signCard().count())
+          await signCard().getByRole('button', { name: '거부', exact: true }).click();
+        return pane().locator('.xterm-accessibility-tree').innerText();
+      },
+      { timeout: 20000 },
+    )
+    .toContain('DENIED_FAIL');
+  assert.equal(shell(`git --git-dir ${work}.git log -1 --format=%s main`), 'c1');
+  const forwardProfile = (await invoke('sessions')).profiles.find((p) => p.name === forwardName);
+  assert.equal(forwardProfile.forwardAgent, true);
+  await page.getByRole('button', { name: `${forwardName} 탭 닫기`, exact: true }).click();
+  await invoke('delete_session', { id: forwardProfile.id });
+  await page.locator('.tab-strip').getByRole('tab').first().click();
+  console.log('PASS native refusal makes git push fail and leaves the remote unchanged');
 }

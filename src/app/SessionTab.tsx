@@ -6,6 +6,7 @@ import {
   useProgramSummary,
 } from '../features/terminal/StatusBadge';
 import { isRecording, useLogStatus } from '../features/terminal/logStatus';
+import { useSignWaiting } from '../features/terminal/agentSign';
 import { capabilities } from '../features/terminal/sessionKind';
 import { gitSentence, gitTooltip } from '../features/git/gitStatus';
 import { gitStatusOf, useGitStatus } from '../features/git/useGitStatus';
@@ -56,7 +57,8 @@ export function SessionTab({
   useEffect(() => {
     if (active) gitStatusOf(session)?.request('activate');
   }, [active, session]);
-  const program = state.status === 'connected' ? summary : null;
+  const signing = useSignWaiting(session.agentSign, session.connectionId);
+  const program = state.status === 'connected' ? (signing ?? summary) : null;
   // The branch shows in the status bar; the tab carries it only for its name and tooltip.
   const label = [
     session.profile.name,

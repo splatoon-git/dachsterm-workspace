@@ -18,7 +18,8 @@ export function hasConnectionOverrides(p: Profile) {
     (p.jumpIds?.length ?? 0) > 0 ||
     (p.encoding ?? 'utf-8') !== 'utf-8' ||
     !!p.tlsCaPath ||
-    !!p.tmuxSession
+    !!p.tmuxSession ||
+    !!p.forwardAgent
   );
 }
 export function inGroup(p: Profile, id: string, groups: Group[]) {

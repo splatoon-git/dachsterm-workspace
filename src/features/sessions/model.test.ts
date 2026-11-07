@@ -17,6 +17,7 @@ describe('session form advanced section', () => {
     expect(hasConnectionOverrides({ ...blankProfile(), encoding: 'euc-kr' })).toBe(true);
     expect(hasConnectionOverrides({ ...blankProfile(), tlsCaPath: 'ca.pem' })).toBe(true);
     expect(hasConnectionOverrides({ ...blankProfile(), tmuxSession: 'work' })).toBe(true);
+    expect(hasConnectionOverrides({ ...blankProfile(), forwardAgent: true })).toBe(true);
   });
 });
 

@@ -18,6 +18,7 @@ export type Profile = {
   timeout: number;
   keepalive: number;
   tmuxSession?: string;
+  forwardAgent?: boolean;
   lastConnected: number | null;
   hasSecret: boolean;
 };
