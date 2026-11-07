@@ -9,7 +9,7 @@ import { TerminalSettings } from './TerminalSettings';
 import { ProgramGuide } from './CommandGuide';
 import { AuthenticationPrompt } from './AuthenticationPrompt';
 import { attachFontSizeWheel } from './fontWheel';
-import { throttleTrailing } from './fitThrottle';
+import { afterRendererResumes, throttleTrailing } from './fitThrottle';
 import { PasteConfirm } from './PasteConfirm';
 import { PromptAttachConfirm } from './PromptAttachConfirm';
 import { usePromptAttachments } from './usePromptAttachments';
@@ -68,8 +68,12 @@ export function TerminalPane({
     const element = host.current!;
     if (!session.terminal.element) session.terminal.open(element);
     else element.appendChild(session.terminal.element);
+    let cancelFit = () => {};
     const fit = throttleTrailing(() => {
-      if (element.clientWidth && element.clientHeight) fitTerminal(session);
+      cancelFit();
+      cancelFit = afterRendererResumes(() => {
+        if (element.clientWidth && element.clientHeight) fitTerminal(session);
+      });
     }, FIT_INTERVAL_MS);
     const observer = new ResizeObserver(() => fit.call());
     observer.observe(element);
@@ -92,6 +96,7 @@ export function TerminalPane({
     return () => {
       observer.disconnect();
       fit.cancel();
+      cancelFit();
       element.removeEventListener('paste', intercept, true);
       element.removeEventListener('focusin', seen);
       detachWheel();
@@ -166,7 +171,7 @@ export function TerminalPane({
   }, [session, theme]);
   useEffect(() => {
     session.configure(fontSize, scrollback);
-    if (active) fitTerminal(session);
+    if (active) return afterRendererResumes(() => fitTerminal(session));
   }, [session, active, fontSize, scrollback]);
   useEffect(() => {
     // Visibility is shared by all split panes; keyboard ownership is not.

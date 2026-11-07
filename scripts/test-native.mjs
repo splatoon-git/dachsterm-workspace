@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
-import { arrangeTabs, expectPtyMatchesTerminal } from './native-workspace.mjs';
+import { arrangeTabs, dragTab, expectPtyMatchesTerminal } from './native-workspace.mjs';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
@@ -558,7 +558,7 @@ try {
     before.push(await expectPtyMatchesTerminal(splitPane, command));
   }
   await page.screenshot({ path: path.join(screenshots, 'split-grid.png') });
-  stage = 'split divider resize';
+  stage = 'split layout divider resize';
   const divider = page.getByRole('separator', { name: '칸 크기 조절' }).first();
   const handle = await divider.boundingBox();
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
@@ -576,6 +576,38 @@ try {
     'dragging a divider resizes exactly the two groups beside it',
   );
   await page.screenshot({ path: path.join(screenshots, 'split-divider.png') });
+  stage = 'split layout tab drag';
+  // Group 1 moves into group 2, then group 2 splits with a tab of its own beside group 3.
+  const firstTab = page.locator('.tab-strip').first().getByRole('tab');
+  const secondCell = await page.locator('.terminal-pane:not([hidden])').nth(1).boundingBox();
+  await dragTab(
+    page,
+    firstTab,
+    secondCell.x + secondCell.width / 2,
+    secondCell.y + secondCell.height / 2,
+  );
+  await expect(page.locator('.tab-strip')).toHaveCount(3);
+  await expect(page.locator('.terminal-pane:not([hidden])')).toHaveCount(3);
+  await page.mouse.move(5, 5);
+  await sleep(200);
+  const moved = page.locator('.pane-cell.focused .terminal-pane');
+  await expect(moved).toHaveAttribute('data-connection-id', connections[0]);
+  await expectPtyMatchesTerminal(moved, command);
+  const lastCell = await page.locator('.terminal-pane:not([hidden])').last().boundingBox();
+  await dragTab(
+    page,
+    page.locator('.tab-strip').first().getByRole('tab').first(),
+    lastCell.x + lastCell.width - 8,
+    lastCell.y + lastCell.height / 2,
+  );
+  await expect(page.locator('.terminal-pane:not([hidden])')).toHaveCount(4);
+  await sleep(200);
+  await page.screenshot({ path: path.join(screenshots, 'tab-drag.png') });
+  for (let i = 0; i < 4; i++)
+    await expectPtyMatchesTerminal(page.locator('.terminal-pane:not([hidden])').nth(i), command);
+  // Keys pressed over a terminal the drag crossed must not have reached it as mouse reports.
+  await command("printf 'AFTER_TAB_DRAG\\n'", moved);
+  await output('AFTER_TAB_DRAG', moved);
   await arrangeTabs(page, '하나로');
   assert.deepEqual(
     await page
@@ -589,7 +621,7 @@ try {
   );
   await page.locator('.tab-strip').getByRole('tab').first().click();
   console.log(
-    'PASS native 2x2 independent PTY input, per-group stty size after divider drag, same connections and terminals',
+    'PASS native 2x2 independent PTY input, per-group stty size after divider and tab drag, same connections and terminals',
   );
   stage = 'terminal controls';
   await pane().getByLabel('터미널 검색', { exact: true }).fill('NATIVE_한글_OK');
@@ -668,7 +700,9 @@ try {
   await output('BEFORE_DETACH');
   const mainPage = page;
   const detachedId = await pane().getAttribute('data-connection-id');
-  await page.getByRole('button', { name: '새 창으로 분리 ↗' }).click();
+  // Beyond the window edge. CDP reports the position, so a real OS drag remains a manual check.
+  const selectedTab = page.locator('.tab-strip').getByRole('tab', { selected: true });
+  await dragTab(page, selectedTab, -40, 300);
   let detachedPage;
   for (let i = 0; i < 60; i++) {
     detachedPage = browser

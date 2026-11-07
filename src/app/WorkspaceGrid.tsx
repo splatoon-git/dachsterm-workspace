@@ -8,7 +8,9 @@ import {
 } from 'react';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { GroupTabBar } from './GroupTabBar';
+import { useTabDrag } from './useTabDrag';
 import type { Workspace } from './useWorkspaceLayout';
+import { dropPreviewRect } from './workspaceDrop';
 import { dividerRange, dividers, rects, type Rect } from './workspaceGeometry';
 import {
   displayRoot,
@@ -101,6 +103,7 @@ export function WorkspaceGrid({
   renderCell,
   cellClass,
   start,
+  detach,
 }: {
   workspace: Workspace;
   narrow: boolean;
@@ -111,11 +114,23 @@ export function WorkspaceGrid({
   cellClass?: (tab: TabRef) => string;
   /** The start page and its tab, offered while no terminal or preview is open. */
   start?: { tab: (selected: boolean, select: () => void) => ReactNode; page: ReactNode };
+  /** A tab dropped outside the app window. Tabs that cannot leave simply stay. */
+  detach: (key: string) => void;
 }) {
   const { layout, zoomed } = workspace;
   const canvasRef = useRef<HTMLDivElement>(null);
   const canvas = useElementSize(canvasRef);
   const root = displayRoot(layout, { zoomed, narrow });
+  const drag = useTabDrag({
+    canvas: canvasRef,
+    layout,
+    root,
+    allowSplit: !narrow,
+    drop: workspace.drop,
+    detach,
+    finished: focusActiveTerminal,
+  });
+  const preview = drag.view?.target ? dropPreviewRect(root, drag.view.target) : null;
   const shownRects = rects(root);
   const rectOf = new Map(shownRects.map((rect) => [rect.id, rect]));
   const shownGroups = groups(root);
@@ -144,6 +159,7 @@ export function WorkspaceGrid({
             focusGroup={() => workspace.focus(group.id)}
             toggleZoom={workspace.toggleZoom}
             nextGroup={narrow && workspace.groupCount > 1 ? () => nextGroup(group) : undefined}
+            onTabPointerDown={drag.onTabPointerDown}
           />
         );
       })}
@@ -220,6 +236,32 @@ export function WorkspaceGrid({
           />
         );
       })}
+      {preview && drag.view?.target && (
+        <div
+          className="drop-preview"
+          data-zone={drag.view.target.zone}
+          style={{
+            left: `${preview.x * 100}%`,
+            top: `${preview.y * 100}%`,
+            width: `${preview.w * 100}%`,
+            height: `${preview.h * 100}%`,
+          }}
+        />
+      )}
+      {drag.view?.insert && (
+        <div
+          className="drop-insert"
+          style={{ left: drag.view.insert.x, top: drag.view.insert.y, height: TAB_BAR_HEIGHT }}
+        />
+      )}
+      {drag.view && (
+        <div
+          className="tab-drag-label"
+          style={{ left: drag.view.clientX + 12, top: drag.view.clientY + 12 }}
+        >
+          {drag.view.title}
+        </div>
+      )}
     </div>
   );
 }

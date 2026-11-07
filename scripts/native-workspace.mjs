@@ -7,6 +7,16 @@ export async function arrangeTabs(page, label) {
   await page.getByRole('button', { name: `모든 탭 ${label}`, exact: true }).click();
 }
 
+/** Drags a tab with the real mouse: past the threshold, then to the point, then releases. */
+export async function dragTab(page, tab, x, y) {
+  const box = await tab.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 12, { steps: 3 });
+  await page.mouse.move(x, y, { steps: 6 });
+  await page.mouse.up();
+}
+
 let sizeMarker = 0;
 /**
  * Asks the shell for its PTY size and compares it with what the terminal actually draws. The rows

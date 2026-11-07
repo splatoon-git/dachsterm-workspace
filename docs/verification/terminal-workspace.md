@@ -22,6 +22,23 @@
 | FTP 탭의 작은 칸 표시 | `node scripts/run-ftp.mjs --native-only`의 FTP 단계 | 통과. 스크린샷은 `test-results-native/ftp-small-group.png`로 남고 저장소에는 넣지 않는다 |
 | FTPS 탭 | 같은 명령의 FTPS 단계 | **실패(기존)**, 아래 참조 |
 
+## TW.3
+
+TW.3부터는 사용자 결정에 따라 작업 ID마다 typecheck, lint, 바꾼 부분의 테스트만 실행하고, 전체 게이트는 TW.1~TW.3 묶음 끝에 한 번 실행한다.
+
+| 항목 | 명령 | 결과 |
+|---|---|---|
+| 형식·타입·린트 | `npx prettier --check src scripts tests`, `npm run typecheck`, `npm run lint` | 통과 |
+| 단위 | `npx vitest run src/app src/features/terminal/fitThrottle.test.ts` | 96/96 |
+| 5개 영역(탭 바·상하좌우 가장자리·가운데), 탭 순서, Esc 취소, 5px 임계값, 닫기 버튼·우클릭 제외, 자기 칸 금지, 최소 크기, 창 밖 분리, 작업 영역 밖 취소, 좁은 창, 확대 중 드래그, 셀 재마운트 없음 | `npx playwright test tests/ui/workspace-drag.spec.ts` 외 바꾼 영역 5개 파일 | 54/54 |
+| 실제 OpenSSH 탭을 다른 칸에 합치고 가장자리로 나눈 뒤 칸별 `stty size` 일치, 같은 연결·xterm 인스턴스 유지, 창 밖으로 끌어 새 창 분리 | `node scripts/run-phase1.mjs --native --skip-app-build` (현재 소스로 빌드한 앱) | 종료 0 |
+
+창 밖 분리는 CDP가 창 밖 좌표로 보낸 마우스 이벤트로 확인했다. 실제 OS에서 창 밖으로 끄는 동작은 확인하지 않았다.
+
+### TW.3에서 찾아 고친 결함
+
+숨겨진 터미널의 크기가 바뀐 뒤 다시 보이면, 뷰포트가 옛 위치에 남아 새 출력이 보이는 행 아래로 쌓였다. xterm은 숨겨진 동안 렌더러 크기 갱신을 미루고 `IntersectionObserver`가 다시 켤 때 반영하는데, 그 전에 `fit`이 실행되면 스크롤 범위가 옛 높이로 고정된다. 탭을 칸 사이로 옮기면 바로 생기고, 이전 구조에서도 숨긴 탭이 있는 채로 창 크기를 바꾸면 생길 수 있었다. `fit`을 렌더러가 다시 켜진 뒤로 미뤄 고쳤다(`fitThrottle.ts`의 `afterRendererResumes`). 재현 테스트는 `tests/ui/terminal-visibility.spec.ts`이다.
+
 ## 알려진 실패
 
 `verify-windows.ps1 -Native`는 `run-ftp --native`에서 끝까지 가지 못한다. 변경 전에도 있던 실패다.
@@ -36,5 +53,6 @@
 ## 미검증
 
 - 실제 FTPS 탭을 분할 안에서 파일 전송까지 쓰는 경로. 위 실패로 자동 검사가 도달하지 못한다.
-- 실제 앱의 창 경계 드래그와 Windows 파일 드롭 공존은 TW.3 항목이다.
-- Mac 실기기 전체.
+- 실제 마우스로 앱 창 밖까지 끌어 분리하는 동작, 탭 드래그와 Windows 파일 드롭의 공존.
+- `test-jump-native.mjs`, `test-session-transfer-native.mjs`는 임시 WebView2 프로필 설정만 추가했고 실행하지 않았다.
+- Mac 실기기 전체(WKWebView 포인터 캡처 포함).

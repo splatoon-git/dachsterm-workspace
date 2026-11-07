@@ -14,10 +14,11 @@ applyTheme(getCurrentTheme());
 
 declare global {
   interface Window {
-    __grid: { workspace: Workspace; mounts: Record<string, number> };
+    __grid: { workspace: Workspace; mounts: Record<string, number>; detached: string[] };
   }
 }
 const mounts: Record<string, number> = {};
+const detached: string[] = [];
 
 function Cell({ name, state }: { name: string; state: CellState }) {
   const [typed, setTyped] = useState('');
@@ -49,7 +50,7 @@ function Fixture() {
   const { open } = workspace;
   useEffect(() => order.forEach(open), [open]);
   useEffect(() => {
-    window.__grid = { workspace, mounts };
+    window.__grid = { workspace, mounts, detached };
   });
   const renderTab = (tab: TabRef, group: GroupNode) => {
     const key = tabKey(tab);
@@ -69,6 +70,7 @@ function Fixture() {
       workspace={workspace}
       narrow={params.has('narrow')}
       order={order}
+      detach={(key) => detached.push(key)}
       renderTab={renderTab}
       renderCell={(tab, state) => (
         <Cell name={tab.kind === 'session' ? tab.tabId : tabKey(tab)} state={state} />

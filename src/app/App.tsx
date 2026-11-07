@@ -74,6 +74,9 @@ const sessionRef = (session: TerminalSession): TabRef => ({
   tabId: session.tabId,
 });
 const sessionKey = (session: TerminalSession) => tabKey(sessionRef(session));
+// A separate window takes over an SSH connection only. The other kinds stay in the main window.
+const canDetach = (session?: TerminalSession) =>
+  !!session && !session.podtree && !session.localTarget && session.profile.protocol === 'ssh';
 const presets: [Preset, string][] = [
   ['columns', '모든 탭 좌우'],
   ['rows', '모든 탭 상하'],
@@ -860,11 +863,7 @@ export function App() {
               <button
                 className="detach-button"
                 aria-label="새 창으로 분리 ↗"
-                disabled={
-                  !!selected?.podtree ||
-                  !!selected?.localTarget ||
-                  selected?.profile.protocol !== 'ssh'
-                }
+                disabled={!canDetach(selected)}
                 title={
                   selected?.localTarget
                     ? '로컬 터미널은 현재 창의 탭과 분할을 지원합니다.'
@@ -906,6 +905,10 @@ export function App() {
             ]}
             renderTab={renderTab}
             renderCell={renderCell}
+            detach={(key) => {
+              const session = tabs.find((t) => sessionKey(t) === key);
+              if (session && canDetach(session)) void detach(session);
+            }}
             cellClass={(tab) =>
               tabs.some(
                 (t) => sessionKey(t) === tabKey(tab) && broadcastIds.includes(t.connectionId),
