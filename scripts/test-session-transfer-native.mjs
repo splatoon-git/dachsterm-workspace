@@ -185,6 +185,7 @@ try {
   await close('이번만');
   stage = 'native transfer settings layout';
   await page.getByRole('button', { name: '설정', exact: true }).click();
+  await page.getByRole('tab', { name: '가져오기·내보내기', exact: true }).click();
   await expect(page.getByRole('region', { name: '세션 가져오기와 내보내기' })).toBeVisible();
   await page.setViewportSize({ width: 560, height: 820 });
   await page.getByRole('button', { name: '파일 선택 · 미리보기' }).scrollIntoViewIfNeeded();

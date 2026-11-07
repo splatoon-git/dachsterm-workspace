@@ -147,7 +147,7 @@ try {
   const fileDialog = page.getByRole('dialog');
   const answer = async (value) => {
     await fileDialog.getByLabel('이름 또는 경로', { exact: true }).fill(value);
-    await fileDialog.getByRole('button', { name: '적용', exact: true }).click();
+    await fileDialog.getByRole('button', { name: /^(만들기|바꾸기)$/ }).click();
     await expect(fileDialog).toHaveCount(0);
   };
   await localFiles.getByRole('button', { name: '폴더', exact: true }).click();
@@ -157,7 +157,9 @@ try {
   await answer('created.txt');
   await expect(localFiles.getByRole('button', { name: /created\.txt/ })).toBeVisible();
   await localFiles.getByRole('button', { name: /seen\.txt/ }).click();
-  await localFiles.getByRole('button', { name: '이름', exact: true }).click();
+  // Item actions are in the row's right-click menu and on keys; rename uses the menu here.
+  await localFiles.getByRole('button', { name: /seen\.txt/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /^이름 바꾸기/ }).click();
   await answer('renamed.txt');
   await expect(localFiles.getByRole('button', { name: /renamed\.txt/ })).toBeVisible();
   // The tree is the panel: it keeps most of the height, and folders open in place.
@@ -171,9 +173,9 @@ try {
   await expect(localPath).toHaveValue(scratch);
   await nested.locator('.file-row').click();
   await page.screenshot({ path: path.resolve('test-results-native/local-files.png') });
-  await localFiles.getByRole('button', { name: '삭제', exact: true }).click();
+  await page.keyboard.press('Delete');
   await expect(fileDialog).toContainText('nested.txt');
-  await fileDialog.getByRole('button', { name: '적용', exact: true }).click();
+  await fileDialog.getByRole('button', { name: '삭제', exact: true }).click();
   await expect(fileDialog).toHaveCount(0);
   await expect(nested).toHaveCount(0);
   await expect
@@ -181,7 +183,7 @@ try {
     .toBe('ENOENT');
   await localFiles.getByRole('button', { name: '접기: inner', exact: true }).click();
   await localFiles.getByRole('button', { name: /renamed\.txt/ }).click();
-  await localFiles.getByRole('button', { name: '복사', exact: true }).click();
+  await page.keyboard.press('Control+c');
   await localFiles.getByRole('button', { name: /^inner/ }).dblclick();
   await expect(localPath).toHaveValue(path.join(scratch, 'inner'));
   await localFiles.getByRole('button', { name: '붙여넣기', exact: true }).click();
@@ -193,8 +195,8 @@ try {
   await expect(localFiles.getByRole('alert')).toContainText('이미 있습니다');
   expect(await readFile(path.join(scratch, 'inner', 'renamed.txt'), 'utf8')).toBe('changed');
   await localFiles.getByRole('button', { name: /renamed\.txt/ }).click();
-  await localFiles.getByRole('button', { name: '삭제', exact: true }).click();
-  await fileDialog.getByRole('button', { name: '적용', exact: true }).click();
+  await page.keyboard.press('Delete');
+  await fileDialog.getByRole('button', { name: '삭제', exact: true }).click();
   await expect(fileDialog).toHaveCount(0);
   await expect(localFiles.getByRole('button', { name: /renamed\.txt/ })).toHaveCount(0);
   console.log('PASS local file create, rename, copy, no-overwrite paste and delete');
@@ -206,9 +208,13 @@ try {
   let settings = await openTerminalSettings(page);
   await settings.getByLabel('글꼴 크기').selectOption('16');
   await page.keyboard.press('Escape');
-  const workspaceSettings = page.getByRole('dialog', { name: '워크스페이스 설정' });
-  await expect(workspaceSettings.getByRole('button', { name: '터미널 설정' })).toBeFocused();
-  await workspaceSettings.getByRole('button', { name: '터미널 설정' }).click();
+  await expect(settings).toHaveCount(0);
+  // The settings window opens again on the category used last.
+  await page.getByRole('button', { name: '설정', exact: true }).click();
+  await expect(settings.getByRole('tab', { name: '터미널', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await settings.getByLabel('글꼴 크기').selectOption('14');
   await closeTerminalSettings(page);
   await page.screenshot({ path: path.resolve('test-results-native/unified-local.png') });

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import net from 'node:net';
-import { openNewConnectionForm } from './native-workspace.mjs';
+import { openGame as chooseGame, openNewConnectionForm } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-survivor-integration-'));
 const fixture = `dachsterm-survivor-${randomUUID()}`;
@@ -107,12 +107,7 @@ try {
     await input.press('Enter');
   };
   const openGame = async () => {
-    const launcher = page.locator('.sidebar-games');
-    if ((await launcher.getAttribute('open')) === null) await launcher.locator('summary').click();
-    await page
-      .getByRole('navigation', { name: '게임 목록' })
-      .getByRole('button', { name: '닥스의 서바이버', exact: true })
-      .click();
+    await chooseGame(page, '닥스의 서바이버');
     await expect(page.locator('.survivor-game')).toBeVisible();
   };
   stage = 'local-open';

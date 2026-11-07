@@ -6,6 +6,7 @@ import { mkdtemp, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import { openGame } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('This smoke test requires Windows WebView2.');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-games-'));
@@ -59,10 +60,8 @@ try {
           .map((p) => p.url())
           .join(', '),
     );
-  const launcher = page.locator('.sidebar-games summary');
-  await launcher.click();
-  const menu = page.getByRole('navigation', { name: '게임 목록' });
-  await menu.getByRole('button', { name: '블록 퍼즐', exact: true }).click();
+  const launcher = page.locator('.toolbar-menu > summary').filter({ hasText: '도구' });
+  await openGame(page, '블록 퍼즐');
   const dialog = page.locator('.game-terminal:visible');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await dialog.getByRole('button', { name: '게임 시작', exact: true }).click();
@@ -72,17 +71,17 @@ try {
     .toBeGreaterThan(0);
   await page.keyboard.press('p');
   await expect(dialog.getByRole('status')).toContainText('일시정지');
-  await menu.getByRole('button', { name: '스네이크', exact: true }).click();
+  await openGame(page, '스네이크');
   await dialog.getByRole('button', { name: '게임 시작', exact: true }).click();
   await expect(dialog.getByRole('group', { name: '스네이크 게임판' })).toBeFocused();
   await page.keyboard.press('p');
-  await menu.getByRole('button', { name: '2048', exact: true }).click();
+  await openGame(page, '2048');
   await dialog.getByRole('button', { name: '왼쪽으로', exact: true }).click();
   await expect(dialog.locator('.number-tile')).toHaveCount(16);
-  await menu.getByRole('button', { name: '지뢰찾기', exact: true }).click();
+  await openGame(page, '지뢰찾기');
   await dialog.getByRole('group', { name: '지뢰찾기 게임판' }).getByRole('button').first().click();
   await expect(dialog.getByTestId('game-score')).toHaveText('1');
-  await menu.getByRole('button', { name: '닥스의 간식 타임', exact: true }).click();
+  await openGame(page, '닥스의 간식 타임');
   await page.evaluate(() => {
     Math.random = () => 0.5;
   });
@@ -105,7 +104,7 @@ try {
   expect(Number(await snackBoard.getAttribute('data-x'))).toBeGreaterThan(snackX);
   await page.keyboard.press('p');
   const snackTime = await dialog.getByTestId('snack-time').textContent();
-  await menu.getByRole('button', { name: '닥스의 모험', exact: true }).click();
+  await openGame(page, '닥스의 모험');
   await dialog.getByRole('button', { name: '게임 시작', exact: true }).click();
   await page.keyboard.press('ArrowUp');
   await expect
@@ -131,10 +130,10 @@ try {
   await expect(adventureBoard).toHaveAttribute('data-motion', 'bite');
   await page.keyboard.press('p');
   const adventureScore = await dialog.getByTestId('game-score').textContent();
-  await menu.getByRole('button', { name: '닥스의 간식 타임', exact: true }).click();
+  await openGame(page, '닥스의 간식 타임');
   await expect(dialog.getByTestId('snack-time')).toHaveText(snackTime);
   await expect(dialog.getByRole('button', { name: '계속하기', exact: true })).toBeVisible();
-  await menu.getByRole('button', { name: '닥스의 모험', exact: true }).click();
+  await openGame(page, '닥스의 모험');
   await expect(dialog.getByTestId('game-score')).toHaveText(adventureScore);
   await verifyAdventureVariety(page, dialog);
   await mkdir('test-results-native', { recursive: true });
@@ -158,7 +157,8 @@ try {
   await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
   const terminal = page.getByRole('region', { name: 'Windows PowerShell 터미널', exact: true });
   const input = terminal.locator('.xterm-helper-textarea');
-  await expect(terminal.locator('.xterm-accessibility-tree')).toContainText('PS C:', {
+  // The prompt depends on the user's PowerShell profile, so wait for any first output.
+  await expect(terminal.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
   const connection = await terminal.getAttribute('data-connection-id');
@@ -175,9 +175,8 @@ try {
   });
   await input.press('Enter');
   await expect(terminal.locator('.xterm-accessibility-tree')).toContainText('GAME_WAIT:');
-  await launcher.click();
   for (const name of ['닥스의 간식 타임', '닥스의 모험']) {
-    await menu.getByRole('button', { name, exact: true }).click();
+    await openGame(page, name);
     await dialog.getByRole('button', { name: '게임 시작', exact: true }).click();
     for (const key of ['ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'a', 'd', 's', 'j', 'x'])
       await page.keyboard.press(key);

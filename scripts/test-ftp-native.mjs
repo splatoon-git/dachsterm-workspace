@@ -98,7 +98,7 @@ try {
     stage = `${protocol} mkdir form`;
     let dialog = page.getByRole('dialog');
     await dialog.getByLabel('이름 또는 경로').fill(`${protocol}-ui`);
-    await dialog.getByRole('button', { name: '적용', exact: true }).click();
+    await dialog.getByRole('button', { name: '만들기', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     stage = `${protocol} enter directory`;
     await pane
@@ -110,7 +110,7 @@ try {
     await pane.getByRole('button', { name: '새 파일', exact: true }).click();
     dialog = page.getByRole('dialog');
     await dialog.getByLabel('이름 또는 경로').fill('한글 빈 파일.txt');
-    await dialog.getByRole('button', { name: '적용', exact: true }).click();
+    await dialog.getByRole('button', { name: '만들기', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     const file = pane.locator('.file-row').filter({ hasText: '한글 빈 파일.txt' });
     await expect(file).toBeVisible();
@@ -125,7 +125,7 @@ try {
     await page.keyboard.press('Delete');
     dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('2개 항목');
-    await dialog.getByRole('button', { name: '적용', exact: true }).click();
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(pane.locator('.file-row')).toHaveCount(0);
     stage = `${protocol} upload`;

@@ -90,7 +90,8 @@ try {
   });
   stage = 'settings recovery UI';
   await page.getByRole('button', { name: '설정', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '워크스페이스 설정' });
+  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+  await dialog.getByRole('tab', { name: '복구·진단', exact: true }).click();
   const recovery = dialog.locator('section[aria-label="복구와 진단"]');
   await dialog.getByRole('button', { name: '설정 복구본 만들기', exact: true }).click();
   await expect(recovery.getByRole('status')).toHaveText('설정 복구본을 만들었습니다.');

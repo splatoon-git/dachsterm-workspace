@@ -176,7 +176,8 @@ try {
   );
   const result = (await invoke('transfer_list')).find((t) => t.id === job);
   assert.equal(result.finished, 6);
-  await pane.getByRole('button', { name: '파일별 결과' }).click();
+  await pane.getByRole('button', { name: /전송 작업$/ }).click();
+  await page.getByRole('menuitem', { name: '파일별 결과' }).click();
   stage = 'verify native results view';
   await expect(pane.getByRole('button', { name: '다음 결과' })).toBeDisabled();
   await page.screenshot({ path: path.join(evidence, 'queue.png') });

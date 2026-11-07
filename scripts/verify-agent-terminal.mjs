@@ -190,7 +190,6 @@ export async function verifyAgentTerminal({
   await expect
     .poll(async () => (await invoke('remote_ports', { id: connectionId })).map((p) => p.port))
     .toContain(serverPort);
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '도구' }).click();
   await page.getByRole('button', { name: '터널', exact: true }).click();
   const tunnels = page.getByRole('dialog', { name: 'SSH 터널', exact: true });
   await tunnels.getByRole('button', { name: '서버 포트 보기', exact: true }).click();

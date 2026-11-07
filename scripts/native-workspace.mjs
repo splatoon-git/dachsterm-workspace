@@ -1,10 +1,31 @@
 // Helpers shared by the native scripts that arrange tabs in the workspace.
 import { expect } from '@playwright/test';
 
-/** label: 좌우, 상하, 2 × 2 or 하나로. */
+/**
+ * label: 좌우, 상하, 2 × 2 or 하나로. Laying out every tab is in any tab's menu; the focused
+ * group's selected tab is used, since pressing another tab would move the focus first.
+ */
 export async function arrangeTabs(page, label) {
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: `모든 탭 ${label}`, exact: true }).click();
+  await page
+    .locator('.tab-strip[data-focused-group="true"] [role="tab"][aria-selected="true"]')
+    .click({ button: 'right' });
+  const item = page.getByRole('menuitem', { name: `모든 탭 ${label}`, exact: true });
+  await page.getByRole('menu').waitFor();
+  // One tab in one group has nothing to lay out, so the menu leaves the items out.
+  if (await item.count()) await item.click();
+  else await page.keyboard.press('Escape');
+}
+
+/** Opens a game from the title bar's tools menu. */
+export async function openGame(page, name) {
+  const menu = page.locator('details.toolbar-menu', {
+    has: page.locator('summary', { hasText: '도구' }),
+  });
+  if ((await menu.getAttribute('open')) === null) await menu.locator('summary').click();
+  await page
+    .getByRole('navigation', { name: '게임 목록' })
+    .getByRole('button', { name, exact: true })
+    .click();
 }
 
 /** Drags a tab with the real mouse: past the threshold, then to the point, then releases. */
@@ -83,24 +104,23 @@ export async function openTerminalSearch(page, pane) {
   return search;
 }
 
-/** Opens the settings shared by every terminal, from the app settings. */
-export async function openTerminalSettings(page) {
+/** Opens the settings window on one of its categories and returns the window. */
+export async function openSettings(page, category) {
   await page.getByRole('button', { name: '설정', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: '워크스페이스 설정' })
-    .getByRole('button', { name: '터미널 설정', exact: true })
-    .click();
-  return page.getByRole('dialog', { name: '터미널 설정', exact: true });
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  await settings.getByRole('tab', { name: category, exact: true }).click();
+  return settings;
 }
 
-/** Closes the terminal settings and the app settings behind them. */
+/** Opens the settings shared by every terminal: the settings window's terminal category. */
+export function openTerminalSettings(page) {
+  return openSettings(page, '터미널');
+}
+
+/** Closes the settings window. */
 export async function closeTerminalSettings(page) {
   await page
-    .getByRole('dialog', { name: '터미널 설정', exact: true })
-    .getByRole('button', { name: '대화상자 닫기' })
-    .click();
-  await page
-    .getByRole('dialog', { name: '워크스페이스 설정' })
+    .getByRole('dialog', { name: '설정', exact: true })
     .getByRole('button', { name: '대화상자 닫기' })
     .click();
 }
@@ -114,23 +134,37 @@ export async function chooseProfileMenu(page, card, item) {
     .click();
 }
 
-/** Opens the new connection form from the title bar's ＋ menu. */
-export async function openNewConnectionForm(page) {
-  await page.getByRole('button', { name: '＋ 새 연결', exact: true }).click();
-  await page.getByRole('menuitem', { name: /^새 연결…/ }).click();
+const sidebarToggle = (page) => page.getByRole('button', { name: '사이드바', exact: true });
+
+/**
+ * Chooses an item from a connection tree section's ⋯ menu: 새 연결… or 새 그룹… under 연결,
+ * 로컬 터미널… under 로컬.
+ */
+export async function chooseSectionMenu(page, item) {
+  await showSidebarView(page, '연결');
+  const section = item.startsWith('로컬') ? '로컬' : '연결';
+  await page.getByRole('button', { name: `${section} 작업`, exact: true }).click();
+  await page.getByRole('menuitem', { name: new RegExp(`^${item}`) }).click();
 }
 
-/** Shows a sidebar view. Pressing the icon of the view already open would fold the sidebar. */
+/** Opens the new connection form from the 연결 section's menu. */
+export async function openNewConnectionForm(page) {
+  await chooseSectionMenu(page, '새 연결…');
+}
+
+/** Shows a sidebar view, opening the folded sidebar from the title bar first. */
 export async function showSidebarView(page, name) {
+  if ((await sidebarToggle(page).getAttribute('aria-expanded')) !== 'true')
+    await sidebarToggle(page).click();
   const tab = page.getByRole('tab', { name, exact: true });
   if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
   await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
 
-/** Folds the sidebar by pressing the icon of the open view. */
+/** Folds the sidebar with the title bar button. */
 export async function foldSidebar(page) {
-  const open = page.locator('.sidebar-rail [role="tab"][aria-selected="true"]');
-  if (await open.count()) await open.click();
+  if ((await sidebarToggle(page).getAttribute('aria-expanded')) === 'true')
+    await sidebarToggle(page).click();
   await expect(page.locator('#workspace-sidebar')).toBeHidden();
 }
 

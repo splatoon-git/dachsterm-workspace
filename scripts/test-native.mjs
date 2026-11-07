@@ -20,6 +20,8 @@ import {
   openTerminalSearch,
   openTerminalSettings,
   showSidebarView,
+  openGame,
+  chooseSectionMenu,
 } from './native-workspace.mjs';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
@@ -218,7 +220,7 @@ try {
   await launch();
   console.log('PASS native packaged WebView2 starts without Vite');
   stage = 'group and profile';
-  await page.getByRole('button', { name: '그룹 추가', exact: true }).click();
+  await chooseSectionMenu(page, '새 그룹…');
   await page.getByLabel('그룹 이름', { exact: true }).fill('개발');
   await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
   await openNewConnectionForm(page);
@@ -290,11 +292,7 @@ try {
   stage = 'embedded games preserve SSH';
   const gameConnection = await pane().getAttribute('data-connection-id');
   await command("sleep 2; printf 'OUTPUT_DURING_GAME\\n'");
-  await page.locator('.sidebar-games summary').click();
-  await page
-    .getByRole('navigation', { name: '게임 목록' })
-    .getByRole('button', { name: '블록 퍼즐', exact: true })
-    .click();
+  await openGame(page, '블록 퍼즐');
   const gamePanel = page.getByRole('tabpanel', { name: '블록 퍼즐', exact: true });
   await gamePanel.getByRole('button', { name: '게임 시작', exact: true }).click();
   await page.keyboard.press('ArrowLeft');
@@ -317,7 +315,6 @@ try {
   await page.keyboard.press('Enter');
   await output('GAME_INPUT<>');
   await page.getByRole('button', { name: '블록 퍼즐 탭 닫기', exact: true }).click();
-  await page.locator('.sidebar-games summary').click();
   await command("printf 'SSH_AFTER_GAME\\n'");
   await output('SSH_AFTER_GAME');
   console.log(
@@ -430,7 +427,8 @@ try {
   const files = page.locator('.files');
   const uploadedRow = () => files.locator('.file-row').filter({ hasText: '한글 upload.txt' });
   await uploadedRow().click();
-  await files.getByRole('button', { name: '권한', exact: true }).click();
+  await uploadedRow().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '권한…' }).click();
   stage = 'file permission form';
   await page.getByRole('dialog').getByLabel('권한 (000~777)').fill('640');
   await page.getByRole('dialog').getByRole('button', { name: '적용', exact: true }).click();
@@ -442,14 +440,16 @@ try {
     0o640,
   );
   await uploadedRow().click();
-  await files.getByRole('button', { name: '압축', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: '적용', exact: true }).click();
+  await uploadedRow().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '압축하기…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '압축', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(files.locator('.file-row').filter({ hasText: 'archive.zip' })).toBeVisible();
   await files.locator('.file-row').filter({ hasText: 'archive.zip' }).click();
-  await files.getByRole('button', { name: '압축 해제', exact: true }).click();
+  await files.locator('.file-row').filter({ hasText: 'archive.zip' }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '압축 해제…' }).click();
   await page.getByRole('dialog').getByLabel('ZIP 파일명 인코딩').selectOption('auto');
-  await page.getByRole('dialog').getByRole('button', { name: '적용', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '풀기', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(files.locator('.file-row').filter({ hasText: 'archive.zip 추출' })).toBeVisible();
   const helper = path.join(directory, 'editor-helper.cjs');
@@ -460,6 +460,7 @@ try {
   stage = 'external editor form';
   await uploadedRow().dblclick();
   const editorForm = page.getByRole('dialog');
+  await editorForm.locator('summary', { hasText: '경로 직접 입력' }).click();
   await editorForm.getByLabel('프로그램 경로', { exact: true }).fill(process.execPath);
   stage = 'external editor args';
   await editorForm.getByLabel('추가 인자 (JSON 배열)').fill(JSON.stringify([helper]));
@@ -803,8 +804,9 @@ try {
   const master = randomBytes(32).toString('base64url');
   const replacementMaster = randomBytes(32).toString('base64url');
   await page.getByRole('button', { name: '설정', exact: true }).click();
-  await page.getByRole('button', { name: '마스터 패스워드 · 암호 보관함' }).click();
-  let vaultDialog = page.getByRole('dialog', { name: '마스터 패스워드', exact: true });
+  // The master password is a category of the settings window, not a dialog of its own.
+  let vaultDialog = page.getByRole('dialog', { name: '설정', exact: true });
+  await vaultDialog.getByRole('tab', { name: '암호 보관함' }).click();
   await vaultDialog.getByLabel('새 마스터 패스워드', { exact: true }).fill(master);
   await vaultDialog.getByLabel('새 마스터 패스워드 확인', { exact: true }).fill(master);
   await vaultDialog.getByRole('button', { name: '마스터 패스워드 저장', exact: true }).click();
@@ -813,7 +815,6 @@ try {
   ).toBeVisible(kdfWait);
   assert.equal((await invoke('vault_status')).enabled, true);
   await vaultDialog.getByRole('button', { name: '대화상자 닫기' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: '대화상자 닫기' }).click();
   await showConnections();
   await chooseProfileMenu(page, page.locator('.profile-card'), '수정');
   await page.getByRole('dialog').locator('summary', { hasText: '고급 옵션' }).click();

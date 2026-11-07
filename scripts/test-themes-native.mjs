@@ -60,8 +60,8 @@ async function shutdown() {
 }
 try {
   let page = await launch();
-  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
-  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  // The packaged app has no preview tab; a local shell gives a real terminal to theme.
+  await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
   await expect(page.locator('.xterm-screen')).toBeVisible();
   await page.locator('.xterm-screen').evaluate((e) => e.setAttribute('data-lifetime', 'original'));
   await mkdir('test-results-native', { recursive: true });
