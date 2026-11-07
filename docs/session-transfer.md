@@ -8,9 +8,9 @@
 
 설정 → 세션 가져오기·내보내기 → 형식/파일 인코딩 → 파일 선택·미리보기 → 가져올 항목 선택/빠진 사용자명 입력 → 세션 추가. 기본은 새 ID 추가이며 선택 해제는 건너뛰기다. 같은 접속 대상은 미리보기에서 명시적으로 병합할 수 있다. 병합 기준은 프로토콜·호스트·포트·계정·인증·키·CA가 같아야 하며 저장 암호는 유지한다. 저장 암호가 있는 경유 관계 변경은 병합에서 거부한다. 자동 접속하지 않는다. 변경 전에 기존 설정 복구본을 만든다.
 
-PuTTY는 `HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions`를 레지스트리 편집기에서 `.reg` 파일로 내보낸다. DachsTerm은 그 파일을 텍스트로 읽으며 레지스트리에 실행/등록하지 않는다. MobaXterm은 왼쪽 세션 목록의 우클릭 내보내기 `.mxtsessions` 또는 `MobaXterm.ini`를 사용한다. OpenSSH는 `config` 파일을 선택한다. UTF-16 BOM을 자동 처리하며 UTF-8, CP949, Windows-1252를 선택할 수 있다. 글자가 깨지면 적용 전에 인코딩을 바꿔 다시 선택한다.
+PuTTY는 `HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions`를 레지스트리 편집기에서 `.reg` 파일로 내보낸다. DachsTerm은 그 파일을 텍스트로 읽으며 레지스트리에 실행/등록하지 않는다. 세션 북마크 파일은 다른 터미널 프로그램에서 내보낸 `.mxtsessions` 또는 `.ini`를 선택한다. OpenSSH는 `config` 파일을 선택한다. UTF-16 BOM을 자동 처리하며 UTF-8, CP949, Windows-1252를 선택할 수 있다. 글자가 깨지면 적용 전에 인코딩을 바꿔 다시 선택한다.
 
-현재 지원표와 검증 결과는 [Phase 6.4/6.5 기록](verification/phase-6-jump-sessions.md)을 따른다. OpenSSH ProxyJump·승인한 Include·루프백 터널, MobaXterm 계층·키·게이트웨이, PuTTY 키·루프백 터널을 제한적으로 변환한다. 지원하지 않는 접속 조건을 직접 연결로 묵시적으로 바꾸지 않는다. 원본 파일은 실행하거나 수정하지 않는다. 제품 버전이 파일에 없으면 확인 불가로 보고한다. 실제 제품별 내보내기 fixture 대기는 구현 검사와 구분한다.
+현재 지원표와 검증 결과는 [Phase 6.4/6.5 기록](verification/phase-6-jump-sessions.md)을 따른다. OpenSSH ProxyJump·승인한 Include·루프백 터널, 세션 북마크 파일의 계층·키·게이트웨이, PuTTY 키·루프백 터널을 제한적으로 변환한다. 지원하지 않는 접속 조건을 직접 연결로 묵시적으로 바꾸지 않는다. 원본 파일은 실행하거나 수정하지 않는다. 제품 버전이 파일에 없으면 확인 불가로 보고한다. 실제 제품별 내보내기 fixture 대기는 구현 검사와 구분한다.
 
 파일당 2MiB/20,000줄, 세션500·그룹100·터널128·템플릿100개 제한이다. 선택한 세션의 경유지와 상위 그룹, 템플릿 의존성도 함께 가져온다. 누락 계정은 미리보기에서 입력한다. Include는 설정 파일 폴더 안의 상대 경로만 지원하며 목록에서 승인한 파일만 읽는다.
 
@@ -64,8 +64,7 @@ Rust의 임시 값은 Zeroizing으로 보관하고 성공·실패 시 제거한�
 ## 근거와 검증 범위
 
 - [PuTTY 공식 설정 문서](https://www.puttyssh.org/0.83/htmldoc/Chapter4.html): 세션 저장과 레지스트리 위치.
-- [MobaXterm 공식 문서](https://mobaxterm.mobatek.net/documentation.html): 세션 내보내기/가져오기 동선. 내부 파일 형식 전체에 대한 공식 표준은 확인하지 못했다.
-- [MTPuTTY→MobaXterm 변환기 원본](https://github.com/affifuddin-hazam/mtputty2mobaxterm/blob/main/mtputty2mobaxterm.py): 공개 구현의 SSH 공통 접두부와 Bookmarks/SubRep 예시를 대조했다. 자체 파서는 해당 기본 필드만 독립 구현하며 제품 전체 호환 근거로 확대하지 않는다.
+- 세션 북마크 파일의 형식 근거는 [Phase 6.4/6.5 기록](verification/phase-6-jump-sessions.md)에 있다. 내부 파일 형식 전체에 대한 공식 표준은 확인하지 못했다.
 - [OpenBSD/OpenSSH ssh_config 공식 매뉴얼](https://man.openbsd.org/ssh_config): 첫 값 우선, 패턴, 조건, 인용 규칙.
 
-자동 검증 명령/실제 결과·미검증 환경은 `progress.md` I.1 기록을 따른다. 합성 fixture의 파서 테스트를 실제 PuTTY/MobaXterm 모든 버전 내보내기 검사로 표시하지 않는다.
+자동 검증 명령/실제 결과·미검증 환경은 `progress.md` I.1 기록을 따른다. 합성 fixture의 파서 테스트를 실제 프로그램의 모든 버전 내보내기 검사로 표시하지 않는다.

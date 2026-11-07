@@ -36,7 +36,7 @@ DachsTerm은 Tauri 2와 Rust로 만든 SSH 클라이언트다. 별도 서버, �
 - 최대 4홉의 점프 호스트
 - 최초 접속 시 호스트키 지문 확인, 키가 변경되면 접속 차단
 - 비밀번호와 Passphrase는 OS 보안 저장소에 암호화 보관, 선택적 마스터 패스워드
-- 그룹, 태그, 템플릿, 일괄 수정. PuTTY, MobaXterm, OpenSSH `config`에서 세션 가져오기
+- 그룹, 태그, 템플릿, 일괄 수정. PuTTY `.reg`, 세션 북마크 파일(`.mxtsessions`, `.ini`), OpenSSH `config`에서 세션 가져오기
 
 **파일**
 
@@ -73,7 +73,7 @@ DachsTerm은 Tauri 2와 Rust로 만든 SSH 클라이언트다. 별도 서버, �
 | 압축·압축 해제 | Linux/Python3 서버 | 미지원 |
 | 터미널·멀티 입력·분리 창·터널·모니터링 | 지원 | 미지원 |
 
-**지원하지 않는 것**: X 서버, RDP/VNC, 매크로, 클라우드 동기화, 자동 업데이트, Pageant, FIDO2 키 직접 접근, GSSAPI/Kerberos, agent forwarding, 호스트 CA 인증서, implicit FTPS, Active FTP, FXP, SOCKS5 UDP/BIND, 터널의 공개 인터페이스 바인딩. MobaXterm의 SSH 작업 흐름을 참고했지만 전체 기능 복제가 목표는 아니다.
+**지원하지 않는 것**: X 서버, RDP/VNC, 매크로, 클라우드 동기화, 자동 업데이트, Pageant, FIDO2 키 직접 접근, GSSAPI/Kerberos, agent forwarding, 호스트 CA 인증서, implicit FTPS, Active FTP, FXP, SOCKS5 UDP/BIND, 터널의 공개 인터페이스 바인딩.
 
 ## 설치
 

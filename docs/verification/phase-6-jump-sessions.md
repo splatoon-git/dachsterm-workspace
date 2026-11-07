@@ -22,7 +22,7 @@
 | PuTTY reg | 기본 접속·OpenSSH 키 경로, 루프백 L/R/D PortForwardings | PPK 자동 변환, 프록시, 명령, 암호, 비루프백·지원하지 않는 escape/수신 주소. 기본 PuTTY 세션 저장 자체에는 폴더 필드가 없어 임의 경로 구분을 추정하지 않음 |
 | MobaXterm Bookmarks | SubRep 계층, 기본 접속, 명시 키 경로, SSH gateway host/port/user/key 목록 | 프록시·인증서·SSHv1 조건 제외. PPK/드라이브 치환 키는 경고 후 재지정. 별도 터널 섹션·명령/매크로·신뢰 제외 |
 
-형식 근거: [OpenSSH 공식 ssh_config](https://man.openbsd.org/ssh_config), [PuTTY 설정 설명](https://the.earth.li/~sgtatham/putty/0.85/htmldoc/Chapter4.html), [PuTTY 저장 파서 소스](https://raw.githubusercontent.com/github/putty/master/settings.c). MobaXterm의 비공개 북마크 필드는 [작성자의 26.3 형식 관찰 자료](https://gist.github.com/Ruzgfpegk/ab597838e4abbe8de30d7224afd062ea)를 참고했다. 이를 제품별 전체 호환/로컬 실측으로 표시하지 않는다. reg/mxtsessions/config는 작성 제품 버전을 보장하지 않아 미리보기 보고서에도 버전 확인 불가를 알린다.
+형식 근거: [OpenSSH 공식 ssh_config](https://man.openbsd.org/ssh_config), [PuTTY 설정 설명](https://the.earth.li/~sgtatham/putty/0.85/htmldoc/Chapter4.html), [PuTTY 저장 파서 소스](https://raw.githubusercontent.com/github/putty/master/settings.c). MobaXterm의 비공개 북마크 필드는 [작성자의 26.3 형식 관찰 자료](https://gist.github.com/Ruzgfpegk/ab597838e4abbe8de30d7224afd062ea)를 참고했다. 세션 내보내기 동선은 [MobaXterm 공식 문서](https://mobaxterm.mobatek.net/documentation.html), SSH 공통 접두부와 Bookmarks/SubRep 예시는 [MTPuTTY→MobaXterm 변환기 원본](https://github.com/affifuddin-hazam/mtputty2mobaxterm/blob/main/mtputty2mobaxterm.py)과 대조했고, 자체 파서는 해당 기본 필드만 독립 구현했다. 이를 제품별 전체 호환/로컬 실측으로 표시하지 않는다. reg/mxtsessions/config는 작성 제품 버전을 보장하지 않아 미리보기 보고서에도 버전 확인 불가를 알린다.
 
 ## 실행 결과
 

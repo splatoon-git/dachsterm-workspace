@@ -405,7 +405,7 @@ fn moba(text: &str) -> Result<Preview> {
                 || get(27) == "2"
             {
                 out.skipped += 1;
-                out.warn("MobaXterm 프록시·인증서·SSHv1 조건 세션은 제외했습니다.");
+                out.warn("프록시·인증서·SSHv1 조건 세션은 제외했습니다.");
                 continue;
             }
             let user = if matches!(fields[3], "<default>" | "<username>") {
@@ -422,7 +422,7 @@ fn moba(text: &str) -> Result<Preview> {
                     || value.to_ascii_lowercase().ends_with(".ppk")
                     || value.contains("__")
                 {
-                    out.warn("MobaXterm PPK·드라이브 치환 키 경로는 적용 전에 다시 지정하세요.");
+                    out.warn("PPK·드라이브 치환 키 경로는 적용 전에 다시 지정하세요.");
                 } else {
                     p.auth = "key".into();
                     p.key_path = value.into();
@@ -440,7 +440,7 @@ fn moba(text: &str) -> Result<Preview> {
                     || (!get(15).is_empty() && keys.len() != hosts.len())
                 {
                     out.skipped += 1;
-                    out.warn("MobaXterm 게이트웨이 목록 형식이 달라 세션을 제외했습니다.");
+                    out.warn("게이트웨이 목록 형식이 달라 세션을 제외했습니다.");
                     continue;
                 }
                 let mut hops = Vec::new();
@@ -466,7 +466,7 @@ fn moba(text: &str) -> Result<Preview> {
                 }
                 if !valid {
                     out.skipped += 1;
-                    out.warn("유효하지 않은 MobaXterm 게이트웨이 때문에 세션을 제외했습니다.");
+                    out.warn("유효하지 않은 게이트웨이 때문에 세션을 제외했습니다.");
                     continue;
                 }
                 for hop in hops {
@@ -495,7 +495,7 @@ fn moba(text: &str) -> Result<Preview> {
         }
     }
     flush(&mut result, &folder, &mut entries)?;
-    result.warn("MobaXterm SSH 북마크의 폴더 계층·키 경로·게이트웨이를 변환합니다. 공개 형식 관찰 자료(26.3)를 참고한 제한적 어댑터이며 실제 제품 내보내기 버전은 파일에서 확인할 수 없습니다. 별도 터널 섹션·PPK·명령·매크로·신뢰 설정은 제외합니다.");
+    result.warn("SSH 북마크의 폴더 계층·키 경로·게이트웨이를 변환합니다. 공개 형식 관찰 자료를 참고한 제한적 어댑터이며 내보낸 프로그램의 버전은 파일에서 확인할 수 없습니다. 별도 터널 섹션·PPK·명령·매크로·신뢰 설정은 제외합니다.");
     Ok(result)
 }
 

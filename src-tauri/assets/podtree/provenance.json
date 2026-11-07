@@ -3,9 +3,10 @@
   "embeddedVersion": "2.4.0-dachsterm.1",
   "source": "User-provided podtree/podtree.sh",
   "upstreamSha256": "88db6984b284d477b9f60e501116d0ab51d0396daae1be4e8b11c605d3660ca8",
-  "embeddedSha256": "f3dd5e0bacb8ba150fa302d4b1c5af835fc37ad1ac4d9e6fcadb3a6208083a16",
-  "permission": "User confirmed authorship or permission to include, modify and distribute on 2026-11-05. No additional public license inferred.",
+  "embeddedSha256": "af1db4555a5c1a026bbc1f57f557d8527ce4b7ad605de2ed86451cb6a27990be",
+  "permission": "User confirmed authorship on 2026-11-07. No additional public license inferred.",
   "changes": [
+    "contact address and external product name removed from comments",
     "output scope pinned; ignore ~/.podtreerc in embedded mode",
     "read-only guards for exec/debug/capture/forward/probes/raw; disable proxy metrics",
     "secure pager; operational target confirmations; child process and staged-file cleanup",

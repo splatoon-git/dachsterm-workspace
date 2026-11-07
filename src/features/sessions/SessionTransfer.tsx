@@ -100,7 +100,7 @@ export function SessionTransfer({
             <option value="auto">자동 감지</option>
             <option value="dachsterm">DachsTerm JSON (v1 / v2 / v3)</option>
             <option value="putty">PuTTY (.reg)</option>
-            <option value="mobaxterm">MobaXterm (.mxtsessions / .ini)</option>
+            <option value="mobaxterm">세션 북마크 파일 (.mxtsessions / .ini)</option>
             <option value="openssh">OpenSSH (config)</option>
           </select>
         </label>

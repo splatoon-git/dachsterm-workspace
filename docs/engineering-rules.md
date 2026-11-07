@@ -28,6 +28,7 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 - 상세 검증은 `docs/verification/`에 두고 progress에는 링크와 결론만 적는다.
 - "커밋 요청", "푸시 완료"처럼 git 이력으로 알 수 있는 내용은 기록하지 않는다.
 - README는 사용자와 개발자가 쓰는 방법만 적고, 작업 ID별 경과를 넣지 않는다.
+- 사용자에게 보이는 곳(앱 화면, 오류 문구, README, `user-guide.md`, `session-transfer.md`)에는 MobaXterm, Claude Code, Codex 같은 외부 제품명을 쓰지 않는다. 내부 설계·진행·검증 문서에만 둔다. 파일 형식을 알아보는 데 필요한 확장자와 실행 명령 문자열은 예외다.
 
 ## 4. 공통 구조
 

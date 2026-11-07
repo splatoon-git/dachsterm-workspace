@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # podtree.sh - Kubernetes  node > namespace > pod  tree with logs, events, network views and live stats, in plain bash.
-# 제작자: 김태동 <rilak0514@metabuild.co.kr>
+# 제작자: 김태동
 #
 # Needs: bash 4+, kubectl, awk, sort.  Optional: less (scrolling), tcpdump / ssh / a debug image (packet capture),
 # metrics-server (kubectl top columns).  One file, no other dependencies - copy it to any (air-gapped) server.
@@ -121,7 +121,7 @@ kc() {
 }
 
 # ---------------------------------------------------------------- terminal / locale / language
-# SSH sessions (MobaXterm etc.) often arrive with LANG unset.  Switch to a UTF-8 locale when the server has one,
+# SSH sessions often arrive with LANG unset.  Switch to a UTF-8 locale when the server has one,
 # so Korean and other multibyte text works in the UI, prompts, less and grep.
 UTF8=0
 if ((ASCII == 0)) || [[ $LANG_OPT == ko ]]; then
