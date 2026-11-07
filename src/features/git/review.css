@@ -1,0 +1,264 @@
+/* Change review tab (DX.6). Colours come from the status tokens only. */
+.review-pane {
+  /* The cell is a flex row; without this the pane shrinks to its content and turns compact. */
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-surface-panel);
+  color: var(--color-text-primary);
+  font-size: var(--font-small);
+}
+.review-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
+}
+.review-bar label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+.review-bar select {
+  max-width: 280px;
+}
+.review-summary {
+  color: var(--color-text-secondary);
+}
+.review-refresh {
+  margin-left: auto;
+}
+.review-message {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--color-text-secondary);
+}
+.review-message[role='alert'] {
+  color: var(--color-status-error);
+}
+.review-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 28%) 1fr;
+  flex: 1;
+  min-height: 0;
+}
+.review-body.compact {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+}
+.review-file-select {
+  margin: var(--space-xs) var(--space-sm);
+}
+.review-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+  border-right: var(--border-width-default) solid var(--color-border-subtle);
+}
+.review-files button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: 2px var(--space-sm);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.review-files button:hover {
+  background: var(--color-surface-subtle);
+}
+.review-files button[aria-current='true'] {
+  background: var(--color-action-selected);
+}
+.review-mark {
+  width: 1.2em;
+  font-family: var(--font-mono);
+  text-align: center;
+  color: var(--color-status-warning);
+}
+.review-mark[data-change='added'],
+.review-mark[data-change='untracked'] {
+  color: var(--color-status-success);
+}
+.review-mark[data-change='deleted'],
+.review-mark[data-change='conflict'] {
+  color: var(--color-status-error);
+}
+.review-path {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.review-counts {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.review-file {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.review-empty {
+  margin: 0;
+  padding: var(--space-md);
+  color: var(--color-text-secondary);
+}
+.review-empty code,
+.review-meta {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.review-meta {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--color-text-secondary);
+}
+.diff-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+}
+.diff-row {
+  display: flex;
+  height: 20px;
+  line-height: 20px;
+  white-space: pre;
+  min-width: 100%;
+  width: max-content;
+}
+.diff-pair {
+  width: 100%;
+}
+.diff-hunk,
+.diff-note {
+  padding: 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-subtle);
+}
+.diff-side {
+  display: flex;
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow: hidden;
+}
+.diff-side + .diff-side {
+  border-left: var(--border-width-default) solid var(--color-border-subtle);
+}
+.diff-side .diff-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diff-side.empty {
+  background: var(--color-surface-subtle);
+}
+.diff-line.add,
+.diff-side.add {
+  background: color-mix(in srgb, var(--color-status-success) 16%, transparent);
+}
+.diff-line.del,
+.diff-side.del {
+  background: color-mix(in srgb, var(--color-status-error) 16%, transparent);
+}
+.diff-row.selected {
+  box-shadow: inset 3px 0 0 var(--color-action-primary);
+}
+.diff-row.selected .diff-side,
+.diff-line.selected {
+  outline: var(--border-width-default) solid
+    color-mix(in srgb, var(--color-action-primary) 45%, transparent);
+  outline-offset: -1px;
+}
+.diff-gutter {
+  flex: none;
+  width: 48px;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: right;
+}
+button.diff-gutter:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-subtle);
+}
+.diff-sign {
+  flex: none;
+  width: 1.5em;
+  text-align: center;
+}
+.diff-cut {
+  color: var(--color-text-secondary);
+}
+.review-composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-xs) var(--space-sm);
+  padding: var(--space-sm);
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+}
+.review-composer strong {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.review-composer textarea {
+  resize: vertical;
+  min-height: 2.5em;
+}
+.review-composer-actions {
+  display: flex;
+  align-items: end;
+  gap: var(--space-xs);
+}
+.review-notes {
+  max-height: 35%;
+  display: flex;
+  flex-direction: column;
+  border-top: var(--border-width-default) solid var(--color-border-default);
+}
+.review-notes header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+}
+.review-notes header strong {
+  margin-right: auto;
+}
+.review-notes ul {
+  margin: 0;
+  padding: 0 var(--space-sm) var(--space-xs);
+  list-style: none;
+  overflow: auto;
+}
+.review-notes li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+.review-notes li span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.review-notes li code {
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+}

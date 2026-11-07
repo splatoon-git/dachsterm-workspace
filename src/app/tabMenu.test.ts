@@ -25,6 +25,7 @@ const podtree = {
 };
 const base: TabMenuState = {
   capabilities: capabilities(ssh),
+  review: true,
   connection: 'live',
   recording: false,
   groupCount: 2,
@@ -67,6 +68,7 @@ describe('tabMenuEntries', () => {
       'search',
       'log',
       'guide',
+      'review',
       'splitRight',
       'splitDown',
       'zoom',
@@ -86,7 +88,7 @@ describe('tabMenuEntries', () => {
     ]);
   });
   it('hides terminal-only items on an FTP tab', () => {
-    expect(commands({ capabilities: capabilities(ftp) })).toEqual([
+    expect(commands({ capabilities: capabilities(ftp), review: null })).toEqual([
       'zoom',
       'disconnect',
       'close',
@@ -94,7 +96,7 @@ describe('tabMenuEntries', () => {
     ]);
   });
   it('keeps search but not logs, guides or splitting on PodTree', () => {
-    expect(commands({ capabilities: capabilities(podtree) })).toEqual([
+    expect(commands({ capabilities: capabilities(podtree), review: null })).toEqual([
       'search',
       'zoom',
       'disconnect',
@@ -103,7 +105,7 @@ describe('tabMenuEntries', () => {
     ]);
   });
   it('lets a local terminal split but not detach', () => {
-    const list = commands({ capabilities: capabilities(local) });
+    const list = commands({ capabilities: capabilities(local), review: null });
     expect(list).toContain('splitRight');
     expect(list).not.toContain('detach');
   });
@@ -114,7 +116,7 @@ describe('tabMenuEntries', () => {
     expect(entries.find((e) => e.command === 'detach')?.disabled).toBe(true);
   });
   it('gives games only layout and closing', () => {
-    expect(commands({ capabilities: null, connection: null })).toEqual([
+    expect(commands({ capabilities: null, connection: null, review: null })).toEqual([
       'zoom',
       'close',
       'closeOthers',
@@ -140,6 +142,13 @@ describe('tabMenuEntries', () => {
     // One tab left in a split can still be gathered into one group.
     expect(all({ tabCount: 1, groupCount: 2 })).toContain('single');
     expect(tabMenuEntries({ ...base, tabCount: 2, groupCount: 1 }).at(-4)?.disabled).toBe(true);
+  });
+  it('offers the change review on SSH tabs, disabled until the shell folder is known', () => {
+    const entry = (review: boolean | null) =>
+      tabMenuEntries({ ...base, review }).find((e) => e.command === 'review');
+    expect(entry(true)).toMatchObject({ label: '변경 검토', disabled: false });
+    expect(entry(false)?.disabled).toBe(true);
+    expect(entry(null)).toBeUndefined();
   });
   it('names the state it is in', () => {
     const labels = tabMenuEntries({ ...base, zoomed: true, recording: true }).map((e) => e.label);

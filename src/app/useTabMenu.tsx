@@ -4,6 +4,7 @@ import { isRecording, logStatusOf } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
 import { capabilities } from '../features/terminal/sessionKind';
 import { tabMenuEntries, type TabCommand } from './tabMenu';
+import { reviewable } from './useReviewTabs';
 import type { Beside, Workspace } from './useWorkspaceLayout';
 import { allTabs, groupOfTab, groups, tabKey, type Preset } from './workspaceLayout';
 
@@ -11,6 +12,8 @@ export type TabActions = {
   /** Opens the same target again beside the group: a new connection and a new shell. */
   split: (session: TerminalSession, beside: Beside) => void;
   detach: (session: TerminalSession) => void;
+  /** Opens the change review of the session's repository beside it. */
+  review: (session: TerminalSession) => void;
   reconnect: (session: TerminalSession) => void;
   /** Closes any tab by its key, with the checks each kind needs. */
   close: (key: string) => void;
@@ -60,6 +63,7 @@ export function useTabMenu({
         select();
         session?.view.set({ guide: true });
       },
+      review: () => session && actions.review(session),
       splitRight: () => session && actions.split(session, { groupId: group.id, side: 'right' }),
       splitDown: () => session && actions.split(session, { groupId: group.id, side: 'bottom' }),
       zoom: () => {
@@ -78,6 +82,7 @@ export function useTabMenu({
     };
     const entries = tabMenuEntries({
       capabilities: session ? capabilities(session) : null,
+      review: reviewable(session),
       connection: !session ? null : ['closed', 'error'].includes(status!) ? 'ended' : 'live',
       recording: !!session && isRecording(logStatusOf(session.connectionId)),
       groupCount: groups(workspace.layout.root).length,

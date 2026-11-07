@@ -52,6 +52,12 @@ describe('app shortcuts', () => {
     expect(appShortcut(key('Comma', { ctrl: true, shift: true }))).toBeNull();
   });
 
+  it('opens the change review with Shift+G and leaves Ctrl+G to the terminal', () => {
+    expect(appShortcut(key('KeyG', { ctrl: true, shift: true }))).toEqual({ name: 'review' });
+    expect(appShortcut(key('KeyG', { meta: true, shift: true }))).toEqual({ name: 'review' });
+    expect(appShortcut(key('KeyG', { ctrl: true }))).toBeNull();
+  });
+
   it('keeps F11 for full screen', () => {
     expect(appShortcut(key('F11'))).toEqual({ name: 'fullscreen' });
   });

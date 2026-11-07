@@ -11,6 +11,7 @@ mod editor_location;
 pub mod encoding;
 pub mod file_ops;
 pub mod ftp;
+pub mod git_diff;
 pub mod git_status;
 pub mod hostkeys;
 pub mod local;
@@ -203,6 +204,9 @@ pub fn run() {
             remote_ports::remote_ports,
             terminal_start::tmux_current_path,
             git_status::git_status,
+            git_diff::git_refs,
+            git_diff::git_diff_files,
+            git_diff::git_diff_file,
             agent_forward::agent_sign_reply,
             broadcast::broadcast_status,
             broadcast::broadcast_set,

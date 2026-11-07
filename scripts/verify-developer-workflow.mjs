@@ -1,13 +1,22 @@
-// Command boundaries (DX.9) and Git status (DX.5) in the real app against the OpenSSH fixture.
+// Command boundaries (DX.9), Git status (DX.5) and change review (DX.6) in the real app against the OpenSSH fixture.
 // Runs in the first SSH tab, whose Bash 5.2 already has the session hook.
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { showSidebarView } from './native-workspace.mjs';
 
 const repo = '/tmp/dachsterm-git-ui';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function verifyDeveloperWorkflow({ page, pane, docker, probe, command, setStage }) {
+export async function verifyDeveloperWorkflow({
+  page,
+  pane,
+  docker,
+  probe,
+  command,
+  screenshots,
+  setStage,
+}) {
   const container = probe('CONTAINER');
   const shell = (script) => docker(['exec', '-u', 'probe', container, 'sh', '-c', script]).trim();
   const viewport = () => pane().locator('.xterm-accessibility-tree').innerText();
@@ -49,6 +58,7 @@ export async function verifyDeveloperWorkflow({ page, pane, docker, probe, comma
       `git config core.fsmonitor ${hook}`,
   );
   const status = page.locator('.status-bar .status-git');
+  let failure = null;
   const ran = () => shell(`test -e ${hook}.ran && echo ran || echo none`) === 'ran';
   try {
     await command(`cd ${repo}`);
@@ -74,6 +84,71 @@ export async function verifyDeveloperWorkflow({ page, pane, docker, probe, comma
     assert(!ran(), 'the app ran the repository fsmonitor program');
     console.log('PASS native Git status bar, tab name and tooltip, tree marks, fsmonitor not run');
 
+    setStage('DX.6 change review and prompt');
+    const reviewTab = page.locator('.tab-strip [role="tab"]').filter({ hasText: /^변경 검토 · / });
+    const groupsBefore = await page.locator('.tab-strip').count();
+    let reviewOpen = false;
+    try {
+      await pane().locator('.xterm-helper-textarea').focus();
+      await page.keyboard.press('Control+Shift+G');
+      await expect(reviewTab).toHaveCount(1);
+      reviewOpen = true;
+      // It opens beside its terminal; zoomed, the file list has room to show as a list.
+      await expect(page.locator('.tab-strip')).toHaveCount(groupsBefore + 1);
+      await page.keyboard.press('Control+Shift+Enter');
+      const review = page.locator('.review-pane');
+      await expect(
+        review.getByRole('list', { name: '변경 파일' }).locator('.review-path'),
+      ).toHaveText(['a.txt', 'new.txt', 'src/s.txt'], { timeout: 15000 });
+      await expect(review.locator('.review-mark')).toHaveText(['M', 'A', 'M']);
+      await review.getByRole('button', { name: '새 2행 선택', exact: true }).click();
+      await review.getByRole('textbox', { name: '의견' }).fill('대문자로 바꾸기');
+      await review.getByRole('textbox', { name: '의견' }).press('Enter');
+      await page.keyboard.press('Control+Shift+Enter');
+      // The shell beside the review. Echo is off in this run, so the pasted text never shows;
+      // what shows is whether the line ran.
+      const shellScreen = page.locator(
+        '.pane-cell:not([hidden]) .terminal-pane:not([hidden]) .xterm-accessibility-tree',
+      );
+      await expect(shellScreen).toHaveCount(1);
+      const errors = async () =>
+        ((await shellScreen.innerText()).match(/a\.txt:2: command not found/g) ?? []).length;
+      assert.equal(await errors(), 0);
+      await review.getByRole('button', { name: /^프롬프트로 보내기 · / }).click();
+      await expect(review.getByRole('status')).toHaveText(
+        '프롬프트에 넣었습니다. 내용을 확인한 뒤 Enter를 누르세요.',
+      );
+      await sleep(1500);
+      // Had the app pressed Enter, bash would already have refused the line.
+      assert.equal(await errors(), 0, 'the comment ran before Enter');
+      // The text waits at the prompt: the user's own Enter runs exactly that line.
+      await expect(pane().locator('.xterm-helper-textarea')).toBeFocused();
+      await pane().locator('.xterm-helper-textarea').press('Enter');
+      await expect.poll(errors).toBe(1);
+      assert(!ran(), 'the review ran the repository fsmonitor program');
+      await reviewTab.click({ button: 'right' });
+      await page.getByRole('menuitem', { name: '탭 닫기', exact: true }).click();
+      await expect(reviewTab).toHaveCount(0);
+      reviewOpen = false;
+      await expect(page.locator('.tab-strip')).toHaveCount(groupsBefore);
+      console.log(
+        'PASS native change review: list, line comment pasted without Enter, fsmonitor not run',
+      );
+    } catch (error) {
+      await page.screenshot({ path: path.join(screenshots, 'review-failure.png') });
+      throw error;
+    } finally {
+      // A failed check must not leave the review focused, where the cleanup has no terminal.
+      if (reviewOpen) {
+        await page.keyboard.press('Escape');
+        await reviewTab.click({ button: 'right' }).catch(() => {});
+        await page
+          .getByRole('menuitem', { name: '탭 닫기', exact: true })
+          .click()
+          .catch(() => {});
+      }
+    }
+
     setStage('DX.5 quiet outside a repository and without Git');
     await command('cd /tmp');
     await expect(status).toHaveCount(0, { timeout: 15000 });
@@ -87,9 +162,17 @@ export async function verifyDeveloperWorkflow({ page, pane, docker, probe, comma
       docker(['exec', container, 'mv', '/usr/bin/git.hidden', '/usr/bin/git']);
     }
     console.log('PASS native Git status stays hidden outside a repository and without Git');
+  } catch (error) {
+    failure = error;
+    throw error;
   } finally {
     shell(`rm -rf ${repo} ${hook} ${hook}.ran`);
-    await command('cd /tmp');
-    await showSidebarView(page, '연결');
+    // After a failure the cleanup may fail too; the first error is the one to report.
+    const cleanup = async () => {
+      await command('cd /tmp');
+      await showSidebarView(page, '연결');
+    };
+    if (failure) await cleanup().catch(() => {});
+    else await cleanup();
   }
 }

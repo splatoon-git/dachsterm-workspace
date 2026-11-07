@@ -46,11 +46,12 @@ import {
   type Group,
 } from '../lib/ipc';
 import { SessionForm } from '../features/sessions/SessionForm';
-import { groupPath } from '../features/sessions/model';
 import { TerminalSession, type LocalCatalog, type LocalTarget } from '../features/terminal/session';
 import { PodTreeDialog } from '../features/terminal/PodTreeDialog';
 import { CommandPanel } from '../features/terminal/CommandPanel';
 import { SessionTerminal } from './SessionTerminal';
+import { GroupDialog } from './GroupDialog';
+import { useReviewTabs } from './useReviewTabs';
 import { tmuxCloseNotice } from './tmuxNotice';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
@@ -304,6 +305,8 @@ export function App() {
         return void showSidebar('files');
       case 'inputScope':
         return input.shortcut();
+      case 'review':
+        return selected && reviews.open(selected);
       case 'splitRight':
         // Like the tab menu: the same target again, as a new connection and a new shell.
         if (selected && capabilities(selected).split && !narrow)
@@ -362,12 +365,13 @@ export function App() {
     const game = games.find((g) => tabKey({ kind: 'game', id: g.id }) === key);
     if (session) closeTab(session);
     else if (game) closeGame(game.id);
-    else workspace.close(key);
+    else if (!reviews.close(key)) workspace.close(key);
   };
   const splitTab = (t: TerminalSession, beside: Beside) =>
     t.localTarget
       ? openLocal(t.localTarget, beside)
       : requestConnect(savedProfile(t), undefined, beside);
+  const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
   const tabMenu = useTabMenu({
     workspace,
     narrow,
@@ -375,6 +379,7 @@ export function App() {
     actions: {
       split: splitTab,
       detach: (t) => void detach(t),
+      review: (t) => reviews.open(t),
       reconnect: reconnectTab,
       close: closeKey,
       arranged: focusActiveTerminal,
@@ -409,6 +414,7 @@ export function App() {
         )
       );
     }
+    if (tab.kind === 'review') return reviews.renderTab(tab, active, select);
     if (tab.kind === 'preview')
       return (
         <PlainTab
@@ -432,6 +438,7 @@ export function App() {
     );
   };
   const renderCell = (tab: TabRef, { visible, focused }: CellState) => {
+    if (tab.kind === 'review') return reviews.renderCell(tab);
     if (tab.kind === 'preview')
       return (
         <div className="preview-wrap">
@@ -620,6 +627,7 @@ export function App() {
               ...tabs.map(sessionRef),
               ...(hasPreview ? [{ kind: 'preview' } as const] : []),
               ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
+              ...reviews.order,
             ]}
             renderTab={renderTab}
             renderCell={renderCell}
@@ -835,88 +843,7 @@ export function App() {
         </Dialog>
       )}
       {group && (
-        <Dialog
-          title={group.id ? '그룹 수정' : '새 그룹'}
-          size="small"
-          close={() => setGroup(null)}
-        >
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void action('group_update', {
-                group: {
-                  ...group,
-                  id: group.id || crypto.randomUUID(),
-                  parentId: group.parentId ?? null,
-                  sortOrder: group.sortOrder ?? 0,
-                },
-              }).then((ok) => {
-                if (ok) setGroup(null);
-              });
-            }}
-          >
-            <label>
-              그룹 이름
-              <input
-                autoFocus
-                required
-                maxLength={100}
-                value={group.name}
-                onChange={(e) => setGroup({ ...group, name: e.target.value })}
-              />
-            </label>
-            <label>
-              상위 그룹
-              <select
-                value={group.parentId ?? ''}
-                onChange={(e) => setGroup({ ...group, parentId: e.target.value || null })}
-              >
-                <option value="">최상위</option>
-                {snapshot.groups
-                  .filter((g) => g.id !== group.id)
-                  .map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {groupPath(g.id, snapshot.groups)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label>
-              정렬 순서
-              <input
-                type="number"
-                value={group.sortOrder ?? 0}
-                onChange={(e) => setGroup({ ...group, sortOrder: Number(e.target.value) })}
-              />
-            </label>
-            {group.id && (
-              <p className="field-help">
-                삭제하면 직속 세션 {snapshot.profiles.filter((p) => p.groupId === group.id).length}
-                개와 하위 그룹 {snapshot.groups.filter((g) => g.parentId === group.id).length}개를
-                최상위로 옮깁니다. 열린 연결은 유지됩니다.
-              </p>
-            )}
-            <div className="form-actions">
-              {group.id && (
-                <button
-                  type="button"
-                  className="start danger-quiet"
-                  onClick={() =>
-                    void action('save_group', { id: group.id, name: null }).then((ok) => {
-                      if (ok) setGroup(null);
-                    })
-                  }
-                >
-                  그룹 삭제
-                </button>
-              )}
-              <button type="button" onClick={() => setGroup(null)}>
-                취소
-              </button>
-              <button className="primary">저장</button>
-            </div>
-          </form>
-        </Dialog>
+        <GroupDialog group={group} setGroup={setGroup} snapshot={snapshot} action={action} />
       )}
       {remove && (
         <Dialog title="세션 삭제" size="small" close={() => setRemove(null)}>
