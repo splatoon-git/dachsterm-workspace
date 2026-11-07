@@ -28,10 +28,11 @@ export function SessionTab({
 }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const summary = useProgramSummary(session.programStatus);
-  // Opening the tab counts as seeing a result, whichever way the user got here.
+  // Opening the tab counts as seeing a result, whichever way the user got here. A result arriving
+  // on the open tab stays until the user acts, since they may be looking at another window.
   useEffect(() => {
     if (active) session.programStatus.acknowledge();
-  }, [active, session, summary]);
+  }, [active, session]);
   const program = state.status === 'connected' ? summary : null;
   return (
     <div

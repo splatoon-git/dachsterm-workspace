@@ -3,7 +3,7 @@ import { programMetadata, type GuideProgram } from './guideData';
 import type { KittyKeyboard } from './kittyKeyboard';
 import { directoryFromOsc, terminalPreferences } from './preferences';
 import { parseOsc52 } from './osc52';
-import { programStatusQueryReply, type ProgramStatus } from './programStatus';
+import { hookStatus, programStatusQueryReply, type ProgramStatus } from './programStatus';
 import { osc777Message, osc9Message, type AttentionReason } from './terminalNotify';
 
 type IntegrationHost = {
@@ -17,6 +17,7 @@ type IntegrationHost = {
     /** A copy made in the past must never replace what is on the clipboard now. */
     replaying(): boolean;
     copy(text: string): void;
+    tmuxMissing(): void;
     attention(reason: AttentionReason, detail?: string): void;
   };
   /** Blocked during replay by the session, so old queries are never answered. */
@@ -38,11 +39,28 @@ export function attachTerminalIntegrations(terminal: Terminal, host: Integration
     if (path) host.directory(path);
     return true;
   };
+  const report = (body: string) => {
+    if (!agent || !terminalPreferences().programStatus) return;
+    const before = agent.status.snapshot()?.state;
+    agent.status.report(body);
+    const now = agent.status.snapshot();
+    if (now && now.state !== before && now.state !== 'working')
+      agent.attention(now.state, now.detail);
+  };
   parser.registerOscHandler(7, (value) => directory(value, true));
   parser.registerOscHandler(777, (value) => {
     const program = programMetadata(value);
     if (program !== undefined) {
       host.program(program);
+      return true;
+    }
+    if (value === 'DachsTerm;tmux;missing') {
+      agent?.tmuxMissing();
+      return true;
+    }
+    const hook = hookStatus(value);
+    if (hook) {
+      report(`state=${hook}:id=hook`);
       return true;
     }
     const message = osc777Message(value);
@@ -89,11 +107,7 @@ export function attachTerminalIntegrations(terminal: Terminal, host: Integration
       host.respond(programStatusQueryReply);
       return true;
     }
-    const before = status.snapshot()?.state;
-    status.report(value);
-    const now = status.snapshot();
-    if (now && now.state !== before && now.state !== 'working')
-      agent.attention(now.state, now.detail);
+    report(value);
     return true;
   });
   parser.registerOscHandler(9, (value) => {

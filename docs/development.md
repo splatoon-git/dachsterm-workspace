@@ -65,6 +65,7 @@ cargo test -p dachsterm --lib --locked hostkeys
 | `npm run probe` | 전용 OpenSSH 컨테이너로 인증, 호스트키, PTY 기반 동작 실증 |
 | `npm run probe:phase1` | 제품 엔진을 실제 OpenSSH로 검사. 이름과 달리 Phase 2~4 검사도 포함 |
 | `npm run test:native` | Windows 전용. 앱을 빌드하고 WebView2 UI로 실제 SSH에 접속 |
+| `node scripts/run-phase1.mjs --native --reuse-build --agent-only` | 빌드를 재사용해 첨부, 서버 포트, tmux 검사까지만 실행. 서버 포트 단계에서 기본 브라우저 탭이 하나 열린다 |
 | `npm run probe:ftp` | FTP, FTPS, CP949 |
 | `node scripts/run-ftp.mjs --reuse-build --native-only` | 빌드를 재사용한 FTP 네이티브 검사 |
 | `node scripts/test-<기능>-native.mjs` | 개별 네이티브 검사. `target/debug/dachsterm.exe`가 먼저 필요 |

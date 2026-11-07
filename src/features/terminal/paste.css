@@ -35,3 +35,12 @@
 .paste-confirm .paste-omitted {
   color: var(--color-text-secondary);
 }
+.attach-items {
+  margin: var(--space-sm) 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+.attach-items small {
+  color: var(--color-text-muted);
+}

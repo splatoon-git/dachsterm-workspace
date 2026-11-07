@@ -49,6 +49,8 @@ pub struct Status {
     pub name: String,
     pub kind: String,
     pub port: u16,
+    pub host: String,
+    pub target_port: u16,
     pub status: String,
     pub message: String,
 }
@@ -110,6 +112,8 @@ impl Tunnels {
                         name: c.name.clone(),
                         kind: c.kind.clone(),
                         port: c.port,
+                        host: c.host.clone(),
+                        target_port: c.target_port,
                         status: "starting".into(),
                         message: String::new(),
                     },

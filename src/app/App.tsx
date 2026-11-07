@@ -35,7 +35,8 @@ import { TerminalSession, type LocalCatalog, type LocalTarget } from '../feature
 import { PodTreeDialog } from '../features/terminal/PodTreeDialog';
 import { SnippetDialog } from '../features/terminal/SnippetDialog';
 import { CommandCatalog } from '../features/terminal/CommandGuide';
-import { TerminalPane } from '../features/terminal/TerminalPane';
+import { SessionTerminal } from './SessionTerminal';
+import { tmuxCloseNotice } from './tmuxNotice';
 import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
@@ -371,8 +372,12 @@ export function App() {
       setError(errorText(e));
     }
   }
+  const reconnectTab = (t: TerminalSession) =>
+    requestConnect(snapshot.profiles.find((p) => p.id === t.profile.id) ?? t.profile, t);
   function closeTab(session: TerminalSession) {
     session.dispose();
+    const notice = tmuxCloseNotice(session.profile);
+    if (notice) setError(notice);
     setTabs((previous) => previous.filter((t) => t !== session));
     if (active === session.tabId) setActive(tabs.find((t) => t !== session)?.tabId ?? '');
   }
@@ -913,17 +918,9 @@ export function App() {
                 onPointerDown={() => setActive(t.tabId)}
               >
                 {t.profile.protocol && t.profile.protocol !== 'ssh' ? (
-                  <FtpPane
-                    session={t}
-                    reconnect={() =>
-                      requestConnect(
-                        snapshot.profiles.find((p) => p.id === t.profile.id) ?? t.profile,
-                        t,
-                      )
-                    }
-                  />
+                  <FtpPane session={t} reconnect={() => reconnectTab(t)} />
                 ) : (
-                  <TerminalPane
+                  <SessionTerminal
                     key={t.tabId}
                     session={t}
                     focused={active === t.tabId && !preview && !activeGame}
@@ -935,12 +932,7 @@ export function App() {
                         : index < paneCapacity(layout))
                     }
                     theme={theme}
-                    reconnect={() =>
-                      requestConnect(
-                        snapshot.profiles.find((p) => p.id === t.profile.id) ?? t.profile,
-                        t,
-                      )
-                    }
+                    reconnect={() => reconnectTab(t)}
                   />
                 )}
               </div>

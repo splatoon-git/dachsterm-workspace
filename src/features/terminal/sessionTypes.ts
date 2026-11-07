@@ -46,4 +46,6 @@ export type SessionState = {
   guideProgram?: GuideProgram | null;
   guideRun?: number;
   replaying?: boolean;
+  /** A server's own address the user asked to open, waiting for their choice. */
+  serverLink?: string;
 };

@@ -1,24 +1,20 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import type { ThemeDefinition } from '../../themes/contract';
 import type { TerminalSession } from './session';
 import { errorText } from '../../lib/ipc';
-import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
 import { SessionLog } from './SessionLog';
+import { TerminalSettings } from './TerminalSettings';
 import { ProgramGuide } from './CommandGuide';
 import { AuthenticationPrompt } from './AuthenticationPrompt';
 import { attachFontSizeWheel } from './fontWheel';
 import { PasteConfirm } from './PasteConfirm';
-import {
-  fontSizeChoices,
-  isMacPlatform,
-  needsPasteConfirmation,
-  saveTerminalDisplay,
-  saveTerminalPreferences,
-  useTerminalDisplay,
-  useTerminalPreferences,
-} from './preferences';
+import { PromptAttachConfirm } from './PromptAttachConfirm';
+import { usePromptAttachments } from './usePromptAttachments';
+import { needsPasteConfirmation, useTerminalDisplay, useTerminalPreferences } from './preferences';
+const hasImage = (data: DataTransfer | null) =>
+  Array.from(data?.items ?? []).some((item) => item.type.startsWith('image/'));
 function fitTerminal(session: TerminalSession) {
   const buffer = session.terminal.buffer.active;
   const atBottom = buffer.viewportY >= buffer.baseY;
@@ -47,6 +43,25 @@ export function TerminalPane({
   const { fontSize, scrollback } = useTerminalDisplay();
   const [paste, setPaste] = useState<{ id: string; text: string } | null>(null);
   const preferences = useTerminalPreferences();
+  const pane = useRef<HTMLElement>(null);
+  const attachments = usePromptAttachments(session, active, pane);
+  const { attachImage } = attachments;
+  const pasteClipboard = useCallback(async () => {
+    const id = session.connectionId;
+    if (session.snapshot().status !== 'connected') return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (id !== session.connectionId || session.snapshot().status !== 'connected') return;
+      if (!text) await attachImage();
+      else if (needsPasteConfirmation(text)) setPaste({ id, text });
+      else {
+        session.terminal.paste(text);
+        session.terminal.focus();
+      }
+    } catch (e) {
+      session.notice(errorText(e));
+    }
+  }, [attachImage, session]);
   useEffect(() => {
     const element = host.current!;
     if (!session.terminal.element) session.terminal.open(element);
@@ -57,10 +72,12 @@ export function TerminalPane({
     observer.observe(element);
     const intercept = (event: ClipboardEvent) => {
       const text = event.clipboardData?.getData('text/plain');
-      if (text && needsPasteConfirmation(text)) {
+      const image = !text && hasImage(event.clipboardData);
+      if (image || (text && needsPasteConfirmation(text))) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        setPaste({ id: session.connectionId, text });
+        if (image) void attachImage();
+        else if (text) setPaste({ id: session.connectionId, text });
       }
     };
     element.addEventListener('paste', intercept, true);
@@ -75,27 +92,12 @@ export function TerminalPane({
       element.removeEventListener('focusin', seen);
       detachWheel();
     };
-  }, [session]);
+  }, [attachImage, session]);
   useEffect(() => {
     const element = host.current!;
     const copy = () => {
       const selected = session.terminal.getSelection();
       if (selected) session.copyText(selected);
-    };
-    const paste = async () => {
-      if (session.snapshot().status !== 'connected') return;
-      const id = session.connectionId;
-      try {
-        const text = await navigator.clipboard.readText();
-        if (id !== session.connectionId || session.snapshot().status !== 'connected') return;
-        if (needsPasteConfirmation(text)) setPaste({ id, text });
-        else {
-          session.terminal.paste(text);
-          session.terminal.focus();
-        }
-      } catch (e) {
-        session.notice(errorText(e));
-      }
     };
     const mouseup = (event: MouseEvent) => {
       if (event.button === 0 && preferences.copyOnSelect) copy();
@@ -108,7 +110,7 @@ export function TerminalPane({
       )
         return;
       event.preventDefault();
-      void paste();
+      void pasteClipboard();
     };
     session.terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown' || event.isComposing) return true;
@@ -128,7 +130,7 @@ export function TerminalPane({
         (event.shiftKey && event.code === 'Insert')
       ) {
         event.preventDefault();
-        void paste();
+        void pasteClipboard();
         return false;
       }
       if (
@@ -151,7 +153,7 @@ export function TerminalPane({
       element.removeEventListener('mouseup', mouseup);
       element.removeEventListener('contextmenu', context);
     };
-  }, [session, preferences]);
+  }, [session, preferences, pasteClipboard]);
   useEffect(() => {
     session.useOptionAsMeta(preferences.macOptionAsMeta);
   }, [session, preferences.macOptionAsMeta]);
@@ -174,22 +176,9 @@ export function TerminalPane({
       session.terminal.focus();
   }, [session, active, focused]);
   const ended = ['closed', 'error'].includes(state.status);
-  async function pasteClipboard() {
-    const id = session.connectionId;
-    try {
-      const text = await navigator.clipboard.readText();
-      if (id !== session.connectionId || session.snapshot().status !== 'connected') return;
-      if (needsPasteConfirmation(text)) setPaste({ id, text });
-      else {
-        session.terminal.paste(text);
-        session.terminal.focus();
-      }
-    } catch (e) {
-      session.notice(errorText(e));
-    }
-  }
   return (
     <section
+      ref={pane}
       className="terminal-pane"
       data-connection-id={session.connectionId}
       hidden={!active}
@@ -258,106 +247,18 @@ export function TerminalPane({
           )}
         </div>
       </div>
-      {settingsOpen && (
-        <Dialog title="터미널 설정" close={() => setSettingsOpen(false)}>
-          <div className="terminal-preferences">
-            {(
-              [
-                ['copyOnSelect', '마우스 선택 시 자동 복사'],
-                ['rightClickPaste', '마우스 우클릭 붙여넣기'],
-                ['followDirectory', '새 SFTP 탐색기의 터미널 경로 따라가기'],
-                ['programStatus', '실행 중인 프로그램 상태를 탭에 표시'],
-                ['clipboardWrite', '프로그램의 클립보드 복사 허용'],
-                ['osNotifications', '다른 작업 중일 때 프로그램 상태를 OS 알림으로 표시'],
-                ['bellNotifications', '터미널 벨도 OS 알림으로 표시'],
-                ...(isMacPlatform
-                  ? ([['macOptionAsMeta', 'Option 키를 Meta로 사용']] as const)
-                  : []),
-              ] as const
-            ).map(([key, label]) => (
-              <label className="checkbox" key={key}>
-                <input
-                  type="checkbox"
-                  checked={preferences[key]}
-                  onChange={(e) => {
-                    try {
-                      saveTerminalPreferences({ [key]: e.target.checked });
-                    } catch {
-                      session.notice('터미널 설정을 저장하지 못했습니다.');
-                    }
-                  }}
-                />
-                {label}
-              </label>
-            ))}
-            <label>
-              Backspace 전송
-              <select
-                aria-label="Backspace 전송"
-                value={preferences.backspace}
-                onChange={(e) => {
-                  try {
-                    saveTerminalPreferences({ backspace: e.target.value as 'del' | 'bs' });
-                  } catch {
-                    session.notice('터미널 설정을 저장하지 못했습니다.');
-                  }
-                }}
-              >
-                <option value="del">DEL · 표준 기본값</option>
-                <option value="bs">Ctrl+H · 오래된 서버 호환</option>
-              </select>
-            </label>
-            <label>
-              글꼴 크기
-              <select
-                aria-label="글꼴 크기"
-                value={fontSize}
-                onChange={(e) => {
-                  try {
-                    saveTerminalDisplay({ fontSize: Number(e.target.value) });
-                  } catch {
-                    session.notice('터미널 설정을 저장하지 못했습니다.');
-                  }
-                }}
-              >
-                {fontSizeChoices(fontSize).map((n) => (
-                  <option key={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              스크롤 기록
-              <select
-                aria-label="스크롤백"
-                value={scrollback}
-                onChange={(e) => {
-                  try {
-                    saveTerminalDisplay({ scrollback: Number(e.target.value) });
-                  } catch {
-                    session.notice('터미널 설정을 저장하지 못했습니다.');
-                  }
-                }}
-              >
-                {[1000, 5000, 10000].map((n) => (
-                  <option key={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <p className="muted">
-            마우스·키 설정은 열린 터미널과 새 창에도 적용됩니다. Ctrl/Cmd+Shift+C/V, Shift+Insert를
-            사용할 수 있고, Ctrl/Cmd+스크롤로 글꼴 크기를 바꿉니다. 마우스를 사용하는 TUI에서는
-            Shift+드래그/우클릭으로 선택·붙여넣기합니다. 방향키·Home/End·Delete·Tab·Ctrl+C는 터미널
-            표준 모드를 따릅니다.
-          </p>
-        </Dialog>
-      )}
+      {settingsOpen && <TerminalSettings session={session} close={() => setSettingsOpen(false)} />}
       <div
         className={`connection-message ${state.status === 'error' ? 'error' : ''}`}
         role="status"
       >
         {state.message}{' '}
         <span className="encoding-badge">{session.profile.encoding?.toUpperCase() ?? 'UTF-8'}</span>
+        {session.profile.tmuxSession && (
+          <span className="encoding-badge" title="탭을 닫아도 서버의 tmux 세션은 유지됩니다">
+            tmux {session.profile.tmuxSession}
+          </span>
+        )}
       </div>
       {state.hostKey && (
         <div className="trust-card" role="alert" aria-label="최초 호스트키 확인">
@@ -393,6 +294,14 @@ export function TerminalPane({
             session.terminal.focus();
             setPaste(null);
           }}
+        />
+      )}
+      {attachments.pending && state.status === 'connected' && (
+        <PromptAttachConfirm
+          attachment={attachments.pending}
+          server={`${session.profile.name} (${session.profile.host})`}
+          cancel={attachments.cancel}
+          confirm={attachments.confirm}
         />
       )}
       <div className="live-terminal" ref={host} />

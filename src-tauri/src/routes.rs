@@ -38,6 +38,12 @@ pub fn resolve(target: &Profile, profiles: &[Profile]) -> Result<Vec<Profile>> {
     Ok(result)
 }
 
+pub fn describe<'a>(route: impl Iterator<Item = &'a Profile>) -> String {
+    route
+        .map(|h| format!("{} ({}:{})", h.name, h.host, h.port))
+        .collect::<Vec<_>>()
+        .join(" → ")
+}
 pub fn validate(profiles: &[Profile]) -> Result<()> {
     for p in profiles {
         resolve(p, profiles)?;

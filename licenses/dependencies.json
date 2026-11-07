@@ -275,6 +275,22 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "bytemuck",
+      "version": "1.25.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/Lokathor/bytemuck",
+      "licenseTextsFound": 3
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "byteorder-lite",
+      "version": "0.1.0",
+      "license": "Unlicense OR MIT",
+      "repository": "https://github.com/image-rs/byteorder-lite",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "byteorder",
       "version": "1.5.0",
       "license": "Unlicense OR MIT",
@@ -883,6 +899,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "fax",
+      "version": "0.2.7",
+      "license": "MIT",
+      "repository": "https://github.com/pdf-rs/fax",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "fdeflate",
       "version": "0.3.7",
       "license": "MIT OR Apache-2.0",
@@ -1091,6 +1115,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "half",
+      "version": "2.7.1",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/VoidStarKat/half-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "hashbrown",
       "version": "0.12.3",
       "license": "MIT OR Apache-2.0",
@@ -1287,6 +1319,14 @@
       "version": "1.1.0",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/servo/rust-url/",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "image",
+      "version": "0.25.10",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/image-rs/image",
       "licenseTextsFound": 2
     },
     {
@@ -1567,6 +1607,14 @@
       "version": "0.2.4",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/KEMs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "moxcms",
+      "version": "0.8.1",
+      "license": "BSD-3-Clause OR Apache-2.0",
+      "repository": "https://github.com/awxkee/moxcms.git",
       "licenseTextsFound": 2
     },
     {
@@ -1951,6 +1999,22 @@
       "version": "1.0.107",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/proc-macro2",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pxfm",
+      "version": "0.1.30",
+      "license": "BSD-3-Clause OR Apache-2.0",
+      "repository": "https://github.com/awxkee/pxfm",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "quick-error",
+      "version": "2.0.1",
+      "license": "MIT/Apache-2.0",
+      "repository": "http://github.com/tailhook/quick-error",
       "licenseTextsFound": 2
     },
     {
@@ -2787,6 +2851,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "tiff",
+      "version": "0.11.3",
+      "license": "MIT",
+      "repository": "https://github.com/image-rs/image-tiff",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "time-core",
       "version": "0.1.9",
       "license": "MIT OR Apache-2.0",
@@ -3099,6 +3171,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "weezl",
+      "version": "0.1.12",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/image-rs/weezl",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "winapi-util",
       "version": "0.1.11",
       "license": "Unlicense OR MIT",
@@ -3339,6 +3419,22 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "zerocopy-derive",
+      "version": "0.8.63",
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/google/zerocopy",
+      "licenseTextsFound": 3
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zerocopy",
+      "version": "0.8.63",
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/google/zerocopy",
+      "licenseTextsFound": 3
+    },
+    {
+      "ecosystem": "cargo",
       "name": "zerofrom-derive",
       "version": "0.1.8",
       "license": "Unicode-3.0",
@@ -3400,6 +3496,22 @@
       "license": "MIT",
       "repository": "https://github.com/dtolnay/zmij",
       "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zune-core",
+      "version": "0.5.3",
+      "license": "MIT OR Apache-2.0 OR Zlib",
+      "repository": "https://github.com/etemesi254/zune-image",
+      "licenseTextsFound": 3
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zune-jpeg",
+      "version": "0.5.15",
+      "license": "MIT OR Apache-2.0 OR Zlib",
+      "repository": "https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg",
+      "licenseTextsFound": 3
     },
     {
       "ecosystem": "npm",

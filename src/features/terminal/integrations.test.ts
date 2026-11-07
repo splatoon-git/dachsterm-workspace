@@ -22,7 +22,7 @@ function setup(withAgent = true) {
     program: vi.fn(),
     respond: vi.fn(),
     agent: withAgent
-      ? { keyboard, status, replaying: () => replay.active, copy, attention }
+      ? { keyboard, status, replaying: () => replay.active, copy, attention, tmuxMissing: vi.fn() }
       : undefined,
   };
   attachTerminalIntegrations(terminal, host);
@@ -75,6 +75,36 @@ describe('terminal integrations', () => {
     await write('\x1bc');
     expect(keyboard.flags('normal')).toBe(0);
     expect(terminal.buffer.active.type).toBe('normal');
+  });
+
+  it('takes status from a hook in tmux, with only the four allowed words', async () => {
+    const { status, write } = setup();
+    await write('\x1b]777;DachsTerm;status;working\x07');
+    expect(status.snapshot()?.state).toBe('working');
+    await write('\x1b]777;DachsTerm;status;blocked\x07');
+    expect(status.snapshot()?.state).toBe('blocked');
+    await write('\x1b]777;DachsTerm;status;done\x07');
+    expect(status.snapshot()?.state).toBe('done');
+    await write('\x1b]777;DachsTerm;status;error\x07');
+    expect(status.snapshot()?.state).toBe('error');
+    await write('\x1b]777;DachsTerm;status;clear\x07');
+    await write('\x1b]777;DachsTerm;status;working;x\x07');
+    await write('\x1b]777;DachsTerm;status;\x07');
+    expect(status.snapshot()?.state).toBe('error');
+  });
+
+  it('ignores a hook status while the setting is off', async () => {
+    const { status, write } = setup();
+    saveTerminalPreferences({ programStatus: false });
+    await write('\x1b]777;DachsTerm;status;working\x07');
+    expect(status.snapshot()).toBeNull();
+    saveTerminalPreferences({ programStatus: true });
+  });
+
+  it('reports a server without tmux', async () => {
+    const { host, write } = setup();
+    await write('\x1b]777;DachsTerm;tmux;missing\x07');
+    expect(host.agent?.tmuxMissing).toHaveBeenCalledOnce();
   });
 
   it('does not answer on tabs without agent signals', async () => {

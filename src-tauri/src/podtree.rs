@@ -72,9 +72,7 @@ impl PodTrees {
             .ok_or("PodTree 탭이 종료되었습니다.".into())
     }
 }
-fn quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
+use crate::remote_exec::quote;
 fn name(s: &str, empty: bool) -> Result<()> {
     if (!empty && s.is_empty())
         || s.len() > 253

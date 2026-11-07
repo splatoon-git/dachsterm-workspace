@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTheme } from '../themes/useTheme';
 import { call, errorText, type Profile } from '../lib/ipc';
 import { TerminalSession } from '../features/terminal/session';
-import { TerminalPane } from '../features/terminal/TerminalPane';
+import { SessionTerminal } from './SessionTerminal';
 import { FilePanel } from '../features/sftp/FilePanel';
 import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { Icon } from '../components/Icon';
@@ -85,7 +85,7 @@ export function DetachedWindow({ id }: { id: string }) {
       )}
       <div className={`detached-grid ${filesOpen ? '' : 'files-hidden'}`}>
         {session && (
-          <TerminalPane
+          <SessionTerminal
             session={session}
             active
             theme={theme}

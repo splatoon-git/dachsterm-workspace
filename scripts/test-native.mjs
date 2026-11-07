@@ -8,6 +8,7 @@ import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
+import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-native-'));
 const screenshots = path.resolve('test-results-native');
@@ -16,6 +17,8 @@ const probe = (key) => process.env[`DACHSTERM_PROBE_${key}`];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Argon2 in the debug build takes about 1s when idle and over 4s on a busy machine.
 const kdfWait = { timeout: 20000 };
+// Ends a run limited to the agent checks. The cleanup in `finally` still runs.
+const finishedEarly = new Error('agent checks only');
 let app,
   browser,
   page,
@@ -236,6 +239,25 @@ try {
   console.log('PASS native UI -> IPC -> host trust -> password -> Korean PTY output');
   stage = 'U3 tunnel visual editor and real forwarding';
   await verifyTunnels({ page, invoke, docker, probe, screenshots });
+  stage = 'AT agent terminal';
+  await verifyAgentTerminal({
+    page,
+    pane,
+    invoke,
+    docker,
+    probe,
+    command,
+    output,
+    connected,
+    typeInput,
+    showConnections,
+    directory,
+    screenshots,
+    setStage: (value) => {
+      stage = value;
+    },
+  });
+  if (process.env.DACHSTERM_AGENT_ONLY === '1') throw finishedEarly;
   stage = 'S1 terminal and authentication basics';
   if (process.env.DACHSTERM_UI_REGRESSION_ONLY === '1')
     console.log('SKIP S1 parallel authentication/terminal-basics extension (UI regression only)');
@@ -835,12 +857,39 @@ try {
       : 'PASS all Phase 1 Windows native integration checks',
   );
 } catch (error) {
+  if (error === finishedEarly) console.log('PASS agent terminal checks only');
+  else await reportFailure(error);
+} finally {
+  if (paused) docker(['unpause', probe('CONTAINER')]);
+  if (page) {
+    try {
+      for (const p of (await invoke('sessions')).profiles)
+        await invoke('delete_session', { id: p.id });
+    } catch {
+      /* OS entries remain discoverable through the isolated DB if cleanup failed. */
+    }
+  }
+  await shutdown();
+  // Only the temporary directory created above can be removed.
+  if (
+    path.dirname(directory) === path.resolve(tmpdir()) &&
+    path.basename(directory).startsWith('dachsterm-native-')
+  ) {
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
+  } else {
+    console.error('unsafe test cleanup path');
+    process.exitCode = 1;
+  }
+}
+async function reportFailure(error) {
   if (
     stage === 'launch' ||
     stage === 'detached window ownership' ||
     stage.startsWith('five tabs') ||
     stage.startsWith('split layout') ||
     stage.startsWith('file ') ||
+    stage.startsWith('AT.') ||
+    stage.startsWith('DX.4') ||
     stage.startsWith('external editor') ||
     stage === 'selective multi input' ||
     stage === 'embedded games preserve SSH'
@@ -868,6 +917,10 @@ try {
     );
   if (stage.startsWith('U3'))
     console.error(String(error.stack).match(/verify-tunnels\.mjs:\d+:\d+/)?.[0] ?? 'U3 failure');
+  if (stage.startsWith('AT') || stage.startsWith('DX'))
+    console.error(
+      String(error.stack).match(/verify-agent-terminal\.mjs:\d+:\d+/)?.[0] ?? 'agent failure',
+    );
   if (stage.startsWith('S1'))
     console.error(
       String(error.stack).match(/verify-terminal-basics\.mjs:\d+:\d+/)?.[0] ?? 'S1 failure',
@@ -883,28 +936,8 @@ try {
       stage === 'legacy terminal encoding' ||
       stage.startsWith('split layout') ||
       stage.startsWith('file ') ||
-      stage === 'selective multi input')
+      stage === 'selective multi input' ||
+      stage.startsWith('AT.'))
   )
     await page.screenshot({ path: path.join(screenshots, 'failure.png') }).catch(() => {});
-} finally {
-  if (paused) docker(['unpause', probe('CONTAINER')]);
-  if (page) {
-    try {
-      for (const p of (await invoke('sessions')).profiles)
-        await invoke('delete_session', { id: p.id });
-    } catch {
-      /* OS entries remain discoverable through the isolated DB if cleanup failed. */
-    }
-  }
-  await shutdown();
-  // Only the temporary directory created above can be removed.
-  if (
-    path.dirname(directory) === path.resolve(tmpdir()) &&
-    path.basename(directory).startsWith('dachsterm-native-')
-  ) {
-    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
-  } else {
-    console.error('unsafe test cleanup path');
-    process.exitCode = 1;
-  }
 }

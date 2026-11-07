@@ -17,6 +17,7 @@ export type Profile = {
   favorite: boolean;
   timeout: number;
   keepalive: number;
+  tmuxSession?: string;
   lastConnected: number | null;
   hasSecret: boolean;
 };

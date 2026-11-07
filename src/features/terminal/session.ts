@@ -42,7 +42,9 @@ export class TerminalSession {
     connected: () => this.current.status === 'connected',
     directory: () => this.current.directory,
     mode: () => {
-      if (this.podtree || this.profile.protocol !== 'ssh') return 'none';
+      // tmux may reattach to a pane where a program runs, so nothing may ever be typed there.
+      if (this.podtree || this.profile.protocol !== 'ssh' || this.profile.tmuxSession)
+        return 'none';
       return this.localTarget?.follow ?? 'remote';
     },
     supportsHook: () =>
@@ -61,7 +63,8 @@ export class TerminalSession {
   }
   /** A Windows shell only takes its hook at launch; the typed hook is Bash and Zsh text. */
   get canTypeDirectoryHook() {
-    return !this.podtree && (!this.localTarget || this.localTarget.kind === 'wsl');
+    if (this.podtree || this.profile.tmuxSession) return false;
+    return !this.localTarget || this.localTarget.kind === 'wsl';
   }
   typeDirectoryHook() {
     this.directoryHookInstaller.cancel();
@@ -112,10 +115,7 @@ export class TerminalSession {
     this.terminal.loadAddon(this.search);
     attachTerminalIntegrations(this.terminal, {
       windowsPaths: this.localTarget?.kind === 'shell',
-      directory: (path) => {
-        if (this.current.directory !== path)
-          this.update({ ...this.current, directory: path, directoryHook: undefined });
-      },
+      directory: (path) => this.setDirectory(path),
       program: (program) => {
         if (this.current.guideEnabled && !this.podtree)
           this.update({
@@ -132,6 +132,7 @@ export class TerminalSession {
               status: this.programStatus,
               replaying: () => this.replaying,
               copy: (text) => this.copyText(text),
+              tmuxMissing: () => this.notice('서버에 tmux가 없어 일반 셸로 시작했습니다.'),
               attention: programNotifier({
                 terminal: this.terminal,
                 sessionName: () => this.profile.name,
@@ -144,20 +145,34 @@ export class TerminalSession {
     if (!this.podtree && this.profile.protocol === 'ssh')
       attachTerminalLinks(this.terminal, {
         remote: () => !this.localTarget,
+        server: (serverLink) => this.update({ ...this.current, serverLink }),
         notice: (message) => this.notice(message),
       });
     this.terminal.onData((data) => this.send(data));
     this.terminal.onResize(({ cols, rows }) => {
       if (this.current.status === 'connected' && this.profile.protocol === 'ssh')
-        void call(
-          this.podtree ? 'podtree_resize' : this.localTarget ? 'local_resize' : 'terminal_resize',
-          {
-            id: this.connectionId,
-            cols,
-            rows,
-          },
-        ).catch((e) => this.notice(errorText(e)));
+        void call(`${this.backend}_resize`, { id: this.connectionId, cols, rows }).catch((e) =>
+          this.notice(errorText(e)),
+        );
     });
+  }
+  private get backend() {
+    return this.podtree ? 'podtree' : this.localTarget ? 'local' : 'terminal';
+  }
+  private setDirectory(path: string) {
+    if (this.current.directory !== path)
+      this.update({ ...this.current, directory: path, directoryHook: undefined });
+  }
+  /** tmux owns the prompt, so its folder is asked for at moments the user acts, not polled. */
+  async syncTmuxDirectory() {
+    const id = this.connectionId;
+    if (!this.profile.tmuxSession || this.current.status !== 'connected') return;
+    if (!this.wantsDirectoryFollow()) return;
+    const path = await call<string | null>('tmux_current_path', { id }).catch(() => null);
+    if (path && id === this.connectionId) this.setDirectory(path);
+  }
+  closeServerLink() {
+    this.update({ ...this.current, serverLink: undefined });
   }
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -251,10 +266,7 @@ export class TerminalSession {
           this.notice('일부 문자가 대체 표시되었습니다. 세션 인코딩과 서버 로케일을 확인하세요.');
         this.terminal.write(this.directoryHookInstaller.filter.push(text), () => {
           this.directoryHookInstaller.noteOutput();
-          void call(
-            this.podtree ? 'podtree_ack' : this.localTarget ? 'local_ack' : 'terminal_ack',
-            { id, seq: event.seq },
-          ).catch(() => {});
+          void call(`${this.backend}_ack`, { id, seq: event.seq }).catch(() => {});
         });
       } else if (event.type === 'authPrompt')
         this.update({
@@ -281,18 +293,11 @@ export class TerminalSession {
           this.programStatus.programEnded();
         if (event.status === 'connected') {
           if (this.profile.protocol === 'ssh')
-            void call(
-              this.podtree
-                ? 'podtree_resize'
-                : this.localTarget
-                  ? 'local_resize'
-                  : 'terminal_resize',
-              {
-                id,
-                cols: this.terminal.cols,
-                rows: this.terminal.rows,
-              },
-            ).catch((e) => this.notice(errorText(e)));
+            void call(`${this.backend}_resize`, {
+              id,
+              cols: this.terminal.cols,
+              rows: this.terminal.rows,
+            }).catch((e) => this.notice(errorText(e)));
           this.onConnected();
           if (this.autoDirectoryHook && this.wantsDirectoryFollow())
             void this.directoryHookInstaller.install();
@@ -353,13 +358,10 @@ export class TerminalSession {
     this.sending = true;
     try {
       while (this.inputQueue.length && !this.disposed)
-        await call(
-          this.podtree ? 'podtree_input' : this.localTarget ? 'local_input' : 'terminal_input',
-          {
-            id: this.connectionId,
-            data: this.inputQueue.shift()!,
-          },
-        );
+        await call(`${this.backend}_input`, {
+          id: this.connectionId,
+          data: this.inputQueue.shift()!,
+        });
     } catch (e) {
       this.inputQueue = [];
       this.notice(errorText(e));

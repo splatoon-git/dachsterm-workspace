@@ -13,3 +13,21 @@
   color: var(--color-status-success);
   font-weight: 700;
 }
+.agent-hook-guide {
+  margin-top: var(--space-md);
+}
+.agent-hook-guide summary {
+  cursor: pointer;
+}
+.agent-hook-guide pre {
+  max-height: 180px;
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm);
+  overflow: auto;
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--font-small);
+  user-select: text;
+}

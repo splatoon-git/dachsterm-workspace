@@ -106,6 +106,7 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
     for p in &mut snapshot.profiles {
         p.has_secret = false;
         p.last_connected = None;
+        p.tmux_session.clear();
     }
     let tunnels = store
         .tunnel_configs()?
@@ -363,6 +364,12 @@ pub(crate) fn apply_bundle(store: &Store, bundle: &mut Bundle, merges: &[Merge])
         p.group_id = p.group_id.map(|id| group_ids[&id].clone());
         p.has_secret = false;
         p.last_connected = None;
+        // A file cannot choose this. Merging into a saved session keeps what the user set there.
+        p.tmux_session = existing
+            .profiles
+            .iter()
+            .find(|old| old.id == p.id)
+            .map_or_else(String::new, |old| old.tmux_session.clone());
         tx.execute(
             "INSERT INTO profiles(id,data,group_id) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET data=?2,group_id=?3",
             params![
@@ -493,6 +500,43 @@ mod tests {
         assert!(state.profiles.is_empty());
         assert!(state.groups.is_empty());
         assert!(store.tunnel_configs().unwrap().is_empty());
+    }
+    #[test]
+    fn a_session_file_cannot_set_tmux_and_a_merge_keeps_the_saved_value() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("db")).unwrap();
+        let mut saved = crate::storage::tests::profile();
+        saved.tmux_session = "mine".into();
+        let saved = store.save(saved, None).unwrap();
+        let exported = String::from_utf8(export(&store).unwrap()).unwrap();
+        assert!(
+            !exported.contains("tmuxSession"),
+            "export must not carry it"
+        );
+        let mut incoming = saved.clone();
+        incoming.id = "file".into();
+        incoming.tmux_session = "from-file".into();
+        let mut fresh = incoming.clone();
+        fresh.id = "fresh".into();
+        fresh.host = "other.example".into();
+        let mut bundle = Bundle {
+            format: Some("dachsterm.sessions".into()),
+            version: 3,
+            profiles: vec![incoming, fresh],
+            groups: vec![],
+            tunnels: vec![],
+            templates: vec![],
+        };
+        let merges = vec![Merge {
+            source_id: "file".into(),
+            expected: saved.clone(),
+        }];
+        apply_bundle(&store, &mut bundle, &merges).unwrap();
+        let profiles = store.list().unwrap().profiles;
+        let merged = profiles.iter().find(|p| p.id == saved.id).unwrap();
+        assert_eq!(merged.tmux_session, "mine");
+        let added = profiles.iter().find(|p| p.host == "other.example").unwrap();
+        assert_eq!(added.tmux_session, "");
     }
     #[test]
     fn rejects_secret_and_unknown_schema() {

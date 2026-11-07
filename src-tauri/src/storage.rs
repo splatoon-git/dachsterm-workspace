@@ -33,6 +33,9 @@ pub struct Profile {
     pub favorite: bool,
     pub timeout: u64,
     pub keepalive: u64,
+    /// Empty means off. Not part of session JSON and not part of "same connection target".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tmux_session: String,
     #[serde(default)]
     pub last_connected: Option<i64>,
     #[serde(default)]
@@ -42,8 +45,37 @@ fn default_protocol() -> String {
     "ssh".into()
 }
 impl Profile {
+    /// A new SSH session with default options, for sessions read from other tools' settings.
+    pub(crate) fn imported(name: &str, host: &str, username: &str, port: u16) -> Self {
+        Profile {
+            id: Uuid::new_v4().to_string(),
+            name: name.into(),
+            host: host.into(),
+            port,
+            username: username.into(),
+            auth: "password".into(),
+            protocol: "ssh".into(),
+            tls_ca_path: String::new(),
+            encoding: "utf-8".into(),
+            key_path: String::new(),
+            jump_ids: vec![],
+            tags: vec![],
+            sort_order: 0,
+            group_id: None,
+            favorite: false,
+            timeout: 15,
+            keepalive: 15,
+            tmux_session: String::new(),
+            last_connected: None,
+            has_secret: false,
+        }
+    }
     pub fn validate(&self) -> Result<()> {
         crate::encoding::get(&self.encoding)?;
+        crate::terminal_start::check_name(&self.tmux_session)?;
+        if self.protocol != "ssh" && !self.tmux_session.is_empty() {
+            return Err("tmux 세션은 SSH 연결에서만 사용할 수 있습니다.".into());
+        }
         if self.jump_ids.len() > crate::routes::MAX_HOPS
             || (self.protocol != "ssh" && !self.jump_ids.is_empty())
             || self.tags.len() > 32
@@ -366,9 +398,23 @@ pub(crate) mod tests {
             favorite: false,
             timeout: 15,
             keepalive: 15,
+            tmux_session: String::new(),
             last_connected: None,
             has_secret: false,
         }
+    }
+    #[test]
+    fn tmux_session_needs_ssh_and_a_safe_name() {
+        let mut p = profile();
+        p.tmux_session = "work_1-a".into();
+        assert!(p.validate().is_ok());
+        p.tmux_session = "a b".into();
+        assert!(p.validate().is_err());
+        p.tmux_session = "work".into();
+        p.protocol = "ftp".into();
+        assert!(p.validate().is_err());
+        p.tmux_session.clear();
+        assert!(p.validate().is_ok());
     }
     #[test]
     fn persistence_and_groups() {

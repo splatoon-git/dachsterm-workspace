@@ -110,6 +110,7 @@ pub fn quote(value: &str) -> String; // POSIX 작은따옴표 인용
 - `script`는 `sh -c '<인용>'`으로 감싼다. fish나 csh 로그인 셸에서도 같은 문법으로 동작하게 하기 위해서다.
 - 로그인 셸의 rc 파일이 출력을 섞을 수 있으므로(`shell_probe.rs:9`) 표준 출력 시작을 표식으로 구분하고 표식 뒤만 파싱한다.
 - 시간 초과와 출력 초과는 채널을 닫고 오류를 반환한다. 호출이 취소되면 채널도 닫힌다.
+- 구현: AT.6과 DX.3의 선행으로 먼저 넣었다. `stderr`는 쓰는 곳이 없어 `Output`에서 뺐다.
 - `podtree.rs:75`의 `quote`와 `shell_probe.rs`를 이 모듈로 옮긴다. 표준 입력을 쓰는 `archive.rs`와 주기 수집용 `monitoring.rs`는 정책이 달라 B10에서 별도로 판단한다. AT.6의 `remote_ports`는 이 모듈을 쓴다.
 
 ### DX.2 — Agent forwarding과 서명 승인
@@ -171,6 +172,15 @@ exec tmux new-session -A -s '<이름>'
 | 스크롤백 | tmux가 소유한다. 앱 스크롤백에 남지 않으므로 안내서에 `set -g mouse on`을 적는다 |
 | `SSH_AUTH_SOCK` | 다시 붙은 기존 패널은 옛 소켓을 가리킬 수 있다. `eval "$(tmux show-environment -s SSH_AUTH_SOCK)"`를 안내서와 기본 명령에 넣는다 |
 
+**구현에서 더한 것:**
+
+- UTF-8 세션은 `tmux -u`로 시작한다. exec에는 로그인 환경이 없어 로케일이 비어 있을 수 있고, 그러면 tmux가 한글을 다른 문자로 바꾼다.
+- 로그인 셸이 fish나 csh여도 같게 동작하도록 시작 명령을 `sh -c`로 감싼다.
+- `exec`을 거부하면 서버의 `Failure` 응답을 받아 오류로 표시한다. russh의 `exec`은 응답을 기다리지 않으므로 읽기 루프에서 처리하며, tmux 연결에만 적용한다.
+- 새로고침 대신 탐색기의 **경로 가져오기**로 활성 패널의 폴더를 조회한다. `FilePanel`이 순증 금지이기 때문이다.
+- 탭을 처음 닫을 때 한 번 안내하고(`app/tmuxNotice.ts`), 연결 상태 줄에도 tmux 표시를 둔다.
+- `SSH_AUTH_SOCK` 항목은 DX.2에서 다룬다. agent 전달이 아직 없어 이번 시작 명령에는 넣지 않았다.
+
 **안내서에 넣을 설정(Claude Code 문서 기준, 앱이 쓰지 않는다):**
 
 ```text
@@ -188,14 +198,17 @@ set -as terminal-features 'xterm*:extkeys'
 
 | 훅 이벤트 | 시퀀스 | 상태 |
 |---|---|---|
-| `PermissionRequest`, `Notification` | `OSC 777;DachsTerm;status;blocked` | 입력 대기 |
+| `PermissionRequest`, `PreToolUse`(`AskUserQuestion`), `Notification`(`permission_prompt`, `elicitation_dialog`, `elicitation_url_dialog`) | `OSC 777;DachsTerm;status;blocked` | 입력 대기 |
 | `Stop` | `OSC 777;DachsTerm;status;done` | 완료 |
 | `StopFailure` | `OSC 777;DachsTerm;status;error` | 오류 |
-| 작업 시작 이벤트(DX.0 확인) | `OSC 777;DachsTerm;status;working` | 작업 중 |
+| `UserPromptSubmit`, `PostToolUse` | `OSC 777;DachsTerm;status;working` | 작업 중 |
 
 - AT.2의 `programStatus` 레코드에 고정 `id=hook`으로 넣는다. 탭 합치기, 알림, 수명 규칙은 AT.2와 같다. 값은 허용 목록의 네 단어만 받고 나머지는 무시한다.
 - **앱이 훅을 설치하지 않는다.** 안내서와 설정 화면에 복사용 예시를 둔다. 예시는 `jq` 없이 고정 JSON을 출력한다.
-- 표현의 한계를 안내한다: 한 탭의 tmux 패널 여러 개는 구별되지 않고, 다른 tmux 창의 전달 여부는 DX.0 결과를 따른다.
+- 표현의 한계를 안내한다: 한 탭의 tmux 패널 여러 개는 구별되지 않고, 다른 tmux 창에 가려진 패널의 신호는 오지 않는다([실측](../verification/agent-terminal.md)).
+- `PostToolUse`는 설계 뒤 추가했다. 승인에 답한 뒤 다음 보고까지 탭이 `입력 대기`로 남는 것을 막는다.
+- `Notification`은 종류를 제한한다. 전체를 받으면 `idle_prompt`(응답 후 약 60초 입력 없음)가 끝난 작업을 `입력 대기`로 바꾼다. 실제 실행에서 발견했다.
+- 질문 도구는 `PermissionRequest`나 알림 발생이 문서에 보장되지 않아 `PreToolUse`로 받는다.
 
 ### DX.5 — Git 상태 표시
 

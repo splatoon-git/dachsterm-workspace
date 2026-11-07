@@ -2,6 +2,7 @@ import { VaultDialog } from './VaultDialog';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { JumpEditor } from './JumpEditor';
+import { TmuxField } from './TmuxField';
 import { groupPath, hasConnectionOverrides } from './model';
 import type { SessionTemplate } from './SessionManager';
 import { call, errorText, type Group, type Profile } from '../../lib/ipc';
@@ -133,6 +134,7 @@ export function SessionForm({
                   port: [21, 22].includes(p.port) ? (e.target.value === 'ssh' ? 22 : 21) : p.port,
                   auth: e.target.value === 'ssh' ? p.auth : 'password',
                   jumpIds: e.target.value === 'ssh' ? p.jumpIds : [],
+                  tmuxSession: e.target.value === 'ssh' ? p.tmuxSession : '',
                 }))
               }
             >
@@ -343,6 +345,7 @@ export function SessionForm({
                   <small>인증서와 서버 이름을 검증하며 TLS 실패 시 FTP로 전환하지 않습니다.</small>
                 </label>
               )}
+              {profile.protocol === 'ssh' && <TmuxField profile={profile} field={field} />}
               {profile.protocol === 'ssh' && (
                 <JumpEditor
                   profile={profile}

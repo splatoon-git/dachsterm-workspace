@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-prompt-files-upload"
+description = "Enables the prompt_files_upload command without any pre-configured scope."
+commands.allow = ["prompt_files_upload"]
+
+[[permission]]
+identifier = "deny-prompt-files-upload"
+description = "Denies the prompt_files_upload command without any pre-configured scope."
+commands.deny = ["prompt_files_upload"]

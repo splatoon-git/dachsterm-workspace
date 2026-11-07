@@ -39,7 +39,7 @@ describe('terminal links', () => {
   async function linksAt(content: string, y: number, cols = 20) {
     const terminal = new Terminal({ cols, rows: 6, allowProposedApi: false });
     const provider = vi.spyOn(terminal, 'registerLinkProvider');
-    attachTerminalLinks(terminal, { remote: () => false, notice: vi.fn() });
+    attachTerminalLinks(terminal, { remote: () => false, server: vi.fn(), notice: vi.fn() });
     await new Promise<void>((resolve) => terminal.write(content, resolve));
     return new Promise<{ text: string; range: unknown }[] | undefined>((resolve) =>
       provider.mock.calls[0][0].provideLinks(y, resolve),

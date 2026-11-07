@@ -93,6 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 favorite: false,
                 timeout: 10,
                 keepalive: 5,
+                tmux_session: String::new(),
                 last_connected: None,
                 has_secret: false,
             },

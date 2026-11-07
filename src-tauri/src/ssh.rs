@@ -390,15 +390,7 @@ async fn run(
         status: "connecting".into(),
         message: "서버에 연결하고 있습니다.".into(),
     })?;
-    let route_text = hops
-        .iter()
-        .map(|(h, _)| format!("{} ({}:{})", h.name, h.host, h.port))
-        .chain(std::iter::once(format!(
-            "{} ({}:{})",
-            p.name, p.host, p.port
-        )))
-        .collect::<Vec<_>>()
-        .join(" → ");
+    let route_text = crate::routes::describe(hops.iter().map(|(h, _)| h).chain([&p]));
     let mut route = hops;
     route.push((p.clone(), Some(secret)));
     let mut owned: Vec<SessionGuard> = Vec::new();
@@ -493,7 +485,7 @@ async fn run(
                 &[(russh::Pty::VERASE, 127), (russh::Pty::IUTF8, 1)],
             )
             .await?;
-        channel.request_shell(true).await?;
+        crate::terminal_start::begin(&channel, &p).await?;
         Ok::<_, russh::Error>(channel)
     })
     .await
@@ -541,11 +533,15 @@ async fn run(
                     }
                 }
                 ChannelMsg::Close => break,
+                // A refused shell keeps its old behavior. tmux cannot run without its PTY and exec.
+                ChannelMsg::Failure if !p.tmux_session.is_empty() => {
+                    return Err("서버가 tmux 시작을 거부했습니다.".to_string());
+                }
                 _ => {}
             }
         }
         if session.is_closed() {
-            Err("서버 연결이 끊어졌습니다. 재접속하면 새 셸이 열립니다.".into())
+            Err(crate::terminal_start::lost_message(&p).to_string())
         } else {
             Ok(())
         }

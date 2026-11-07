@@ -155,6 +155,7 @@ fn base() -> Profile {
         favorite: true,
         timeout: 5,
         keepalive: 5,
+        tmux_session: String::new(),
         last_connected: None,
         has_secret: false,
     }

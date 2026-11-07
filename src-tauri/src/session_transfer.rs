@@ -87,27 +87,7 @@ impl Preview {
     }
 }
 fn profile(name: &str, host: &str, username: &str, port: u16) -> Profile {
-    Profile {
-        id: uuid::Uuid::new_v4().to_string(),
-        name: name.into(),
-        host: host.into(),
-        port,
-        username: username.into(),
-        auth: "password".into(),
-        protocol: "ssh".into(),
-        tls_ca_path: String::new(),
-        encoding: "utf-8".into(),
-        key_path: String::new(),
-        jump_ids: vec![],
-        tags: vec![],
-        sort_order: 0,
-        group_id: None,
-        favorite: false,
-        timeout: 15,
-        keepalive: 15,
-        last_connected: None,
-        has_secret: false,
-    }
+    Profile::imported(name, host, username, port)
 }
 pub(crate) fn decode(data: &[u8], encoding: &str) -> Result<String> {
     let (codec, skip) = if data.starts_with(&[0xff, 0xfe]) {

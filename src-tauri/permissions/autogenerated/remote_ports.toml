@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remote-ports"
+description = "Enables the remote_ports command without any pre-configured scope."
+commands.allow = ["remote_ports"]
+
+[[permission]]
+identifier = "deny-remote-ports"
+description = "Denies the remote_ports command without any pre-configured scope."
+commands.deny = ["remote_ports"]

@@ -44,13 +44,24 @@ export function FollowControl({
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const waiting = state.directoryHook === 'waiting';
   const unavailable = follow && !state.directory && !waiting;
+  const tmux = !!session.profile.tmuxSession;
   return (
     <>
       <label>
         <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
         터미널 경로 따라가기
       </label>
-      {unavailable && (
+      {tmux && follow && (
+        <button
+          aria-label="tmux 경로 가져오기"
+          disabled={state.status !== 'connected'}
+          title="tmux 활성 패널의 폴더로 이동합니다"
+          onClick={() => void session.syncTmuxDirectory()}
+        >
+          경로 가져오기
+        </button>
+      )}
+      {unavailable && !tmux && (
         <small className="file-follow-note">
           {session.canTypeDirectoryHook
             ? '경로 알림 없음 · Bash/Zsh에서 연결 가능'

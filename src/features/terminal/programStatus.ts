@@ -54,6 +54,15 @@ function decodeText(encoded: string, limit: { encoded: number; decoded: number }
   }
 }
 
+/**
+ * Inside tmux a program cannot send OSC 7501, so its hooks send this instead. Only these four words
+ * are accepted, and the fixed record ID keeps them apart from what a program reports itself.
+ */
+export function hookStatus(value: string) {
+  const match = /^DachsTerm;status;(working|blocked|done|error)$/.exec(value);
+  return match ? match[1] : null;
+}
+
 /** Returns the report, or null to ignore it. The caller handles the `?` query. */
 export function parseProgramReport(body: string): Report | null {
   if (body.length > maxSequence) return null;

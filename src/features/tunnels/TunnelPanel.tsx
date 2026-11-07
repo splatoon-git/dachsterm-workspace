@@ -3,6 +3,8 @@ import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
 import { call, errorText, type Profile } from '../../lib/ipc';
 import type { TerminalSession } from '../terminal/session';
+import { ServerPortsButton } from './ForwardPortDialog';
+import type { TunnelStatus as Status } from './serverPorts';
 import './tunnels.css';
 
 type Config = {
@@ -14,15 +16,6 @@ type Config = {
   host: string;
   targetPort: number;
   autoStart: boolean;
-};
-type Status = {
-  id: string;
-  connectionId: string;
-  name: string;
-  kind: string;
-  port: number;
-  status: string;
-  message: string;
 };
 const kinds = [
   {
@@ -189,6 +182,7 @@ export function TunnelPanel({
               </h3>
               <p className="muted">한 번 설정하고, 필요할 때 시작하거나 중지하세요.</p>
             </div>
+            <ServerPortsButton sessions={ready} current={session} />
             <button
               className="primary"
               disabled={!loaded || busy || !sshProfiles.length}

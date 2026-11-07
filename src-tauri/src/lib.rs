@@ -18,6 +18,9 @@ mod login_path;
 mod maintenance;
 pub mod monitoring;
 pub mod podtree;
+mod prompt_files;
+mod remote_exec;
+mod remote_ports;
 pub mod routes;
 mod rsa_auth;
 pub mod session_log;
@@ -30,6 +33,7 @@ pub mod snippets;
 pub mod ssh;
 mod ssh_auth;
 pub mod storage;
+mod terminal_start;
 pub mod transfer_queue;
 pub mod tunnels;
 pub mod vault;
@@ -189,6 +193,12 @@ pub fn run() {
             desktop_bridge::clipboard_write_text,
             desktop_bridge::url_open,
             desktop_bridge::notification_show,
+            prompt_files::prompt_clipboard_inspect,
+            prompt_files::prompt_clipboard_image,
+            prompt_files::prompt_files_inspect,
+            prompt_files::prompt_files_upload,
+            remote_ports::remote_ports,
+            terminal_start::tmux_current_path,
             broadcast::broadcast_status,
             broadcast::broadcast_set,
             vault::vault_status,

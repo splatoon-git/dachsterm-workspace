@@ -19,6 +19,7 @@ const env = {
     process.env.DACHSTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', 'dachsterm.exe'),
 };
 if (process.argv.includes('--jumps')) env.DACHSTERM_PROBE_JUMPS = '1';
+if (process.argv.includes('--agent-only')) env.DACHSTERM_AGENT_ONLY = '1';
 function capture(args) {
   const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 30_000 });
   if (result.status !== 0) throw new Error(`Docker operation failed: ${args[0]}`);
@@ -137,7 +138,7 @@ try {
             ? 'scripts/test-session-transfer-native.mjs'
             : 'scripts/test-native.mjs',
       ],
-      { timeout: 300_000 },
+      { timeout: 420_000 },
     );
   }
 } catch (error) {

@@ -274,7 +274,9 @@ Claude Code가 서버에 띄운 개발 서버를 PC 브라우저로 여는 흐�
 | `notification_show` | 제목, 본문 | OS 알림. 길이 제한 재검증 | AT.3 |
 | `clipboard_write_text` | 문자열 | 1MiB 상한. 포커스 검사는 OSC 52 처리에서 한다 | AT.4 |
 | `url_open` | URL | §4 AT.4의 검증 후 열기 | AT.4 |
-| `prompt_clipboard_image` | 연결 ID | 이미지 없으면 `null`, 있으면 업로드한 경로 | AT.5 |
+| `prompt_clipboard_inspect` | 없음 | 이미지 없으면 `null`, 있으면 이름, 크기, 내용 해시. 확인창이 먼저 보여 줄 값이다 | AT.5 |
+| `prompt_clipboard_image` | 연결 ID, 확인한 해시 | 업로드한 경로. 확인 뒤 클립보드가 바뀌면 거부한다 | AT.5 |
+| `prompt_files_inspect` | 로컬 경로 목록, 업로드 여부 | 이름과 크기. 폴더와 심볼릭 링크는 거부한다 | AT.5 |
 | `prompt_files_upload` | 연결 ID, 로컬 경로 목록 | 업로드한 경로 목록 | AT.5 |
 | `remote_ports` | 연결 ID | `{ host, port }` 목록 | AT.6 |
 
@@ -283,7 +285,7 @@ Claude Code가 서버에 띄운 개발 서버를 PC 브라우저로 여는 흐�
 
 | 추가 크레이트 | 용도 | 대안을 택하지 않은 이유 |
 |---|---|---|
-| `arboard` | 클립보드 이미지 읽기, 텍스트 쓰기 | 웹 클립보드 API는 WKWebView에서 사용자 동작 제약과 권한 표시 차이가 있다 |
+| `arboard`(`image-data` 기능) | 클립보드 이미지 읽기, 텍스트 쓰기 | 웹 클립보드 API는 WKWebView에서 사용자 동작 제약과 권한 표시 차이가 있다 |
 | `png` (직접 의존으로 승격) | 클립보드 이미지 인코딩 | `Cargo.lock`에 이미 있다 |
 | `tauri-plugin-opener` | URL 열기 | 현재 앱에 수단이 없다 |
 | `tauri-plugin-notification` | OS 알림 | 웹 `Notification`은 WKWebView 지원을 기대할 수 없다 |

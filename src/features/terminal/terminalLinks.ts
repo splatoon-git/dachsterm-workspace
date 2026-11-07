@@ -29,6 +29,8 @@ export function classifyLink(url: string, remote: boolean): LinkTarget {
 type LinkHost = {
   /** True for a tab running on another machine. */
   remote: () => boolean;
+  /** The user asked for a server's own address. Opening it needs a tunnel and their choice. */
+  server: (url: string) => void;
   notice: (message: string) => void;
 };
 
@@ -57,7 +59,7 @@ export function attachTerminalLinks(terminal: Terminal, host: LinkHost) {
     // A plain click belongs to the terminal or the program. Opening takes Ctrl or Cmd.
     if (!event.ctrlKey && !event.metaKey) return;
     const target = classifyLink(url, host.remote());
-    if (target === 'server') host.notice('서버 내부 주소입니다. 터널을 연 뒤 내 PC 주소로 여세요.');
+    if (target === 'server') host.server(url);
     else if (target === 'open')
       void call('url_open', { url }).catch((error) => host.notice(errorText(error)));
     else host.notice('이 링크는 열 수 없습니다.');
