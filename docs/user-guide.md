@@ -74,7 +74,8 @@ macOS에서는 Ctrl 대신 Command를 쓰며, 앱 안의 단축키 안내도 ⌘
 - **지원 방식**: 비밀번호, 개인키(Ed25519, ECDSA, RSA), 암호화 개인키의 Passphrase, OS SSH agent, keyboard-interactive. 개인키·agent 인증 뒤 서버가 요구하는 OTP·MFA 질문도 표시한다. 응답은 저장하지 않으며 질문당 120초를 제공한다.
 - **SSH agent**: Windows는 OpenSSH `ssh-agent` 서비스와 `ssh-add`로 등록한 키를 쓴다. macOS와 Unix는 `SSH_AUTH_SOCK`을 쓴다. 연결당 시도는 최대 5회이므로 agent에 키가 많으면 사용할 키를 정리한다.
 - **RSA**: OpenSSH 일반·암호화, PEM PKCS#1, PKCS#8 일반·암호화 키를 읽는다. 2048~8192비트, SHA-256/512만 허용하고 SHA-1 `ssh-rsa` 서명은 허용하지 않는다. 오래된 PEM 암호화 형식은 OpenSSH나 PKCS#8로 변환해야 한다.
-- **미지원**: Pageant, FIDO2 키 직접 접근, GSSAPI/Kerberos, agent forwarding, 호스트 CA 인증서.
+- **SSH 키 전달(agent forwarding)**: 서버에서 이 PC의 키로 `git push` 등을 할 때 쓴다. 세션 편집의 **고급 옵션**에서 켜며 기본은 꺼짐이다. 서버가 서명을 요청할 때마다 터미널 위 카드에서 **거부**, **이번만 허용**, **이 연결에서 10분 허용** 중 하나를 고른다. 60초 안에 답하지 않으면 거부한다. 서버 관리자나 서버에서 도는 프로그램도 요청할 수 있으니 믿는 서버에서만 켜고, 모르는 요청은 거부한다. 서버에서 키를 추가·삭제·잠글 수는 없다. 경유 서버에는 전달하지 않으며, 세션 파일로 내보내거나 가져오지 않는다.
+- **미지원**: Pageant, FIDO2 키 직접 접근, GSSAPI/Kerberos, 호스트 CA 인증서.
 
 ### 점프 호스트
 

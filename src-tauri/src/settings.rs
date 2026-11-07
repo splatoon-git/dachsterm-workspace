@@ -107,6 +107,7 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
         p.has_secret = false;
         p.last_connected = None;
         p.tmux_session.clear();
+        p.forward_agent = false;
     }
     let tunnels = store
         .tunnel_configs()?
@@ -364,12 +365,10 @@ pub(crate) fn apply_bundle(store: &Store, bundle: &mut Bundle, merges: &[Merge])
         p.group_id = p.group_id.map(|id| group_ids[&id].clone());
         p.has_secret = false;
         p.last_connected = None;
-        // A file cannot choose this. Merging into a saved session keeps what the user set there.
-        p.tmux_session = existing
-            .profiles
-            .iter()
-            .find(|old| old.id == p.id)
-            .map_or_else(String::new, |old| old.tmux_session.clone());
+        // A file cannot choose these. Merging into a saved session keeps what the user set there.
+        let saved = existing.profiles.iter().find(|old| old.id == p.id);
+        p.tmux_session = saved.map_or_else(String::new, |old| old.tmux_session.clone());
+        p.forward_agent = saved.is_some_and(|old| old.forward_agent);
         tx.execute(
             "INSERT INTO profiles(id,data,group_id) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET data=?2,group_id=?3",
             params![
@@ -507,18 +506,21 @@ mod tests {
         let store = Store::open(&dir.path().join("db")).unwrap();
         let mut saved = crate::storage::tests::profile();
         saved.tmux_session = "mine".into();
+        saved.forward_agent = true;
         let saved = store.save(saved, None).unwrap();
         let exported = String::from_utf8(export(&store).unwrap()).unwrap();
         assert!(
-            !exported.contains("tmuxSession"),
-            "export must not carry it"
+            !exported.contains("tmuxSession") && !exported.contains("forwardAgent"),
+            "export must not carry them"
         );
         let mut incoming = saved.clone();
         incoming.id = "file".into();
         incoming.tmux_session = "from-file".into();
+        incoming.forward_agent = false;
         let mut fresh = incoming.clone();
         fresh.id = "fresh".into();
         fresh.host = "other.example".into();
+        fresh.forward_agent = true;
         let mut bundle = Bundle {
             format: Some("dachsterm.sessions".into()),
             version: 3,
@@ -535,8 +537,10 @@ mod tests {
         let profiles = store.list().unwrap().profiles;
         let merged = profiles.iter().find(|p| p.id == saved.id).unwrap();
         assert_eq!(merged.tmux_session, "mine");
+        assert!(merged.forward_agent, "a file cannot turn it off either");
         let added = profiles.iter().find(|p| p.host == "other.example").unwrap();
         assert_eq!(added.tmux_session, "");
+        assert!(!added.forward_agent, "a file cannot turn it on");
     }
     #[test]
     fn rejects_secret_and_unknown_schema() {

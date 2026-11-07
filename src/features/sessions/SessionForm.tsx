@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { JumpEditor } from './JumpEditor';
 import { TmuxField } from './TmuxField';
+import { AgentForwardField } from './AgentForwardField';
 import { groupPath, hasConnectionOverrides } from './model';
 import type { SessionTemplate } from './SessionManager';
 import { call, errorText, type Group, type Profile } from '../../lib/ipc';
@@ -140,6 +141,7 @@ export function SessionForm({
                   auth: e.target.value === 'ssh' ? p.auth : 'password',
                   jumpIds: e.target.value === 'ssh' ? p.jumpIds : [],
                   tmuxSession: e.target.value === 'ssh' ? p.tmuxSession : '',
+                  forwardAgent: e.target.value === 'ssh' && p.forwardAgent,
                 }))
               }
             >
@@ -351,6 +353,7 @@ export function SessionForm({
                 </label>
               )}
               {profile.protocol === 'ssh' && <TmuxField profile={profile} field={field} />}
+              {profile.protocol === 'ssh' && <AgentForwardField profile={profile} field={field} />}
               {profile.protocol === 'ssh' && (
                 <JumpEditor
                   profile={profile}

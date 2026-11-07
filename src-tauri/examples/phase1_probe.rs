@@ -1,6 +1,7 @@
 #[path = "queue/checks.rs"]
 mod queue_checks;
 // Runs the actual product engine against the ephemeral OpenSSH fixture. No secret output.
+mod agent_checks;
 mod jump_checks;
 mod workspace_checks;
 use dachsterm::{
@@ -156,6 +157,7 @@ fn base() -> Profile {
         timeout: 5,
         keepalive: 5,
         tmux_session: String::new(),
+        forward_agent: false,
         last_connected: None,
         has_secret: false,
     }
@@ -436,9 +438,11 @@ async fn run() -> Result<()> {
     mfa.auth = "key".into();
     mfa.key_path = rsa_path.to_string_lossy().into();
     mfa.port = env("MFA_PORT").parse()?;
+    mfa.forward_agent = true;
     let mfa = store.save(mfa, None)?;
     let mut client = begin(&manager, &store, &paths, mfa.clone(), String::new())?;
     let mut challenged = false;
+    let mut notice = None;
     loop {
         match client.event().await? {
             Event::HostKey { fingerprint, .. } => {
@@ -449,6 +453,7 @@ async fn run() -> Result<()> {
                 );
                 manager.control(&client.id)?.trust.send(Some(true))?;
             }
+            Event::AgentNotice { message } => notice = Some(message),
             Event::AuthPrompt {
                 challenge, prompts, ..
             } => {
@@ -470,6 +475,7 @@ async fn run() -> Result<()> {
         }
     }
     assert!(challenged);
+    assert!(agent_checks::refused(notice.as_deref()));
     client.stop().await?;
     let mut client = begin(&manager, &store, &paths, mfa, String::new())?;
     loop {
@@ -481,6 +487,8 @@ async fn run() -> Result<()> {
     println!(
         "PASS RSA-only host verification, RSA SHA256 + PAM MFA, cancellation during challenge"
     );
+    println!("PASS a server refusing agent forwarding is reported once and the shell still opens");
+    agent_checks::run(&manager, &store, &paths).await?;
     for i in 1..5 {
         let mut profile = base();
         profile.name = format!("fixture-{i}");

@@ -1,3 +1,5 @@
+mod agent_filter;
+pub mod agent_forward;
 pub mod archive;
 pub mod broadcast;
 mod commands;
@@ -199,6 +201,7 @@ pub fn run() {
             prompt_files::prompt_files_upload,
             remote_ports::remote_ports,
             terminal_start::tmux_current_path,
+            agent_forward::agent_sign_reply,
             broadcast::broadcast_status,
             broadcast::broadcast_set,
             vault::vault_status,

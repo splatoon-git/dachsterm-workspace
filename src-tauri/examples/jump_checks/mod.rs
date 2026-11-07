@@ -1,6 +1,6 @@
 //! Actual OpenSSH transport checks; credentials remain in ephemeral fixture memory/files.
 use super::*;
-fn routed(
+pub(super) fn routed(
     manager: &Arc<Connections>,
     store: &Arc<Store>,
     paths: &[PathBuf],

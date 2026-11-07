@@ -73,7 +73,7 @@ DachsTerm은 Tauri 2와 Rust로 만든 SSH 클라이언트다. 별도 서버, �
 | 압축·압축 해제 | Linux/Python3 서버 | 미지원 |
 | 터미널·멀티 입력·분리 창·터널·모니터링 | 지원 | 미지원 |
 
-**지원하지 않는 것**: X 서버, RDP/VNC, 매크로, 클라우드 동기화, 자동 업데이트, Pageant, FIDO2 키 직접 접근, GSSAPI/Kerberos, agent forwarding, 호스트 CA 인증서, implicit FTPS, Active FTP, FXP, SOCKS5 UDP/BIND, 터널의 공개 인터페이스 바인딩.
+**지원하지 않는 것**: X 서버, RDP/VNC, 매크로, 클라우드 동기화, 자동 업데이트, Pageant, FIDO2 키 직접 접근, GSSAPI/Kerberos, 호스트 CA 인증서, implicit FTPS, Active FTP, FXP, SOCKS5 UDP/BIND, 터널의 공개 인터페이스 바인딩.
 
 ## 설치
 

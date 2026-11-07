@@ -11,7 +11,7 @@ KbdInteractiveAuthentication yes
 AllowTcpForwarding yes
 GatewayPorts no
 X11Forwarding no
-AllowAgentForwarding no
+AllowAgentForwarding yes
 PrintMotd no
 Subsystem sftp internal-sftp
 LogLevel ERROR

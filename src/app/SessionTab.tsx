@@ -6,6 +6,7 @@ import {
   useProgramSummary,
 } from '../features/terminal/StatusBadge';
 import { isRecording, useLogStatus } from '../features/terminal/logStatus';
+import { useSignWaiting } from '../features/terminal/agentSign';
 import { capabilities } from '../features/terminal/sessionKind';
 import { tabKey } from './workspaceLayout';
 
@@ -48,7 +49,8 @@ export function SessionTab({
   useEffect(() => {
     if (active) session.programStatus.acknowledge();
   }, [active, session]);
-  const program = state.status === 'connected' ? summary : null;
+  const signing = useSignWaiting(session.agentSign, session.connectionId);
+  const program = state.status === 'connected' ? (signing ?? summary) : null;
   return (
     <div
       className={`session-tab ${active ? 'selected' : ''}`}

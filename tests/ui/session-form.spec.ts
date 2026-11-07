@@ -86,3 +86,16 @@ test('an invalid value inside the folded section opens it instead of blocking si
   await expect(keepalive).toBeFocused();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
 });
+
+test('key forwarding starts off, folded, and only for SSH', async ({ page }) => {
+  const dialog = await openForm(page);
+  const forward = dialog.getByLabel('SSH 키 전달 (agent forwarding)', { exact: true });
+  await expect(forward).toBeHidden();
+  await dialog.locator('summary', { hasText: '고급 옵션' }).click();
+  await expect(forward).not.toBeChecked();
+  await forward.check();
+  await dialog.getByLabel('프로토콜').selectOption('ftps');
+  await expect(forward).toHaveCount(0);
+  await dialog.getByLabel('프로토콜').selectOption('ssh');
+  await expect(forward).not.toBeChecked();
+});

@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.10**, 설계일: **2026-11-07**.
-- 현재 상태: **설계 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **구현 진행 중**(DX.1 일부, DX.2~DX.4). 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -145,6 +145,17 @@ pub fn quote(value: &str) -> String; // POSIX 작은따옴표 인용
 **이벤트:** `Event::AgentSign`을 추가하고 `agent_sign_reply`로 답한다. `Broker::send`는 이 이벤트를 **`state`에 저장하지 않는다**(§2). 승인 대기 중에 창을 옮기면 요청이 사라지고 시간 초과로 거부되어 안전한 쪽으로 실패한다. 대기 맵은 락을 쥔 채 await하지 않는다.
 
 **합격:** 서버에서 `ssh-add -l`이 내 키를 보여주고 승인 후 실제 Git 서버로 push된다. 거부하면 push가 실패한다. 서버의 `ssh-add -D`가 로컬 키를 지우지 못한다. 경유 호스트와 옵션을 끈 연결에서는 agent 채널이 거부된다.
+
+**TW 반영과 구현에서 정한 것(2026-11-07):**
+
+- **대화상자가 아니라 창 안 카드다.** 호스트키 확인 카드(`trust-card`)와 같은 자리에 `features/terminal/AgentSignCard.tsx`를 띄운다. 터미널이 보여야 내가 실행한 명령의 요청인지 판단할 수 있기 때문이다. 카드는 포커스를 가져가지 않아 터미널에 치던 키가 답이 되지 않는다. 남은 초를 표시하고, 좁은 칸에서는 상세만 줄어들고 버튼은 화면에 남는다. 그래서 §3.1의 `AgentSignPrompt.tsx`는 만들지 않았다.
+- 대기 중인 요청은 탭과 독립 창에 `입력 대기`로 표시한다(`useSignWaiting`). 포커스가 터미널 밖이면 AT.3의 `programNotifier`로 알림을 보낸다. 요청은 받은 연결 ID에 묶여 재접속 뒤에는 표시되지 않는다.
+- `forwardAgent`는 세션 폼의 접힌 고급 옵션에 체크박스로 두었다(`AgentForwardField.tsx`). 켜져 있으면 고급 옵션이 펼쳐진다. 새 전역 설정과 단축키는 없다. 카드의 세 버튼만으로 답한다.
+- 서버 거부를 알리려고 `Event::AgentNotice`를 하나 더 두었다. `AgentSign`과 함께 `Broker` 상태에 저장하지 않는다. 안내는 연결당 한 번이다(서버가 전달 요청을 거부, 로컬 agent 연결 불가).
+- 전달 요청은 PTY 요청 **전에** `want_reply=true`로 보내고 응답을 받는다. 셸 뒤에 받으면 tmux의 `exec` 거부(`ChannelMsg::Failure`) 처리와 섞이기 때문이다. 성공했을 때만 그 연결의 채널을 받는다.
+- 서명 요청의 키가 로컬 agent 목록에 없으면 묻지 않고 `FAILURE`를 준다. 목록은 같은 agent 연결에 `REQUEST_IDENTITIES`를 보내 얻고, 키 코멘트 표시에도 쓴다.
+- `ssh.rs`는 751줄에서 730줄이 됐다. `Host::verify`를 `ssh/host_key.rs`로 옮겼다. `session.ts`는 400줄을 넘지 않도록 `release()`와 같은 내용을 복사하던 `dispose()`와 종료 명령 분기 두 곳을 합쳤다.
+- DX.0 중 이번에 실측한 것: `AllowAgentForwarding no` 서버는 요청에 `CHANNEL_FAILURE`로 답하고 russh는 `ChannelMsg::Failure`로 전달한다. 원격 `ssh`가 보내는 `session-bind@openssh.com`이 통과해 카드에 대상 호스트키를 표시한다. `ssh-add -h` 제한 키와 Finder로 실행한 Mac 앱의 `SSH_AUTH_SOCK`은 아직 실측하지 않았다.
 
 ### DX.3 — tmux 세션 연결
 

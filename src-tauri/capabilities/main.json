@@ -89,6 +89,7 @@
     "allow-prompt-files-upload",
     "allow-remote-ports",
     "allow-tmux-current-path",
+    "allow-agent-sign-reply",
     "allow-notification-show",
     "allow-log-status",
     "allow-log-pick",
