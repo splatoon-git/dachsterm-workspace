@@ -21,6 +21,12 @@ jobs:
         run: npx playwright install chromium
       - name: Rust toolchain
         run: rustup show
+      # Every branch restores this, and only main writes it, because push runs on every branch
+      # and branch caches would use up the repository's cache limit.
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Automated macOS gates and app bundle
         run: bash scripts/verify-macos.sh --package
       - name: Test reports

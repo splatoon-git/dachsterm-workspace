@@ -21,8 +21,17 @@ jobs:
         run: npx playwright install chromium
       - name: Rust toolchain
         run: rustup show
+      # Every branch restores this, and only main writes it, because push runs on every branch
+      # and branch caches would use up the repository's cache limit.
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # The project's released binary. Building it from source took about six minutes.
       - name: Audit tool
-        run: cargo install cargo-audit --version 0.22.2 --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit@0.22.2
       - name: Automated Windows gates
         shell: pwsh
         run: ./scripts/verify-windows.ps1
