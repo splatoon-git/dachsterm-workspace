@@ -37,7 +37,7 @@
 | ID | 심각도 | 상태 | 내용 | 위치 |
 |---|---|---|---|---|
 | F1 | 높음 | 확인 | 스니펫 검증 오류가 전부 "작업에 실패했습니다"로 표시된다. `throw new Error('…')`를 `errorText`가 일반 문구로 바꾼다. | `SnippetDialog.tsx` `review`, `snippets.ts:24`, `ipc.ts:52` |
-| F2 | 중간 | 확인 | 분할 화면에서 PodTree를 열면 활성 탭인데 보이지 않을 수 있다. 다른 탭은 앞에 넣지만 PodTree만 뒤에 넣고, 앞쪽 탭만 표시한다. | `App.tsx:310,317,1123`, `:955` |
+| F2 | 중간 | 해결(TW.2, 앞쪽 탭만 표시하는 구조를 없앰) | 분할 화면에서 PodTree를 열면 활성 탭인데 보이지 않을 수 있다. 다른 탭은 앞에 넣지만 PodTree만 뒤에 넣고, 앞쪽 탭만 표시한다. | `App.tsx:310,317,1123`, `:955` |
 | F3 | 중간 | 확인 | 글꼴 크기·스크롤백 변경이 같은 창의 다른 패널에 반영되지 않는다. `storage` 이벤트는 같은 문서에 오지 않는다. | `TerminalPane.tsx:41-56` |
 | F4 | 중간 | 보고 | `localStorage` 읽기에 try/catch가 없어 저장소 접근 실패 시 앱 초기화가 실패할 수 있다. `layout`은 검증 없이 클래스명이 된다. | `App.tsx:116-119,236` |
 | F5 | 낮음 | 보고 | 폴러 3개에 중첩 방지가 없다. `MonitorBar`는 성공해도 이전 오류를 지우지 않는다. | `FilePanel:166`, `BroadcastControl:41`, `TransferQueue:60`, `MonitorBar:112` |

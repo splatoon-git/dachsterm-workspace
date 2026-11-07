@@ -9,10 +9,12 @@ import { TerminalSettings } from './TerminalSettings';
 import { ProgramGuide } from './CommandGuide';
 import { AuthenticationPrompt } from './AuthenticationPrompt';
 import { attachFontSizeWheel } from './fontWheel';
+import { throttleTrailing } from './fitThrottle';
 import { PasteConfirm } from './PasteConfirm';
 import { PromptAttachConfirm } from './PromptAttachConfirm';
 import { usePromptAttachments } from './usePromptAttachments';
 import { needsPasteConfirmation, useTerminalDisplay, useTerminalPreferences } from './preferences';
+const FIT_INTERVAL_MS = 60;
 const hasImage = (data: DataTransfer | null) =>
   Array.from(data?.items ?? []).some((item) => item.type.startsWith('image/'));
 function fitTerminal(session: TerminalSession) {
@@ -66,9 +68,10 @@ export function TerminalPane({
     const element = host.current!;
     if (!session.terminal.element) session.terminal.open(element);
     else element.appendChild(session.terminal.element);
-    const observer = new ResizeObserver(() => {
+    const fit = throttleTrailing(() => {
       if (element.clientWidth && element.clientHeight) fitTerminal(session);
-    });
+    }, FIT_INTERVAL_MS);
+    const observer = new ResizeObserver(() => fit.call());
     observer.observe(element);
     const intercept = (event: ClipboardEvent) => {
       const text = event.clipboardData?.getData('text/plain');
@@ -88,6 +91,7 @@ export function TerminalPane({
     );
     return () => {
       observer.disconnect();
+      fit.cancel();
       element.removeEventListener('paste', intercept, true);
       element.removeEventListener('focusin', seen);
       detachWheel();

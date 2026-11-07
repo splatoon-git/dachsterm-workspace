@@ -5,6 +5,7 @@ import {
   StatusBadge,
   useProgramSummary,
 } from '../features/terminal/StatusBadge';
+import { tabKey } from './workspaceLayout';
 
 const labels: Record<string, string> = {
   connecting: '접속 중',
@@ -37,8 +38,7 @@ export function SessionTab({
   return (
     <div
       className={`session-tab ${active ? 'selected' : ''}`}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('text/dachsterm-tab', session.tabId)}
+      data-tab-key={tabKey({ kind: 'session', tabId: session.tabId })}
     >
       <button
         role="tab"

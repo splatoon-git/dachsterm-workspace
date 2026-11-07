@@ -4,6 +4,7 @@ import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import { arrangeTabs } from './native-workspace.mjs';
 const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-ftp-native-'));
 let app, browser, page;
 let stage = 'launch';
@@ -30,7 +31,12 @@ try {
   app = spawn(process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe'), [], {
     windowsHide: true,
     stdio: 'ignore',
-    env: { ...process.env, DACHSTERM_TEST_DATA_DIR: root, DACHSTERM_TEST_CDP_PORT: String(port) },
+    env: {
+      ...process.env,
+      DACHSTERM_TEST_DATA_DIR: root,
+      DACHSTERM_TEST_CDP_PORT: String(port),
+      WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
+    },
   });
   let endpoint;
   for (let i = 0; i < 80; i++) {
@@ -141,8 +147,17 @@ try {
     await page.setViewportSize({ width: 800, height: 650 });
     await expect(pane.locator('.files')).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
+    if (protocol === 'ftp') {
+      stage = 'file panel in a small group';
+      await arrangeTabs(page, '2 × 2');
+      await expect(pane.locator('.file-row').first()).toBeVisible();
+      await expect(pane.getByRole('button', { name: '파일 새로 고침', exact: true })).toBeVisible();
+      await page.screenshot({ path: path.resolve('test-results-native/ftp-small-group.png') });
+      await arrangeTabs(page, '하나로');
+      await expect(pane.locator('.files')).toBeVisible();
+    }
     console.log(
-      `PASS native ${protocol} session form, connect, file view, Unicode mkdir/new file, context copy/paste, multi-delete, binary upload and narrow window`,
+      `PASS native ${protocol} session form, connect, file view, Unicode mkdir/new file, context copy/paste, multi-delete, binary upload, narrow window and small group`,
     );
   }
 } catch (error) {

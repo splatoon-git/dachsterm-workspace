@@ -180,16 +180,6 @@ main {
   display: flex;
   flex-direction: column;
 }
-.tab-strip {
-  height: 48px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--space-lg);
-  background: var(--color-surface-header);
-  border-bottom: var(--border-width-default) solid var(--color-border-default);
-}
 .active-tab {
   height: 100%;
   display: flex;
@@ -303,7 +293,8 @@ footer i {
 .preview-wrap {
   display: flex;
   flex: 1;
-  min-height: 280px;
+  min-width: 0;
+  min-height: 0;
   flex-direction: column;
   padding: var(--space-lg);
   background: var(--color-surface-panel);
@@ -316,7 +307,7 @@ footer i {
 }
 .terminal-preview {
   flex: 1;
-  min-height: 240px;
+  min-height: 0;
   min-width: 0;
   overflow: hidden;
 }
@@ -550,32 +541,6 @@ label.checkbox {
   overflow-wrap: anywhere;
   margin: 0;
 }
-.tab-strip {
-  overflow-x: auto;
-  overflow-y: hidden;
-  height: 54px;
-  justify-content: flex-start;
-  padding: 0;
-  gap: var(--space-xs);
-}
-.session-tab {
-  display: flex;
-  flex: 0 0 auto;
-  height: 36px;
-  align-items: center;
-  border-bottom: var(--border-width-focus) solid transparent;
-}
-.session-tab.selected {
-  border-bottom-color: var(--color-action-primary);
-  background: var(--color-action-selected);
-}
-.session-tab button {
-  border: none;
-  background: transparent;
-}
-.session-tab small {
-  margin-left: var(--space-sm);
-}
 .terminal-pane {
   display: flex;
   flex-direction: column;
@@ -789,25 +754,9 @@ button {
 main {
   background: var(--color-surface-panel);
 }
-.tab-strip {
-  height: 43px;
-  background: var(--color-surface-subtle);
-  border-color: var(--color-border-subtle);
-}
 .active-tab {
   padding: 0 20px;
   font-size: 12px;
-}
-.session-tab {
-  height: 42px;
-  border-right: 1px solid var(--color-border-subtle);
-  font-size: 12px;
-}
-.session-tab.selected {
-  background: var(--color-surface-panel);
-}
-.session-tab small {
-  font-size: 10px;
 }
 .welcome {
   display: block;
@@ -1110,61 +1059,6 @@ main {
   gap: 6px;
   flex: 1;
 }
-.segmented {
-  display: flex;
-  gap: 2px;
-}
-.segmented button {
-  font-size: 10px;
-  padding: 4px 7px;
-  border-color: transparent;
-}
-.segmented button[aria-pressed='true'] {
-  background: var(--color-action-selected);
-  color: var(--color-action-primary);
-}
-.split-ratio {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-}
-.split-ratio input {
-  width: 70px;
-  accent-color: var(--color-action-primary);
-}
-.terminal-grid {
-  display: grid;
-  flex: 1;
-  min-height: 0;
-  gap: 3px;
-  background: var(--color-border-default);
-}
-.terminal-grid[hidden] {
-  display: none;
-}
-.terminal-grid.layout-columns {
-  grid-template-columns: var(--split-ratio) minmax(0, 1fr);
-}
-.terminal-grid.layout-rows {
-  grid-template-rows: var(--split-ratio) minmax(0, 1fr);
-}
-.terminal-grid.layout-grid {
-  grid-template-columns: var(--split-ratio) minmax(0, 1fr);
-  grid-template-rows: 1fr 1fr;
-}
-.pane-cell {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-.pane-cell[hidden] {
-  display: none;
-}
-.pane-cell.focused {
-  box-shadow: inset 0 2px var(--color-action-primary);
-}
 .terminal-tools {
   gap: 3px;
   padding: 5px;
@@ -1312,15 +1206,6 @@ footer {
   }
   .welcome > small {
     font-size: 9px;
-  }
-  .terminal-grid.layout-columns,
-  .terminal-grid.layout-grid {
-    grid-template-columns: 1fr;
-    grid-auto-rows: minmax(180px, 1fr);
-    overflow: auto;
-  }
-  .terminal-grid.layout-grid {
-    grid-template-rows: repeat(4, minmax(180px, 1fr));
   }
   .profile-target {
     padding: 8px;
@@ -1664,9 +1549,6 @@ footer {
 .sidebar-games .nav-item {
   align-items: center;
   font-size: var(--font-small);
-}
-.preview-wrap[hidden] {
-  display: none;
 }
 /* Local environments and compact, keyboard accessible application navigation. */
 .toolbar-menu {

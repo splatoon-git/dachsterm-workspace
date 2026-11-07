@@ -22,6 +22,7 @@ Invoke-Check 'node' @('scripts/audit-windows.mjs')
 Invoke-Check 'node' @('scripts/generate-notices.mjs')
 if ($Native) {
   Invoke-Check 'npm.cmd' @('run', 'test:native')
+  Invoke-Check 'node' @('scripts/test-workspace-native.mjs')
   Invoke-Check 'node' @('scripts/test-maintenance-native.mjs')
   Invoke-Check 'node' @('scripts/run-ftp.mjs', '--native')
 }

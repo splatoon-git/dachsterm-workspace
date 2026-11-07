@@ -55,6 +55,55 @@ for (const width of [1280, 800, 560, 360]) {
   });
 }
 
+test('a game fits a split group, pauses without the keyboard and keeps the preview beside it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto('/');
+  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
+  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await page.locator('.sidebar-games summary').click();
+  await page
+    .getByRole('navigation', { name: '게임 목록' })
+    .getByRole('button', { name: '블록 퍼즐', exact: true })
+    .click();
+  await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();
+  await page.getByRole('button', { name: '모든 탭 좌우', exact: true }).click();
+  const terminal = page.locator('.xterm');
+  const game = page.getByRole('tabpanel', { name: '블록 퍼즐', exact: true });
+  await expect(terminal).toBeVisible();
+  await expect(game).toBeVisible();
+  expect(await game.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/game-in-split.png' });
+  await game.getByRole('button', { name: '게임 시작', exact: true }).click();
+  await terminal.click();
+  await expect(game).toBeVisible();
+  await game.click({ position: { x: 5, y: 5 } });
+  await expect(game.getByRole('button', { name: '계속하기', exact: true })).toBeVisible();
+  await game.press('Escape');
+  await expect(page.getByRole('tab', { name: '블록 퍼즐', exact: true })).toBeVisible();
+});
+
+test('the start page opens in a saved split and a preset menu closes after use', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('dachsterm.layout', 'grid'));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '서버 작업의 편안한 시작' })).toBeVisible();
+  await expect(page.locator('.tab-strip')).toHaveCount(1);
+  await expect(page.getByRole('tab', { name: '시작하기', exact: true })).toBeVisible();
+  const menu = page.locator('.toolbar-menu').filter({ hasText: '보기' });
+  await menu.locator('summary').click();
+  await page.getByRole('button', { name: '터미널 미리보기', exact: true }).click();
+  await expect(page.locator('.tab-strip')).toHaveCount(4);
+  await expect(page.getByRole('tab', { name: '시작하기', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '모든 탭 상하', exact: true }).click();
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(page.locator('.tab-strip')).toHaveCount(2);
+});
+
 test('switching the sidebar preserves the existing terminal renderer', async ({ page }) => {
   await page.goto('/');
   await page.locator('.toolbar-menu > summary').filter({ hasText: '보기' }).click();

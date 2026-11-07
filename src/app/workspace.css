@@ -352,54 +352,10 @@ dialog select {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.segmented {
-  gap: 2px;
-  padding: 2px;
-  background: var(--color-surface-subtle);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-small);
-}
-.segmented button {
-  height: 28px;
-  min-height: 28px;
-  padding-inline: 9px;
-  font-size: 11px;
-}
 .terminal-tools {
   gap: 8px;
   padding: 8px 10px;
   justify-content: space-between;
-}
-/* Split according to the space left after the sidebar, not the window width. */
-#workspace {
-  container-type: inline-size;
-}
-.terminal-grid[data-pane-count='1'] {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-}
-.terminal-grid.layout-grid[data-pane-count='2'] {
-  grid-template-rows: minmax(0, 1fr);
-}
-.terminal-grid.layout-grid[data-pane-count='3'] > .pane-cell:nth-child(3) {
-  grid-column: 1 / -1;
-}
-@container (max-width: 720px) {
-  .terminal-grid.layout-columns,
-  .terminal-grid.layout-grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    grid-auto-rows: minmax(220px, 1fr);
-    overflow: auto;
-  }
-  .terminal-grid[data-pane-count='1'] {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    grid-auto-rows: auto;
-  }
-  .terminal-grid.layout-grid[data-pane-count='2'] {
-    grid-template-rows: repeat(2, minmax(220px, 1fr));
-  }
 }
 .terminal-search {
   display: flex;
@@ -569,10 +525,6 @@ dialog select {
 .sidebar-empty {
   padding: 18px 12px;
 }
-.tab-strip,
-.session-tab {
-  height: 36px;
-}
 .workspace-controls {
   gap: 6px;
   padding: 5px 8px;
@@ -586,12 +538,6 @@ dialog select {
 .workspace-controls .detach-button {
   width: 28px;
   padding: 0;
-}
-.workspace-controls .segmented {
-  padding: 0;
-}
-.workspace-controls .segmented button {
-  height: 28px;
 }
 .split-input {
   display: flex;
@@ -616,14 +562,6 @@ dialog select {
 }
 .split-input-error {
   max-width: 200px;
-}
-.pane-cell.broadcast-target {
-  box-shadow: inset 0 2px var(--color-status-warning);
-}
-.pane-cell.broadcast-target .connection-message::before {
-  content: '동시 입력 · ';
-  color: var(--color-status-warning);
-  font-weight: 600;
 }
 .tray-heading {
   position: sticky;

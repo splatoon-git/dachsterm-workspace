@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import { arrangeTabs } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-local-'));
@@ -91,7 +92,8 @@ try {
       },
     );
   }
-  await expect(pane.locator('.xterm-accessibility-tree')).toContainText('PS C:', {
+  // Any text means the shell is up. A user's profile can replace the default "PS C:\>" prompt.
+  await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
   await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');
@@ -231,7 +233,7 @@ try {
   await expect(localPath).toHaveValue(scratch);
   await page.getByRole('tab', { name: '연결', exact: true }).click();
   console.log('PASS cmd directory follow');
-  await page.getByRole('button', { name: '좌우', exact: true }).click();
+  await arrangeTabs(page, '좌우');
   await expect(pane).toBeVisible();
   await expect(cmd).toBeVisible();
   // A font change in one pane must reach the other pane in the same window.
@@ -254,7 +256,7 @@ try {
   await expect(cmd).toHaveCount(0);
   await page.screenshot({ path: path.resolve('test-results-native/local-split-before-input.png') });
   await command(pane, "Write-Output ('SURVIVE' + '_OK')", 'SURVIVE_OK');
-  await page.getByRole('button', { name: '단일', exact: true }).click();
+  await arrangeTabs(page, '하나로');
   await mkdir('test-results-native', { recursive: true });
   await page.screenshot({ path: 'test-results-native/local-terminal.png' });
   const wsl = page
@@ -303,7 +305,7 @@ try {
     .toBe(false);
   await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
   pane = page.getByRole('region', { name: 'Windows PowerShell 터미널', exact: true });
-  await expect(pane.locator('.xterm-accessibility-tree')).toContainText('PS C:', {
+  await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
   await command(pane, "Write-Output ('LOCAL' + 'PID:' + $PID)", 'LOCALPID:');

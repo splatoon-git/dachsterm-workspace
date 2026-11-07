@@ -1,7 +1,24 @@
 import { FtpPane } from '../features/sftp/FtpPane';
 import { ShortcutList } from './ShortcutList';
 import { useFullscreen } from './useFullscreen';
-import { insertTab, paneCapacity } from './workspaceTabs';
+import { Welcome } from './Welcome';
+import { PlainTab } from './GroupTabBar';
+import {
+  focusActiveTerminal,
+  focusSelectedTab,
+  WorkspaceGrid,
+  type CellState,
+} from './WorkspaceGrid';
+import { useWorkspaceLayout } from './useWorkspaceLayout';
+import {
+  allTabs,
+  groups,
+  tabKey,
+  type GroupNode,
+  type Preset,
+  type Side,
+  type TabRef,
+} from './workspaceLayout';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { MaintenancePanel } from '../features/settings/MaintenancePanel';
 import { SessionTransfer } from '../features/sessions/SessionTransfer';
@@ -47,12 +64,28 @@ import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
 import { ToolbarMenu } from '../components/ToolbarMenu';
 import face from '../assets/brand/dachshund-face.png';
-import full from '../assets/brand/dachshund-full.png';
 const TerminalPreview = lazy(() =>
   import('../features/terminal/TerminalPreview').then((m) => ({ default: m.TerminalPreview })),
 );
 const GamePane = lazy(() => import('../features/games/GamePane'));
 import { games, type GameId } from '../features/games/catalog';
+const sessionRef = (session: TerminalSession): TabRef => ({
+  kind: 'session',
+  tabId: session.tabId,
+});
+const sessionKey = (session: TerminalSession) => tabKey(sessionRef(session));
+const presets: [Preset, string][] = [
+  ['columns', '모든 탭 좌우'],
+  ['rows', '모든 탭 상하'],
+  ['grid', '모든 탭 2 × 2'],
+  ['single', '모든 탭 하나로'],
+];
+const focusKeys: Record<string, Side> = {
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+  ArrowUp: 'top',
+  ArrowDown: 'bottom',
+};
 function subscribeNarrowViewport(listener: () => void) {
   const media = window.matchMedia('(max-width: 700px)');
   media.addEventListener('change', listener);
@@ -122,7 +155,8 @@ export function App() {
     localStorage.setItem('dachsterm.sidebar', String(sidebarOpen));
   }, [sidebarOpen]);
   const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
-  const [zoomed, setZoomed] = useState(false);
+  const workspace = useWorkspaceLayout();
+  const { open: openWorkspaceTab } = workspace;
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [pendingVault, setPendingVault] = useState<{
@@ -131,18 +165,17 @@ export function App() {
   } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [gameTabs, setGameTabs] = useState<GameId[]>([]);
-  const [activeGame, setActiveGame] = useState<GameId | null>(null);
   const survivorClose = useRef<(() => boolean) | null>(null);
   const registerSurvivorClose = useCallback((close: (() => boolean) | null) => {
     survivorClose.current = close;
   }, []);
   const settleSurvivorBeforeClose = useCallback(() => {
     if (survivorClose.current && !survivorClose.current()) {
-      setActiveGame('survivor');
+      openWorkspaceTab({ kind: 'game', id: 'survivor' });
       return false;
     }
     return true;
-  }, []);
+  }, [openWorkspaceTab]);
   useEffect(() => {
     if (!desktop) return;
     let disposed = false;
@@ -169,28 +202,20 @@ export function App() {
     window.addEventListener('beforeunload', save);
     return () => window.removeEventListener('beforeunload', save);
   }, [settleSurvivorBeforeClose]);
-  const tabStrip = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    tabStrip.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({
-      block: 'nearest',
-      inline: 'nearest',
-    });
-  }, [activeGame]);
-  const leaveGame = () => {
-    setActiveGame(null);
-    requestAnimationFrame(() => {
-      tabStrip.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-    });
+  const leaveGame = (id: GameId) => {
+    workspace.leaveTab(tabKey({ kind: 'game', id }));
+    focusSelectedTab();
   };
   const openGame = (id: GameId) => {
     setGameTabs((previous) => (previous.includes(id) ? previous : [...previous, id]));
-    setActiveGame(id);
+    workspace.open({ kind: 'game', id });
     closeDrawer();
   };
   const closeGame = (id: GameId) => {
     if (id === 'survivor' && !settleSurvivorBeforeClose()) return;
     setGameTabs((previous) => previous.filter((game) => game !== id));
-    if (activeGame === id) leaveGame();
+    workspace.close(tabKey({ kind: 'game', id }));
+    if (activeGame === id) focusSelectedTab();
   };
   const [error, setError] = useState('');
   const { fullscreen, toggleFullscreen } = useFullscreen(setError);
@@ -200,15 +225,12 @@ export function App() {
   const [auth, setAuth] = useState<{ profile: Profile; session?: TerminalSession } | null>(null);
   const secret = useRef<HTMLInputElement>(null);
   const [tabs, setTabs] = useState<TerminalSession[]>([]);
-  const [active, setActive] = useState('');
-  const [preview, setPreview] = useState(false);
-  const [layout, setLayout] = useState(() => localStorage.getItem('dachsterm.layout') ?? 'single');
-  async function changeLayout(next: string) {
+  async function arrange(preset: Preset) {
     try {
       if (desktop) await call('broadcast_set', { ids: [] });
       setBroadcastIds([]);
-      setZoomed(false);
-      setLayout(next);
+      workspace.preset(preset);
+      focusActiveTerminal();
     } catch (e) {
       setError(errorText(e));
     }
@@ -216,11 +238,9 @@ export function App() {
   const [leftWidth, setLeftWidth] = useState(() =>
     Math.max(280, Math.min(420, Number(localStorage.getItem('dachsterm.leftWidth')) || 304)),
   );
-  const [split, setSplit] = useState(50);
   useEffect(() => {
-    localStorage.setItem('dachsterm.layout', layout);
     localStorage.setItem('dachsterm.leftWidth', String(leftWidth));
-  }, [layout, leftWidth]);
+  }, [leftWidth]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const refresh = useCallback(async () => {
@@ -267,29 +287,25 @@ export function App() {
         return;
       }
     }
-    setPreview(false);
-    setActiveGame(null);
     closeDrawer();
     if (existing) {
       void existing.reconnect(value, profile, remember);
-      setActive(existing.tabId);
+      workspace.open(sessionRef(existing));
       return;
     }
     const session = new TerminalSession(profile, theme, () => {
       void refresh();
       if (profile.protocol === 'ssh') revealFiles();
     });
-    setTabs((previous) => insertTab(previous, session, layout));
-    setActive(session.tabId);
+    setTabs((previous) => [...previous, session]);
+    workspace.open(sessionRef(session));
     void session.connect(value, remember);
   }
   function openLocal(target: LocalTarget) {
     const profile = { ...blankProfile(), id: target.id, name: target.name, host: 'localhost' };
     const session = new TerminalSession(profile, theme, () => {}, target);
-    setTabs((previous) => insertTab(previous, session, layout));
-    setActive(session.tabId);
-    setActiveGame(null);
-    setPreview(false);
+    setTabs((previous) => [...previous, session]);
+    workspace.open(sessionRef(session));
     setLocalOpen(false);
     closeDrawer();
     void session.connect(null);
@@ -302,6 +318,18 @@ export function App() {
       return;
     }
     if (
+      !document.querySelector('dialog[open]') &&
+      (e.ctrlKey || e.metaKey) &&
+      e.altKey &&
+      !e.shiftKey &&
+      e.code in focusKeys
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      workspace.moveFocus(focusKeys[e.code]);
+      return;
+    }
+    if (
       document.querySelector('dialog[open]') ||
       !(e.ctrlKey || e.metaKey) ||
       !e.shiftKey ||
@@ -311,7 +339,7 @@ export function App() {
     switch (e.code) {
       case 'Enter':
         e.preventDefault();
-        if (tabs.length > 1 && layout !== 'single') setZoomed((v) => !v);
+        if (workspace.groupCount > 1) workspace.toggleZoom();
         break;
       case 'KeyL':
         e.preventDefault();
@@ -367,7 +395,7 @@ export function App() {
       });
       session.release();
       setTabs((previous) => previous.filter((t) => t !== session));
-      if (active === session.tabId) setActive(tabs.find((t) => t !== session)?.tabId ?? '');
+      workspace.close(sessionKey(session));
     } catch (e) {
       setError(errorText(e));
     }
@@ -379,9 +407,93 @@ export function App() {
     const notice = tmuxCloseNotice(session.profile);
     if (notice) setError(notice);
     setTabs((previous) => previous.filter((t) => t !== session));
-    if (active === session.tabId) setActive(tabs.find((t) => t !== session)?.tabId ?? '');
+    workspace.close(sessionKey(session));
   }
-  const selected = tabs.find((t) => t.tabId === active);
+  const focusedKey = workspace.focusedGroup.active;
+  const focusedTab = workspace.focusedGroup.tabs.find((tab) => tabKey(tab) === focusedKey);
+  const activeGame = focusedTab?.kind === 'game' ? focusedTab.id : null;
+  const hasPreview = allTabs(workspace.layout.root).some((tab) => tab.kind === 'preview');
+  const selected = tabs.find((t) => sessionKey(t) === focusedKey);
+  // Zoom hides groups for a moment but keeps them in the input group; a narrow window shows one.
+  const inputScope = (narrow ? [workspace.focusedGroup] : groups(workspace.layout.root))
+    .flatMap((group) => tabs.filter((t) => sessionKey(t) === group.active))
+    .map((t) => t.connectionId)
+    .sort();
+  const renderTab = (tab: TabRef, group: GroupNode) => {
+    const key = tabKey(tab);
+    const active = group.active === key;
+    const select = () => workspace.select(group.id, key);
+    if (tab.kind === 'session') {
+      const session = tabs.find((t) => t.tabId === tab.tabId);
+      return (
+        session && (
+          <SessionTab
+            session={session}
+            active={active}
+            select={select}
+            close={() => closeTab(session)}
+          />
+        )
+      );
+    }
+    if (tab.kind === 'preview')
+      return (
+        <PlainTab
+          tabKey={key}
+          title="터미널 미리보기"
+          active={active}
+          select={select}
+          close={() => workspace.close(key)}
+        />
+      );
+    return (
+      <PlainTab
+        tabKey={key}
+        id={`game-tab-${tab.id}`}
+        controls={`game-panel-${tab.id}`}
+        title={games.find((game) => game.id === tab.id)?.title ?? ''}
+        active={active}
+        select={select}
+        close={() => closeGame(tab.id)}
+      />
+    );
+  };
+  const renderCell = (tab: TabRef, { visible, focused }: CellState) => {
+    if (tab.kind === 'preview')
+      return (
+        <div className="preview-wrap">
+          <div className="preview-notice">색상과 한글 렌더링 미리보기 · SSH 연결 없음</div>
+          <Suspense fallback={<p>터미널 준비 중…</p>}>
+            <TerminalPreview theme={theme} />
+          </Suspense>
+        </div>
+      );
+    if (tab.kind === 'game')
+      return (
+        <Suspense fallback={visible ? <p>준비 중…</p> : null}>
+          <GamePane
+            game={tab.id}
+            visible={visible}
+            active={focused}
+            leave={() => leaveGame(tab.id)}
+            registerSurvivorClose={registerSurvivorClose}
+          />
+        </Suspense>
+      );
+    const session = tabs.find((t) => t.tabId === tab.tabId);
+    if (!session) return null;
+    return session.profile.protocol && session.profile.protocol !== 'ssh' ? (
+      <FtpPane session={session} reconnect={() => reconnectTab(session)} />
+    ) : (
+      <SessionTerminal
+        session={session}
+        focused={focused}
+        active={visible}
+        theme={theme}
+        reconnect={() => reconnectTab(session)}
+      />
+    );
+  };
   const profiles = snapshot.profiles
     .filter((p) => {
       const match = matchesSession(p, query, snapshot.groups);
@@ -436,13 +548,23 @@ export function App() {
               <Icon name="folder" size={16} /> 파일
             </button>
             <button
-              onClick={() => {
-                setActiveGame(null);
-                setPreview((value) => !value);
-              }}
+              onClick={() =>
+                hasPreview ? workspace.close('preview') : workspace.open({ kind: 'preview' })
+              }
             >
-              {preview ? '작업 화면' : '터미널 미리보기'}
+              {hasPreview ? '작업 화면' : '터미널 미리보기'}
             </button>
+            {presets.map(([preset, label]) => (
+              <button
+                key={preset}
+                onClick={(e) => {
+                  e.currentTarget.closest('details')!.open = false;
+                  void arrange(preset);
+                }}
+              >
+                {label}
+              </button>
+            ))}
             <button onClick={() => setHelpOpen(true)}>키보드 단축키</button>
           </ToolbarMenu>
           <ToolbarMenu label="도구">
@@ -733,101 +855,6 @@ export function App() {
           />
         )}
         <main id="workspace" tabIndex={-1} inert={narrow && sidebarOpen && !fullscreen}>
-          <div
-            className="tab-strip"
-            ref={tabStrip}
-            role="tablist"
-            aria-label="터미널 탭"
-            onKeyDown={(e) => {
-              if (
-                !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) ||
-                (e.target as HTMLElement).getAttribute('role') !== 'tab'
-              )
-                return;
-              const buttons = Array.from(
-                e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-              );
-              const index = buttons.indexOf(e.target as HTMLButtonElement);
-              const next =
-                e.key === 'Home'
-                  ? 0
-                  : e.key === 'End'
-                    ? buttons.length - 1
-                    : (index + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
-              e.preventDefault();
-              buttons[next]?.click();
-              buttons[next]?.focus();
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const id = e.dataTransfer.getData('text/dachsterm-tab');
-              const t = tabs.find((t) => t.tabId === id);
-              if (t) {
-                setTabs([t, ...tabs.filter((v) => v !== t)]);
-                setActive(id);
-                setActiveGame(null);
-              }
-            }}
-          >
-            {tabs.length ? (
-              tabs.map((t) => (
-                <SessionTab
-                  key={t.tabId}
-                  session={t}
-                  active={active === t.tabId && !preview && !activeGame}
-                  select={() => {
-                    setActive(t.tabId);
-                    setActiveGame(null);
-                    if (layout !== 'single' && tabs.indexOf(t) >= paneCapacity(layout))
-                      setTabs([t, ...tabs.filter((v) => v !== t)]);
-                    setPreview(false);
-                  }}
-                  close={() => closeTab(t)}
-                />
-              ))
-            ) : (
-              <div className={`session-tab ${!activeGame ? 'selected' : ''}`}>
-                <button role="tab" aria-selected={!activeGame} onClick={leaveGame}>
-                  {preview ? '터미널 미리보기' : '시작하기'}
-                </button>
-              </div>
-            )}
-            {preview && tabs.length > 0 && (
-              <div className={`session-tab ${!activeGame ? 'selected' : ''}`}>
-                <button role="tab" aria-selected={!activeGame} onClick={leaveGame}>
-                  터미널 미리보기
-                </button>
-              </div>
-            )}
-            {gameTabs.map((id) => (
-              <div key={id} className={`session-tab ${activeGame === id ? 'selected' : ''}`}>
-                <button
-                  role="tab"
-                  id={`game-tab-${id}`}
-                  aria-controls={`game-panel-${id}`}
-                  aria-selected={activeGame === id}
-                  onClick={() => setActiveGame(id)}
-                >
-                  {games.find((game) => game.id === id)?.title}
-                </button>
-                <button
-                  aria-label={`${games.find((game) => game.id === id)?.title} 탭 닫기`}
-                  onClick={() => closeGame(id)}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-          {preview && (
-            <div className="preview-wrap" hidden={!!activeGame} inert={!!activeGame}>
-              <div className="preview-notice">색상과 한글 렌더링 미리보기 · SSH 연결 없음</div>
-              <Suspense fallback={<p>터미널 준비 중…</p>}>
-                <TerminalPreview theme={theme} />
-              </Suspense>
-            </div>
-          )}
           {tabs.length > 0 && !activeGame && (
             <div className="workspace-controls">
               <button
@@ -847,34 +874,18 @@ export function App() {
               >
                 ↗
               </button>
-              <div className="segmented" aria-label="터미널 배치">
-                {[
-                  ['single', '단일'],
-                  ['columns', '좌우'],
-                  ['rows', '상하'],
-                  ['grid', '2 × 2'],
-                ].map(([key, label]) => (
-                  <button
-                    key={key}
-                    aria-pressed={layout === key}
-                    onClick={() => void changeLayout(key)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
               <BroadcastControl
-                enabled={layout !== 'single' && tabs.length > 1}
-                scope={tabs.slice(0, paneCapacity(layout)).map((t) => t.connectionId)}
+                enabled={inputScope.length > 1}
+                scope={inputScope}
                 onSelectionChange={setBroadcastIds}
               />
               <button
-                disabled={layout === 'single' || tabs.length < 2}
-                aria-pressed={zoomed}
+                disabled={workspace.groupCount < 2}
+                aria-pressed={workspace.zoomed}
                 title="선택 터미널 확대 · Ctrl/Cmd+Shift+Enter"
-                onClick={() => setZoomed((v) => !v)}
+                onClick={workspace.toggleZoom}
               >
-                {zoomed ? '분할 복원' : '선택 창 확대'}
+                {workspace.zoomed ? '분할 복원' : '선택 창 확대'}
               </button>
               <button
                 aria-pressed={fullscreen}
@@ -883,150 +894,46 @@ export function App() {
               >
                 {fullscreen ? '전체화면 종료' : '전체화면'}
               </button>
-              {layout !== 'single' && (
-                <label className="split-ratio">
-                  분할 비율
-                  <input
-                    type="range"
-                    min="25"
-                    max="75"
-                    value={split}
-                    onChange={(e) => setSplit(Number(e.target.value))}
-                  />
-                </label>
-              )}
             </div>
           )}
-          <div
-            className={`terminal-grid layout-${layout}`}
-            data-pane-count={zoomed ? 1 : Math.min(tabs.length, paneCapacity(layout))}
-            hidden={!tabs.length || preview || !!activeGame}
-            inert={!!activeGame}
-            style={{ '--split-ratio': `${split}%` } as CSSProperties}
-          >
-            {tabs.map((t, index) => (
-              <div
-                className={`pane-cell ${active === t.tabId ? 'focused' : ''} ${broadcastIds.includes(t.connectionId) ? 'broadcast-target' : ''}`}
-                key={t.tabId}
-                hidden={
-                  preview ||
-                  (layout === 'single' || zoomed
-                    ? active !== t.tabId
-                    : index >= paneCapacity(layout))
-                }
-                onFocusCapture={() => setActive(t.tabId)}
-                onPointerDown={() => setActive(t.tabId)}
-              >
-                {t.profile.protocol && t.profile.protocol !== 'ssh' ? (
-                  <FtpPane session={t} reconnect={() => reconnectTab(t)} />
-                ) : (
-                  <SessionTerminal
-                    key={t.tabId}
-                    session={t}
-                    focused={active === t.tabId && !preview && !activeGame}
-                    active={
-                      !preview &&
-                      !activeGame &&
-                      (layout === 'single' || zoomed
-                        ? active === t.tabId
-                        : index < paneCapacity(layout))
-                    }
-                    theme={theme}
-                    reconnect={() => reconnectTab(t)}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-          {!tabs.length && !preview && !activeGame && (
-            <section className="welcome">
-              <div className="welcome-topline">
-                <span>WORKSPACE / OVERVIEW</span>
-                <span>안전한 로컬 작업 공간</span>
-              </div>
-              <div className="welcome-hero">
-                <div className="welcome-copy">
-                  <span className="eyebrow">A LITTLE COMPANION. A BETTER WORKFLOW.</span>
-                  <h1>서버 작업의 편안한 시작</h1>
-                  <p>
-                    터미널부터 파일까지, 한 곳에서.
-                    <br />
-                    자주 쓰는 서버를 연결하고 작업에 집중하세요.
-                  </p>
-                  <button className="primary" onClick={() => setForm(blankProfile())}>
-                    <Icon name="plus" size={17} />새 SSH 연결
-                  </button>
-                </div>
-                <img className="mascot" src={full} alt="장모 크림 닥스훈트 마스코트" />
-              </div>
-              <div className="welcome-section-title">
-                <h2>빠르게 시작하기</h2>
-                <span>내 도구, 내 서버</span>
-              </div>
-              <div className="quick-actions">
-                <button onClick={() => setForm(blankProfile())}>
-                  <Icon name="server" size={23} />
-                  <strong>서버 연결</strong>
-                  <span>새 SSH 세션 등록</span>
-                  <Icon name="arrow" size={16} />
-                </button>
-                <button onClick={() => setLocalOpen(true)}>
-                  <Icon name="terminal" size={23} />
-                  <strong>로컬 터미널 열기</strong>
-                  <span>이 컴퓨터의 셸 · WSL</span>
-                  <Icon name="arrow" size={16} />
-                </button>
-                <button
-                  onClick={() => {
-                    setFilter('recent');
-                    showSidebar('connections');
-                  }}
-                >
-                  <Icon name="activity" size={23} />
-                  <strong>최근 작업</strong>
-                  <span>사용했던 서버 찾기</span>
-                  <Icon name="arrow" size={16} />
-                </button>
-              </div>
-              <div className="welcome-section-title">
-                <h2>연결 워크플로</h2>
-                <span>SSH · SFTP · 멀티 터미널</span>
-              </div>
-              <div className="workflow-note">
-                <span className="step-number">01</span>
-                <div>
-                  <strong>연결할 서버를 등록하세요</strong>
-                  <p>호스트와 계정을 저장하고, 지문을 확인하면 준비 끝.</p>
-                </div>
-                <Icon name="chevron" size={18} />
-              </div>
-              <div className="workflow-note">
-                <span className="step-number">02</span>
-                <div>
-                  <strong>작업에 맞게 공간을 나누세요</strong>
-                  <p>여러 터미널과 원격 파일을 함께 보며 작업하세요.</p>
-                </div>
-                <Icon name="chevron" size={18} />
-              </div>
-              <small>
-                {desktop
-                  ? '비밀번호 · 개인키 인증 지원'
-                  : '실제 접속과 저장은 데스크톱 앱에서 사용할 수 있습니다.'}
-              </small>
-            </section>
-          )}
-          {gameTabs.map((game) => (
-            <Suspense key={game} fallback={activeGame === game ? <p>준비 중…</p> : null}>
-              <GamePane
-                game={game}
-                active={activeGame === game}
-                leave={leaveGame}
-                registerSurvivorClose={registerSurvivorClose}
-              />
-            </Suspense>
-          ))}
-          {!activeGame &&
-            selected &&
+          <WorkspaceGrid
+            workspace={workspace}
+            narrow={narrow}
+            order={[
+              ...tabs.map(sessionRef),
+              ...(hasPreview ? [{ kind: 'preview' } as const] : []),
+              ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
+            ]}
+            renderTab={renderTab}
+            renderCell={renderCell}
+            cellClass={(tab) =>
+              tabs.some(
+                (t) => sessionKey(t) === tabKey(tab) && broadcastIds.includes(t.connectionId),
+              )
+                ? 'broadcast-target'
+                : ''
+            }
+            start={
+              tabs.length || hasPreview
+                ? undefined
+                : {
+                    tab: (active, select) => (
+                      <PlainTab title="시작하기" active={active} select={select} />
+                    ),
+                    page: (
+                      <Welcome
+                        newConnection={() => setForm(blankProfile())}
+                        openLocal={() => setLocalOpen(true)}
+                        showRecent={() => {
+                          setFilter('recent');
+                          showSidebar('connections');
+                        }}
+                      />
+                    ),
+                  }
+            }
+          />
+          {selected &&
             !selected.podtree &&
             !selected.localTarget &&
             selected.profile.protocol === 'ssh' && (
@@ -1050,7 +957,7 @@ export function App() {
       {snippetsOpen && (
         <SnippetDialog
           sessions={tabs}
-          active={activeGame ? undefined : active}
+          active={selected?.tabId}
           close={() => setSnippetsOpen(false)}
         />
       )}
@@ -1063,10 +970,8 @@ export function App() {
           open={(launch, title) => {
             const profile = { ...blankProfile(), name: `PodTree · ${launch.context}`, host: title };
             const session = new TerminalSession(profile, theme, () => {}, undefined, launch);
-            setTabs((previous) => insertTab(previous, session, layout));
-            setActive(session.tabId);
-            setActiveGame(null);
-            setPreview(false);
+            setTabs((previous) => [...previous, session]);
+            workspace.open(sessionRef(session));
             setPodtreeOpen(false);
             closeDrawer();
             void session.connect(null);

@@ -22,6 +22,7 @@ async function launch() {
       ...process.env,
       DACHSTERM_TEST_DATA_DIR: directory,
       DACHSTERM_TEST_CDP_PORT: String(port),
+      WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
     },
   });
   let endpoint;

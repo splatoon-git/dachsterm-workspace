@@ -5,6 +5,7 @@ import { mkdtemp, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import { arrangeTabs } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-workspace-'));
@@ -83,7 +84,7 @@ try {
     await pane(id)
       .locator('.xterm')
       .evaluate((e) => (e.dataset.instance = 'original'));
-  await page.getByRole('button', { name: '2 × 2', exact: true }).click();
+  await arrangeTabs(page, '2 × 2');
   const inputMode = page.getByLabel('분할 입력 모드');
   await expect.poll(async () => (await invoke('broadcast_status')).targets.length).toBe(3);
   await expect(inputMode.locator('option[value="all"]')).toBeEnabled();
@@ -148,22 +149,62 @@ try {
   await expect(handle).toHaveAttribute('aria-valuenow', '344');
   for (const id of ids)
     await expect(pane(id).locator('.xterm')).toHaveAttribute('data-instance', 'original');
-  await page.getByRole('button', { name: '단일', exact: true }).click();
+  await arrangeTabs(page, '하나로');
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
   await expect(inputMode).toHaveValue('off');
   await expect(inputMode).toBeDisabled();
   await page.getByRole('button', { name: '전체화면', exact: true }).click();
+  await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(true);
   await expect(page.locator('.terminal-pane:visible')).toHaveCount(1);
   await page.keyboard.press('F11');
-  await page.getByRole('button', { name: '좌우', exact: true }).click();
+  await expect.poll(() => invoke('plugin:window|is_fullscreen', { label: 'main' })).toBe(false);
+  await expect(page.locator('.toolbar')).toBeVisible();
+  await arrangeTabs(page, '좌우');
   await inputMode.selectOption('all');
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(2);
-  await pane(ids[0]).getByRole('button', { name: '연결 종료', exact: true }).click();
+  // The focused tab stays on screen, sharing the left group with the first tab.
+  await pane(ids[2]).getByRole('button', { name: '연결 종료', exact: true }).click();
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
+  for (const id of ids)
+    await expect(pane(id).locator('.xterm')).toHaveAttribute('data-instance', 'original');
+  await page.keyboard.press('Control+Alt+ArrowRight');
+  await expect(page.locator('.pane-cell.focused .terminal-pane')).toHaveAttribute(
+    'data-connection-id',
+    ids[1],
+  );
+  await page.keyboard.press('Control+Alt+ArrowLeft');
+  await expect(page.locator('.pane-cell.focused .terminal-pane')).toHaveAttribute(
+    'data-connection-id',
+    ids[2],
+  );
+  const divider = page.getByRole('separator', { name: '칸 크기 조절' });
+  await divider.focus();
+  await page.keyboard.press('ArrowRight');
+  const savedLayout = await page.evaluate(() => localStorage.getItem('dachsterm.layout'));
+  const leftWidth = await page
+    .locator('.tab-strip')
+    .first()
+    .evaluate((e) => e.offsetWidth);
+  await shutdown();
+  expect(app.exitCode).toBe(0);
+  page = await launch();
+  expect(await page.evaluate(() => localStorage.getItem('dachsterm.layout'))).toBe(savedLayout);
+  await expect(page.locator('.terminal-pane')).toHaveCount(0);
+  await expect(page.locator('.tab-strip')).toHaveCount(1);
+  for (let i = 0; i < 2; i++)
+    await page.locator('.local-targets').getByTitle('명령 프롬프트 새 터미널 열기').click();
+  await expect(page.locator('.tab-strip')).toHaveCount(2);
+  await expect(page.locator('.terminal-pane:visible')).toHaveCount(2);
+  // Saved sizes keep four decimals, which can land a pixel away after a restart.
+  const restoredWidth = await page
+    .locator('.tab-strip')
+    .first()
+    .evaluate((e) => e.offsetWidth);
+  expect(Math.abs(restoredWidth - leftWidth)).toBeLessThanOrEqual(1);
   await shutdown();
   expect(app.exitCode).toBe(0);
   console.log(
-    'PASS real local all/subset/outsider input, scope/close reset, mouse resize, native fullscreen single/multi, zoom and renderer preservation.',
+    'PASS real local all/subset/outsider input, scope/close reset, mouse resize, native fullscreen single/multi, zoom, renderer preservation, group focus keys and restart restore.',
   );
 } catch (e) {
   if (page)

@@ -15,6 +15,8 @@ export function ShortcutList() {
       <dd>F11</dd>
       <dt>선택 터미널 확대 / 분할 복원</dt>
       <dd>Ctrl + Shift + Enter</dd>
+      <dt>칸 사이 포커스 이동</dt>
+      <dd>Ctrl + Alt + 방향키</dd>
       <dt>탭 이동 (탭에 포커스)</dt>
       <dd>← / → · Home / End</dd>
       <dt>터미널 복사 / 붙여넣기</dt>

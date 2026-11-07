@@ -12,6 +12,7 @@ import {
   applyPreset,
   closeEmptyGroup,
   closeTab,
+  displayRoot,
   findGroup,
   focusGroup,
   groupOfTab,
@@ -355,6 +356,27 @@ describe('presets', () => {
     layout = applyPreset(layout, 'columns', ids());
     expect(allTabs(layout.root).map(tabKey)).toEqual([key('a'), 'game:tiles', 'preview']);
     expect(findGroup(layout.root, layout.focused)!.active).toBe('game:tiles');
+  });
+});
+
+describe('what is on screen', () => {
+  const split = () => splitWith(withTabs('a', 'b'), key('b'), 'root', 'right', ids());
+
+  it('shows the whole tree normally', () => {
+    const layout = split();
+    expect(displayRoot(layout, { zoomed: false, narrow: false })).toBe(layout.root);
+  });
+
+  it('shows only the focused group while zoomed or narrow', () => {
+    const layout = split();
+    const focused = findGroup(layout.root, layout.focused);
+    expect(displayRoot(layout, { zoomed: true, narrow: false })).toBe(focused);
+    expect(displayRoot(layout, { zoomed: false, narrow: true })).toBe(focused);
+  });
+
+  it('shows one group while no tab fills a restored shape', () => {
+    const layout = parseSaved('grid', ids());
+    expect(displayRoot(layout, { zoomed: false, narrow: false })).toBe(groups(layout.root)[0]);
   });
 });
 

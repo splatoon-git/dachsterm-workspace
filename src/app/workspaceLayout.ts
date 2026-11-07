@@ -55,6 +55,15 @@ export const singleGroupLayout = (makeId: MakeId = defaultId): Layout => {
   const id = makeId();
   return { root: emptyGroup(id), focused: id };
 };
+/** What is on screen: one group while zoomed or narrow, and one while no tab fills a saved shape. */
+export function displayRoot(
+  layout: Layout,
+  view: { zoomed: boolean; narrow: boolean },
+): LayoutNode {
+  if (!allTabs(layout.root).length) return groups(layout.root)[0];
+  if (view.zoomed || view.narrow) return findGroup(layout.root, layout.focused)!;
+  return layout.root;
+}
 
 function replaceGroup(
   node: LayoutNode,

@@ -16,6 +16,7 @@ import {
   type BlockAction,
   type Direction,
 } from './engines';
+import { DirectionPad } from './DirectionPad';
 import { useBest, useRound, Stats, RoundControls, phaseText } from './shared';
 import { DachsSnackGame } from './DachsGames';
 import { DachsAdventureGame } from './AdventureGame';
@@ -35,32 +36,6 @@ function useClock(running: boolean, delay: number, tick: () => void) {
     const timer = window.setInterval(tick, delay);
     return () => window.clearInterval(timer);
   }, [running, delay, tick]);
-}
-function DirectionPad({
-  move,
-  verticalLabel = '위로',
-}: {
-  move: (direction: Direction) => void;
-  verticalLabel?: string;
-}) {
-  return (
-    <div className="game-direction-pad" aria-label="방향 조작">
-      <button aria-label={verticalLabel} onClick={() => move('up')}>
-        ↑
-      </button>
-      <div>
-        <button aria-label="왼쪽으로" onClick={() => move('left')}>
-          ←
-        </button>
-        <button aria-label="아래로" onClick={() => move('down')}>
-          ↓
-        </button>
-        <button aria-label="오른쪽으로" onClick={() => move('right')}>
-          →
-        </button>
-      </div>
-    </div>
-  );
 }
 function BlocksGame({ active }: { active: boolean }) {
   const [state, setState] = useState(newBlocks);
@@ -397,11 +372,15 @@ function MinesGame() {
 export default function GamePane({
   game,
   active,
+  visible = active,
   leave,
   registerSurvivorClose,
 }: {
   game: GameId;
+  /** The keyboard belongs to this game. A round pauses without it. */
   active: boolean;
+  /** On screen, which a game beside the focused group is even while paused. */
+  visible?: boolean;
   leave: () => void;
   registerSurvivorClose?: SurvivorCloseRegistration;
 }) {
@@ -417,8 +396,8 @@ export default function GamePane({
       role="tabpanel"
       id={`game-panel-${game}`}
       aria-labelledby={`game-tab-${game}`}
-      hidden={!active}
-      inert={!active}
+      hidden={!visible}
+      inert={!visible}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault();

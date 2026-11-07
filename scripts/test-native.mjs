@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
+import { arrangeTabs, expectPtyMatchesTerminal } from './native-workspace.mjs';
 import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
@@ -330,7 +331,7 @@ try {
   const firstBroadcastId = await pane().getAttribute('data-connection-id');
   await page.locator('.tab-strip').getByRole('tab').nth(1).click();
   const secondBroadcastId = await pane().getAttribute('data-connection-id');
-  await page.getByRole('button', { name: '2 × 2', exact: true }).click();
+  await arrangeTabs(page, '2 × 2');
   await expect(page.getByLabel('분할 입력 모드')).toBeEnabled();
   await page.getByLabel('분할 입력 모드').selectOption('selected');
   const broadcastDialog = page.getByRole('dialog', { name: '멀티 입력 대상' });
@@ -362,11 +363,12 @@ try {
   await pane().getByRole('button', { name: '재접속', exact: true }).click();
   await connected();
   assert.equal((await invoke('broadcast_status')).selected.length, 0);
-  await page.locator('.tab-strip').getByRole('tab').first().click();
   console.log(
     'PASS native selected broadcast delivered to two shells only, disconnect stops group',
   );
   stage = 'selective multi input';
+  // A new tab opens in the focused group, so focus the last group to keep the first on screen.
+  await page.locator('.tab-strip').getByRole('tab').nth(3).click();
   await showConnections();
   await page.locator('.local-targets').getByTitle('명령 프롬프트 새 터미널 열기').click();
   const mixedLocal = page.getByRole('region', { name: '명령 프롬프트 터미널', exact: true });
@@ -389,13 +391,13 @@ try {
     'MIXED_FROM_LOCAL',
     page.locator(`.terminal-pane[data-connection-id="${firstBroadcastId}"]`),
   );
-  await page.locator('.tab-strip').getByRole('tab').nth(1).click();
+  await page.locator('.tab-strip').getByRole('tab').first().click();
   await command('echo MIXED_FROM_SSH');
   await output('MIXED_FROM_SSH', mixedLocal);
   await page.getByRole('button', { name: '명령 프롬프트 탭 닫기' }).click();
   await expect.poll(async () => (await invoke('broadcast_status')).selected.length).toBe(0);
   console.log('PASS native mixed local/SSH input in both directions and local close resets group');
-  await page.getByRole('button', { name: '단일', exact: true }).click();
+  await arrangeTabs(page, '하나로');
   stage = 'workspace SFTP and monitoring';
   await page.getByRole('tab', { name: '파일', exact: true }).click();
   const workspaceId = await pane().getAttribute('data-connection-id');
@@ -539,18 +541,56 @@ try {
   await page.locator('.tab-strip').getByRole('tab').first().click();
   console.log('PASS native CP949 Korean output and exact encoded input bytes');
   stage = 'split layout';
-  await page.getByRole('button', { name: '2 × 2', exact: true }).click();
+  const connections = await page
+    .locator('.terminal-pane')
+    .evaluateAll((panes) => panes.map((p) => p.dataset.connectionId));
+  await page.locator('.terminal-pane .xterm').evaluateAll((terminals) => {
+    for (const terminal of terminals) terminal.dataset.instance = 'original';
+  });
+  await arrangeTabs(page, '2 × 2');
   await expect(page.locator('.terminal-pane:not([hidden])')).toHaveCount(4);
+  const before = [];
   for (let i = 0; i < 4; i++) {
     stage = `split layout pane ${i}`;
     const splitPane = page.locator('.terminal-pane:not([hidden])').nth(i);
     await command(`printf 'SPLIT_${i}\\n'`, splitPane);
     await output(`SPLIT_${i}`, splitPane);
+    before.push(await expectPtyMatchesTerminal(splitPane, command));
   }
   await page.screenshot({ path: path.join(screenshots, 'split-grid.png') });
-  await page.getByRole('button', { name: '단일', exact: true }).click();
+  stage = 'split divider resize';
+  const divider = page.getByRole('separator', { name: '칸 크기 조절' }).first();
+  const handle = await divider.boundingBox();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 120, handle.y + handle.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await sleep(200);
+  const after = [];
+  for (let i = 0; i < 4; i++)
+    after.push(
+      await expectPtyMatchesTerminal(page.locator('.terminal-pane:not([hidden])').nth(i), command),
+    );
+  assert(
+    after.filter((size, i) => size.cols !== before[i].cols).length === 2,
+    'dragging a divider resizes exactly the two groups beside it',
+  );
+  await page.screenshot({ path: path.join(screenshots, 'split-divider.png') });
+  await arrangeTabs(page, '하나로');
+  assert.deepEqual(
+    await page
+      .locator('.terminal-pane')
+      .evaluateAll((panes) => panes.map((p) => p.dataset.connectionId)),
+    connections,
+    'arranging tabs keeps every connection',
+  );
+  await expect(page.locator('.terminal-pane .xterm[data-instance="original"]')).toHaveCount(
+    connections.length,
+  );
   await page.locator('.tab-strip').getByRole('tab').first().click();
-  console.log('PASS native 2x2 independent PTY input and restored single layout');
+  console.log(
+    'PASS native 2x2 independent PTY input, per-group stty size after divider drag, same connections and terminals',
+  );
   stage = 'terminal controls';
   await pane().getByLabel('터미널 검색', { exact: true }).fill('NATIVE_한글_OK');
   await pane().getByRole('button', { name: '이전 검색 결과', exact: true }).click();

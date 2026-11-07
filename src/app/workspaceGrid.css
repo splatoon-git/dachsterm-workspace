@@ -1,0 +1,90 @@
+/* Tab groups placed by rectangles computed in workspaceGeometry.ts. */
+.terminal-grid {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-border-default);
+}
+.pane-cell {
+  position: absolute;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-surface-panel);
+}
+.pane-cell[hidden] {
+  display: none;
+}
+.pane-cell.focused {
+  box-shadow: inset 0 2px var(--color-action-primary);
+}
+.pane-cell.broadcast-target {
+  box-shadow: inset 0 2px var(--color-status-warning);
+}
+.pane-cell.broadcast-target .connection-message::before {
+  content: '동시 입력 · ';
+  color: var(--color-status-warning);
+  font-weight: 600;
+}
+.empty-cell {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  text-align: center;
+}
+.tab-strip {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-xs);
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--color-surface-subtle);
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
+}
+.session-tab {
+  display: flex;
+  flex: 0 0 auto;
+  height: 100%;
+  align-items: center;
+  border-bottom: var(--border-width-focus) solid transparent;
+  border-right: 1px solid var(--color-border-subtle);
+  font-size: 12px;
+  touch-action: none;
+}
+.session-tab.selected {
+  background: var(--color-surface-panel);
+}
+.tab-strip.focused-group .session-tab.selected {
+  border-bottom-color: var(--color-action-primary);
+}
+.session-tab button {
+  border: none;
+  background: transparent;
+}
+.session-tab small {
+  margin-left: var(--space-sm);
+  font-size: 10px;
+}
+.tab-strip .next-group {
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+}
+.resize-handle.pane-divider {
+  position: absolute;
+  z-index: 3;
+  background: transparent;
+}
+.resize-handle.pane-divider:hover,
+.resize-handle.pane-divider:focus-visible {
+  background: var(--color-action-primary);
+}

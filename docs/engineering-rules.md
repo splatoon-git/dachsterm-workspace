@@ -77,7 +77,7 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 - 기능을 상시 버튼으로 나열하지 않는다. 대상별 조작은 그 대상의 우클릭 메뉴, 단축키, 기존 메뉴에 두고, 상태는 있을 때만 표시한다. 터미널 안 우클릭은 바로 붙여넣기로 두고 터미널 관련 메뉴는 탭 헤더 우클릭에 둔다.
 - 의존 방향은 `app → features → components·lib·themes`다. `components`, `lib`, `themes`는 `features`를 import하지 않는다.
 - 기능 간 직접 import를 새로 추가하지 않는다. 공유할 코드는 아래 계층으로 내린다.
-- 탭은 `app/workspaceTabs.ts`의 `insertTab`으로 넣는다. 분할 화면은 앞쪽 `paneCapacity`개만 표시한다.
+- 탭 배치는 `app/useWorkspaceLayout.ts`를 거치고, 연산은 `app/workspaceLayout.ts`의 순수 함수에 둔다. 셀은 `WorkspaceGrid`의 평탄한 목록으로 렌더링해 칸을 옮겨도 다시 마운트되지 않게 한다.
 - 새 탭 종류나 연결 종류를 `this.podtree ? … : this.localTarget ? …` 분기로 늘리지 않는다.
 - 여러 상태를 인코딩한 문자열(`'discard:id'`) 대신 판별 유니온을 쓴다.
 - 순수 로직은 컴포넌트 밖 `.ts`로 빼고 단위 테스트한다.

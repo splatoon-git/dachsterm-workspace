@@ -8,6 +8,8 @@ export function ResizeHandle({
   reverse = false,
   horizontal = false,
   style,
+  className = '',
+  onReset,
 }: {
   value: number;
   min: number;
@@ -17,11 +19,15 @@ export function ResizeHandle({
   reverse?: boolean;
   horizontal?: boolean;
   style?: CSSProperties;
+  className?: string;
+  /** Double click: return to the default size. */
+  onReset?: () => void;
 }) {
   return (
     <div
-      className={`resize-handle ${horizontal ? 'horizontal' : ''}`}
+      className={`resize-handle ${horizontal ? 'horizontal' : ''} ${className}`}
       style={style}
+      onDoubleClick={onReset}
       role="separator"
       aria-label={label}
       aria-orientation={horizontal ? 'horizontal' : 'vertical'}
