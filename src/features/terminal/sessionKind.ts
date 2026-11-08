@@ -1,4 +1,5 @@
 import type { Profile } from '../../lib/ipc';
+import type { Source } from '../../lib/source';
 import type { LocalTarget, PodTreeLaunch } from './sessionTypes';
 
 export type SessionKind = 'ssh' | 'local' | 'podtree' | 'ftp';
@@ -44,3 +45,13 @@ const table: Record<SessionKind, SessionCapabilities> = {
 };
 
 export const capabilities = (session: SessionLike) => table[sessionKind(session)];
+
+/** What commands that work on any tab are told about this one. PodTree has no files of its own. */
+export function sessionSource(session: SessionLike & { connectionId: string }): Source | null {
+  if (session.podtree) return null;
+  if (session.localTarget) return { kind: 'local', targetId: session.localTarget.id };
+  return {
+    kind: session.profile.protocol === 'ssh' ? 'ssh' : 'ftp',
+    connectionId: session.connectionId,
+  };
+}

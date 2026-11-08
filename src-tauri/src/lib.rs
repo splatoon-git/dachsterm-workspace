@@ -40,6 +40,7 @@ mod settings;
 pub mod sftp;
 mod shell_probe;
 pub mod snippets;
+pub mod source;
 pub mod ssh;
 mod ssh_auth;
 pub mod ssh_keys;
