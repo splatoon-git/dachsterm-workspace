@@ -322,7 +322,7 @@ kubeconfig를 읽을 수 없으면 탭에 안내를 보여 준다.
 - **metrics-server 없음:** 자원 상위는 요청량 기준으로 바꿔 그렇게 표시한다. 추세 그래프는 숨기고 이유를 표시한다.
 - **목록 상한:** 재시작·에러, 미달 워크로드, 경고, 노드는 30개까지 보여 주고 "외 N개"를 표시한다. 전체는 트리에 있다.
 - **트리로 이동:** 파드는 지금 묶기를 유지한다. 워크로드 행은 워크로드 묶기에만 있으므로 그 묶기로 바꾼다. 노드는 맨 위 노드 그룹을 열거나, 노드 묶기면 그 그룹을 고른다. 대상을 가리는 필터만 지우고, 접힌 상위 그룹을 편다. 이미 사라진 파드나 파드가 없는 워크로드는 해당 namespace로 간다. 상세(KV.4)가 생기면 여기서 상세를 여는 동작을 더한다.
-- **인그레스, 워커:** 자리만 두었다. KV.8, KV.9에서 `KubeDashboard.tsx`의 주석 위치에 연결한다.
+- **인그레스, 워커:** 인그레스는 KV.8에서 `IngressPanel.tsx`로 연결했다. 워커는 자리만 있고 KV.9에서 `KubeDashboard.tsx`의 주석 위치에 연결한다.
 
 ### KV.4 — 상세, 로그, 파드 셸
 
@@ -426,6 +426,20 @@ enum Action { DeletePod { .. }, RolloutRestart { .. }, Cordon { .. }, Uncordon {
 KV.0 결과: v1.15.1 정적 매니페스트는 **메트릭이 꺼져 있다**(`--enable-metrics=true` 필요). `/metrics`가 읽혀도 이 이름이 없으면 오류가 아니라 "컨트롤러 메트릭이 꺼져 있음"으로 표시한다. `pods/proxy` get이 없으면 그 이유만 표시한다. 상류 저장소가 보관(archived) 상태이므로 트래픽 표시는 이 컨트롤러 안에서만 유지하고 범위를 넓히지 않는다. 구성 점검은 컨트롤러와 무관하다.
 
 **이동:** 인그레스 행에서 백엔드 파드로 이동하고, 컨트롤러 로그를 해당 호스트로 검색한다(KV.5). 5xx 조사의 기본 흐름이다.
+
+**구현에서 정한 것(KV.8):**
+
+- **명령과 슬롯:** `kube_ingress` 하나가 `get ingress`, `get services,endpoints`, `get secrets`, 컨트롤러 파드 목록, 파드마다 `/metrics`를 슬롯 하나 안에서 차례로 읽는다. 연결당 동시 3개 상한을 조회 하나만큼만 쓴다. 인그레스가 없으면 서비스 조회를, TLS Secret 이름이 없으면 Secret 조회를 건너뛴다.
+- **조회 주기:** 30초(느리면 소요 시간의 3배). 인그레스 화면과 대시보드를 볼 때만 조회하고, 이전 요청이 끝나기 전에는 다음 요청을 보내지 않는다.
+- **Secret:** `-A -o name`은 namespace를 주지 않아 go-template으로 namespace와 이름만 출력한다. 값은 앱과 SSH로 오지 않는다. 권한이 없으면 "없음"으로 판정하지 않고 확인하지 못했다고 표시한다.
+- **판정:** 경로 하나의 Service만 본다. `ExternalName`과 리소스 백엔드는 Endpoint를 셀 대상이 아니므로 문제로 보지 않는다. 서비스를 읽지 못하면 `미확인`이다. 대시보드에는 구성 문제만 나오고, 트래픽은 인그레스 화면에만 있다.
+- **컨트롤러:** `app.kubernetes.io/name=ingress-nginx,app.kubernetes.io/component=controller` 라벨의 Running 파드를 `-A`로 찾고 최대 10개를 읽는다. 세션에 namespace를 정했어도 컨트롤러는 보통 다른 namespace에 있기 때문이다. 포트 10254는 선언되지 않아 고정값이다(KV.0).
+- **메트릭 판정:** 서버에서 `grep`으로 쓰는 이름만 받아 히스토그램 버킷을 SSH로 보내지 않는다. kubectl 종료 코드는 KV.5와 같이 stderr로 전달한다. 응답에 `nginx_ingress_controller_*`가 한 줄도 없으면 **꺼짐**이고, 켜졌지만 요청이 없으면 준비 상태에 호스트가 비어 있다. `Forbidden`이면 `pods/proxy` 이유만 표시하고 남은 컨트롤러는 읽지 않는다. 일부만 읽으면 몇 개를 읽었는지 표시한다.
+- **비율:** Rust는 누적 카운터만 넘기고 화면이 두 번의 조회를 비교한다. 그 구간에 요청이 있으면 구간 비율과 요청률, 없으면 누적 비율과 요청률 0을 표시한다(셀 설명에 기준 표시). 카운터가 줄거나 읽은 컨트롤러 수가 바뀌면 재시작으로 보고 기준을 다시 잡는다. 3xx와 나머지는 전체 수에만 들어간다. 지연은 평균이다(버킷을 받지 않음). 메트릭의 호스트는 인그레스 규칙에 있는 것만 남겨 namespace 세션에 다른 namespace의 호스트가 나오지 않는다. `_`는 호스트 없는 규칙으로 합친다.
+- **이동:** 행 클릭은 문제 있는 파드(없으면 첫 파드)로, 파드가 없으면 namespace로 간다. 우클릭에 파드 목록과 컨트롤러 로그 검색이 있다.
+- **컨트롤러 로그 검색:** 로그 검색 범위에 **인그레스 컨트롤러**를 더했다. 컨트롤러 파드는 트리 목록에 없을 수 있어 `kube_ingress`가 준 목록을 쓴다. **기본 접근 로그에는 호스트가 없다**(실측: `ok.local` 일치 0줄, 형식은 `[namespace-서비스-포트]`). 호스트 검색은 요청대로 두되, 로그 형식을 바꾸지 않은 환경에서는 결과가 없으므로 같은 메뉴에 `namespace-서비스-포트` 검색을 함께 둔다. 와일드카드 호스트는 `*.`를 뺀 부분으로 검색한다.
+- **파일:** `kube/ingress.rs`, `kube/ingress_metrics.rs`, `features/kube/ingressTypes.ts`, `ingressModel.ts`, `useKubeIngress.ts`, `IngressView.tsx`, `IngressPanel.tsx`, `ingress.css`. 설계의 `metrics.rs`는 KV.9의 범위라 만들지 않았다. Prometheus 줄 파서가 KV.9와 겹치면 그때 공용화를 검토한다.
+- **검사:** `scripts/verify-kube-ingress.mjs`(`npm run test:kube-ingress`), `tests/ui/kube-ingress.spec.ts`. fixture의 `metrics-on`·`metrics-off`는 metrics-server용이므로 `ingress-up`, `ingress-metrics-on`, `ingress-metrics-off`를 더했다.
 
 ### KV.9 — 워커·런타임 모니터링
 

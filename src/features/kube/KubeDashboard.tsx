@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { ContextMenu, type MenuPoint, type MenuRequest } from '../../components/ContextMenu';
 import { MetricChart } from '../../components/MetricChart';
 import { ItemRow, TargetMenu } from './DashboardRows';
+import { IngressPanel } from './IngressPanel';
 import {
   buildDashboard,
   share,
@@ -13,6 +14,7 @@ import {
   type TopRow,
 } from './dashboard';
 import type { DashboardHistory } from './dashboardHistory';
+import type { IngressData } from './ingressModel';
 import { scopeOfTarget, type SearchScope } from './logSearchModel';
 import { ageAgo, type SnapshotStore } from './polling';
 import { formatCpu, formatMemory, statusMark } from './treeFormat';
@@ -204,9 +206,13 @@ export const KubeDashboard = memo(function KubeDashboard({
   namespace,
   reveal,
   searchLogs,
+  ingress,
+  openIngress,
 }: {
   store: SnapshotStore;
   history: DashboardHistory;
+  ingress: IngressData;
+  openIngress: (host: string) => void;
   /** The session's namespace, empty for all. Nodes are cluster-wide even when this is set. */
   namespace: string;
   reveal: (target: TreeTarget) => void;
@@ -347,11 +353,7 @@ export const KubeDashboard = memo(function KubeDashboard({
             )}
           </Panel>
 
-          {/* KV.8 connects the ingress findings here. */}
-          <section className="kube-dash-panel" aria-label="인그레스">
-            <h3>인그레스</h3>
-            <p className="kube-dash-empty">아직 준비 중입니다.</p>
-          </section>
+          <IngressPanel data={ingress} open={openIngress} />
 
           {/* KV.9 connects worker occupancy and suspected non-returning workers here. */}
           <section className="kube-dash-panel" aria-label="워커">

@@ -12,7 +12,7 @@ set -euo pipefail
 cluster=${1:-}
 action=${2:-up}
 if [[ ! $cluster =~ ^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$ ]]; then
-  echo "usage: kube-fixture.sh <cluster-name> [up|down|status|metrics-on|metrics-off]" >&2
+  echo "usage: kube-fixture.sh <cluster-name> [up|down|status|metrics-on|metrics-off|ingress-up|ingress-metrics-on|ingress-metrics-off]" >&2
   exit 2
 fi
 
@@ -130,12 +130,42 @@ metrics_off() {
   status
 }
 
+ingress_url=https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.15.1/deploy/static/provider/kind/deploy.yaml
+
+# This manifest ships with the controller's metrics off, and schedules it on a node labelled so.
+ingress_up() {
+  kubectl_in_ssh 'label nodes --all ingress-ready=true --overwrite' >/dev/null
+  curl -fsSL "$ingress_url" | in_ssh '/opt/kube/bin/kubectl --kubeconfig /opt/kube/config apply -f -' >/dev/null
+  kubectl_in_ssh '-n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=300s' >/dev/null
+  status
+}
+
+# metrics-on and metrics-off above are metrics-server. This is the controller's own flag.
+ingress_metrics() {
+  local value=$1 args at op path
+  args=$(kubectl_in_ssh "-n ingress-nginx get deployment ingress-nginx-controller \
+    -o go-template='{{range (index .spec.template.spec.containers 0).args}}{{println .}}{{end}}'")
+  at=$(printf '%s\n' "$args" | grep -n '^--enable-metrics=' | cut -d: -f1 || true)
+  if [ -n "$at" ]; then
+    op=replace path=$((at - 1))
+  else
+    op=add path=-
+  fi
+  kubectl_in_ssh "-n ingress-nginx patch deployment ingress-nginx-controller --type=json \
+    -p='[{\"op\":\"$op\",\"path\":\"/spec/template/spec/containers/0/args/$path\",\"value\":\"--enable-metrics=$value\"}]'" >/dev/null
+  kubectl_in_ssh '-n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=300s' >/dev/null
+  status
+}
+
 case $action in
   up) up ;;
   down) down ;;
   status) status ;;
   metrics-on) metrics_on ;;
   metrics-off) metrics_off ;;
+  ingress-up) ingress_up ;;
+  ingress-metrics-on) ingress_metrics true ;;
+  ingress-metrics-off) ingress_metrics false ;;
   *)
     echo "unknown action: $action" >&2
     exit 2

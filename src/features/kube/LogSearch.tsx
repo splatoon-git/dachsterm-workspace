@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ContextMenu, type MenuPoint, type MenuRequest } from '../../components/ContextMenu';
 import { ResizeHandle } from '../../components/ResizeHandle';
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
+import type { IngressController } from './ingressTypes';
 import { KubePodPanel } from './KubePodPanel';
 import { LogAround } from './LogAround';
 import { LogSearchForm } from './LogSearchForm';
 import { LogSearchResults } from './LogSearchResults';
 import {
+  controllerTargets,
   failureText,
   includedWords,
   podsInScope,
@@ -42,6 +44,7 @@ export function LogSearch({
   session,
   focusRequest,
   openTerminal,
+  controllers,
 }: {
   search: LogSearchHandle;
   store: SnapshotStore;
@@ -51,6 +54,7 @@ export function LogSearch({
   /** Bumped when another screen sends a scope here, so the next thing to type is the keywords. */
   focusRequest: number;
   openTerminal: (request: PodTerminalRequest) => void;
+  controllers: IngressController[];
 }) {
   const { form, setForm, result, error, starting, start, cancel } = search;
   const [side, setSide] = useState<Side>(null);
@@ -79,11 +83,13 @@ export function LogSearch({
   );
   const targets = useMemo(
     () =>
-      searchTargets(podsInScope(form.scope, pods ?? [], services ?? []), {
-        allContainers: form.allContainers,
-        previous: form.previous,
-      }),
-    [form.scope, form.allContainers, form.previous, pods, services],
+      form.scope.kind === 'controller'
+        ? controllerTargets(controllers)
+        : searchTargets(podsInScope(form.scope, pods ?? [], services ?? []), {
+            allContainers: form.allContainers,
+            previous: form.previous,
+          }),
+    [form.scope, form.allContainers, form.previous, pods, services, controllers],
   );
   const since = form.since === 'custom' ? form.customSince.trim() : form.since;
   const running = result.phase === 'running';

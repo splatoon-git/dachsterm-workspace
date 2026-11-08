@@ -8,6 +8,7 @@ import type {
   PodLogs,
   ShellCheck,
 } from '../../../src/features/kube/detailTypes';
+import type { IngressReport } from '../../../src/features/kube/ingressTypes';
 import type { Detection, KubeDisplay } from '../../../src/features/kube/kubeModel';
 import type { SearchEvent } from '../../../src/features/kube/logSearchModel';
 import type { PodTerminalRequest } from '../../../src/features/kube/podShell';
@@ -26,6 +27,8 @@ declare global {
       persist: boolean;
       /** Answers to `kube_snapshot` by kind. A kind that is absent has an unreachable cluster. */
       snapshots?: Partial<Record<SnapshotKind, Snapshot>>;
+      /** The answer to `kube_ingress`. Absent means an unreachable cluster. */
+      ingress?: IngressReport;
       /** `visible` starts true; the spec turns it off through `setVisible`. */
       setVisible?: (visible: boolean) => void;
       /** Answers to `kube_detail` by `kind`, `kube_logs` and `kube_terminal_probe`. */
@@ -87,6 +90,19 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
           elapsedMs: 1,
         };
       }
+      if (command === 'kube_ingress')
+        return structuredClone(
+          state.ingress ?? {
+            state: { kind: 'unreachable' },
+            ingresses: null,
+            servicesState: { kind: 'ready' },
+            secretsState: { kind: 'ready' },
+            controllers: [],
+            traffic: { kind: 'notRead' },
+            collectedAt: Date.now(),
+            elapsedMs: 1,
+          },
+        );
       if (command === 'kube_detail')
         return structuredClone(state.podAnswers?.detail?.[args.kind as DetailKind] ?? null);
       if (command === 'kube_logs') return structuredClone(state.podAnswers?.logs ?? null);

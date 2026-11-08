@@ -42,12 +42,15 @@ export const started = (schedule: Schedule, kind: SnapshotKind): Schedule => ({
  * The wait starts after the previous run ended. A refused channel is only a busy connection, so it
  * tries again on the normal period. A limit means this scope is too big to poll at this rate.
  */
-export function delayAfter(kind: SnapshotKind, elapsedMs: number, state: KubeState) {
-  const period = Math.max(pollPeriods[kind], elapsedMs * SLOW_FACTOR);
+export function backoffDelay(base: number, elapsedMs: number, state: KubeState) {
+  const period = Math.max(base, elapsedMs * SLOW_FACTOR);
   if (state.kind === 'timedOut' || state.kind === 'tooLarge')
-    return Math.min(MAX_BACKOFF, Math.max(period, pollPeriods[kind] * LIMIT_FACTOR));
+    return Math.min(MAX_BACKOFF, Math.max(period, base * LIMIT_FACTOR));
   return period;
 }
+
+export const delayAfter = (kind: SnapshotKind, elapsedMs: number, state: KubeState) =>
+  backoffDelay(pollPeriods[kind], elapsedMs, state);
 
 export const finished = (
   schedule: Schedule,
