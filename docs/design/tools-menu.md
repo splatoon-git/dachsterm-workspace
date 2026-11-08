@@ -107,13 +107,15 @@
 
 ### TL.4 — 문서 편집기
 
-- 메뉴를 누르면 **빈 새 문서 탭**이 열린다. 편집기에 포커스가 있을 때 `Ctrl/Cmd+O`로 파일을 열고, 첫 `Ctrl/Cmd+S`는 OS 저장 창을 띄운다. 탭 우클릭 메뉴에도 같은 동작을 둔다.
-- `FileTab`의 `sessionTabId`·`connectionId`를 판별 유니온으로 바꾼다. 소유 터미널이 없는 탭은 `live`가 항상 참이다.
-- `FilePane`의 `path`를 비울 수 있게 하고(제목 `새 문서 1`), 저장되면 일반 로컬 파일 탭과 같아진다.
-- 출처는 이 PC의 첫 비WSL 로컬 대상(`Source::Local`)을 쓴다. 새 출처 종류를 만들지 않는다.
-- 파일 창은 `rfd`로 새 명령 2개(`local_file_pick`, `local_file_pick_save`).
-- 앱 재시작 뒤 제목 없는 문서 복원은 하지 않는다. 닫을 때는 기존 저장 확인을 그대로 쓴다.
-- 합격: 새 문서 저장, 파일 열기, 한글 파일 이름, 저장 안 하고 닫기 확인. 편집기 부품 경계(`CodeEditor.tsx`) 밖의 import를 추가하지 않는다.
+편집기는 이미 있으므로 새로 만들지 않는다. 이 작업은 터미널 없이 파일 탭을 여는 입구만 만든다(2026-11-08 사용자 지시로 범위 축소).
+
+- 도구 메뉴의 **문서 편집기**를 누르면 OS 파일 선택 창을 띄우고, 고른 파일을 기존 파일 탭에 고정 탭으로 연다. 창을 닫으면 아무것도 열지 않는다. 항목은 도구 메뉴에 직접 추가하며 TL.2를 기다리지 않는다.
+- 만들지 않는 것: 빈 새 문서, 첫 저장 창(`local_file_pick_save`), `Ctrl/Cmd+O`.
+- `FileTab`의 소유 정보는 판별 유니온 `owner`다(`terminal`이면 `sessionTabId`·`connectionId`, `none`이면 없음). 소유 터미널이 없는 탭은 `live`가 항상 참이다. 터미널 소유가 있는 탭의 동작은 바꾸지 않는다.
+- 출처는 이 PC의 첫 비WSL 로컬 대상(`Source::Local`)을 쓴다. 새 출처 종류를 만들지 않는다. 앱 시작 때의 목록은 실패했거나 오래됐을 수 있어 파일을 고른 뒤 `local_targets`로 다시 읽는다.
+- 파일 창은 `rfd`로 새 명령 `local_file_pick` 하나다.
+- 닫을 때는 기존 저장 확인을 그대로 쓴다.
+- 합격: 세션 없이 파일 열기, 저장, 한글 파일 이름, 저장 안 하고 닫기 확인. 편집기 부품 경계(`CodeEditor.tsx`) 밖의 import를 추가하지 않는다.
 
 ### TL.5 — 셸 없는 SSH 연결과 출발지 선택
 
@@ -207,7 +209,7 @@ WAS01  →  api.example.com:443    연결됨 · HTTPS 200 · 42ms
 |---|---|---|---|
 | `ssh_key_generate` | 이름, 주석, Passphrase, 폴더 | 경로, 공개키, 지문 | TL.3 |
 | `ssh_key_pick_folder` | 없음 | 폴더 | TL.3 |
-| `local_file_pick`, `local_file_pick_save` | 제안 이름 | 경로 | TL.4 |
+| `local_file_pick` | 없음 | 경로(창을 닫으면 없음) | TL.4 |
 | `net_connect` | 연결 ID, 프로필 ID, 이벤트 채널 | 없음(상태·인증은 이벤트) | TL.5 |
 | `net_disconnect` | 연결 ID | 없음 | TL.5 |
 | `net_port_check` | 출발지, 대상, 포트, 시간 초과, 작업 ID, 이벤트 채널 | 결과는 이벤트 | TL.6 |

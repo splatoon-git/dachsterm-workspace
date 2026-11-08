@@ -7,7 +7,8 @@ import type { FileRead } from '../../../src/features/editor/fileRead';
 import type { GitFileDiff } from '../../../src/features/editor/gitFileDiff';
 import type { GitRow } from '../../../src/features/git/gitViewModel';
 import { notifyGitChange } from '../../../src/lib/gitChanges';
-import type { TerminalSession } from '../../../src/features/terminal/session';
+import type { LocalTarget, TerminalSession } from '../../../src/features/terminal/session';
+import type { Source } from '../../../src/lib/source';
 import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
 import '../../../src/app/styles.css';
@@ -41,6 +42,15 @@ declare global {
       openDiff?: (row: GitRow, pinned: boolean) => void;
       /** What the Git view tells open tabs after it changed the repository. */
       notifyIndex?: () => void;
+      /** No terminal tab at all, and the real tools menu with the start page beside it. */
+      noSession?: boolean;
+      /** Answers for the next `local_file_pick`; null is a closed picker. */
+      picks?: (string | null | { fail: string })[];
+      targets?: LocalTarget[];
+      /** The `source` of every `file_read` and `file_write`. */
+      sources?: Source[];
+      /** What `fail` was told. */
+      failures?: string[];
     };
     __pwned?: boolean;
     __fileTabEnd?: () => void;
@@ -59,6 +69,15 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         state.opened.push(args.url as string);
         return null;
       }
+      if (command === 'local_file_pick') {
+        const pick = state.picks?.shift();
+        if (pick === undefined) throw 'unexpected file picker';
+        if (typeof pick === 'object' && pick) throw pick.fail;
+        return pick;
+      }
+      if (command === 'local_targets') return { targets: state.targets ?? [], warning: null };
+      if (command === 'file_read' || command === 'file_write')
+        state.sources?.push(args.source as Source);
       if (command === 'file_write') {
         const write = args as Window['__fileTab']['writes'][number];
         state.writes.push(write);
@@ -120,6 +139,9 @@ const [{ useWorkspaceLayout }, { useFileTabs }, { WorkspaceGrid }, { PlainTab },
     import('../../../src/features/sftp/fileTree'),
   ]);
 const { tabKey } = await import('../../../src/app/workspaceLayout');
+const { HeaderMenus } = await import('../../../src/app/HeaderTools');
+const noSession = !!state.noSession;
+const noop = () => {};
 
 state.notifyIndex = () =>
   notifyGitChange({
@@ -131,8 +153,15 @@ state.notifyIndex = () =>
 function Harness() {
   const workspace = useWorkspaceLayout();
   const { open: openTab } = workspace;
-  const files = useFileTabs({ workspace, sessions: [session], narrow: false });
-  useEffect(() => openTab({ kind: 'session', tabId: 't1' }), [openTab]);
+  const files = useFileTabs({
+    workspace,
+    sessions: noSession ? [] : [session],
+    narrow: false,
+    fail: (message) => (state.failures ??= []).push(message),
+  });
+  useEffect(() => {
+    if (!noSession) openTab({ kind: 'session', tabId: 't1' });
+  }, [openTab]);
   useEffect(() => {
     state.closeWindow = files.confirmWindowClose;
     state.openDiff = (row, pinned) => files.openDiff(session, row, '/srv/app', pinned);
@@ -154,6 +183,16 @@ function Harness() {
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
       <div style={{ width: 200 }} aria-label="파일 목록">
+        {noSession && (
+          <HeaderMenus
+            sidebarOpen={false}
+            toggleSidebar={noop}
+            tools={{ tunnels: noop, editor: files.pickDocument }}
+            activeGame={null}
+            openGame={noop}
+            preview={noop}
+          />
+        )}
         <FileOpenContext.Provider value={(path, pinned) => files.open(session, path, pinned)}>
           {Object.keys(state.files)
             .filter((path) => !path.includes('|'))
@@ -172,8 +211,21 @@ function Harness() {
         <WorkspaceGrid
           workspace={workspace}
           narrow={false}
-          order={[{ kind: 'session', tabId: 't1' }, ...files.order]}
+          order={[
+            ...(noSession ? [] : [{ kind: 'session', tabId: 't1' } as const]),
+            ...files.order,
+          ]}
           detach={() => {}}
+          start={
+            noSession
+              ? {
+                  tab: (active, select) => (
+                    <PlainTab title="시작하기" active={active} select={select} />
+                  ),
+                  page: <p>시작 화면</p>,
+                }
+              : undefined
+          }
           renderTab={(tab, group) => {
             const key = tabKey(tab);
             const active = group.active === key;

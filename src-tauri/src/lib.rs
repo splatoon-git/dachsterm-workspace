@@ -212,6 +212,7 @@ pub fn run() {
             local_files::local_files_change,
             local_files::local_files_batch,
             local_files::local_files_download,
+            local_files::local_file_pick,
             local_files::local_files_edit,
             desktop_files::files_drag_prepare,
             desktop_files::files_drag_out,

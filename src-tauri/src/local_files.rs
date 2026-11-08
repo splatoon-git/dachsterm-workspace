@@ -400,6 +400,22 @@ pub async fn local_files_download(
     let directory = folder.path().to_path_buf();
     blocking(move || Ok(Some(batch("copy", &source, &paths, Some(directory))))).await
 }
+/// Asks for one file of this computer, for the document editor; `None` when the picker was closed.
+#[tauri::command]
+pub async fn local_file_pick() -> Result<Option<String>> {
+    let Some(file) = rfd::AsyncFileDialog::new()
+        .set_title("문서 열기")
+        .pick_file()
+        .await
+    else {
+        return Ok(None);
+    };
+    // A lossy conversion would name a different file.
+    match file.path().to_str() {
+        Some(path) => Ok(Some(path.to_owned())),
+        None => Err("이 파일 이름은 열 수 없습니다.".into()),
+    }
+}
 #[tauri::command]
 pub async fn local_files_edit(
     state: State<'_, AppState>,
