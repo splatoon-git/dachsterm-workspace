@@ -2,8 +2,8 @@ import { TransferQueue, type Transfer } from './TransferQueue';
 import { EditorPicker } from './EditorPicker';
 import { PermissionEditor } from './PermissionEditor';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { call, desktop, errorText } from '../../lib/ipc';
+import { useFileDrop } from '../../lib/fileDrop';
 import { TerminalSession } from '../terminal/session';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
@@ -142,30 +142,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
       clearInterval(timer);
     };
   }, []);
-  useEffect(() => {
-    if (!desktop || state.status !== 'connected') return;
-    let off: (() => void) | undefined;
-    let disposed = false;
-    void getCurrentWebview()
-      .onDragDropEvent((event) => {
-        if (event.payload.type === 'drop') {
-          const bounds = panel.current?.getBoundingClientRect();
-          const x = event.payload.position.x / window.devicePixelRatio,
-            y = event.payload.position.y / window.devicePixelRatio;
-          if (!bounds || x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom)
-            return;
-          setPendingDrop(event.payload.paths);
-        }
-      })
-      .then((unlisten) => {
-        if (disposed) unlisten();
-        else off = unlisten;
-      });
-    return () => {
-      disposed = true;
-      off?.();
-    };
-  }, [id, listing.path, state.status]);
+  const dropOver = useFileDrop(panel, setPendingDrop, state.status === 'connected');
   const view = useMemo(() => ({ showHidden: hidden, filter, sort }), [hidden, filter, sort]);
   const listFolder = useCallback(
     (folder: string) => call<Listing>('sftp_list', { id, path: folder }),
@@ -301,7 +278,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
   return (
     <aside
       ref={panel}
-      className="files"
+      className={`files ${dropOver ? 'drop-over' : ''}`}
       aria-label={`${isFtp ? 'FTP' : 'SFTP'} 파일 탐색`}
       onKeyDown={fileKey}
       aria-busy={working}

@@ -20,8 +20,9 @@ import {
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 // `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab,
 // `--credentials-only` only the DX.14 WSL HTTPS credential steps, and `--git-only` only the
-// DX.15 Git status steps.
+// DX.15 Git status steps, `--drop-only` only the GE.2 file drop steps.
 const agentOnly = process.argv.includes('--agent-only');
+const dropOnly = process.argv.includes('--drop-only');
 const credentialsOnly = process.argv.includes('--credentials-only');
 const gitOnly = process.argv.includes('--git-only');
 const finished = Symbol('agent-only');
@@ -210,6 +211,63 @@ async function checkLocalGit(page, command, pane) {
   await command(linux, "cd / && printf 'GIT%s\\n' _ROOT", 'GIT_ROOT');
   await expect(status).toHaveCount(0, { timeout: 15000 });
   console.log("PASS WSL tab: the distribution's git status; none outside");
+  await command(linux, 'exit', '');
+}
+
+/** GE.2: files dropped from the OS are copied into the folder the local or WSL panel shows. */
+async function checkLocalDrop(page, command, pane) {
+  const invoke = (cmd, args) =>
+    page.evaluate(({ cmd, args }) => window.__TAURI_INTERNALS__.invoke(cmd, args), { cmd, args });
+  const files = page.getByRole('complementary', { name: '로컬 파일 탐색' });
+  const emit = async (event, payload) => {
+    const box = await files.boundingBox();
+    const scale = await page.evaluate(() => window.devicePixelRatio);
+    const position = { x: (box.x + box.width / 2) * scale, y: (box.y + box.height / 2) * scale };
+    await invoke('plugin:event|emit', { event, payload: { ...payload, position } });
+  };
+  const source = path.join(await realpath(directory), 'drop source');
+  await mkdir(source, { recursive: true });
+  const dropped = path.join(source, '끌어 놓기.txt');
+  await writeFile(dropped, 'dropped');
+  const into = path.join(await realpath(directory), 'drop into');
+  await mkdir(into, { recursive: true });
+  await showSidebarView(page, '파일');
+  await command(pane, `Set-Location '${into}'; Write-Output ('DROP' + '_HERE')`, 'DROP_HERE');
+  await expect(files.getByLabel('로컬 경로', { exact: true })).toHaveValue(into);
+  await emit('tauri://drag-over', {});
+  await expect(files).toHaveClass(/drop-over/);
+  await emit('tauri://drag-drop', { paths: [dropped] });
+  await expect(files).not.toHaveClass(/drop-over/);
+  await expect(files.getByRole('button', { name: /끌어 놓기\.txt/ })).toBeVisible({
+    timeout: 15000,
+  });
+  assert.equal(await readFile(path.join(into, '끌어 놓기.txt'), 'utf8'), 'dropped');
+  assert.equal(await readFile(dropped, 'utf8'), 'dropped');
+  console.log('PASS PowerShell panel: a dropped Windows file is copied into its folder');
+  const wsl = page
+    .locator('.local-targets .local-target')
+    .filter({ hasText: 'WSL' })
+    .filter({ hasNotText: 'docker-desktop' });
+  if (!(await wsl.count())) {
+    console.log('WSL user distribution absent: WSL drop pending.');
+    return;
+  }
+  await showSidebarView(page, '연결');
+  const title = await wsl.first().locator('span').textContent();
+  await wsl.first().click();
+  const linux = page.getByRole('region', { name: `${title} 터미널`, exact: true });
+  await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
+    timeout: 15000,
+  });
+  await command(linux, `cd "$(mktemp -d)" && printf 'DROP%s\\n' _WSL`, 'DROP_WSL');
+  await showSidebarView(page, '파일');
+  await expect(files.getByLabel('로컬 경로', { exact: true })).toHaveValue(/^\/tmp\//);
+  await emit('tauri://drag-drop', { paths: [dropped] });
+  await expect(files.getByRole('button', { name: /끌어 놓기\.txt/ })).toBeVisible({
+    timeout: 15000,
+  });
+  await command(linux, "cat '끌어 놓기.txt'; printf '%s\\n' _CAT", 'dropped_CAT');
+  console.log('PASS WSL panel: a dropped Windows file is copied into the Linux folder');
   await command(linux, 'exit', '');
 }
 
@@ -664,10 +722,11 @@ try {
   await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
-  if (agentOnly || credentialsOnly || gitOnly) {
+  if (agentOnly || credentialsOnly || gitOnly || dropOnly) {
     if (agentOnly) await checkLocalAgent(page, command, pane);
     if (credentialsOnly) await checkWslCredentials(page, command);
     if (gitOnly) await checkLocalGit(page, command, pane);
+    if (dropOnly) await checkLocalDrop(page, command, pane);
     throw finished;
   }
   await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');
