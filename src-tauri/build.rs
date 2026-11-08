@@ -70,6 +70,7 @@ fn main() {
             "editor_pick",
             "edit_list",
             "edit_resolve",
+            "edit_session_auto",
             "detach_terminal",
             "detached_info",
             "attach_terminal",
