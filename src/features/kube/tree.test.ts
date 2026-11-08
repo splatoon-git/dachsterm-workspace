@@ -30,6 +30,7 @@ const container = (patch: Partial<ContainerState> = {}): ContainerState => ({
   terminated: '',
   lastReason: '',
   lastFinished: '',
+  lastExitCode: null,
   ...patch,
 });
 

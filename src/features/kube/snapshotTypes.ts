@@ -9,6 +9,8 @@ export type ContainerState = {
   terminated: string;
   lastReason: string;
   lastFinished: string;
+  /** Why the previous run ended; `null` when it has not ended yet or the cluster did not say. */
+  lastExitCode: number | null;
 };
 
 export type KubePod = {

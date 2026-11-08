@@ -1,8 +1,13 @@
 import type { TreeRow } from './tree';
-import { formatAge, formatCpu, formatMemory, resourceCell, usedOfTotal } from './treeFormat';
+import {
+  formatAge,
+  formatCpu,
+  formatMemory,
+  resourceCell,
+  statusMark,
+  usedOfTotal,
+} from './treeFormat';
 import type { Health } from './treePods';
-
-const statusMark: Record<Health, string> = { ok: '●', warn: '▲', error: '✕' };
 
 type Cell = { text: string; title?: string };
 type Cells = {

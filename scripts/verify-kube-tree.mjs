@@ -1,6 +1,7 @@
-// KV.2 acceptance against the real app, a real OpenSSH server and a real kind cluster:
-// services and pods with their resources, polling that stops when the screen is hidden, and data
-// that stays with its age when the cluster goes away. Never print the fixture's passwords.
+// KV.2 and KV.3 acceptance against the real app, a real OpenSSH server and a real kind cluster:
+// services and pods with their resources, polling that stops when the screen is hidden, data that
+// stays with its age when the cluster goes away, and the dashboard. `--dashboard` runs only the
+// dashboard's stages. Never print the fixture's passwords.
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -12,12 +13,15 @@ import { docker, kubeFixture, kubeScreen } from './lib/kube-native.mjs';
 const clusterArg = process.argv.find((arg) => arg.startsWith('--cluster='));
 const cluster = clusterArg ? clusterArg.slice('--cluster='.length) : 'dachsterm-kv2';
 const keep = process.argv.includes('--keep');
+const dashboardOnly = process.argv.includes('--dashboard');
 const executable = process.env.DACHSTERM_TEST_BINARY ?? 'target/debug/dachsterm.exe';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const pass = (text) => console.log(`PASS ${text}`);
 const fixture = (action) => kubeFixture(cluster, action);
 const LOG = '/tmp/kubectl.log';
 const namespace = 'kv2-tree';
+/** Thrown after the dashboard's stages to end a `--dashboard` run through the normal clean-up. */
+class ChecksDone extends Error {}
 
 const manifest = `
 apiVersion: v1
@@ -73,6 +77,23 @@ spec:
         - name: app
           image: registry.k8s.io/e2e-test-images/busybox:1.29-4
           command: ['false']
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: oom, namespace: ${namespace} }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: oom } }
+  template:
+    metadata: { labels: { app: oom } }
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/e2e-test-images/busybox:1.29-4
+          command: ['sh', '-c', 'x=aaaaaaaa; while true; do x=$x$x; done']
+          resources:
+            requests: { memory: 8Mi }
+            limits: { memory: 16Mi }
 `;
 
 let stage = 'fixture';
@@ -167,6 +188,97 @@ try {
   await expect(pane().getByLabel('묶기', { exact: true })).toHaveValue('workload');
   await expect(row('노드')).toContainText('1/1 준비', { timeout: 40_000 });
   await expect(row('Deployment/api')).toContainText('준비 2/2', { timeout: 40_000 });
+
+  stage = 'dashboard without metrics-server';
+  const dashboardTab = () => header().getByRole('tab', { name: '대시보드', exact: true });
+  const area = (name) => pane().getByRole('region', { name, exact: true });
+  const areaRow = (name, text) => area(name).getByRole('button').filter({ hasText: text }).first();
+  await dashboardTab().click();
+  await expect(area('전체 자원')).toContainText('metrics-server가 없어', { timeout: 40_000 });
+  await expect(area('전체 자원')).toContainText(/요청 \d/);
+  await expect(area('전체 자원')).toContainText('할당');
+  await expect(area('전체 자원')).not.toContainText(/사용 \d/);
+  await expect(area('현황')).toContainText('1/1 준비');
+  await expect(area('자원 상위')).toContainText('요청량 기준입니다.');
+  await expect(area('인그레스')).toContainText('아직 준비 중입니다.');
+  await expect(area('워커')).toContainText('아직 준비 중입니다.');
+  await page.screenshot({
+    path: path.resolve('test-results-native', 'kube-dashboard-requests.png'),
+  });
+  pass('without metrics-server the dashboard shows requests and allocatable and says why');
+
+  stage = 'dashboard with live usage';
+  fixture('metrics-on');
+  await expect(area('전체 자원')).toContainText(/사용 \d/, { timeout: 150_000 });
+  await expect(area('전체 자원').getByRole('img', { name: /CPU 추세/ })).toBeVisible();
+  await expect(area('자원 상위')).not.toContainText('요청량 기준입니다.', { timeout: 40_000 });
+  await expect(area('자원 상위').locator('.kube-dash-row').first()).toContainText(/\d/, {
+    timeout: 40_000,
+  });
+  pass('live usage, the trend and the top pods replace requests once metrics-server answers');
+
+  stage = 'dashboard restarts and errors';
+  await expect(areaRow('재시작·에러', 'broken-')).toContainText('Error (종료 코드 1)', {
+    timeout: 120_000,
+  });
+  await expect(areaRow('재시작·에러', 'oom-')).toContainText('OOMKilled (종료 코드 137)', {
+    timeout: 120_000,
+  });
+  await expect(areaRow('미달 워크로드', 'Deployment/broken')).toContainText('0/1 준비', {
+    timeout: 40_000,
+  });
+  await expect(area('최근 경고')).toContainText('BackOff', { timeout: 40_000 });
+  // Back-off doubles up to five minutes, so the next restart can be that far away.
+  await expect(areaRow('재시작·에러', 'broken-')).toContainText(/\+\d+/, { timeout: 330_000 });
+  await page.screenshot({ path: path.resolve('test-results-native', 'kube-dashboard-live.png') });
+  pass('a crash and an OOM kill show their reason, exit code and increase since the tab opened');
+
+  stage = 'dashboard items go to the tree';
+  const treeTab = () => header().getByRole('tab', { name: '트리', exact: true });
+  await areaRow('재시작·에러', 'broken-').click();
+  await expect(treeTab()).toHaveAttribute('aria-selected', 'true');
+  await expect(podRow('broken')).toHaveAttribute('aria-selected', 'true');
+  await dashboardTab().click();
+  await areaRow('미달 워크로드', 'Deployment/broken').click();
+  await expect(row('Deployment/broken')).toHaveAttribute('aria-selected', 'true');
+  await dashboardTab().click();
+  await area('전체 자원')
+    .getByRole('button', { name: new RegExp(controlPlane) })
+    .click();
+  await expect(row(controlPlane)).toHaveAttribute('aria-selected', 'true');
+  await row('노드').locator('.kube-tree-fold').click();
+  pass('a pod, a workload and a node on the dashboard each go to their row in the tree');
+
+  stage = 'dashboard adds no query';
+  await dashboardTab().click();
+  await sleep(1500);
+  const beforeDashboard = logSize();
+  await sleep(17_000);
+  const whileOpen = kubectlLog().slice(beforeDashboard);
+  const polled = new Set([
+    'get pods',
+    'get deployments,statefulsets,daemonsets',
+    'get services,endpoints',
+    'get nodes',
+    'top pods',
+    'top nodes',
+    'get events',
+  ]);
+  const extra = whileOpen.filter((entry) => entry.what && !polled.has(entry.what));
+  assert.deepEqual(extra, [], 'the dashboard ran only the kinds the tree polls');
+  const podRuns = whileOpen.filter((e) => e.event === 'start' && e.what === 'get pods');
+  const podGaps = podRuns.slice(1).map((entry, at) => entry.time - podRuns[at].time);
+  assert(podGaps.length >= 2, 'pods kept being polled');
+  assert(Math.min(...podGaps) >= 4.5, `pods wait about 5 seconds, gap ${Math.min(...podGaps)}`);
+  await treeTab().click();
+  pass('the server saw only the polled kinds, at the same pace, while the dashboard was open');
+
+  if (dashboardOnly) throw new ChecksDone();
+  fixture('metrics-off');
+  await expect(pane().getByText('파드 사용량: metrics-server 없음')).toBeVisible({
+    timeout: 60_000,
+  });
+
   await pane().getByLabel('묶기', { exact: true }).selectOption('service');
 
   stage = 'services, pods and requests without metrics-server';
@@ -311,15 +423,17 @@ try {
   await expect.poll(age, { timeout: 15_000 }).toBeLessThan(20);
   pass('the tree refreshes by itself once the cluster answers again');
 } catch (error) {
-  failed = true;
-  console.error(`FAILED at: ${stage}`);
-  console.error(error instanceof assert.AssertionError ? error.message : error.constructor.name);
-  try {
-    await app?.page.screenshot({
-      path: path.resolve('test-results-native', 'kube-tree-failure.png'),
-    });
-  } catch {
-    // The window may already be gone; the stage name above is still reported.
+  if (!(error instanceof ChecksDone)) {
+    failed = true;
+    console.error(`FAILED at: ${stage}`);
+    console.error(error instanceof assert.AssertionError ? error.message : error.constructor.name);
+    try {
+      await app?.page.screenshot({
+        path: path.resolve('test-results-native', 'kube-tree-failure.png'),
+      });
+    } catch {
+      // The window may already be gone; the stage name above is still reported.
+    }
   }
 } finally {
   try {
