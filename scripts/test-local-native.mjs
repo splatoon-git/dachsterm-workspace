@@ -207,6 +207,41 @@ async function checkLocalGit(page, command, pane) {
   await showSidebarView(page, 'Git');
   await expect(gitRows()).toHaveText(['new.txt'], { timeout: 15000 });
   console.log('PASS PowerShell tab: the Git view lists the untracked file');
+  // GE.14: the commit graph, before and after there is a history, and a commit's detail.
+  const graph = page.locator('#git-sidebar .git-graph');
+  await expect(graph).toContainText('아직 커밋이 없습니다.', { timeout: 15000 });
+  for (const subject of ['첫 커밋', '둘째 커밋']) {
+    const made = spawnSync(
+      'git',
+      [
+        '-C',
+        repo,
+        '-c',
+        'user.name=probe',
+        '-c',
+        'user.email=probe@example.invalid',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '--no-gpg-sign',
+        '-m',
+        subject,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(made.status, 0, made.stderr);
+  }
+  await page.locator('#git-sidebar').getByRole('button', { name: 'Git 새로 고침' }).click();
+  await expect(graph.locator('.git-graph-subject')).toHaveText(['둘째 커밋', '첫 커밋'], {
+    timeout: 15000,
+  });
+  await expect(graph.locator('.git-graph-ref')).toHaveText(['dx15']);
+  await graph.locator('.git-graph-row').first().click();
+  await expect(graph.locator('.git-graph-hash').first()).toHaveText(/^[0-9a-f]{40}$/, {
+    timeout: 15000,
+  });
+  await graph.locator('.git-graph-row').first().click();
+  console.log('PASS PowerShell tab: the commit graph and a commit detail from the real history');
   await showSidebarView(page, '연결');
   await command(pane, `Set-Location '${directory}'; Write-Output ('GIT' + '_OUT')`, 'GIT_OUT');
   await expect(status).toHaveCount(0, { timeout: 15000 });
@@ -227,13 +262,20 @@ async function checkLocalGit(page, command, pane) {
   });
   await command(
     linux,
-    `cd "$(mktemp -d)" && git init -q -b dx15-wsl && touch a b && printf 'GIT%s\\n' _WSL`,
+    `cd "$(mktemp -d)" && git init -q -b dx15-wsl && touch a b && ` +
+      `git -c user.name=p -c user.email=p@example.invalid commit -q --allow-empty --no-gpg-sign -m wsl-one && ` +
+      `git -c user.name=p -c user.email=p@example.invalid commit -q --allow-empty --no-gpg-sign -m wsl-two && ` +
+      `printf 'GIT%s\\n' _WSL`,
     'GIT_WSL',
   );
   await expect(status).toHaveText('dx15-wsl ●2', { timeout: 15000 });
   await showSidebarView(page, 'Git');
   await expect(gitRows()).toHaveText(['a', 'b'], { timeout: 15000 });
   console.log('PASS WSL tab: the Git view lists the files through the distribution');
+  await expect(page.locator('#git-sidebar .git-graph-subject')).toHaveText(['wsl-two', 'wsl-one'], {
+    timeout: 15000,
+  });
+  console.log('PASS WSL tab: the commit graph reads through the distribution');
   await showSidebarView(page, '연결');
   // GE.11: ConPTY repaints the screen, so the badge must still land on the line being typed on.
   const badge = linux.locator('.prompt-branch');
