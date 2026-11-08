@@ -3,6 +3,7 @@ import { ToolbarMenu } from '../components/ToolbarMenu';
 import { games, type GameId } from '../features/games/catalog';
 import { desktop } from '../lib/ipc';
 import { modKey } from '../lib/platform';
+import type { AppShortcut } from './appShortcuts';
 
 function IconButton({
   icon,
@@ -34,16 +35,18 @@ function IconButton({
   );
 }
 
-/** Left of the title bar: the sidebar toggle and the tools menu, which holds the games for now. */
+/** Left of the title bar: the sidebar toggle and the tools menu. */
 export function HeaderMenus({
   sidebarOpen,
   toggleSidebar,
+  tunnels,
   activeGame,
   openGame,
   preview,
 }: {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+  tunnels: () => void;
   activeGame: GameId | null;
   openGame: (id: GameId) => void;
   /** Opens the terminal preview, which only the browser run without a backend offers. */
@@ -60,6 +63,10 @@ export function HeaderMenus({
         run={toggleSidebar}
       />
       <ToolbarMenu label="도구">
+        <button onClick={tunnels}>
+          <Icon name="tunnel" size={14} />
+          터널
+        </button>
         <span className="menu-label">게임</span>
         <nav aria-label="게임 목록">
           {games.map((game) => (
@@ -85,24 +92,24 @@ export function HeaderMenus({
 }
 
 /** Right of the title bar: what used to sit in the view and tools menus, one icon each. */
-export function HeaderActions({
-  commands,
-  tunnels,
-  help,
-  settings,
-}: {
-  commands: () => void;
-  tunnels: () => void;
-  help: () => void;
-  settings: () => void;
-}) {
+export function HeaderActions({ run }: { run: (shortcut: AppShortcut) => void }) {
   return (
     <>
-      <IconButton icon="snippet" label="명령" keys="Shift+S" run={commands} />
-      <IconButton icon="tunnel" label="터널" keys="Shift+U" run={tunnels} />
+      <IconButton
+        icon="snippet"
+        label="명령"
+        keys="Shift+S"
+        run={() => run({ name: 'commands' })}
+      />
+      <IconButton icon="tunnel" label="터널" keys="Shift+U" run={() => run({ name: 'tunnels' })} />
       <span className="header-divider" aria-hidden="true" />
-      <IconButton icon="keyboard" label="키보드 단축키" keys="Shift+/" run={help} />
-      <IconButton icon="settings" label="설정" keys="," run={settings} />
+      <IconButton
+        icon="keyboard"
+        label="키보드 단축키"
+        keys="Shift+/"
+        run={() => run({ name: 'help' })}
+      />
+      <IconButton icon="settings" label="설정" keys="," run={() => run({ name: 'settings' })} />
     </>
   );
 }
