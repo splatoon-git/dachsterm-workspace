@@ -235,3 +235,92 @@ root 계정: Debian 12와 Alpine(정식 `traceroute` 설치) `traceroute -T -n -
 - Mac 실기기, CI.
 - 실제 5분 미사용(시험값으로만 확인).
 - 분리 창의 터미널 재사용. 코드 경로는 같지만 실행하지 않았다.
+
+## TL.6·TL.7 포트 개통과 포트 사용 여부
+
+대상: 커밋 전 트리(`dev` `c9eae1e`에서 갈라진 `feat/tl6-port-tools`). 합격 기준은 [설계안 §8](../design/tools-menu.md#8-순서와-검증)이다.
+
+### 자동 검사
+
+| 명령 | 범위 | 결과 |
+|---|---|---|
+| `npm run typecheck`, 바꾼 파일 `npx eslint`, `npx prettier --check` | 도구 화면, 스펙, fixture | 종료 0 |
+| `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` | Rust | 종료 0 |
+| `cargo clippy -p dachsterm --all-targets --locked --target aarch64-apple-darwin -- -D warnings` | macOS 타입·린트. C 컴파일러는 빈 파일 대역이라 링크·실행은 아니다 | 종료 0 |
+| `cargo test -p dachsterm --lib --locked net_tools` | 입력 파서·상한, 사유 해석, 스케줄러, 대체 명령, 목록 파서, Windows API | 49/49 |
+| `cargo test -p dachsterm --lib --locked remote_ports` | 공용으로 뺀 파서, 터널 대화상자 응답 | 3/3 |
+| `npx vitest run src/features/tools` | 결과 상태, 요약, 필터 | 23/23 |
+| Playwright `port-tools.spec.ts`, `tools.spec.ts` | 확인창, 취소, 우클릭, 외부 확인, 출발지 | 21/21 |
+
+### 실제 앱 (Windows, Docker OpenSSH)
+
+`npm run test:port-tools`(`scripts/test-port-tools-native.mjs`, `verify-windows.ps1 -Native`에 연결). 컨테이너와 네트워크는 `dachsterm-tl6-*`이고 끝나면 지운다. 두 번에 걸쳐 실행했다. 포트 개통 단계와 로컬 목록은 전체 실행에서 통과했고, 그 뒤 원격 목록 단계에서 멈춘 원인이 검사의 로그인 절차(이미 신뢰한 호스트 키와 터미널 재사용)였으므로 `login`을 고친 뒤 `--list-only`로 나머지 단계를 실행해 종료 0을 받았다. 고친 `login`으로 앞 단계를 다시 돌리지는 않았다. `listeners_windows.rs`의 clippy 지적(크기 계산 표기 변경) 한 줄은 이 실행 뒤에 고쳤고 단위 테스트만 다시 돌렸다.
+
+**포트 개통 — 리모트(대상은 같은 Docker 네트워크의 iptables 컨테이너)**
+
+| 대상 | 표시 |
+|---|---|
+| socat 포트 | 열림 |
+| 듣는 프로그램 없음 | 닫힘(설명 `Connection refused`로 확정) |
+| `DROP` | 응답 없음 |
+| `REJECT icmp-host-unreachable`, `icmp-net-unreachable` | 도달 불가 |
+| 해석되지 않는 이름 | 확인 불가 · 서버에서 이름을 해석하지 못했습니다 |
+
+| 확인 | 결과 |
+|---|---|
+| 2단계 판정: 잠정 닫힘 64개는 하나씩 확정(`닫힘`), 65개는 `닫힘 또는 도달 불가` | 통과 |
+| 미해결 상한: `DROP` 300회, 시간 초과 1초 → `서버 응답 대기 중`, 서버 `SYN-SENT` 최대 **256** | 통과 |
+| 취소(도구 전용 연결): `정리하려고 출발지 연결을 닫았습니다`, 서버 `SYN-SENT` 0, 로그인 0, `다시 연결` 표시 | 통과 |
+| 취소(터미널 공유): `서버가 응답할 때까지 유지`, 터미널 로그인 유지 | 통과 |
+| 자원 고갈: `ulimit -n 64` sshd에 `DROP` 200회 → `서버가 연결을 더 시작하지 못함`, 200행 중 `닫힘` 0, 시작하지 못한 대상은 `확인 불가` | 통과 |
+| 포워딩 금지 + bash: 열림·닫힘·응답 없음·도달 불가가 구분되고 방식이 표시됨 | 통과 |
+| 포워딩 금지 + nc(Alpine): 열림, 나머지는 `닫힘 또는 응답 없음` | 통과 |
+| 포워딩 금지 + 도구 없음: 확인 불가 | 통과 |
+
+**포트 개통 — 로컬**
+
+| 대상 | 표시 |
+|---|---|
+| `127.0.0.1`의 Docker 게시 포트 | 열림 |
+| `127.0.0.1`의 빈 포트 | 닫힘 |
+| `192.0.2.1:80`(문서용 주소) | 응답 없음 |
+| `240.0.0.1:80` | 도달 불가 |
+| `no-such-name.invalid` | 확인 불가 |
+
+| 확인 | 결과 |
+|---|---|
+| `/23`, 4,352회는 시작 전 거부. `/24`는 확인창을 거쳐 256회, `256개 중 0개 열림`, 전체 보기 256행 | 통과 |
+| 취소가 곧바로 적용되고 결과는 남음 | 통과 |
+
+**로컬 판정의 대상을 Docker로 만들지 못한 이유:** Docker Desktop의 게시 포트는 컨테이너에 듣는 프로그램이 없어도 이 PC 쪽에서 연결이 성공한다(실측 5ms). 컨테이너의 REJECT·DROP이 Windows 출발지까지 오지 않으므로, `응답 없음`과 `도달 불가`는 이 PC의 실제 망에서 나온 결과다. 네트워크 구성이 다른 PC에서는 `192.0.2.1`의 결과가 달라질 수 있다. 호스트의 경로·방화벽은 바꾸지 않았다.
+
+**포트 사용 여부**
+
+| 출발지 | 읽은 방법 | 확인 |
+|---|---|---|
+| 이 PC | Windows 소켓 표 | TCP·UDP, `node.exe`, 사용 중 2개·사용 안 함 1개 |
+| Debian + iproute2 | `/proc/net`, `ss` | 일반 계정의 `python3 (pid)`, root의 `sshd`는 `권한 없음` |
+| Alpine | `/proc/net`, BusyBox `netstat` | 목록 |
+| Alpine, `nc`·`netstat`·`lsof` 제거 | `/proc/net` | `알 수 없음` |
+| `/proc` 없는 chroot + `lsof` | `lsof` | `exampled (42)` |
+| `/proc` 없는 chroot + `netstat` | `netstat` | `알 수 없음` |
+| SSH 인증 실패 + 포트 입력 | 외부에서 확인한 결과 | 이 PC에서 그 세션의 주소로 시도, `열림` |
+
+chroot의 `lsof`, `netstat`은 해당 형식을 출력하는 **대역 스크립트**다. 실제 비 Linux 서버에서는 실행하지 않았다.
+
+### 이 검사가 잡은 결함
+
+- `Gate`가 점검 종료와 함께 사라져 서버가 답하지 않은 채널이 다음 점검의 상한에서 빠졌다. 열기 태스크가 응답까지 쥐게 했다.
+- 시간 초과 칸의 HTML 검증이 앱 오류 문구를 막았다(`noValidate`).
+- 출발지 라디오의 글자가 세로로 쪼개졌다(TL.5의 전역 `input` 너비).
+
+### 회귀로 돌리지 않은 것
+
+`test:network-base`와 `run-phase1 --native`는 다시 돌리지 않았다. `Host`를 옮긴 것은 코드 이동이고, `Links` 변경은 이번 검사의 도구 연결·터미널 재사용 단계가 실제 서버로 지난다.
+
+### 미검증
+
+- Mac 실기기 전체(`/usr/sbin/lsof`, 파일 이름 없는 포트 목록의 UI), CI.
+- 표준 사용자 계정의 Windows 결과. 이 PC는 내장 Administrator다.
+- OpenSSH 외 SSH 서버의 실패 설명. 모르는 설명은 `확인 불가`로 처리하는 코드만 있다.
+- 실제 비 Linux 서버의 `lsof`, `netstat -an`.

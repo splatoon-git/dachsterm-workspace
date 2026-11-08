@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-net-listeners"
+description = "Enables the net_listeners command without any pre-configured scope."
+commands.allow = ["net_listeners"]
+
+[[permission]]
+identifier = "deny-net-listeners"
+description = "Denies the net_listeners command without any pre-configured scope."
+commands.deny = ["net_listeners"]

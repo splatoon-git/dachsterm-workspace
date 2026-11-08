@@ -40,9 +40,10 @@ png = "0.18"
 open = "=5.3.3"
 tauri-plugin-notification = "=2.8.0"
 
-# The local tabs' agent pipe (DX.13) needs a DACL for the current user. Already in the graph.
+# The local tabs' agent pipe (DX.13) needs a DACL for the current user, and the port list (TL.7)
+# reads the socket tables and process names. Already in the graph.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
 
 # Starting a file drag out to the desktop (GE.3). Windows and macOS are the shipped targets.
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]

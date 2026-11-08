@@ -1,14 +1,18 @@
 //! The SSH connection behind a tool tab's remote source (TL.5). It stops after login: no PTY, shell,
 //! session log, Git credentials, agent forwarding or tunnel auto-start.
+use super::{
+    Jobs,
+    dial::{Gate, RemoteDialer},
+};
 use crate::{
     ssh::{Connections, Control, Event, Host, Sink, route},
     storage::{Profile, Result, Store},
 };
-use russh::client;
+use russh::{ChannelOpenFailure, client};
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, Weak},
     time::{Duration, Instant},
 };
 use tokio::sync::watch;
@@ -29,12 +33,21 @@ enum Link {
 }
 
 #[derive(Default)]
-pub struct Links(Mutex<HashMap<String, Link>>);
+pub struct Links {
+    entries: Mutex<HashMap<String, Link>>,
+    /// By SSH connection ID. Weak, so a connection nothing is checking through costs nothing.
+    gates: Mutex<HashMap<String, Weak<Gate>>>,
+    pub jobs: Jobs,
+}
 
 impl Links {
-    /// The SSH connection behind a link, and one use of it: the idle clock starts over.
-    pub fn handle(&self, connections: &Connections, id: &str) -> Result<Arc<client::Handle<Host>>> {
-        let connection = match self.0.lock().unwrap().get(id) {
+    /// The connection ID behind a link and its handle, and one use: the idle clock starts over.
+    fn connection(
+        &self,
+        connections: &Connections,
+        id: &str,
+    ) -> Result<(String, Arc<client::Handle<Host>>)> {
+        let connection = match self.entries.lock().unwrap().get(id) {
             Some(Link::Owned { used }) => {
                 used.send_replace(Instant::now());
                 id.to_string()
@@ -42,17 +55,62 @@ impl Links {
             Some(Link::Reused { connection, .. }) => connection.clone(),
             None => return Err("출발지 연결이 종료되었습니다.".into()),
         };
-        connections.handle(&connection)
+        let handle = connections.handle(&connection)?;
+        Ok((connection, handle))
     }
-    fn owns(&self, id: &str) -> bool {
-        matches!(self.0.lock().unwrap().get(id), Some(Link::Owned { .. }))
+    pub fn handle(&self, connections: &Connections, id: &str) -> Result<Arc<client::Handle<Host>>> {
+        self.connection(connections, id).map(|(_, handle)| handle)
+    }
+    /// What a tool dials through. Every link to one SSH connection gets the same gate.
+    pub fn dialer(&self, connections: &Connections, id: &str) -> Result<RemoteDialer> {
+        let (connection, handle) = self.connection(connections, id)?;
+        let mut gates = self.gates.lock().unwrap();
+        gates.retain(|_, gate| gate.strong_count() > 0);
+        let gate = match gates.get(&connection).and_then(Weak::upgrade) {
+            Some(gate) => gate,
+            None => {
+                let gate = Arc::new(Gate::default());
+                gates.insert(connection, Arc::downgrade(&gate));
+                gate
+            }
+        };
+        Ok(RemoteDialer::new(handle, gate))
+    }
+    /// From the connection's russh handler, about a channel that could not be opened.
+    pub fn channel_failure(
+        &self,
+        connection: &str,
+        reason: &ChannelOpenFailure,
+        description: &str,
+    ) {
+        let gate = self
+            .gates
+            .lock()
+            .unwrap()
+            .get(connection)
+            .and_then(Weak::upgrade);
+        if let Some(gate) = gate {
+            gate.record(reason, description);
+        }
+    }
+    /// A running job counts as use, or a long check would be cut off at the idle limit.
+    pub fn touch(&self, id: &str) {
+        if let Some(Link::Owned { used }) = self.entries.lock().unwrap().get(id) {
+            used.send_replace(Instant::now());
+        }
+    }
+    pub fn owns(&self, id: &str) -> bool {
+        matches!(
+            self.entries.lock().unwrap().get(id),
+            Some(Link::Owned { .. })
+        )
     }
     fn forget(&self, id: &str) {
-        self.0.lock().unwrap().remove(id);
+        self.entries.lock().unwrap().remove(id);
     }
     /// Ends the link. Only a connection the tool opened itself is closed with it.
     pub fn close(&self, connections: &Connections, id: &str) {
-        let link = self.0.lock().unwrap().remove(id);
+        let link = self.entries.lock().unwrap().remove(id);
         if matches!(link, Some(Link::Owned { .. }))
             && let Ok(control) = connections.control(id)
         {
@@ -68,7 +126,7 @@ impl Links {
         sink: Sink,
     ) {
         let (release, mut released) = watch::channel(());
-        self.0.lock().unwrap().insert(
+        self.entries.lock().unwrap().insert(
             id.clone(),
             Link::Reused {
                 connection: terminal,
@@ -139,7 +197,7 @@ pub fn start(request: Start) -> Result<()> {
     let (used, clock) = watch::channel(Instant::now());
     connections
         .net
-        .0
+        .entries
         .lock()
         .unwrap()
         .insert(id.clone(), Link::Owned { used });
@@ -271,7 +329,7 @@ mod tests {
     async fn closing_a_reused_link_leaves_the_terminal_alone() {
         let connections = Arc::new(Connections::default());
         let (release, _released) = watch::channel(());
-        connections.net.0.lock().unwrap().insert(
+        connections.net.entries.lock().unwrap().insert(
             "tool".into(),
             Link::Reused {
                 connection: "terminal".into(),

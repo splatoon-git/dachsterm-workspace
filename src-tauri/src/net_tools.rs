@@ -1,14 +1,40 @@
-//! Network tools (TL). `link` is the connection a remote source runs over.
+//! Network tools (TL). `link` is the connection a remote source runs over and `dial` the one TCP
+//! connection a tool makes through it or from this PC.
+mod dial;
+mod fallback;
+mod jobs;
+mod limited;
 pub mod link;
+mod listener_parse;
+mod listeners;
+#[cfg(windows)]
+mod listeners_windows;
+mod port_check;
+mod targets;
+
+pub use jobs::Jobs;
 
 use crate::{
     AppState,
     ssh::{Event, Sink},
     storage::Result,
 };
+use serde::Deserialize;
 use std::sync::{Arc, atomic::Ordering};
 use tauri::{Manager, State, ipc::Channel};
 use uuid::Uuid;
+
+/// Where a tool runs from. `connection_id` is the tool tab's link, not a terminal's connection.
+#[derive(Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum SourceArg {
+    Local,
+    Remote { connection_id: String },
+}
 
 /// Connects a tool tab's remote source. State, login questions and trust come as events, and are
 /// answered with `auth_reply` and `trust_host`. Calling it again for a live link counts as a use.
@@ -69,6 +95,63 @@ pub async fn net_connect(
 #[tauri::command]
 pub fn net_disconnect(state: State<AppState>, id: String) -> Result<()> {
     state.connections.net.close(&state.connections, &id);
+    Ok(())
+}
+
+/// Starts a port check, or says what confirming it would mean. Results come as events.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn net_port_check(
+    state: State<'_, AppState>,
+    source: SourceArg,
+    targets: String,
+    ports: String,
+    timeout_seconds: u64,
+    job_id: String,
+    confirmed: bool,
+    on_event: Channel<port_check::Event>,
+) -> Result<port_check::Start> {
+    if Uuid::parse_str(&job_id).is_err() {
+        return Err("잘못된 작업 ID".into());
+    }
+    port_check::start(
+        state.connections.clone(),
+        port_check::Request {
+            source,
+            targets,
+            ports,
+            timeout_seconds,
+            job_id,
+            confirmed,
+            events: Arc::new(move |event| {
+                on_event
+                    .send(event)
+                    .map_err(|_| "도구 구독이 종료되었습니다.".into())
+            }),
+        },
+    )
+}
+
+#[tauri::command]
+pub async fn net_listeners(
+    state: State<'_, AppState>,
+    source: SourceArg,
+) -> Result<listeners::Report> {
+    match source {
+        SourceArg::Local => listeners::local().await,
+        SourceArg::Remote { connection_id } => {
+            let handle = state
+                .connections
+                .net
+                .handle(&state.connections, &connection_id)?;
+            listeners::remote(&handle).await
+        }
+    }
+}
+
+#[tauri::command]
+pub fn net_cancel(state: State<AppState>, job_id: String) -> Result<()> {
+    state.connections.net.jobs.cancel(&job_id);
     Ok(())
 }
 
