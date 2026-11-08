@@ -43,6 +43,11 @@ fn address(hex: &str) -> Option<String> {
 
 /// None means the output is not this table, as on a server without Linux `/proc`.
 pub(crate) fn parse(output: &str) -> Option<Vec<Port>> {
+    table(output, LISTEN)
+}
+
+/// The sockets of a `/proc/net` table that are in `wanted` state. The network tools also read UDP.
+pub(crate) fn table(output: &str, wanted: &str) -> Option<Vec<Port>> {
     if !output.lines().any(|line| line.contains("local_address")) {
         return None;
     }
@@ -52,7 +57,7 @@ pub(crate) fn parse(output: &str) -> Option<Vec<Port>> {
         let (Some(local), Some(state)) = (fields.get(1), fields.get(3)) else {
             continue;
         };
-        if *state != LISTEN {
+        if *state != wanted {
             continue;
         }
         let Some((host, port)) = local.split_once(':') else {

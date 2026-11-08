@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-net-cancel"
+description = "Enables the net_cancel command without any pre-configured scope."
+commands.allow = ["net_cancel"]
+
+[[permission]]
+identifier = "deny-net-cancel"
+description = "Denies the net_cancel command without any pre-configured scope."
+commands.deny = ["net_cancel"]
