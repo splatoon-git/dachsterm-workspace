@@ -246,7 +246,7 @@ export function TerminalPane({
         <AgentSignCard
           key={sign.request}
           request={sign}
-          answer={(decision) => void session.agentSign.answer(sign, decision)}
+          answer={(answer) => session.agentSign.answer(sign, answer)}
         />
       )}
       {state.authPrompt && (

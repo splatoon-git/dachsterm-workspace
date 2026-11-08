@@ -43,6 +43,7 @@ fn main() {
             "git_diff_files",
             "git_diff_file",
             "agent_sign_reply",
+            "ssh_key_info",
             "archive_run",
             "file_batch",
             "file_clipboard",

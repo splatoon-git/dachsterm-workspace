@@ -1,9 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import { rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 const name = `dachsterm-probe-${randomUUID()}`;
 const native = process.argv.includes('--native');
 const reuseBuild = process.argv.includes('--reuse-build');
@@ -38,6 +38,7 @@ async function run(command, args, options = {}) {
 let created = false;
 let agentBridge;
 let agentSocketPath;
+let agentPause;
 const agentSockets = new Set();
 try {
   if (native && !reuseBuild && !process.argv.includes('--skip-app-build'))
@@ -113,6 +114,22 @@ try {
       agentBridge.once('error', reject);
       agentBridge.listen(listenAt, resolve);
     });
+    // A native check switches this stand-in off and on, as a stopped and restarted ssh-agent
+    // service, by creating and removing this file.
+    env.DACHSTERM_AGENT_PAUSE = path.join(tmpdir(), `dachsterm-agent-pause-${randomUUID()}`);
+    let listening = true;
+    agentPause = setInterval(() => {
+      const paused = existsSync(env.DACHSTERM_AGENT_PAUSE);
+      if (paused && listening) {
+        listening = false;
+        agentBridge.close();
+        for (const socket of agentSockets) socket.destroy();
+      } else if (!paused && !listening) {
+        listening = true;
+        if (agentSocketPath) rmSync(agentSocketPath, { force: true });
+        agentBridge.listen(listenAt);
+      }
+    }, 200);
   }
   for (const [key, file] of [
     ['PASSWORD', 'password'],
@@ -157,6 +174,8 @@ try {
   console.error(error.message);
   process.exitCode = 1;
 } finally {
+  clearInterval(agentPause);
+  if (env.DACHSTERM_AGENT_PAUSE) rmSync(env.DACHSTERM_AGENT_PAUSE, { force: true });
   for (const socket of agentSockets) socket.destroy();
   agentBridge?.close();
   if (agentSocketPath) rmSync(agentSocketPath, { force: true });

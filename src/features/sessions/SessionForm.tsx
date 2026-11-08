@@ -142,6 +142,7 @@ export function SessionForm({
                   jumpIds: e.target.value === 'ssh' ? p.jumpIds : [],
                   tmuxSession: e.target.value === 'ssh' ? p.tmuxSession : '',
                   forwardAgent: e.target.value === 'ssh' && p.forwardAgent,
+                  forwardKeys: e.target.value === 'ssh' ? p.forwardKeys : [],
                 }))
               }
             >

@@ -174,6 +174,9 @@ fn base() -> Profile {
         keepalive: 5,
         tmux_session: String::new(),
         forward_agent: false,
+        forward_login_key: true,
+        forward_keys: vec![],
+        forward_system_agent: true,
         last_connected: None,
         has_secret: false,
     }
@@ -507,6 +510,7 @@ async fn run() -> Result<()> {
     );
     println!("PASS a server refusing agent forwarding is reported once and the shell still opens");
     agent_checks::run(&manager, &store, &paths).await?;
+    agent_checks::builtin::run(&manager, &store, &paths, dir.path()).await?;
     for i in 1..5 {
         let mut profile = base();
         profile.name = format!("fixture-{i}");

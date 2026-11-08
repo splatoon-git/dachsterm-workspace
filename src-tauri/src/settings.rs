@@ -108,6 +108,9 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
         p.last_connected = None;
         p.tmux_session.clear();
         p.forward_agent = false;
+        p.forward_login_key = true;
+        p.forward_keys.clear();
+        p.forward_system_agent = true;
     }
     let tunnels = store
         .tunnel_configs()?
@@ -369,6 +372,9 @@ pub(crate) fn apply_bundle(store: &Store, bundle: &mut Bundle, merges: &[Merge])
         let saved = existing.profiles.iter().find(|old| old.id == p.id);
         p.tmux_session = saved.map_or_else(String::new, |old| old.tmux_session.clone());
         p.forward_agent = saved.is_some_and(|old| old.forward_agent);
+        p.forward_login_key = saved.is_none_or(|old| old.forward_login_key);
+        p.forward_keys = saved.map_or_else(Vec::new, |old| old.forward_keys.clone());
+        p.forward_system_agent = saved.is_none_or(|old| old.forward_system_agent);
         tx.execute(
             "INSERT INTO profiles(id,data,group_id) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET data=?2,group_id=?3",
             params![
@@ -507,20 +513,35 @@ mod tests {
         let mut saved = crate::storage::tests::profile();
         saved.tmux_session = "mine".into();
         saved.forward_agent = true;
+        saved.forward_login_key = false;
+        saved.forward_system_agent = false;
+        saved.forward_keys = vec![crate::storage::ForwardKey {
+            path: "git-key".into(),
+            secret_ref: None,
+        }];
         let saved = store.save(saved, None).unwrap();
         let exported = String::from_utf8(export(&store).unwrap()).unwrap();
         assert!(
             !exported.contains("tmuxSession") && !exported.contains("forwardAgent"),
             "export must not carry them"
         );
+        assert!(!exported.contains("forwardLoginKey") && !exported.contains("forwardKeys"));
+        assert!(!exported.contains("forwardSystemAgent") && !exported.contains("git-key"));
         let mut incoming = saved.clone();
         incoming.id = "file".into();
         incoming.tmux_session = "from-file".into();
         incoming.forward_agent = false;
+        incoming.forward_keys = vec![crate::storage::ForwardKey {
+            path: "from-file".into(),
+            secret_ref: Some("someone-elses".into()),
+        }];
+        incoming.forward_login_key = true;
         let mut fresh = incoming.clone();
         fresh.id = "fresh".into();
         fresh.host = "other.example".into();
         fresh.forward_agent = true;
+        fresh.forward_login_key = false;
+        fresh.forward_system_agent = false;
         let mut bundle = Bundle {
             format: Some("dachsterm.sessions".into()),
             version: 3,
@@ -538,9 +559,16 @@ mod tests {
         let merged = profiles.iter().find(|p| p.id == saved.id).unwrap();
         assert_eq!(merged.tmux_session, "mine");
         assert!(merged.forward_agent, "a file cannot turn it off either");
+        assert_eq!(merged.forward_keys, saved.forward_keys);
+        assert!(!merged.forward_login_key && !merged.forward_system_agent);
         let added = profiles.iter().find(|p| p.host == "other.example").unwrap();
         assert_eq!(added.tmux_session, "");
         assert!(!added.forward_agent, "a file cannot turn it on");
+        assert!(
+            added.forward_keys.is_empty(),
+            "nor choose keys or stored Passphrases"
+        );
+        assert!(added.forward_login_key && added.forward_system_agent);
     }
     #[test]
     fn rejects_secret_and_unknown_schema() {

@@ -39,6 +39,13 @@ pub struct Profile {
     /// Off unless the user turns it on in the form. Never taken from a session file either.
     #[serde(default, skip_serializing_if = "is_false")]
     pub forward_agent: bool,
+    /// Built-in agent sources (DX.11). Like `forward_agent`, a session file never sets them.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub forward_login_key: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forward_keys: Vec<ForwardKey>,
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub forward_system_agent: bool,
     #[serde(default)]
     pub last_connected: Option<i64>,
     #[serde(default)]
@@ -47,6 +54,22 @@ pub struct Profile {
 fn is_false(value: &bool) -> bool {
     !value
 }
+fn is_true(value: &bool) -> bool {
+    *value
+}
+fn yes() -> bool {
+    true
+}
+/// A key file the built-in agent offers. `secret_ref` points at its stored Passphrase; only the
+/// backend sets it (`Store::save` keeps the saved one), the form's value is ignored.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ForwardKey {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret_ref: Option<String>,
+}
+pub const MAX_FORWARD_KEYS: usize = 8;
 fn default_protocol() -> String {
     "ssh".into()
 }
@@ -73,9 +96,18 @@ impl Profile {
             keepalive: 15,
             tmux_session: String::new(),
             forward_agent: false,
+            forward_login_key: true,
+            forward_keys: vec![],
+            forward_system_agent: true,
             last_connected: None,
             has_secret: false,
         }
+    }
+    /// Stored Passphrase references of the forwarded key files.
+    pub fn forward_refs(&self) -> impl Iterator<Item = &str> {
+        self.forward_keys
+            .iter()
+            .filter_map(|k| k.secret_ref.as_deref())
     }
     pub fn validate(&self) -> Result<()> {
         crate::encoding::get(&self.encoding)?;
@@ -83,8 +115,19 @@ impl Profile {
         if self.protocol != "ssh" && !self.tmux_session.is_empty() {
             return Err("tmux 세션은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
-        if self.protocol != "ssh" && self.forward_agent {
+        if self.protocol != "ssh" && (self.forward_agent || !self.forward_keys.is_empty()) {
             return Err("키 전달은 SSH 연결에서만 사용할 수 있습니다.".into());
+        }
+        let keys = &self.forward_keys;
+        if keys.len() > MAX_FORWARD_KEYS
+            || keys.iter().enumerate().any(|(i, k)| {
+                k.path.trim().is_empty()
+                    || k.path.len() > 4096
+                    || k.path.chars().any(char::is_control)
+                    || keys[..i].iter().any(|o| o.path == k.path)
+            })
+        {
+            return Err("전달할 키는 서로 다른 파일로 최대 8개입니다.".into());
         }
         if self.jump_ids.len() > crate::routes::MAX_HOPS
             || (self.protocol != "ssh" && !self.jump_ids.is_empty())
@@ -150,6 +193,13 @@ pub struct Snapshot {
     pub credential_warning: Option<String>,
 }
 pub struct Store(pub Mutex<Connection>);
+/// The JSON kept in `profiles.data`. Group, secret presence and last use live in columns.
+pub(crate) fn profile_data(p: &Profile) -> Result<String> {
+    let mut p = p.clone();
+    p.has_secret = false;
+    p.last_connected = None;
+    serde_json::to_string(&p).map_err(|_| "세션 직렬화 오류".into())
+}
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         let mut connection = Connection::open(path).map_err(db_error)?;
@@ -258,11 +308,26 @@ impl Store {
     }
     pub fn save(&self, mut p: Profile, secret: Option<String>) -> Result<Profile> {
         p.validate()?;
-        if p.id.is_empty() {
+        let old = if p.id.is_empty() {
             p.id = Uuid::new_v4().to_string();
+            None
         } else {
-            self.profile(&p.id)?;
+            Some(self.profile(&p.id)?)
+        };
+        // The form cannot choose a stored Passphrase: a key keeps the one saved for its file.
+        for key in &mut p.forward_keys {
+            key.secret_ref = old
+                .iter()
+                .flat_map(|o| &o.forward_keys)
+                .find(|k| k.path == key.path)
+                .and_then(|k| k.secret_ref.clone());
         }
+        let dropped: Vec<String> = old
+            .iter()
+            .flat_map(|o| o.forward_refs())
+            .filter(|r| !p.forward_refs().any(|kept| kept == *r))
+            .map(String::from)
+            .collect();
         let mut profiles = self.list()?.profiles;
         profiles.retain(|old| old.id != p.id);
         profiles.push(p.clone());
@@ -273,12 +338,14 @@ impl Store {
         for t in crate::session_management::templates(self)? {
             t.validate(&profiles, &self.list()?.groups)?;
         }
-        p.has_secret = false;
-        p.last_connected = None;
-        let data = serde_json::to_string(&p).map_err(|_| "세션 직렬화 오류")?;
+        let data = profile_data(&p)?;
         {
             let mut db = self.0.lock().unwrap();
             let tx = db.transaction().map_err(db_error)?;
+            for reference in &dropped {
+                tx.execute("INSERT OR IGNORE INTO credential_gc VALUES(?)", [reference])
+                    .map_err(db_error)?;
+            }
             tx.execute("INSERT OR IGNORE INTO credential_gc SELECT secret_ref FROM profiles WHERE id=?1 AND secret_ref IS NOT NULL AND secret_ref IS NOT ?2",params![p.id,secret]).map_err(db_error)?;
             tx.execute("INSERT INTO profiles(id,data,group_id,secret_ref) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET data=?2,group_id=?3,secret_ref=?4",params![p.id,data,p.group_id,secret]).map_err(db_error)?;
             tx.execute("DELETE FROM credential_gc WHERE id=?", [&secret])
@@ -295,15 +362,63 @@ impl Store {
             .map_err(db_error)?;
         Ok(())
     }
+    /// Callers hold `AppState.mutation`, so nothing is referenced between the query and the
+    /// removal. The OS store is called without the database lock.
     pub fn cleanup_credentials(&self) -> Result<()> {
-        let db = self.0.lock().unwrap();
-        let ids=db.prepare("SELECT id FROM credential_gc WHERE id NOT IN (SELECT secret_ref FROM profiles WHERE secret_ref IS NOT NULL)").map_err(db_error)?.query_map([],|r|r.get::<_,String>(0)).map_err(db_error)?.collect::<std::result::Result<Vec<_>,_>>().map_err(db_error)?;
-        for id in ids {
+        let forwarded: std::collections::HashSet<String> = self
+            .list()?
+            .profiles
+            .iter()
+            .flat_map(|p| p.forward_refs().map(String::from))
+            .collect();
+        let ids = {
+            let db = self.0.lock().unwrap();
+            db.prepare("SELECT id FROM credential_gc WHERE id NOT IN (SELECT secret_ref FROM profiles WHERE secret_ref IS NOT NULL)").map_err(db_error)?.query_map([],|r|r.get::<_,String>(0)).map_err(db_error)?.collect::<std::result::Result<Vec<_>,_>>().map_err(db_error)?
+        };
+        for id in ids.into_iter().filter(|id| !forwarded.contains(id)) {
             crate::credentials::delete(&id)?;
-            db.execute("DELETE FROM credential_gc WHERE id=?", [id])
+            self.0
+                .lock()
+                .unwrap()
+                .execute("DELETE FROM credential_gc WHERE id=?", [id])
                 .map_err(db_error)?;
         }
         Ok(())
+    }
+    /// Points a forwarded key at a Passphrase `Vault::save` just stored and staged. If a cleanup
+    /// removed it in between, it is staged again and nothing refers to it.
+    pub fn set_forward_secret(&self, profile: &str, path: &str, reference: &str) -> Result<()> {
+        let mut p = self.profile(profile)?;
+        let changed = "세션의 전달할 키가 바뀌어 Passphrase를 저장하지 않았습니다.";
+        let key = p
+            .forward_keys
+            .iter_mut()
+            .find(|k| k.path == path)
+            .ok_or(changed)?;
+        let previous = key.secret_ref.replace(reference.into());
+        let data = profile_data(&p)?;
+        let mut db = self.0.lock().unwrap();
+        let tx = db.transaction().map_err(db_error)?;
+        if tx
+            .execute("DELETE FROM credential_gc WHERE id=?", [reference])
+            .map_err(db_error)?
+            == 0
+        {
+            drop(tx);
+            db.execute("INSERT OR IGNORE INTO credential_gc VALUES(?)", [reference])
+                .map_err(db_error)?;
+            return Err("Passphrase를 저장하지 못했습니다. 다시 시도하세요.".into());
+        }
+        if let Some(previous) = previous {
+            tx.execute("INSERT OR IGNORE INTO credential_gc VALUES(?)", [previous])
+                .map_err(db_error)?;
+        }
+        tx.execute(
+            "UPDATE profiles SET data=?1 WHERE id=?2",
+            params![data, profile],
+        )
+        .map_err(db_error)?;
+        tx.commit().map_err(db_error)
     }
     pub fn touch(&self, id: &str) -> Result<()> {
         self.0
@@ -332,9 +447,17 @@ impl Store {
             return Err("다른 세션 또는 템플릿의 경유지입니다. 참조를 먼저 수정하세요. 열린 연결은 기존 경로를 유지합니다.".into());
         }
         use rusqlite::OptionalExtension;
+        let forwarded: Vec<String> = self
+            .profile(id)
+            .map(|p| p.forward_refs().map(String::from).collect())
+            .unwrap_or_default();
         let mut db = self.0.lock().unwrap();
         let tx = db.transaction().map_err(db_error)?;
         tx.execute("INSERT OR IGNORE INTO credential_gc SELECT secret_ref FROM profiles WHERE id=? AND secret_ref IS NOT NULL", [id]).map_err(db_error)?;
+        for reference in &forwarded {
+            tx.execute("INSERT OR IGNORE INTO credential_gc VALUES(?)", [reference])
+                .map_err(db_error)?;
+        }
         tx.execute("DELETE FROM profiles WHERE id=?", [id])
             .map_err(db_error)?;
         if let Some(value) = tx
@@ -410,6 +533,9 @@ pub(crate) mod tests {
             keepalive: 15,
             tmux_session: String::new(),
             forward_agent: false,
+            forward_login_key: true,
+            forward_keys: vec![],
+            forward_system_agent: true,
             last_connected: None,
             has_secret: false,
         }
@@ -485,6 +611,90 @@ pub(crate) mod tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+    fn journaled(store: &Store) -> Vec<String> {
+        let db = store.0.lock().unwrap();
+        let mut statement = db
+            .prepare("SELECT id FROM credential_gc ORDER BY id")
+            .unwrap();
+        statement
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap()
+    }
+    fn key(path: &str, secret_ref: Option<&str>) -> ForwardKey {
+        ForwardKey {
+            path: path.into(),
+            secret_ref: secret_ref.map(Into::into),
+        }
+    }
+    #[test]
+    fn forwarded_key_passphrases_are_referenced_only_by_the_backend() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("test.db")).unwrap();
+        let mut p = profile();
+        p.forward_keys = vec![key("a", Some("forged")), key("b", None)];
+        let p = store.save(p, None).unwrap();
+        assert_eq!(
+            p.forward_refs().count(),
+            0,
+            "a form cannot pick a reference"
+        );
+        assert!(store.set_forward_secret(&p.id, "a", "ref-a").is_err());
+        assert_eq!(
+            journaled(&store),
+            ["ref-a"],
+            "an unstaged one stays journaled"
+        );
+        store.stage_secret("ref-b").unwrap();
+        store.set_forward_secret(&p.id, "b", "ref-b").unwrap();
+        assert_eq!(journaled(&store), ["ref-a"]);
+        let mut edited = store.profile(&p.id).unwrap();
+        edited.forward_keys = vec![key("b", None), key("c", Some("ref-a"))];
+        let edited = store.save(edited, None).unwrap();
+        assert_eq!(
+            edited.forward_keys,
+            [key("b", Some("ref-b")), key("c", None)],
+            "the saved reference follows its file"
+        );
+        store.stage_secret("ref-b2").unwrap();
+        store.set_forward_secret(&p.id, "b", "ref-b2").unwrap();
+        assert_eq!(journaled(&store), ["ref-a", "ref-b"], "the replaced one");
+        let mut copy = store.profile(&p.id).unwrap();
+        copy.id.clear();
+        assert_eq!(store.save(copy, None).unwrap().forward_refs().count(), 0);
+        store.delete(&p.id).unwrap();
+        assert_eq!(journaled(&store), ["ref-a", "ref-b", "ref-b2"]);
+        let mut removed = store.save(profile(), None).unwrap();
+        removed.forward_keys = vec![key("d", None)];
+        let removed = store.save(removed, None).unwrap();
+        store.stage_secret("ref-d").unwrap();
+        store.set_forward_secret(&removed.id, "d", "ref-d").unwrap();
+        let mut none = store.profile(&removed.id).unwrap();
+        none.forward_keys.clear();
+        store.save(none, None).unwrap();
+        assert!(
+            journaled(&store).contains(&"ref-d".to_string()),
+            "a removed key"
+        );
+    }
+    #[test]
+    fn forwarded_keys_are_bounded_unique_and_ssh_only() {
+        let mut p = profile();
+        p.forward_keys = (0..MAX_FORWARD_KEYS)
+            .map(|i| key(&i.to_string(), None))
+            .collect();
+        assert!(p.validate().is_ok());
+        p.forward_keys.push(key("x", None));
+        assert!(p.validate().is_err());
+        p.forward_keys = vec![key("a", None), key("a", None)];
+        assert!(p.validate().is_err());
+        p.forward_keys = vec![key(" ", None)];
+        assert!(p.validate().is_err());
+        p.forward_keys = vec![key("a", None)];
+        p.protocol = "ftp".into();
+        assert!(p.validate().is_err());
     }
     #[test]
     fn legacy_schema_keeps_profiles_and_defaults_encoding() {

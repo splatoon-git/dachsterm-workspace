@@ -1,5 +1,6 @@
 mod agent_filter;
 pub mod agent_forward;
+pub mod agent_keys;
 pub mod archive;
 pub mod broadcast;
 mod commands;
@@ -36,6 +37,7 @@ mod shell_probe;
 pub mod snippets;
 pub mod ssh;
 mod ssh_auth;
+pub mod ssh_keys;
 pub mod storage;
 pub mod terminal_start;
 pub mod transfer_queue;
@@ -207,7 +209,8 @@ pub fn run() {
             git_diff::git_refs,
             git_diff::git_diff_files,
             git_diff::git_diff_file,
-            agent_forward::agent_sign_reply,
+            agent_keys::agent_sign_reply,
+            ssh_keys::ssh_key_info,
             broadcast::broadcast_status,
             broadcast::broadcast_set,
             vault::vault_status,

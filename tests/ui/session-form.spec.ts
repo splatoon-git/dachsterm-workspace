@@ -99,3 +99,27 @@ test('key forwarding starts off, folded, and only for SSH', async ({ page }) => 
   await dialog.getByLabel('프로토콜').selectOption('ssh');
   await expect(forward).not.toBeChecked();
 });
+
+test('forwarded keys sit under key forwarding and leave no half-empty rows', async ({ page }) => {
+  const dialog = await openForm(page);
+  await dialog.locator('summary', { hasText: '고급 옵션' }).click();
+  const keys = dialog.getByRole('group', { name: '전달할 키', exact: true });
+  await expect(keys).toHaveCount(0);
+  await dialog.getByLabel('SSH 키 전달 (agent forwarding)', { exact: true }).check();
+  await expect(keys).toBeVisible();
+  const login = keys.getByLabel('로그인 키 (위의 개인키 파일)', { exact: true });
+  await expect(login).toHaveCount(0);
+  await dialog.getByLabel('인증 방식').selectOption('key');
+  await expect(login).toBeChecked();
+  await expect(keys.getByLabel('이 PC의 SSH agent 키도 사용', { exact: true })).toBeChecked();
+  const add = keys.getByRole('button', { name: '추가', exact: true });
+  await expect(add).toBeDisabled();
+  const path = keys.getByLabel('추가할 키 파일 경로', { exact: true });
+  await path.fill('C:\\keys\\id_git');
+  // Enter adds here and never submits the session form. Without the desktop app it cannot read.
+  await path.press('Enter');
+  await expect(dialog).toBeVisible();
+  await expect(keys.getByRole('alert')).toContainText('데스크톱 앱');
+  await expect(keys.getByRole('list', { name: '추가 키' }).getByRole('listitem')).toHaveCount(0);
+  await expectFullRows(dialog.locator('.session-advanced .form-grid').first());
+});

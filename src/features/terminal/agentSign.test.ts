@@ -2,7 +2,13 @@
 import type { Terminal } from '@xterm/xterm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { call } from '../../lib/ipc';
-import { AgentSignQueue, currentSign, signPurpose, type PendingSign } from './agentSign';
+import {
+  AgentSignQueue,
+  currentSign,
+  signPurpose,
+  signSource,
+  type PendingSign,
+} from './agentSign';
 import type { AgentSignRequest } from './sessionTypes';
 
 vi.mock('../../lib/ipc', () => ({
@@ -19,6 +25,8 @@ const request = (id: string, extra: Partial<AgentSignRequest> = {}): AgentSignRe
   loginUser: null,
   namespace: null,
   hostKey: null,
+  source: 'system',
+  passphrase: false,
   seconds: 60,
   ...extra,
 });
@@ -37,6 +45,10 @@ describe('which request a pane shows', () => {
     expect(signPurpose(request('r', { loginUser: 'git' }))).toContain('사용자 git');
     expect(signPurpose(request('r', { namespace: 'file' }))).toContain('용도 file');
     expect(signPurpose(request('r'))).toBe('용도를 알 수 없는 서명');
+  });
+  it('says whose key signs', () => {
+    expect(signSource(request('r', { source: 'app' }))).toBe('이 앱의 키 파일');
+    expect(signSource(request('r'))).toBe('이 PC의 SSH agent');
   });
 });
 
@@ -75,7 +87,7 @@ describe('the queue', () => {
     q.subscribe(changes);
     q.add(request('a'), 'c1');
     q.add(request('b'), 'c1');
-    await q.answer(q.snapshot()[0], 'connection');
+    await q.answer(q.snapshot()[0], { decision: 'connection' });
     expect(call).toHaveBeenCalledWith('agent_sign_reply', {
       id: 'c1',
       request: 'a',
@@ -103,7 +115,27 @@ describe('the queue', () => {
     q.add(request('a'), 'c1');
     expect(call).not.toHaveBeenCalled();
     vi.mocked(call).mockRejectedValueOnce('서명 요청이 이미 끝났습니다.');
-    await q.answer(q.snapshot()[0], 'once');
+    await q.answer(q.snapshot()[0], { decision: 'once' });
     expect(notice).toHaveBeenCalledWith('서명 요청이 이미 끝났습니다.');
+  });
+
+  it('keeps a locked key request until its Passphrase is accepted', async () => {
+    const q = queue();
+    q.add(request('a', { source: 'app', passphrase: true, seconds: 120 }), 'c1');
+    vi.mocked(call).mockResolvedValueOnce({ kind: 'passphrase', reason: 'needed' });
+    const asked = await q.answer(q.snapshot()[0], { decision: 'once' });
+    expect(asked).toEqual({ kind: 'passphrase', reason: 'needed' });
+    expect(q.snapshot()).toHaveLength(1);
+    vi.mocked(call).mockResolvedValueOnce({ kind: 'done', notice: '저장 실패' });
+    await q.answer(q.snapshot()[0], { decision: 'once', passphrase: 'p', remember: true });
+    expect(call).toHaveBeenLastCalledWith('agent_sign_reply', {
+      id: 'c1',
+      request: 'a',
+      decision: 'once',
+      passphrase: 'p',
+      remember: true,
+    });
+    expect(q.snapshot()).toHaveLength(0);
+    expect(notice).toHaveBeenCalledWith('저장 실패');
   });
 });
