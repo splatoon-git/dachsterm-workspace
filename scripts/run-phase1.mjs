@@ -21,6 +21,7 @@ const env = {
 };
 if (process.argv.includes('--jumps')) env.DACHSTERM_PROBE_JUMPS = '1';
 if (process.argv.includes('--agent-only')) env.DACHSTERM_AGENT_ONLY = '1';
+if (process.argv.includes('--edit-only')) env.DACHSTERM_EDIT_ONLY = '1';
 if (process.argv.includes('--credentials-only')) env.DACHSTERM_PROBE_CREDENTIALS_ONLY = '1';
 // `--git-versions-only`: the version servers alone, after the Debian checks have passed.
 if (process.argv.includes('--git-versions-only')) {

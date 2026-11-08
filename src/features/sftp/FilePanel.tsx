@@ -4,6 +4,7 @@ import { PermissionEditor } from './PermissionEditor';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { call, desktop, errorText } from '../../lib/ipc';
 import { useFileDrop } from '../../lib/fileDrop';
+import type { ExternalEdit as Edit } from '../../lib/externalEdit';
 import { TerminalSession } from '../terminal/session';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
@@ -16,15 +17,6 @@ type FileClipboard = { sourceId: string; operation: 'copy' | 'move'; paths: stri
 type BatchOutcome = { completed: string[]; errors: string[] };
 type Entry = FileEntry;
 type Listing = { path: string; entries: Entry[] };
-type Edit = {
-  uploadMode: string;
-  id: string;
-  profileId: string;
-  remote: string;
-  local: string;
-  status: string;
-  message: string;
-};
 export function FilePanel({ session }: { session?: TerminalSession }) {
   if (!session)
     return (

@@ -8,7 +8,7 @@ export const agentPresetsKey = 'dachsterm.agentPresets';
 export const maxPresets = 20;
 const maxNameLength = 40;
 const maxCommandLength = 1000;
-const nameToken = '{name}';
+export const nameToken = '{name}';
 
 export const defaultAgentPresets: readonly AgentPreset[] = [
   { name: '에이전트', command: 'claude' },

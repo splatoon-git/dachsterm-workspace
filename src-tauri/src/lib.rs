@@ -279,6 +279,7 @@ pub fn run() {
             workspace::editor_pick,
             workspace::edit_list,
             workspace::edit_resolve,
+            workspace::edit_session_auto,
             snippets::snippet_list,
             snippets::snippet_save,
             snippets::snippet_send,

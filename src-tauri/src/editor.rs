@@ -8,6 +8,8 @@ use std::{
     time::Duration,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+mod connection_auto;
+pub use connection_auto::Listed;
 const LIMIT: u64 = 32 * 1024 * 1024;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -27,6 +29,9 @@ pub struct Edit {
     pub uploaded: String,
     pub status: String,
     pub message: String,
+    /// Set only during "auto for this connection": the mode to return to. Never written to disk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode_after_connection: Option<String>,
 }
 #[derive(Default)]
 pub struct Editors {
@@ -81,7 +86,7 @@ fn persist(edit: &Edit) -> Result<()> {
         .parent()
         .ok_or("편집 경로 오류")?
         .join("recovery.json");
-    let data = serde_json::to_vec(edit).map_err(sftp::failure)?;
+    let data = serde_json::to_vec(&edit.durable()).map_err(sftp::failure)?;
     crate::maintenance::atomic_write(&manifest, &data)
 }
 pub fn private_directory(path: &Path) -> Result<()> {
@@ -210,6 +215,7 @@ impl Editors {
             uploaded: hash(&local_bytes),
             status: "watching".into(),
             message: "저장을 감지하면 업로드 여부를 확인합니다.".into(),
+            mode_after_connection: None,
         };
         persist(&edit)?;
         // Never interpolate a shell command. The file argument is always a separate argument.
@@ -441,6 +447,7 @@ impl Editors {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(2)).await;
+                editors.expire_connection_auto(&connections).await;
                 for edit in editors
                     .list()
                     .into_iter()
@@ -487,6 +494,7 @@ impl Editors {
         let mut entries = self.entries.lock().unwrap();
         let edit = entries.get_mut(id).ok_or("편집 작업 없음")?;
         edit.upload_mode = mode.into();
+        edit.mode_after_connection = None;
         if edit.status == "pending" {
             edit.status = "watching".into();
         }
