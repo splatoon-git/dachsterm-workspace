@@ -4,7 +4,14 @@ import { commandMarksOf } from '../terminal/commandMarks';
 import { terminalPreferences, useTerminalPreferences } from '../terminal/preferences';
 import type { TerminalSession } from '../terminal/session';
 import { sessionKind } from '../terminal/sessionKind';
-import { GitScheduler, gitPath, treeMarks, type GitEvent, type GitResult } from './gitStatus';
+import {
+  GitScheduler,
+  gitPath,
+  hookBranch,
+  treeMarks,
+  type GitEvent,
+  type GitResult,
+} from './gitStatus';
 
 /**
  * The Git status of one SSH, local or WSL tab. It listens to what the tab already reports (folder
@@ -19,10 +26,13 @@ class GitStatusStore {
       query: async (folder) => {
         const id = session.connectionId;
         const target = session.localTarget;
+        const askedAt = Date.now();
         const result = await (target
           ? call<GitResult>('local_git_status', { targetId: target.id, folder })
           : call<GitResult>('git_status', { id, folder }));
-        return id === session.connectionId ? result : null;
+        if (id !== session.connectionId) return null;
+        this.askedAt.set(folder, askedAt);
+        return result;
       },
       auto: () => terminalPreferences().gitStatus && this.connected,
       now: () => Date.now(),
@@ -40,6 +50,7 @@ class GitStatusStore {
       if (session.connectionId !== connection) {
         connection = session.connectionId;
         this.scheduler.clear();
+        this.askedAt.clear();
         this.changed();
       }
       if (now.status === 'connected' && (now.directory !== directory || status !== 'connected'))
@@ -54,9 +65,28 @@ class GitStatusStore {
       program = state;
     });
     // A prompt drawn again from old output says nothing about the folder now.
-    commandMarksOf(session.terminal)?.onPrompt((replaying) => {
+    const marks = commandMarksOf(session.terminal);
+    marks?.onPrompt((replaying) => {
       if (!replaying) this.request('prompt', this.directory);
     });
+    marks?.onBranch((branch) => this.branchReported(branch));
+  }
+  /** When the answer each folder has now was asked for. */
+  private askedAt = new Map<string, number>();
+  /** The last report that asked again, so a shell Git never agrees with asks only once. */
+  private askedFor = '';
+  /** The prompt names another branch than the last query, which is then out of date. */
+  private branchReported(branch: string) {
+    const folder = this.directory;
+    if (!folder) return;
+    const view = this.scheduler.view(folder);
+    const queried = view && 'repo' in view ? hookBranch(view.repo) : '';
+    const report = `${folder}\n${branch}`;
+    if (branch === queried) this.askedFor = '';
+    else if (report !== this.askedFor) {
+      this.askedFor = report;
+      this.request('branch', folder);
+    }
   }
   private get connected() {
     return this.session.snapshot().status === 'connected';
@@ -90,6 +120,8 @@ class GitStatusStore {
     };
   };
   snapshot = () => this.version;
+  /** When the folder's current answer was asked for, or 0 when it has none. */
+  answerTime = (folder: string) => this.askedAt.get(folder) ?? 0;
 }
 
 const stores = new WeakMap<TerminalSession, GitStatusStore>();
@@ -123,6 +155,7 @@ export function useGitStatus(session: TerminalSession | undefined) {
     /** The folder is known, so a manual query is possible. */
     directory,
     auto,
+    answerTime: directory ? store.answerTime(directory) : 0,
     refresh: () => store.request('manual', directory),
   };
 }

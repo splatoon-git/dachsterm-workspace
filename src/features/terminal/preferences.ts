@@ -18,6 +18,8 @@ export type TerminalPreferences = {
   programGuide: boolean;
   /** Queries Git status of a tab's folder when something happens. Off leaves the manual refresh. */
   gitStatus: boolean;
+  /** Where the branch shows inside the terminal. Settings get their control in GE.10. */
+  promptBranch: 'right' | 'off';
   /** Seconds a command must run before its end is notified. 0 turns this off. */
   longCommandNotify: number;
 };
@@ -34,6 +36,7 @@ const defaults: TerminalPreferences = {
   bellNotifications: true,
   programGuide: true,
   gitStatus: true,
+  promptBranch: 'right',
   longCommandNotify: 30,
 };
 export { isMac as isMacPlatform } from '../../lib/platform';
@@ -54,6 +57,7 @@ function read(): TerminalPreferences {
         typeof saved.bellNotifications === 'boolean' ? saved.bellNotifications : true,
       programGuide: typeof saved.programGuide === 'boolean' ? saved.programGuide : true,
       gitStatus: typeof saved.gitStatus === 'boolean' ? saved.gitStatus : true,
+      promptBranch: saved.promptBranch === 'off' ? 'off' : 'right',
       longCommandNotify: longCommandChoices.includes(saved.longCommandNotify)
         ? saved.longCommandNotify
         : 30,

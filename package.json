@@ -20,7 +20,8 @@
     "test:ui": "playwright test",
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
     "format:check": "prettier --check src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
-    "probe:ftp": "node scripts/run-ftp.mjs"
+    "probe:ftp": "node scripts/run-ftp.mjs",
+    "probe:prompt-branch": "node scripts/probe-prompt-branch.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

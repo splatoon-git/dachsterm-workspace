@@ -5,6 +5,7 @@ import {
   gitSentence,
   gitStatusText,
   gitTooltip,
+  hookBranch,
   treeMarks,
   type GitRepo,
   type GitResult,
@@ -102,6 +103,20 @@ describe('git status schedule', () => {
     expect(asked).toEqual(['/a', '/a']);
   });
 
+  it('asks at once when the prompt names another branch, even right after a query', async () => {
+    const { scheduler, asked, flush, timers, setAuto } = setup();
+    scheduler.request('folder', '/a');
+    await flush();
+    scheduler.request('branch', '/a');
+    await flush();
+    expect(timers).toHaveLength(0);
+    expect(asked).toEqual(['/a', '/a']);
+    setAuto(false);
+    scheduler.request('branch', '/a');
+    await flush();
+    expect(asked).toHaveLength(2);
+  });
+
   it('runs one query at a time and keeps only the latest waiting one', async () => {
     const { scheduler, asked, flush, hold, release } = setup();
     hold(true);
@@ -193,6 +208,12 @@ describe('git status schedule', () => {
 });
 
 describe('git status text', () => {
+  it('spells a query result the way the shell hook does', () => {
+    expect(hookBranch(repo('/r'))).toBe('main');
+    expect(hookBranch(repo('/r', { branch: null }))).toBe('@abcdef0');
+    expect(hookBranch(repo('/r', { branch: null, oid: null }))).toBe('');
+  });
+
   const changed = repo('/srv/app', {
     entries: [
       { path: 'src/main.rs', mark: 'M' },
