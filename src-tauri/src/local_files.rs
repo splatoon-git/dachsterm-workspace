@@ -66,6 +66,19 @@ fn posix_parts(value: &str) -> Vec<&str> {
     }
     parts
 }
+/// Files dropped from this computer's file manager belong to no tab. Their paths are native, so a
+/// shell target reads them, and a WSL folder still receives them through its share.
+fn this_computer() -> Target {
+    Target {
+        id: "this-computer".into(),
+        name: String::new(),
+        kind: "shell".into(),
+        follow: "none".into(),
+        program: PathBuf::new(),
+        args: Vec::new(),
+        env: Vec::new(),
+    }
+}
 fn locate(target: &Target, value: &str) -> Result<Location> {
     crate::sftp::path(value)?;
     if let Some(distribution) = target.id.strip_prefix("wsl:") {
@@ -342,7 +355,7 @@ pub async fn local_files_change(
 #[tauri::command]
 pub async fn local_files_batch(
     state: State<'_, AppState>,
-    source_target_id: String,
+    source_target_id: Option<String>,
     target_id: String,
     operation: String,
     paths: Vec<String>,
@@ -351,12 +364,37 @@ pub async fn local_files_batch(
     if !["copy", "move", "delete"].contains(&operation.as_str()) || paths.len() > 1000 {
         return Err("파일 작업 설정을 확인하세요.".into());
     }
-    let source = state.locals.target(&source_target_id)?;
+    let source = match source_target_id {
+        Some(id) => state.locals.target(&id)?,
+        None => this_computer(),
+    };
     let target = state.locals.target(&target_id)?;
     let directory = directory
         .map(|d| locate(&target, &d).map(|l| l.native))
         .transpose()?;
     blocking(move || Ok(batch(&operation, &source, &paths, directory))).await
+}
+/// Copies files of a WSL tab to a folder of this computer the user picks; `None` when the picker
+/// was closed. Existing files are never replaced, as in the panel's own copy.
+#[tauri::command]
+pub async fn local_files_download(
+    state: State<'_, AppState>,
+    target_id: String,
+    paths: Vec<String>,
+) -> Result<Option<Outcome>> {
+    if paths.is_empty() || paths.len() > 1000 {
+        return Err("파일 작업 설정을 확인하세요.".into());
+    }
+    let source = state.locals.target(&target_id)?;
+    let Some(folder) = rfd::AsyncFileDialog::new()
+        .set_title("다운로드할 폴더")
+        .pick_folder()
+        .await
+    else {
+        return Ok(None);
+    };
+    let directory = folder.path().to_path_buf();
+    blocking(move || Ok(Some(batch("copy", &source, &paths, Some(directory))))).await
 }
 #[tauri::command]
 pub async fn local_files_edit(
@@ -491,6 +529,23 @@ mod tests {
         let deleted = batch("delete", &shell(), &paths, None);
         assert!(deleted.errors.is_empty(), "{:?}", deleted.errors);
         assert!(!from.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn dropped_files_copy_from_this_computer() {
+        let root = scratch("drop");
+        let (dropped, folder) = (root.join("dropped.txt"), root.join("into"));
+        fs::write(&dropped, b"drop").unwrap();
+        fs::create_dir(&folder).unwrap();
+        let outcome = batch(
+            "copy",
+            &this_computer(),
+            &[text(&dropped)],
+            Some(folder.clone()),
+        );
+        assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+        assert_eq!(fs::read(folder.join("dropped.txt")).unwrap(), b"drop");
+        assert!(dropped.exists());
         fs::remove_dir_all(root).unwrap();
     }
     #[test]

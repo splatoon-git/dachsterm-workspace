@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, errorText } from '../../lib/ipc';
+import { useFileDrop } from '../../lib/fileDrop';
 import type { LocalTarget, TerminalSession } from '../terminal/session';
 import { childPath, selectionAfterClick, withoutNested, type FileEntry } from './fileList';
 import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
@@ -92,7 +93,12 @@ export function LocalFilePanel({
     shareClipboard(value);
     setClipboardState(value);
   }
-  async function runBatch(kind: 'copy' | 'move' | 'delete', paths: string[], source = targetId) {
+  /** `source` null means paths of this computer, such as files dropped from its file manager. */
+  async function runBatch(
+    kind: 'copy' | 'move' | 'delete',
+    paths: string[],
+    source: string | null = targetId,
+  ) {
     const result = await call<Outcome>('local_files_batch', {
       sourceTargetId: source,
       targetId,
@@ -103,6 +109,24 @@ export function LocalFilePanel({
     await load(listing.path);
     setError(result.errors.join('\n'));
     return result;
+  }
+  const panel = useRef<HTMLElement>(null);
+  const dropOver = useFileDrop(
+    panel,
+    (paths) => void runBatch('copy', paths, null).catch((e) => setError(errorText(e))),
+    !!listing.path,
+  );
+  async function download() {
+    setContext(null);
+    try {
+      const result = await call<Outcome | null>('local_files_download', {
+        targetId,
+        paths: selectedPaths,
+      });
+      if (result) setError(result.errors.join('\n'));
+    } catch (e) {
+      setError(errorText(e));
+    }
   }
   function remember(kind: 'copy' | 'move') {
     setContext(null);
@@ -180,7 +204,12 @@ export function LocalFilePanel({
   }
   const editable = !!selected && !selected.directory;
   return (
-    <aside className="files" aria-label="로컬 파일 탐색" onKeyDown={fileKey}>
+    <aside
+      ref={panel}
+      className={`files ${dropOver ? 'drop-over' : ''}`}
+      aria-label="로컬 파일 탐색"
+      onKeyDown={fileKey}
+    >
       <div className="file-header" title={target.name}>
         <span className="status-dot online" />
         <span className="file-header-name">{target.name}</span>
@@ -305,6 +334,10 @@ export function LocalFilePanel({
           at={context}
           close={() => setContext(null)}
           items={[
+            // WSL files live inside Linux, so taking a copy to this computer is a download.
+            ...(target.kind === 'wsl'
+              ? [{ label: '다운로드…', disabled: !selection.length, run: () => void download() }]
+              : []),
             {
               label: '외부 편집기로 열기',
               disabled: !editable,

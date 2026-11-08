@@ -176,3 +176,8 @@
 .file-git-mark[data-mark='?'] {
   color: var(--color-status-info);
 }
+/* Files dragged from the OS over a panel that takes them. */
+.files.drop-over {
+  outline: var(--border-width-focus) dashed var(--color-focus-ring);
+  outline-offset: calc(-1 * var(--space-xs));
+}

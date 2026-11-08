@@ -27,6 +27,7 @@ fn main() {
             "local_files_list",
             "local_files_change",
             "local_files_batch",
+            "local_files_download",
             "local_files_edit",
             "terminal_supports_directory_hook",
             "clipboard_write_text",

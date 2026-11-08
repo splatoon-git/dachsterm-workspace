@@ -81,6 +81,7 @@
     "allow-local-files-list",
     "allow-local-files-change",
     "allow-local-files-batch",
+    "allow-local-files-download",
     "allow-local-files-edit",
     "allow-terminal-supports-directory-hook",
     "allow-clipboard-write-text",

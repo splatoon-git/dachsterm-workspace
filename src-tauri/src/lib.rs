@@ -199,6 +199,7 @@ pub fn run() {
             local_files::local_files_list,
             local_files::local_files_change,
             local_files::local_files_batch,
+            local_files::local_files_download,
             local_files::local_files_edit,
             shell_probe::terminal_supports_directory_hook,
             desktop_bridge::clipboard_write_text,
