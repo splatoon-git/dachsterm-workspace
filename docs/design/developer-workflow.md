@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
-- 작업 ID: **DX.0~DX.10**, 설계일: **2026-11-07**.
-- 현재 상태: **DX.1~DX.10 구현. 실제 CLI 에이전트·Windows ssh-agent·외부 push 수동 확인과 Mac 실기기(M.15) 대기.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 작업 ID: **DX.0~DX.14**, 설계일: **2026-11-07**(DX.11~DX.14는 2026-11-08 추가).
+- 현재 상태: **DX.1~DX.10 구현. 실제 CLI 에이전트·외부 push 수동 확인과 Mac 실기기(M.15) 대기. DX.11~DX.14 설계 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -60,6 +60,13 @@ AT의 원칙을 그대로 따른다: 전용 모드 없음, 화면 글자 해석 
 | `features/terminal/commandMarks.ts` | OSC 133 표식, 이동, 긴 명령 판단 | DX.9 |
 | `components/fileDecorations.ts` | 파일 트리 행 표시용 컨텍스트 | DX.5 |
 | `app/SessionTab.tsx`, `app/ReviewDock.tsx` | `Tab` 이동과 검토 패널 연결 | AT.2, DX.6 |
+| `src-tauri/src/ssh_keys.rs` | 개인키 읽기·해독. `ssh.rs`에서 옮겨 로그인과 내장 agent가 함께 쓴다 | DX.11 |
+| `src-tauri/src/agent_keys.rs` | 내장 agent의 키 목록, 서명, 시스템 agent 목록과 합치기 | DX.11 |
+| `features/sessions/ForwardKeysField.tsx` | 세션 고급 옵션의 전달할 키 목록 | DX.11 |
+| `src-tauri/src/git_credential.rs` | 원격 소켓 전달, 요청 파서, 승인 대기, 이 PC 쪽 출처 | DX.12 |
+| `features/terminal/GitCredentialCard.tsx` | 자격 증명 승인과 직접 입력 카드 | DX.12 |
+| `src-tauri/src/local_agent.rs` | 로컬·WSL 탭의 pipe·소켓 수신, 탭 수명, 셸 환경 변수 | DX.13 |
+| `src-tauri/src/credential_helper.rs` | `dachsterm git-credential get` 실행 모드. 화면 없이 pipe로 중계 | DX.14 |
 
 기능 간 직접 import를 만들지 않는다(규칙 §7). `App`이 `features/git`의 값을 `components/fileDecorations.ts` 컨텍스트로 내려보내면 `FileTreeRow`가 표시한다. 이 방식이면 `FilePanel.tsx`를 수정하지 않는다.
 
@@ -429,6 +436,171 @@ exec tmux attach -t '=<이름>'
 - **`SSH_AUTH_SOCK`(DX.3 표의 항목):** 안내서에만 넣었다. 기본 명령(`guideData.ts`)에 `eval "$(tmux show-environment -s SSH_AUTH_SOCK)"`를 넣는 것은 코드 변경이라 이번 문서 범위에서 빼고 후속으로 남긴다. 안내 내용은 Docker OpenSSH와 tmux 3.3a에서 확인했다. 재접속해 붙은 뒤 기존 패널은 끊긴 소켓을 가리켜 `ssh-add -l`이 종료 코드 2였고, `eval` 뒤 새 소켓으로 0이 됐다.
 - **Git 조회 명령:** 안내서에 `git_status.rs`가 실제로 보내는 명령 전체와 clean 필터를 확인하는 명령(`git config --show-origin --get-regexp '^filter\.'`)을 적었다.
 
+### DX.11 — 앱 내장 agent (2026-11-08 추가)
+
+**필요한 이유:** DX.2는 서버의 요청을 이 PC의 `ssh-agent`로 넘기기만 한다. Windows는 이 서비스가 기본으로 꺼져 있고(이 PC도 Disabled, 키 없음), Finder로 실행한 Mac 앱은 `SSH_AUTH_SOCK`이 있는지 확인되지 않았다(DX.0 미실측). 그래서 대부분의 사용자는 처음에 키 전달이 동작하지 않는다. 앱은 이미 로그인에 쓰는 개인키를 다루므로, 앱이 직접 agent가 되어 설정 없이 동작하게 한다. SSH 키 서명은 표준이라 GitHub, GitLab(자체 설치형 포함), Bitbucket, Gitea 모두 같은 방식으로 동작한다.
+
+**전달할 키:** 서버 로그인 키와 Git 호스팅에 등록한 키가 다른 경우가 흔하므로 로그인 키만 내보내지 않는다. 세션 고급 옵션 **SSH 키 전달** 아래에 다음을 둔다.
+
+| 항목 | 기본값 | 설명 |
+|---|---|---|
+| 로그인 키 | 켬 | 인증 방식이 개인키일 때만 보인다 |
+| 추가 키 | 없음 | 키 파일을 골라 최대 8개. 줄마다 파일 이름, 알고리즘, SHA-256 지문을 보여주고 ⋯ 메뉴로 뺀다 |
+| 이 PC의 SSH agent 키도 사용 | 켬 | 시스템 agent가 있으면 그 키도 목록에 더한다. 없으면 조용히 건너뛴다 |
+
+- 지문은 새 명령 `ssh_key_info`가 개인키 파일의 공개 부분에서 읽는다. 공개 부분을 읽을 수 없는 형식(암호화된 PEM)은 같은 이름의 `.pub`를 읽고, 그것도 없으면 "첫 서명 때 확인"으로 표시한다.
+- 추가 키의 Passphrase는 DB에 참조만 두고 값은 OS 저장소나 금고에 둔다(기존 비밀 참조와 정리 journal 규칙). 저장하지 않은 키는 첫 서명 승인 때 카드에서 묻는다.
+
+**동작(`agent_keys.rs` 새 파일, `agent_forward.rs`는 연결만 바꾼다):**
+
+| 요청 | 처리 |
+|---|---|
+| `REQUEST_IDENTITIES` | 앱의 키(로그인 키, 추가 키)와 시스템 agent의 키를 합친다. 같은 공개키는 하나로 두고 앱의 키를 우선한다 |
+| `SIGN_REQUEST` | 기존과 같이 승인을 받는다. 앱의 키면 앱이 서명하고, 시스템 agent의 키면 지금처럼 그쪽으로 넘긴다. 목록에 없는 키는 묻지 않고 `FAILURE` |
+| `session-bind@openssh.com` | 지금처럼 기록해 카드에 대상 호스트키를 보여주고 `SUCCESS` |
+| 그 밖의 모든 메시지 | 지금처럼 `FAILURE`. 필터(`agent_filter.rs`)는 바꾸지 않는다 |
+
+- **서명 알고리즘:** Ed25519, ECDSA는 키 라이브러리로 서명한다. RSA는 기존 `rsa_auth`의 ring 경로로 `rsa-sha2-256`, `rsa-sha2-512`만 서명하고, 플래그가 없는 SHA-1 요청은 `FAILURE`와 연결당 한 번 안내로 거부한다(로그인 인증과 같은 정책). 서명 결과는 단위 테스트에서 공개키로 검증한다.
+- **키 메모리:** 로그인 키는 접속할 때 이미 해독한다. 키 전달이 켜져 있고 로그인 키를 내보내는 연결만 그 키를 연결 수명 동안 보관하고, 연결이 끝나면 지운다(`ZeroizeOnDrop`). 시스템 `ssh-agent`가 키를 메모리에 두는 것과 같은 수준이다. 추가 키는 서명할 때 해독하고 바로 지운다. "이 연결에서 10분 허용"을 고른 경우에만 그 10분 동안 보관한다.
+- **키 읽기 공용화:** `ssh.rs`의 개인키 읽기·해독(크기 확인, `decode_secret_key`, `rsa_auth::decode_pem`)을 `ssh_keys.rs`로 옮겨 로그인과 내장 agent가 함께 쓴다. `ssh.rs`가 줄어든다.
+- **안내:** "이 PC의 agent에 연결할 수 없음" 안내는 앱의 키가 하나도 없을 때만 보낸다. 문구는 "전달할 키가 없습니다. 세션 고급 옵션에서 키를 고르거나 이 PC의 SSH agent에 키를 등록하세요."로 바꾼다.
+- **카드:** 기존 `AgentSignCard`에 키 출처(이 앱의 키, 이 PC의 agent)를 더한다. Passphrase가 필요한 추가 키는 **허용**을 누른 뒤 같은 카드에 Passphrase 칸과 "이 PC에 저장"을 보여준다. 카드는 여전히 포커스를 먼저 가져가지 않는다.
+- **제외:** FIDO(`sk-*`) 키는 하드웨어가 필요해 시스템 agent를 거칠 때만 쓴다. 사용자 인증서(`*-cert.pub`)는 1차에서 뺀다.
+
+**합격:** 시스템 agent가 없는 상태(이 PC 그대로)에서 서버의 `ssh-add -l`이 로그인 키와 추가 키를 보여준다. 로그인 키와 다른 "Git 전용 키"로 승인한 뒤 push되고, 거부하면 실패한다. RSA 키는 SHA-2로 서명되고 SHA-1 요청은 거부된다. 서버의 `ssh-add -D`가 키를 지우지 못한다. 시스템 agent를 켜면 두 출처의 키가 합쳐지고 중복이 없다.
+
+### DX.12 — HTTPS Git 자격 증명 전달 (2026-11-08 추가)
+
+**필요한 이유:** `https://` 저장소는 SSH 키가 아니라 토큰이나 암호를 쓴다. 회사 GitLab처럼 SSH 포트가 막혀 HTTPS만 쓰는 곳도 많다. 서버의 git이 자격 증명을 물을 때 그 질문을 이 PC로 가져와, 이 PC의 Git 자격 증명 관리자(GitHub, GitLab, Bitbucket, Azure DevOps 로그인 지원)나 앱에 저장한 토큰으로 답한다.
+
+**서버에 설치하지 않는다.** 서버의 git에 원래 들어 있는 `credential-cache` 클라이언트를 통로로 쓴다. 이 클라이언트는 지정한 Unix 소켓에 요청을 보내고 받은 답을 git에 돌려준다. 앱은 그 소켓을 SSH 원격 소켓 전달로 만들고, 소켓 반대편에서 캐시 데몬 대신 답한다. 파일을 쓰지 않고, 터미널에 자격 증명을 입력하지도 않는다.
+
+```text
+서버 git ──get──▶ git credential-cache --socket <경로> ──Unix 소켓──▶ sshd ──SSH 채널──▶ 앱
+                                                                                        │ 승인 카드
+서버 git ◀── username/password ◀──────────────────────────────────────────────────────── ┘ 이 PC의 자격 증명
+```
+
+**연결:**
+
+- 세션 고급 옵션 **HTTPS Git 자격 증명 전달**. 기본은 꺼짐이고 SSH 키 전달과 따로 켠다. 세션 파일로 켜지지 않는다. 경유 호스트에는 요청하지 않는다.
+- 최종 서버에 접속한 뒤 `streamlocal_forward`(russh 0.65.1에 있음)로 소켓을 연다. 경로는 연결마다 128비트 난수 이름이다. `$XDG_RUNTIME_DIR`이 있고 사용자만 접근할 수 있으면(0700) 그 아래에 두고, 없으면 `/tmp` 아래에 둔다. 소켓 권한은 sshd의 `StreamLocalBindMask`(기본 0177)로 사용자 전용이 된다. 서버가 거부하면(`AllowStreamLocalForwarding no`, `DisableForwarding`) 연결당 한 번 안내한다.
+- `Handler::server_channel_open_forwarded_streamlocal`은 이 연결이 연 경로만 받고 나머지는 거부한다. 핸들러에는 위임 호출만 넣는다(`ssh.rs` 순증 금지, DX.11의 키 읽기 이동으로 상쇄).
+- 정상 종료할 때는 전달을 취소하고 그 연결의 `remote_exec`로 자기 소켓 파일 하나만 지운다(`[ -S <경로> ] && rm -f -- <경로>`).
+
+**git에 알리는 방법:** 셸의 환경 변수로 helper 하나를 **덧붙인다.** 사용자의 기존 helper 설정은 지우지 않는다.
+
+- helper 값: `!f() { [ "$1" = get ] || return 0; exec git credential-cache --socket '<경로>' get; }; f`
+- **`get`만 전달한다.** `store`와 `erase`는 helper가 아무것도 하지 않는다. `store`에는 암호가 실려 있고, `credential-cache`는 `store` 때 소켓이 없으면 서버에 실제 캐시 데몬을 띄워 암호를 서버 메모리에 남긴다. `get`은 데몬을 띄우지 않는다.
+- 전달 방식은 모든 git 버전이 읽는 `GIT_CONFIG_PARAMETERS`에 덧붙이는 것을 1안으로 한다. `GIT_CONFIG_COUNT`는 git 2.31부터라 Ubuntu 20.04(2.25), CentOS 7(1.8)에서 동작하지 않는다. 두 방식을 함께 넣으면 helper가 두 번 불려 카드가 두 번 뜰 수 있으므로 하나만 쓴다. 최종 방식은 DX.12.0 실측으로 정한다.
+- **일반 셸:** 기존 셸 훅(`shellHook.ts`, 파일을 쓰지 않음)에 `export` 한 줄을 더한다. 이 옵션이 켜져 있으면 경로 따라가기와 조작표가 모두 꺼져 있어도 이 부분은 넣는다. Bash 3.2와 Zsh에서 동작해야 한다. fish와 csh는 훅이 없어 안내서의 수동 한 줄로만 지원한다.
+- **tmux 세션:** tmux 탭에는 아무것도 입력하지 않는다(DX.3). 그래서 `terminal_start.rs`의 시작 명령에서 새 세션은 `new-session -e`, 기존 세션은 `set-environment`로 세션 환경에 넣어 **새 패널**에 적용한다. 재접속하면 이미 열린 패널은 이전 경로를 가리킨다. `SSH_AUTH_SOCK`과 같은 문제이므로, DX.10 후속으로 남은 기본 명령의 갱신 줄 하나에 두 값을 함께 넣는다. 경로가 사라진 경우 `get`이 조용히 실패하고 git이 원래대로 터미널에서 묻는다.
+
+**요청 처리(`git_credential.rs` 새 파일, 프로토콜 파서는 순수 함수로 분리):**
+
+- 요청 하나는 64KiB 이하다. `action=get` 줄과 git 자격 증명 형식(`key=value`)만 받고, `timeout`, `capability[]`, `wwwauth[]` 같은 모르는 키는 무시한다. NUL이나 제어문자가 있으면 버린다. 연결당 동시 채널은 4개이고, 같은 호스트의 카드는 한 번에 하나만 띄운다.
+- `protocol=https`만 받는다. `http`는 토큰이 평문으로 나가므로 거부하고 연결당 한 번 안내한다.
+- **승인 카드(`GitCredentialCard`, 서명 카드와 같은 자리):** 세션 이름, 호스트, 경로(git이 보낸 경우), 사용자 이름(있으면)을 보여주고 "이 PC의 자격 증명이 **서버로 전달됩니다**"라고 표시한다. 서명과 달리 값 자체가 서버로 가기 때문이다. 선택지는 **거부**, **이번만 허용**, **이 연결에서 10분 허용**(같은 호스트), **직접 입력**이다. 60초 안에 답이 없으면 거부한다. 거부하면 빈 답을 보내 git이 원래대로 터미널에서 묻게 한다. 탭에는 `입력 대기`를 표시하고 포커스 밖이면 알림을 보낸다(DX.2와 같음).
+- **승인한 뒤에 값을 가져온다.** 먼저 가져오면 자격 증명 관리자의 로그인 창이 승인 전에 뜰 수 있기 때문이다. 가져오는 순서는 다음과 같다.
+  1. 앱에 저장한 이 호스트의 토큰
+  2. 이 PC의 `git credential fill`
+     - 대상: 자격 증명 관리자, macOS 키체인, wincred 등 사용자가 설정한 helper
+     - 실행: `spawn_blocking`, 콘솔 창 없음, `GIT_TERMINAL_PROMPT=0`, 120초 제한
+     - 저장된 값이 없으면 관리자가 브라우저 로그인을 띄울 수 있다. 성공하면 같은 값으로 `git credential approve`를 불러 다음부터 묻지 않게 한다.
+  3. 둘 다 없으면 카드가 입력 칸으로 바뀐다(사용자 이름, 토큰, "이 PC에 저장")
+- **이 PC의 git 찾기(규칙 §11):** 이름만으로 실행하지 않는다.
+  - Windows: `PATH`의 `git.exe`, 없으면 `%ProgramFiles%\Git\cmd\git.exe`
+  - macOS: `login_path.rs`의 사용자 `PATH`, 그다음 `/opt/homebrew/bin`, `/usr/local/bin`
+  - macOS의 `/usr/bin/git`은 Command Line Tools가 없으면 설치 창을 띄우므로 `xcode-select -p`가 성공할 때만 쓴다.
+  - git이 없으면 1과 3만 쓴다.
+- **저장:** 앱에 저장하는 토큰은 OS 저장소나 금고에 두고 DB에는 `프로토콜+호스트+사용자` 참조만 둔다. 설정 창 **에이전트** 분류에 목록(호스트, 사용자, 삭제)을 둔다. 서버가 보낸 값을 저장하는 경로는 없다.
+- 응답을 보낸 뒤 값은 즉시 지운다(`Zeroizing`). 요청과 응답 내용은 로그, 진단 내보내기, 세션 기록에 남기지 않는다.
+
+**합격 (Docker 검사):**
+
+- HTTPS Git 서버(Basic 인증)에 여러 git 버전의 서버에서 push한다. 대상: 1.8, 2.17, 2.25, 2.39, 최신.
+- 이 PC 쪽 출처 세 가지(앱 저장, `git credential fill`, 직접 입력)가 모두 동작하고, 거부하면 git이 터미널에서 묻는다.
+- `store`와 `erase`는 서버에 데몬을 남기지 않는다.
+- 다음 경우에는 거부한다: `http`, 남의 소켓 경로, 64KiB를 넘는 요청, 채널 5개째.
+- tmux의 새 패널에 적용된다.
+
+**합격 (수동):** 실제 GitHub, GitLab.com, Bitbucket을 이 PC의 자격 증명 관리자로 확인하고, 자체 설치형 GitLab이 있으면 함께 확인한다.
+
+#### DX.12.0 — 실측 (게이트)
+
+DX.0처럼 구현 전에 확인하고 `docs/verification/agent-terminal.md`에 기록한다. 실측 전에는 사실로 취급하지 않는다.
+
+| 질문 | 결과에 따른 처리 |
+|---|---|
+| `credential-cache --socket`의 요청 형식(`action`, `timeout`, 그 뒤 자격 증명 줄, 쓰기 쪽 종료)과 응답 처리가 git 1.8~최신에서 같은가 | 파서 확정. 다르면 버전별 분기 |
+| 연결이 없는 소켓 경로에서 `get`이 조용히 끝나고 git이 다음 helper나 터미널 질문으로 넘어가는가 | 경로가 사라진 경우의 동작 확정 |
+| `GIT_CONFIG_PARAMETERS`에 덧붙인 `!` helper가 1.8~최신에서 인용까지 맞게 동작하고, 사용자의 기존 helper 뒤에 붙는가 | 전달 방식 확정. 안 되면 `GIT_CONFIG_COUNT`와 버전 판별 |
+| sshd의 원격 소켓 전달 기본값, 소켓 권한, 연결이 끝난 뒤 소켓 파일이 남는지, `StreamLocalBindUnlink` | 정리 방식 확정 |
+| SSH 접속의 `exec` 환경에 `$XDG_RUNTIME_DIR`이 있는가(pam_systemd 유무별) | 소켓 위치 확정 |
+| tmux `new-session -e`(3.0 이상)와 `set-environment`가 새 패널에 적용되는가, 더 오래된 tmux에서는 어떻게 되는가 | tmux 지원 범위 확정 |
+| Windows 자격 증명 관리자와 macOS 키체인의 `git credential fill`이 창 없는 앱 프로세스에서 로그인 창을 띄우고 값을 돌려주는가. 저장값이 없을 때 `GIT_TERMINAL_PROMPT=0`에서 멈추지 않는가 | 이 PC 쪽 출처 확정 |
+| Git LFS 전송이 같은 helper를 거쳐 동작하는가 | 안내서에 지원 여부 기록 |
+
+### DX.13 — 로컬·WSL 탭의 SSH 키 제공 (2026-11-08 추가)
+
+**필요한 이유:** 로컬 탭의 git과 `ssh`는 이 PC에서 돌기 때문에 원래 이 PC의 키를 쓴다. 그러나 Windows는 `ssh-agent` 서비스가 기본으로 꺼져 있어, 암호화된 키는 push할 때마다 Passphrase를 묻고 CLI 에이전트는 멈춘다. WSL 안의 git은 Windows의 키와 agent를 아예 보지 못한다. DX.11의 내장 agent를 로컬과 WSL 탭에도 제공해, 어느 탭에서 push해도 같은 키와 같은 승인을 쓰게 한다.
+
+**설정(설정 창 › 에이전트, 앱 설정 `Store::setting`):**
+
+| 키 | 기본값 | 설명 |
+|---|---|---|
+| `localAgent` | 꺼짐 | 로컬·WSL 탭에 앱 agent 제공. 바꾸면 새로 여는 탭부터 적용한다 |
+| `localAgentKeys` | 빈 목록 | 제공할 키 파일. 최대 8개. Passphrase는 DX.11과 같이 참조만 저장한다 |
+
+세션 프로필이 없는 탭이라 세션별이 아니라 앱 전체 설정이다.
+
+**통로(탭마다 하나, 탭이 소유하고 탭을 닫으면 닫는다):**
+
+| 탭 | 통로 | 셸에 넣는 값 |
+|---|---|---|
+| Windows 로컬 (PowerShell, 명령 프롬프트) | named pipe `\\.\pipe\dachsterm-agent-<난수>`. 현재 사용자만 접근하고 원격 클라이언트는 거부한다(`PIPE_REJECT_REMOTE_CLIENTS`) | `SSH_AUTH_SOCK`=그 pipe. Git for Windows의 기본 ssh는 pipe를 읽지 못하므로 `GIT_SSH`=`%SystemRoot%\System32\OpenSSH\ssh.exe`(존재할 때만) |
+| WSL | 위와 같은 Windows pipe | `WSLENV`로 `SSH_AUTH_SOCK`을 넘기고 `GIT_SSH`=`/mnt/c/Windows/System32/OpenSSH/ssh.exe`(interop). WSL의 git이 Windows `ssh.exe`를 실행하고, 그 `ssh.exe`가 pipe로 앱에 닿는다 |
+| macOS 로컬 | 앱 전용 0700 폴더 안의 Unix 소켓. 경로는 104바이트 이하 | `SSH_AUTH_SOCK`=그 소켓 |
+
+- **`GIT_SSH`를 고른 이유:** git의 우선순위는 `GIT_SSH_COMMAND` > `core.sshCommand` > `GIT_SSH`다. 가장 낮은 `GIT_SSH`를 써서 사용자가 직접 정한 ssh 설정을 덮지 않는다.
+- **WSL의 한계:** git만 Windows `ssh.exe`를 거친다. WSL 안에서 직접 치는 `ssh`는 Linux `ssh`라 이 agent에 닿지 않는다. WSL2는 Windows pipe와 Unix 소켓을 바로 잇지 못하고, 중계에는 `socat` 같은 서버 쪽 도구가 필요하기 때문이다(§10 후속). Windows `ssh.exe`는 Windows 쪽 `known_hosts`와 `~/.ssh/config`를 쓴다. 안내서에 적는다.
+- **키 목록과 승인:** DX.11의 `agent_keys.rs`를 그대로 쓴다.
+  - 앱의 키(`localAgentKeys`)와 이 PC의 시스템 agent 키를 합친다.
+  - **앱의 키 서명은 그 탭에 카드를 띄워 승인받는다.** 로컬 셸 안에서 CLI 에이전트가 push할 수도 있기 때문이다.
+  - **시스템 agent 키는 카드 없이 그대로 넘긴다.** 이 기능을 켜기 전에도 로컬 프로그램은 그 agent에 바로 닿을 수 있었으므로, 승인을 더해도 막는 것이 없고 로컬 `ssh` 로그인마다 카드가 떠 불편하기만 하다. 시스템 agent 자체의 확인(`ssh-add -c`)은 그대로 동작한다.
+  - 필터(키 추가·삭제·잠금 거부)는 원격과 같다.
+- **승인 이벤트의 소유자:** DX.2의 요청은 연결 ID에 묶여 있다. 로컬 탭은 로컬 세션 ID를 쓰므로 "요청을 받을 탭" 식별자로 일반화한다. `Broker` 상태에 저장하지 않는 규칙은 같다.
+- **코드 위치:** `local_agent.rs` 새 파일이 pipe와 소켓 수신, 탭 수명을 맡는다. `local.rs`(490줄)에는 환경 변수를 넣는 호출만 더한다.
+
+**합격:**
+
+- `ssh-agent` 서비스가 꺼진 이 PC에서 PowerShell 탭의 `ssh-add -l`이 앱의 키를 보여준다.
+- 같은 탭에서 Git for Windows로 SSH push가 승인 후 성공하고, 거부하면 실패한다.
+- WSL 탭의 git push가 같은 방식으로 동작한다.
+- 탭을 닫으면 pipe와 소켓이 사라진다. 다른 사용자 계정에서는 pipe에 닿지 못한다.
+- Mac 로컬 탭은 실기기에서 확인한다.
+
+### DX.14 — WSL 탭의 HTTPS Git 자격 증명 (2026-11-08 추가)
+
+**필요한 이유:** Windows·Mac 로컬 탭의 HTTPS는 이 PC의 Git 자격 증명 관리자가 이미 처리하므로 앱이 끼어들지 않는다. **WSL 안의 git만** Windows 자격 증명 관리자를 보지 못한다. DX.12의 요청 처리를 WSL 탭에 연결한다.
+
+- **설정:** `wslGitCredentials`(설정 창 › 에이전트, 기본 꺼짐). 새로 여는 WSL 탭부터 적용한다.
+- **helper:** 앱 실행 파일 자체를 helper로 쓴다. `dachsterm.exe git-credential get`으로 실행되면 앱 화면을 띄우지 않는다. `main.rs`에서 Tauri 초기화와 인스턴스 잠금보다 먼저 분기한다. 이 helper는 표준 입력의 요청을 탭의 pipe(`DACHSTERM_CREDENTIAL_PIPE`, `WSLENV`로 전달)로 보내고 답을 표준 출력으로 돌려준다. WSL에는 아무것도 설치하지 않는다.
+- **git에 알리는 방법:** WSL 실행 환경(`wsl_follow_env`)에 helper 설정을 더한다. 방식(`GIT_CONFIG_PARAMETERS`에 덧붙이기)과 `get`만 전달하는 규칙은 DX.12와 같다. helper 경로는 앱 실행 파일 경로를 WSL 경로로 바꾼 값이다. 자동 마운트 위치를 `/mnt`로 가정하지 않고 DX.13.0에서 확인한다.
+- **처리:** 요청 파서, 승인 카드, 이 PC 쪽 출처(앱 저장 토큰, `git credential fill`, 직접 입력)는 DX.12의 `git_credential.rs`를 그대로 쓴다. 카드는 그 WSL 탭에 뜬다.
+- **합격:** WSL 탭에서 HTTPS 저장소 push가 Windows 자격 증명 관리자의 값으로 승인 후 성공한다. 관리자가 없으면 직접 입력으로 성공한다. 설정을 끄면 WSL의 git이 원래대로 동작한다.
+
+#### DX.13.0 — 실측 (게이트)
+
+| 질문 | 결과에 따른 처리 |
+|---|---|
+| Windows 11 기본 OpenSSH의 `ssh.exe`, `ssh-add.exe`가 `SSH_AUTH_SOCK`에 준 named pipe 경로를 쓰는가(버전 기록) | DX.13 Windows 방식 확정 |
+| Git for Windows가 `GIT_SSH`로 Windows `ssh.exe`를 쓰고, `core.sshCommand`가 있으면 그것을 우선하는가 | 환경 변수 확정 |
+| WSL2 git이 interop으로 Windows `ssh.exe`를 실행해 push하는가. `WSLENV`로 넘긴 `SSH_AUTH_SOCK`을 그 `ssh.exe`가 받는가 | DX.13 WSL 방식 확정. 안 되면 WSL SSH는 후속 |
+| `windows_subsystem = "windows"` 실행 파일을 WSL interop의 helper로 실행할 때 표준 입출력이 이어지는가. 시작 시간 | DX.14 helper 방식 확정. 안 되면 콘솔용 작은 실행 파일을 함께 배포 |
+| WSL 자동 마운트 위치(`wsl.conf`의 `root`)를 바꾼 경우의 경로 변환 | helper 경로 계산 확정 |
+| Finder로 실행한 Mac 앱이 띄운 로컬 셸에 시스템 `SSH_AUTH_SOCK`이 있는가(DX.0 미실측 항목과 같음) | DX.13 Mac에서 시스템 agent 합치기 확정 |
+
 ## 5. IPC
 
 engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 입력 검증과 위임만 한다. 터미널 소유권이 필요한 명령은 `broker.check(window.label())`로 확인한다.
@@ -441,6 +613,13 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 | `git_refs` | 연결 ID, 루트 | 브랜치와 worktree 목록 | DX.6 |
 | `git_diff_files` | 연결 ID, 루트, 기준 | 변경 파일 목록 | DX.6 |
 | `git_diff_file` | 연결 ID, 루트, 기준, 경로 | 한 파일의 diff | DX.6 |
+| `ssh_key_info` | 키 파일 경로 | 알고리즘, SHA-256 지문, 코멘트, 암호화 여부. 비밀은 읽지 않는다 | DX.11 |
+| `agent_sign_reply` (인자 추가) | 위 + 선택적 Passphrase, 저장 여부 | 추가 키의 Passphrase를 받는다. 첫 줄에서 `Zeroizing` | DX.11 |
+| `git_credential_reply` | 연결 ID, 요청 ID, 판단(거부, 이번만, 10분, 직접 입력과 값·저장 여부) | 대기 중인 자격 증명 요청에 응답. 값은 첫 줄에서 `Zeroizing` | DX.12 |
+| `git_credentials_saved`, `git_credential_forget` | 없음 / 참조 | 앱에 저장한 HTTPS 자격 증명 목록(값 제외)과 삭제 | DX.12 |
+| `local_agent_settings`, `local_agent_save` | 없음 / 설정과 키 목록 | 로컬·WSL 탭의 키 제공 설정 읽기와 저장. Passphrase는 첫 줄에서 `Zeroizing` | DX.13, DX.14 |
+
+`agent_sign_reply`와 `git_credential_reply`의 요청 ID는 원격 연결과 로컬 탭을 모두 가리킬 수 있게 한다(DX.13). 새 명령을 따로 만들지 않는다.
 
 `connect`에는 일회성 `launch`(폴더, 명령) 인자를 추가한다(DX.7 구현, tmux 세션에만 받는다). 새 크레이트는 없다. tokio의 named pipe 기능 활성화 여부는 구현 시 확인한다.
 
@@ -454,6 +633,19 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 
 `forwardAgent`, `tmuxSession`은 세션별 설정이다. **서명 승인은 끌 수 없다.**
 
+DX.11·DX.12의 세션별 설정(`serde(default)`, 세션 JSON v3 내보내기·가져오기에서 기본값으로 되돌림, §3.2와 같은 규칙):
+
+| 필드 | 기본값 | 작업 |
+|---|---|---|
+| `forwardLoginKey: bool` | `true` | DX.11 |
+| `forwardKeys: [{ path, secretRef? }]` | 빈 목록, 최대 8개 | DX.11 |
+| `forwardSystemAgent: bool` | `true` | DX.11 |
+| `forwardGitCredentials: bool` | `false` | DX.12 |
+
+**자격 증명 전달 승인도 끌 수 없다.**
+
+앱 전체 설정(DX.13·DX.14, 설정 창 › 에이전트): `localAgent`(꺼짐), `localAgentKeys`(빈 목록), `wslGitCredentials`(꺼짐). 로컬 탭에서도 앱의 키 서명과 자격 증명 전달은 승인을 받는다.
+
 ## 7. 보안 요약
 
 - 서버는 신뢰할 수 없다. OSC, agent 프레임, Git 출력 모두 길이를 먼저 확인하고, 실패하면 버린다.
@@ -462,6 +654,10 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 - 모든 원격 명령은 고정 형식이고 사용자 값은 인용 함수를 거친다. 브랜치 이름은 서버가 준 목록과 대조한다.
 - 앱은 사용자 동작 없이 터미널에 글자를 입력하지 않는다. 프롬프트 전달은 Enter를 보내지 않는다. 에이전트 시작만 사용자가 최종 명령을 확인한 뒤 실행한다.
 - 서명 요청 내용, diff 내용, 의견을 로그와 진단 내보내기에 넣지 않는다.
+- 내장 agent(DX.11)는 키를 서버로 보내지 않는다. 로그인 키는 키 전달을 켠 연결의 수명 동안만, 추가 키는 서명 순간이나 승인한 10분 동안만 메모리에 둔다. RSA SHA-1 서명은 하지 않는다.
+- HTTPS 자격 증명 전달(DX.12)은 **값 자체가 서버로 간다.** 서버의 root는 그 순간 토큰을 볼 수 있다. 그래서 기본 꺼짐, 호스트별 승인, `https`만 허용, `get`만 전달(서버에 캐시 데몬을 남기지 않음), 서버가 보낸 값은 저장하지 않음을 지킨다. 무인 push에는 DX.2처럼 서버 전용 배포 토큰을 권한다.
+- 원격 소켓은 연결마다 난수 경로이고 사용자 전용 권한이며, 앱은 자기가 연 경로의 채널만 받는다.
+- 로컬 pipe와 소켓(DX.13·DX.14)은 탭마다 난수 이름이고 현재 사용자만 접근하며, 원격 클라이언트를 거부하고, 탭을 닫으면 사라진다. 같은 사용자의 다른 프로그램이 이름을 알아내 접근하더라도 앱의 키 서명과 자격 증명은 그 탭의 승인을 거친다.
 
 ## 8. 검증
 
@@ -474,6 +670,14 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 | 네이티브 | 실제 앱에서 승인·거부, tmux 재접속, 트리 표시, 프롬프트 전달 | 기존 스크립트 수정 후 `verify-windows.ps1 -Native` 연결. T2 전까지 새 실행 헬퍼를 만들지 않는다 |
 | 실제 Claude Code | 훅 상태, worktree, 검토 후 의견 전달 | 수동. Claude Code 버전과 함께 기록 |
 | macOS 실기기 | Finder 앱의 `SSH_AUTH_SOCK`, agent 전달, tmux, 단축키, 검토 패널 | `mac-verify`. CI와 Windows 결과로 대체하지 않는다 |
+| 단위 (DX.11·DX.12) | 알고리즘별 서명과 공개키 검증, RSA 플래그와 SHA-1 거부, 키 목록 합치기, 자격 증명 요청 파서(모르는 키, 제어문자, 상한), helper 값 인용 | `cargo test`, Vitest |
+| 실제 프로토콜 (DX.11) | 시스템 agent 없이 로그인 키와 Git 전용 키로 push, 거부, `ssh-add -D` 차단, RSA SHA-2 | `probe:phase1` 확장 |
+| 실제 프로토콜 (DX.12) | HTTPS Git 서버(Basic 인증)와 git 1.8~최신 서버 이미지, 세 출처, 거부, 데몬 미생성, tmux 새 패널. 이 PC 쪽은 격리한 `HOME`과 `store` helper로 사용자의 실제 자격 증명 관리자를 건드리지 않는다 | `probe:phase1` 확장 |
+| 네이티브 (DX.11·DX.12) | 이 PC의 `ssh-agent`를 끈 그대로 승인·Passphrase 입력·push, 자격 증명 카드의 네 선택지 | `run-phase1 --native --agent-only` 확장 |
+| 실제 호스팅 (DX.11·DX.12) | GitHub, GitLab.com, Bitbucket의 SSH·HTTPS push. 자격 증명 관리자와 버전을 함께 기록 | 수동 |
+| macOS 실기기 (DX.11·DX.12) | Finder 앱에서 시스템 agent 없이 키 전달, 키체인 `git credential fill`, `/usr/bin/git` 설치 창이 뜨지 않음 | `mac-verify`, M.15에 추가 |
+| 네이티브 (DX.13·DX.14) | `ssh-agent`가 꺼진 이 PC의 PowerShell·WSL 탭에서 `ssh-add -l`, SSH push(Docker의 Git 서버), WSL HTTPS push, 탭 종료 후 pipe 소멸 | `test-local-native` 확장 |
+| macOS 실기기 (DX.13) | 로컬 탭의 소켓, 시스템 agent 합치기, push | `mac-verify`, M.15에 추가 |
 
 ## 9. 구현 순서
 
@@ -491,6 +695,16 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 | 10 | DX.8 | 현황판 | AT.2, DX.5 | 독립 창 포함 |
 | 11 | DX.9 | 명령 경계 | AT.3 | 이동, 표시, 알림 |
 | 12 | AT.7, DX.10 | 문서, 회귀, Mac | 전체 | 결과 기록 |
+| 13 | DX.11 | 앱 내장 agent, 전달할 키 선택 | DX.2 | 시스템 agent 없이 Git 전용 키로 push |
+| 14 | DX.12.0 | HTTPS 자격 증명 실측 | 없음. DX.11과 병렬 가능 | 질문의 답이 기록됨 |
+| 15 | DX.12 | HTTPS 자격 증명 전달 | DX.11, DX.12.0 | 여러 git 버전에서 push, 데몬 미생성 |
+| 16 | DX.13.0 | 로컬·WSL 실측 | 없음. DX.11, DX.12.0과 병렬 가능 | 질문의 답이 기록됨 |
+| 17 | DX.13 | 로컬·WSL 탭의 SSH 키 제공 | DX.11, DX.13.0 | 시스템 agent 없이 PowerShell·WSL에서 push |
+| 18 | DX.14 | WSL 탭의 HTTPS 자격 증명 | DX.12, DX.13 | WSL에서 HTTPS push |
+
+- DX.11과 DX.12는 `ssh.rs` 핸들러, 세션 고급 옵션, 창 안 카드를 함께 고치므로 동시에 구현하지 않는다. DX.12.0과 DX.13.0은 코드를 바꾸지 않아 DX.11과 병렬로 진행할 수 있다.
+- DX.13은 DX.11이 끝나면 DX.12와 병렬로 진행할 수 있다. 겹치는 곳은 승인 이벤트의 소유자 일반화(DX.13)와 카드(DX.12)이므로, DX.13이 일반화를 먼저 머지하는 순서를 권한다.
+- 두 작업 모두 끝나면 안내서의 **SSH 키 전달** 절을 고치고 **HTTPS 자격 증명 전달** 절을 더한다. "이 PC의 agent" 준비 단계는 선택 사항으로 낮춘다.
 
 - **중간 출시 지점:** 5번까지 하면 서버 에이전트의 기본 흐름이 완성되고, 7번까지 하면 차별점이 드러난다.
 - **별도 진행:** 설치 파일과 서명(W.3, 5.3), 라이선스 지정은 코드 순서와 무관하다. 다른 사람이 써보려면 2번 전후로 먼저 끝내는 것이 좋다.
@@ -507,6 +721,13 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 | Git 쓰기 동작, 그래프, 커밋 메시지 생성 | 제외. §1 경계 |
 | Mosh | 제외. tmux가 같은 문제를 더 넓은 서버에서 푼다. UDP와 서버 설치가 필요하다 |
 | 훅과 tmux 설정 자동 적용, 앱 안 AI 호출 | 제외. AT 원칙 |
+| 내장 agent의 FIDO(`sk-*`) 키, 사용자 인증서 | 후속. FIDO는 시스템 agent를 거쳐 쓸 수 있다 |
+| 자격 증명 `store`·`erase` 전달 | 제외. 서버가 보낸 암호를 받지 않고, 서버에 캐시 데몬을 띄우지 않기 위해서다 |
+| Git 밖의 HTTPS 자격 증명(패키지 저장소 등), Windows 서버, fish·csh 자동 적용 | 후속. fish·csh는 안내서의 수동 한 줄로 쓴다 |
+| 내장 agent를 고정 경로 소켓으로 제공해 tmux 재접속 문제를 없애는 것 | 후속 후보. DX.12의 원격 소켓 전달 경험을 보고 판단한다 |
+| WSL 안에서 직접 치는 `ssh`의 agent | 후속. WSL2와 Windows pipe를 잇는 중계가 필요하다. DX.13은 git만 Windows `ssh.exe`를 거친다 |
+| Windows·Mac 로컬 탭의 HTTPS 자격 증명 | 제외. 이 PC의 Git 자격 증명 관리자가 이미 처리한다 |
+| WSL1 | 실측에서 동작하면 지원으로 기록하고, 따로 맞추지 않는다 |
 
 ## 11. 참고 자료
 
