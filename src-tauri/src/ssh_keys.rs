@@ -161,7 +161,7 @@ pub(crate) mod tests {
 
     /// The OpenSSH key generator at its fixed system path. Test keys are made per run in a
     /// temporary folder and never leave it.
-    fn keygen() -> &'static str {
+    pub(crate) fn keygen() -> &'static str {
         if cfg!(windows) {
             r"C:\Windows\System32\OpenSSH\ssh-keygen.exe"
         } else {

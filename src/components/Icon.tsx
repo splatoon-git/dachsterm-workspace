@@ -26,6 +26,7 @@ export type IconName =
   | 'edit'
   | 'rename'
   | 'lock'
+  | 'key'
   | 'archive'
   | 'extract'
   | 'trash'
@@ -81,6 +82,7 @@ const paths: Record<IconName, string> = {
   edit: 'M4 20l1-4L16 5l3 3L8 19z M14 7l3 3',
   rename: 'M12 4v16 M9 4h6 M9 20h6 M4 8v8 M20 8v8',
   lock: 'M6 11h12v10H6z M8.5 11V7a3.5 3.5 0 0 1 7 0v4',
+  key: 'M8 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M12 12h9 M18 12v3 M21 12v2',
   archive: 'M3 4h18v5H3z M5 9v11h14V9 M10 13h4',
   extract: 'M3 4h18v5H3z M5 9v11h14V9 M12 12v5 M9.5 14.5l2.5 2.5 2.5-2.5',
   trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14 M10 11v6 M14 11v6',

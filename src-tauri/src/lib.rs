@@ -50,6 +50,7 @@ pub mod snippets;
 pub mod source;
 pub mod ssh;
 mod ssh_auth;
+pub mod ssh_keygen;
 pub mod ssh_keys;
 pub mod storage;
 pub mod terminal_start;
@@ -249,6 +250,9 @@ pub fn run() {
             local_agent::settings::local_agent_settings,
             local_agent::settings::local_agent_save,
             ssh_keys::ssh_key_info,
+            ssh_keygen::ssh_key_defaults,
+            ssh_keygen::ssh_key_pick_folder,
+            ssh_keygen::ssh_key_generate,
             git_credential::commands::git_credential_reply,
             git_credential::commands::git_credential_shell,
             git_credential::commands::git_credentials_saved,

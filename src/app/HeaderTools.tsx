@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Icon, type IconName } from '../components/Icon';
+import { LazySshKeyDialog } from '../components/NewSshKey';
 import { ToolbarMenu } from '../components/ToolbarMenu';
 import { games, type GameId } from '../features/games/catalog';
 import { desktop } from '../lib/ipc';
@@ -52,6 +54,7 @@ export function HeaderMenus({
   /** Opens the terminal preview, which only the browser run without a backend offers. */
   preview: () => void;
 }) {
+  const [makingKey, setMakingKey] = useState(false);
   return (
     <>
       <IconButton
@@ -66,6 +69,10 @@ export function HeaderMenus({
         <button onClick={tools.tunnels}>
           <Icon name="tunnel" size={14} />
           터널
+        </button>
+        <button onClick={() => setMakingKey(true)}>
+          <Icon name="key" size={14} />
+          SSH 키 만들기
         </button>
         <button onClick={tools.editor}>
           <Icon name="file" size={14} />
@@ -91,6 +98,7 @@ export function HeaderMenus({
           </>
         )}
       </ToolbarMenu>
+      {makingKey && <LazySshKeyDialog close={() => setMakingKey(false)} />}
     </>
   );
 }
