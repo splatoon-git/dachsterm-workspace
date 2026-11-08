@@ -15,6 +15,7 @@ const pod = (name: string, patch: Partial<KubePod> = {}): KubePod => ({
   ownerKind: 'ReplicaSet',
   ownerName: 'api-7f9c',
   labels: { app: 'api', 'pod-template-hash': '7f9c' },
+  defaultContainer: 'app',
   containerCount: 1,
   cpuRequest: null,
   memoryRequest: null,

@@ -52,6 +52,7 @@ const pod = (name: string, patch: Partial<KubePod> = {}): KubePod => ({
   ownerKind: '',
   ownerName: '',
   labels: {},
+  defaultContainer: 'app',
   containerCount: 1,
   cpuRequest: null,
   memoryRequest: null,

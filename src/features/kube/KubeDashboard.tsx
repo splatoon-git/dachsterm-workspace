@@ -1,5 +1,7 @@
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { ContextMenu, type MenuPoint, type MenuRequest } from '../../components/ContextMenu';
 import { MetricChart } from '../../components/MetricChart';
+import { ItemRow, TargetMenu } from './DashboardRows';
 import {
   buildDashboard,
   share,
@@ -11,6 +13,7 @@ import {
   type TopRow,
 } from './dashboard';
 import type { DashboardHistory } from './dashboardHistory';
+import { scopeOfTarget, type SearchScope } from './logSearchModel';
 import { ageAgo, type SnapshotStore } from './polling';
 import { formatCpu, formatMemory, statusMark } from './treeFormat';
 import type { Health } from './treePods';
@@ -65,25 +68,6 @@ function Rows<T>({
       <ul className="kube-dash-list">{list.items.map(children)}</ul>
       {list.more > 0 && <p className="kube-dash-more">외 {list.more}개</p>}
     </>
-  );
-}
-
-function ItemRow({
-  target,
-  reveal,
-  className,
-  children,
-}: {
-  target: TreeTarget | null;
-  reveal: (target: TreeTarget) => void;
-  className: string;
-  children: ReactNode;
-}) {
-  if (!target) return <div className={`kube-dash-row ${className}`}>{children}</div>;
-  return (
-    <button className={`kube-dash-row ${className}`} onClick={() => reveal(target)}>
-      {children}
-    </button>
   );
 }
 
@@ -219,160 +203,191 @@ export const KubeDashboard = memo(function KubeDashboard({
   history,
   namespace,
   reveal,
+  searchLogs,
 }: {
   store: SnapshotStore;
   history: DashboardHistory;
   /** The session's namespace, empty for all. Nodes are cluster-wide even when this is set. */
   namespace: string;
   reveal: (target: TreeTarget) => void;
+  searchLogs: (scope: SearchScope) => void;
 }) {
   const board = useMemo(() => buildDashboard(store, history), [store, history]);
+  const [menu, setMenu] = useState<MenuRequest | null>(null);
+  const targetMenu = useCallback(
+    (target: TreeTarget, at: MenuPoint) => {
+      const scope = scopeOfTarget(target);
+      setMenu({
+        at,
+        items: [
+          { label: '트리에서 보기', run: () => reveal(target) },
+          ...(scope ? [{ label: '로그 검색', run: () => searchLogs(scope) }] : []),
+        ],
+      });
+    },
+    [reveal, searchLogs],
+  );
   return (
-    <div className="kube-dash" role="tabpanel" aria-label="대시보드">
-      {board.stale && (
-        <p className="kube-dash-stale" role="status">
-          마지막으로 받은 데이터입니다. {board.stale}
-        </p>
-      )}
-      <div className="kube-dash-grid">
-        <Panel title="전체 자원" part={board.resources} wide>
-          {(value) => (
-            <ResourcesBody
-              value={value}
-              scope={namespace}
-              usageNote={board.usageNote}
-              cpu={history.trend.map((sample) => sample.cpu)}
-              memory={history.trend.map((sample) => sample.memory)}
-              reveal={reveal}
-            />
-          )}
-        </Panel>
+    <TargetMenu.Provider value={targetMenu}>
+      <div className="kube-dash" role="tabpanel" aria-label="대시보드">
+        {board.stale && (
+          <p className="kube-dash-stale" role="status">
+            마지막으로 받은 데이터입니다. {board.stale}
+          </p>
+        )}
+        <div className="kube-dash-grid">
+          <Panel title="전체 자원" part={board.resources} wide>
+            {(value) => (
+              <ResourcesBody
+                value={value}
+                scope={namespace}
+                usageNote={board.usageNote}
+                cpu={history.trend.map((sample) => sample.cpu)}
+                memory={history.trend.map((sample) => sample.memory)}
+                reveal={reveal}
+              />
+            )}
+          </Panel>
 
-        <section className="kube-dash-panel" aria-label="현황">
-          <h3>현황</h3>
-          <dl className="kube-dash-counts">
-            <dt>노드</dt>
-            <dd>{partText(board.nodes, (v) => `${v.ready}/${v.total} 준비`)}</dd>
-            <dt>파드</dt>
-            <dd>
-              {partText(board.pods, (v) => (
-                <>
-                  {v.total}개
-                  {v.statuses.map((item) => (
-                    <span key={item.status} className="kube-dash-chip">
-                      <Mark health={item.health} /> {item.status} {item.count}
-                    </span>
-                  ))}
-                </>
-              ))}
-            </dd>
-            <dt>워크로드</dt>
-            <dd>
-              {partText(board.workloads, (list) =>
-                list.length
-                  ? list.map((item) => (
-                      <span key={item.kind} className="kube-dash-chip">
-                        {item.kind} {item.ready}/{item.total}
+          <section className="kube-dash-panel" aria-label="현황">
+            <h3>현황</h3>
+            <dl className="kube-dash-counts">
+              <dt>노드</dt>
+              <dd>{partText(board.nodes, (v) => `${v.ready}/${v.total} 준비`)}</dd>
+              <dt>파드</dt>
+              <dd>
+                {partText(board.pods, (v) => (
+                  <>
+                    {v.total}개
+                    {v.statuses.map((item) => (
+                      <span key={item.status} className="kube-dash-chip">
+                        <Mark health={item.health} /> {item.status} {item.count}
                       </span>
-                    ))
-                  : '없음',
-              )}
-            </dd>
-          </dl>
-        </section>
+                    ))}
+                  </>
+                ))}
+              </dd>
+              <dt>워크로드</dt>
+              <dd>
+                {partText(board.workloads, (list) =>
+                  list.length
+                    ? list.map((item) => (
+                        <span key={item.kind} className="kube-dash-chip">
+                          {item.kind} {item.ready}/{item.total}
+                        </span>
+                      ))
+                    : '없음',
+                )}
+              </dd>
+            </dl>
+          </section>
 
-        <Panel title="재시작·에러" part={board.troubles}>
-          {(list) => (
-            <Rows list={list} empty={NO_PROBLEM}>
-              {(row) => (
-                <li key={row.key}>
-                  <ItemRow target={row.target} reveal={reveal} className="trouble">
-                    <span className="kube-dash-name" title={`${row.namespace}/${row.name}`}>
-                      <Mark health={row.health} /> {row.name}
-                    </span>
-                    <span className="kube-dash-reason" title={row.detail}>
-                      {row.detail}
-                    </span>
-                    <span>
-                      재시작 {row.restarts}
-                      {row.increase > 0 && (
-                        <b className="kube-restart-recent" title="이 화면을 연 뒤 증가">
-                          {' '}
-                          +{row.increase}
-                        </b>
-                      )}
-                    </span>
-                    <span>{row.lastAt === null ? '' : ageAgo(board.now - row.lastAt)}</span>
-                  </ItemRow>
-                </li>
-              )}
-            </Rows>
-          )}
-        </Panel>
+          <Panel title="재시작·에러" part={board.troubles}>
+            {(list) => (
+              <Rows list={list} empty={NO_PROBLEM}>
+                {(row) => (
+                  <li key={row.key}>
+                    <ItemRow target={row.target} reveal={reveal} className="trouble">
+                      <span className="kube-dash-name" title={`${row.namespace}/${row.name}`}>
+                        <Mark health={row.health} /> {row.name}
+                      </span>
+                      <span className="kube-dash-reason" title={row.detail}>
+                        {row.detail}
+                      </span>
+                      <span>
+                        재시작 {row.restarts}
+                        {row.increase > 0 && (
+                          <b className="kube-restart-recent" title="이 화면을 연 뒤 증가">
+                            {' '}
+                            +{row.increase}
+                          </b>
+                        )}
+                      </span>
+                      <span>{row.lastAt === null ? '' : ageAgo(board.now - row.lastAt)}</span>
+                    </ItemRow>
+                  </li>
+                )}
+              </Rows>
+            )}
+          </Panel>
 
-        <Panel title="자원 상위" part={board.top}>
-          {(top) => (
-            <>
-              {top.basis === 'request' && <p className="kube-dash-note">요청량 기준입니다.</p>}
-              <div className="kube-dash-top">
-                <TopColumn title="CPU" rows={top.cpu} format={formatCpu} reveal={reveal} />
-                <TopColumn title="메모리" rows={top.memory} format={formatMemory} reveal={reveal} />
-              </div>
-            </>
-          )}
-        </Panel>
+          <Panel title="자원 상위" part={board.top}>
+            {(top) => (
+              <>
+                {top.basis === 'request' && <p className="kube-dash-note">요청량 기준입니다.</p>}
+                <div className="kube-dash-top">
+                  <TopColumn title="CPU" rows={top.cpu} format={formatCpu} reveal={reveal} />
+                  <TopColumn
+                    title="메모리"
+                    rows={top.memory}
+                    format={formatMemory}
+                    reveal={reveal}
+                  />
+                </div>
+              </>
+            )}
+          </Panel>
 
-        <Panel title="미달 워크로드" part={board.under}>
-          {(list) => (
-            <Rows list={list} empty={NO_PROBLEM}>
-              {(row) => (
-                <li key={row.key}>
-                  <ItemRow target={row.target} reveal={reveal} className="under">
-                    <span className="kube-dash-name" title={row.namespace}>
-                      <Mark health="warn" /> {row.kind}/{row.name}
-                    </span>
-                    <span>
-                      {row.ready}/{row.desired} 준비
-                    </span>
-                  </ItemRow>
-                </li>
-              )}
-            </Rows>
-          )}
-        </Panel>
+          <Panel title="미달 워크로드" part={board.under}>
+            {(list) => (
+              <Rows list={list} empty={NO_PROBLEM}>
+                {(row) => (
+                  <li key={row.key}>
+                    <ItemRow target={row.target} reveal={reveal} className="under">
+                      <span className="kube-dash-name" title={row.namespace}>
+                        <Mark health="warn" /> {row.kind}/{row.name}
+                      </span>
+                      <span>
+                        {row.ready}/{row.desired} 준비
+                      </span>
+                    </ItemRow>
+                  </li>
+                )}
+              </Rows>
+            )}
+          </Panel>
 
-        {/* KV.8 connects the ingress findings here. */}
-        <section className="kube-dash-panel" aria-label="인그레스">
-          <h3>인그레스</h3>
-          <p className="kube-dash-empty">아직 준비 중입니다.</p>
-        </section>
+          {/* KV.8 connects the ingress findings here. */}
+          <section className="kube-dash-panel" aria-label="인그레스">
+            <h3>인그레스</h3>
+            <p className="kube-dash-empty">아직 준비 중입니다.</p>
+          </section>
 
-        {/* KV.9 connects worker occupancy and suspected non-returning workers here. */}
-        <section className="kube-dash-panel" aria-label="워커">
-          <h3>워커</h3>
-          <p className="kube-dash-empty">아직 준비 중입니다.</p>
-        </section>
+          {/* KV.9 connects worker occupancy and suspected non-returning workers here. */}
+          <section className="kube-dash-panel" aria-label="워커">
+            <h3>워커</h3>
+            <p className="kube-dash-empty">아직 준비 중입니다.</p>
+          </section>
 
-        <Panel title="최근 경고" part={board.warnings} wide>
-          {(list) => (
-            <Rows list={list} empty={NO_PROBLEM}>
-              {(row) => (
-                <li key={row.key}>
-                  <ItemRow target={row.target} reveal={reveal} className="warning">
-                    <span>{ageAgo(board.warningsNow - row.at)}</span>
-                    <span>{row.reason}</span>
-                    <span className="kube-dash-name">{row.object}</span>
-                    <span className="kube-dash-reason" title={row.message}>
-                      {row.message}
-                    </span>
-                  </ItemRow>
-                </li>
-              )}
-            </Rows>
-          )}
-        </Panel>
+          <Panel title="최근 경고" part={board.warnings} wide>
+            {(list) => (
+              <Rows list={list} empty={NO_PROBLEM}>
+                {(row) => (
+                  <li key={row.key}>
+                    <ItemRow target={row.target} reveal={reveal} className="warning">
+                      <span>{ageAgo(board.warningsNow - row.at)}</span>
+                      <span>{row.reason}</span>
+                      <span className="kube-dash-name">{row.object}</span>
+                      <span className="kube-dash-reason" title={row.message}>
+                        {row.message}
+                      </span>
+                    </ItemRow>
+                  </li>
+                )}
+              </Rows>
+            )}
+          </Panel>
+        </div>
+        {menu && (
+          <ContextMenu
+            label="대시보드 메뉴"
+            at={menu.at}
+            items={menu.items}
+            close={() => setMenu(null)}
+          />
+        )}
       </div>
-    </div>
+    </TargetMenu.Provider>
   );
 });
 

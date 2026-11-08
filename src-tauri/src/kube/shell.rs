@@ -1,6 +1,7 @@
 //! Command lines for the pod shell and log-follow tabs (design §3.3), and the check that decides
 //! whether a shell tab is worth opening. Every name here was checked by `check_target`.
 use super::{
+    log_keywords::Keywords,
     runner::{Kubectl, Runner},
     settings::{KubeSettings, check_container, check_namespace, check_pod},
     state::{KubeState, ShellCheck, classify_shell},
@@ -66,8 +67,9 @@ pub fn logs_command(
     pod: &str,
     container: &str,
     tail: u32,
+    keywords: &Keywords,
 ) -> String {
-    under_sh(kubectl(kube).streaming(
+    let follow = kubectl(kube).streaming(
         &kube.context,
         &format!(
             "logs -f --tail={} {} -n {} -c {}",
@@ -76,6 +78,10 @@ pub fn logs_command(
             quote(namespace),
             quote(container),
         ),
+    );
+    under_sh(format!(
+        "{follow}{}",
+        keywords.stages("--line-buffered ", false)
     ))
 }
 
@@ -132,9 +138,25 @@ mod tests {
 
     #[test]
     fn following_a_log_is_bounded_and_streams() {
-        let line = logs_command(&settings(), "web", "api-1", "app", 999_999);
+        let line = logs_command(
+            &settings(),
+            "web",
+            "api-1",
+            "app",
+            999_999,
+            &Keywords::default(),
+        );
         assert!(line.contains("logs -f --tail=5000"), "{line}");
         assert!(!line.contains("request-timeout"), "{line}");
+        assert!(!line.contains("grep"), "{line}");
+    }
+
+    #[test]
+    fn following_with_keywords_filters_line_by_line() {
+        let keywords = Keywords::parse("error !debug").unwrap();
+        let line = logs_command(&settings(), "web", "api-1", "app", 500, &keywords);
+        assert!(line.contains("grep --line-buffered -aiF --"), "{line}");
+        assert!(line.contains("grep --line-buffered -aivF --"), "{line}");
     }
 
     #[test]

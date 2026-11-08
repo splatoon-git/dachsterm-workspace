@@ -2,6 +2,9 @@
 //! delegate; the work is in the modules below.
 mod detail;
 mod detect;
+mod log_keywords;
+mod log_scheduler;
+mod log_search;
 mod logs;
 mod runner;
 mod settings;
@@ -16,16 +19,22 @@ use crate::{
 };
 use detail::{Detail, DetailKind, PodTarget};
 use detect::{Detection, Source, detect};
+pub use log_keywords::Keywords;
+pub use log_search::LogSearches;
+use log_search::SearchRequest;
 use logs::{LogRequest, Logs};
 use runner::Runner;
 use serde::Deserialize;
 pub use settings::{KubeSettings, Workspace};
-use settings::{check_context, check_kubeconfig, check_kubectl, check_namespace, check_pod};
+use settings::{
+    check_context, check_kubeconfig, check_kubectl, check_namespace, check_pod, is_log_time,
+};
 pub use shell::{check_target, logs_command, shell_command};
 pub use slots::Slots;
 use snapshot::{Kind, Snapshot, collect};
 use state::ShellCheck;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, ipc::Channel};
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 #[serde(tag = "mode", rename_all = "camelCase", deny_unknown_fields)]
@@ -180,8 +189,12 @@ pub async fn kube_logs(
     container: String,
     tail: u32,
     previous: bool,
+    since_time: Option<String>,
 ) -> Result<Logs> {
     check_target(&kube, &target.namespace, &target.pod, &container)?;
+    if since_time.as_deref().is_some_and(|time| !is_log_time(time)) {
+        return Err("로그 시각이 올바르지 않습니다.".into());
+    }
     let handle = state.connections.handle(&id)?;
     let slot = slots.for_connection(&id);
     let _turn = slot
@@ -194,8 +207,39 @@ pub async fn kube_logs(
         container: &container,
         tail,
         previous,
+        since_time: since_time.as_deref(),
     };
     Ok(logs::fetch(&Runner::Ssh(&handle), &kube, request).await)
+}
+
+/// Results come as events and the call ends with the search. Log search has its own limit rather
+/// than the polling slots (design KV.2).
+#[tauri::command]
+pub async fn kube_log_search(
+    state: State<'_, AppState>,
+    searches: State<'_, LogSearches>,
+    id: String,
+    kube: KubeSettings,
+    search_id: String,
+    request: SearchRequest,
+    on_event: Channel<log_search::Event>,
+) -> Result<()> {
+    kube.validate()?;
+    if Uuid::parse_str(&search_id).is_err() {
+        return Err("잘못된 검색 ID".into());
+    }
+    let plan = log_search::plan(request)?;
+    let handle = state.connections.handle(&id)?;
+    let registered = searches.begin(search_id);
+    let cancel = registered.cancel.clone();
+    log_search::run(handle, kube, plan, on_event, cancel).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn kube_log_cancel(searches: State<'_, LogSearches>, search_id: String) -> Result<()> {
+    searches.cancel(&search_id);
+    Ok(())
 }
 
 /// Runs a no-op in the container first, so a tab is only opened when a shell can start.

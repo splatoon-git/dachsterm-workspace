@@ -166,6 +166,7 @@ pub fn run() {
                 });
             }
             app.manage(kube::Slots::default());
+            app.manage(kube::LogSearches::default());
             app.manage(AppState {
                 instance_lock,
                 locals: Arc::default(),
@@ -254,6 +255,8 @@ pub fn run() {
             kube::kube_snapshot,
             kube::kube_detail,
             kube::kube_logs,
+            kube::kube_log_search,
+            kube::kube_log_cancel,
             kube::kube_terminal_probe,
             agent_keys::agent_sign_reply,
             local_agent::settings::local_agent_settings,

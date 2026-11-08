@@ -55,6 +55,8 @@ fn main() {
             "kube_snapshot",
             "kube_detail",
             "kube_logs",
+            "kube_log_search",
+            "kube_log_cancel",
             "git_config_read",
             "git_config_preview",
             "git_config_write",

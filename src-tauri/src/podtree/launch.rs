@@ -3,7 +3,7 @@
 use super::{Location, quote, stage};
 use crate::{
     AppState,
-    kube::{KubeSettings, check_target, logs_command, shell_command},
+    kube::{Keywords, KubeSettings, check_target, logs_command, shell_command},
     storage::Result,
 };
 use serde::Deserialize;
@@ -39,6 +39,9 @@ pub enum Launch {
         pod: String,
         container: String,
         tail: u32,
+        /// A log search's keywords. Empty follows the whole log.
+        #[serde(default)]
+        keywords: String,
     },
 }
 
@@ -122,11 +125,13 @@ pub(super) async fn prepare(state: &AppState, launch: &Launch) -> Result<Prepare
             pod,
             container,
             tail,
+            keywords,
         } => {
             check_target(kube, namespace, pod, container)?;
+            let keywords = Keywords::parse(keywords)?;
             Prepared {
                 location: pod_location(connection),
-                command: logs_command(kube, namespace, pod, container, *tail),
+                command: logs_command(kube, namespace, pod, container, *tail, &keywords),
                 labels: Labels {
                     title: format!("{} · {namespace}/{pod} · {container} 로그", kube.context),
                     closed: "로그 따라가기가 끝났습니다.",

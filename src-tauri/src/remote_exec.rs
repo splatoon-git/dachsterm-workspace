@@ -3,7 +3,7 @@
 //! (see the DX.1 note in docs/design/developer-workflow.md).
 use crate::ssh::Host;
 use russh::{ChannelMsg, client};
-use std::time::Duration;
+use std::{ops::ControlFlow, time::Duration};
 
 #[derive(Clone, Copy)]
 pub struct Limits {
@@ -45,8 +45,9 @@ pub fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-/// Everything before the first marker line came from the login shell's rc files.
-fn after_marker(stdout: &[u8], marker: &[u8]) -> Option<Vec<u8>> {
+/// Everything before the first marker line came from the login shell's rc files. This is where
+/// that line ends: the index of its newline, or the end of `stdout` if it has none yet.
+fn marker_end(stdout: &[u8], marker: &[u8]) -> Option<usize> {
     let mut line = 0;
     while line <= stdout.len() {
         let end = stdout[line..]
@@ -58,11 +59,16 @@ fn after_marker(stdout: &[u8], marker: &[u8]) -> Option<Vec<u8>> {
             .unwrap_or(&stdout[line..end])
             == marker
         {
-            return Some(stdout.get(end + 1..).unwrap_or_default().to_vec());
+            return Some(end);
         }
         line = end + 1;
     }
     None
+}
+
+fn after_marker(stdout: &[u8], marker: &[u8]) -> Option<Vec<u8>> {
+    let end = marker_end(stdout, marker)?;
+    Some(stdout.get(end + 1..).unwrap_or_default().to_vec())
 }
 
 /// Closes the channel when the call times out or is cancelled. Dropping a channel does not.
@@ -91,125 +97,49 @@ pub async fn run(
         })
 }
 
+fn other(message: &str) -> Refusable {
+    Refusable::Failure(Failure::Other(message.into()))
+}
+
+/// Opens a channel and starts `script` after a marker line, which separates it from rc-file output.
+async fn start(
+    handle: &client::Handle<Host>,
+    script: &str,
+) -> Result<(OpenChannel, String), Refusable> {
+    let marker = format!("DACHSTERM-{}", uuid::Uuid::new_v4().simple());
+    let command = format!(
+        "sh -c {}",
+        quote(&format!("printf '%s\\n' {marker}\n{script}"))
+    );
+    let channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|error| match error {
+            russh::Error::ChannelOpenFailure(_) => Refusable::ChannelRefused,
+            _ => other("원격 명령 채널을 열 수 없습니다."),
+        })?;
+    let mut open = OpenChannel(Some(channel));
+    open.0
+        .as_mut()
+        .unwrap()
+        .exec(true, command)
+        .await
+        .map_err(|_| other("원격 명령을 시작할 수 없습니다."))?;
+    Ok((open, marker))
+}
+
 pub async fn run_refusable(
     handle: &client::Handle<Host>,
     script: &str,
     limits: Limits,
 ) -> Result<Output, Refusable> {
-    let marker = format!("DACHSTERM-{}", uuid::Uuid::new_v4().simple());
-    let (stdout, stderr, exit) = execute(handle, script, limits, &marker, &mut |_| {}).await?;
-    let stdout = after_marker(&stdout, marker.as_bytes()).ok_or_else(no_shell)?;
-    Ok(Output {
-        stdout,
-        stderr,
-        exit,
-    })
-}
-
-/// For commands that report as they go: each stdout line arrives as soon as the server sends it,
-/// so what came before a time limit is not lost with the rest. Returns the exit status.
-pub async fn run_lines(
-    handle: &client::Handle<Host>,
-    script: &str,
-    limits: Limits,
-    mut on_line: impl FnMut(&str) + Send,
-) -> Result<Option<u32>, Failure> {
-    let marker = format!("DACHSTERM-{}", uuid::Uuid::new_v4().simple());
-    let mut lines = Lines::new(&marker);
-    let result = execute(handle, script, limits, &marker, &mut |data| {
-        lines.feed(data, &mut on_line);
-    })
-    .await;
-    let unmarked = !lines.past_marker;
-    lines.finish(&mut on_line);
-    let (_, _, exit) = result.map_err(|failure| match failure {
-        Refusable::ChannelRefused => Failure::Other("원격 명령 채널을 열 수 없습니다.".into()),
-        Refusable::Failure(failure) => failure,
-    })?;
-    if unmarked {
-        return Err(Failure::Other(NO_SHELL.into()));
-    }
-    Ok(exit)
-}
-
-const NO_SHELL: &str = "이 서버에서는 원격 명령을 실행할 수 없습니다.";
-fn no_shell() -> Refusable {
-    Refusable::Failure(Failure::Other(NO_SHELL.into()))
-}
-
-/// Cuts a command's stdout into lines and drops everything up to the marker line.
-struct Lines<'a> {
-    marker: &'a [u8],
-    past_marker: bool,
-    pending: Vec<u8>,
-}
-impl<'a> Lines<'a> {
-    fn new(marker: &'a str) -> Self {
-        Self {
-            marker: marker.as_bytes(),
-            past_marker: false,
-            pending: Vec::new(),
-        }
-    }
-    fn line(&mut self, line: &[u8], on_line: &mut impl FnMut(&str)) {
-        let line = line.strip_suffix(b"\r").unwrap_or(line);
-        if self.past_marker {
-            on_line(&String::from_utf8_lossy(line));
-        } else if line == self.marker {
-            self.past_marker = true;
-        }
-    }
-    fn feed(&mut self, data: &[u8], on_line: &mut impl FnMut(&str)) {
-        self.pending.extend_from_slice(data);
-        let mut start = 0;
-        while let Some(at) = self.pending[start..].iter().position(|b| *b == b'\n') {
-            let line = self.pending[start..start + at].to_vec();
-            self.line(&line, on_line);
-            start += at + 1;
-        }
-        self.pending.drain(..start);
-    }
-    fn finish(mut self, on_line: &mut impl FnMut(&str)) {
-        if !self.pending.is_empty() {
-            let line = std::mem::take(&mut self.pending);
-            self.line(&line, on_line);
-        }
-    }
-}
-
-async fn execute(
-    handle: &client::Handle<Host>,
-    script: &str,
-    limits: Limits,
-    marker: &str,
-    on_stdout: &mut (dyn FnMut(&[u8]) + Send),
-) -> Result<(Vec<u8>, Vec<u8>, Option<u32>), Refusable> {
-    let other = |message: &str| Refusable::Failure(Failure::Other(message.into()));
-    let command = format!(
-        "sh -c {}",
-        quote(&format!("printf '%s\\n' {marker}\n{script}"))
-    );
     let work = async {
-        let channel = handle
-            .channel_open_session()
-            .await
-            .map_err(|error| match error {
-                russh::Error::ChannelOpenFailure(_) => Refusable::ChannelRefused,
-                _ => other("원격 명령 채널을 열 수 없습니다."),
-            })?;
-        let mut open = OpenChannel(Some(channel));
+        let (mut open, marker) = start(handle, script).await?;
         let channel = open.0.as_mut().unwrap();
-        channel
-            .exec(true, command)
-            .await
-            .map_err(|_| other("원격 명령을 시작할 수 없습니다."))?;
         let (mut stdout, mut stderr, mut exit) = (Vec::new(), Vec::new(), None);
         while let Some(message) = channel.wait().await {
             match message {
-                ChannelMsg::Data { data } => {
-                    on_stdout(&data);
-                    stdout.extend_from_slice(&data);
-                }
+                ChannelMsg::Data { data } => stdout.extend_from_slice(&data),
                 ChannelMsg::ExtendedData { data, .. } => stderr.extend_from_slice(&data),
                 ChannelMsg::ExitStatus { exit_status } => exit = Some(exit_status),
                 ChannelMsg::Failure => return Err(other("서버가 원격 명령을 거부했습니다.")),
@@ -219,35 +149,155 @@ async fn execute(
                 return Err(Refusable::Failure(Failure::TooLarge));
             }
         }
-        Ok((stdout, stderr, exit))
+        Ok((stdout, stderr, exit, marker))
+    };
+    let (stdout, stderr, exit, marker) = tokio::time::timeout(limits.timeout, work)
+        .await
+        .map_err(|_| Refusable::Failure(Failure::TimedOut))??;
+    let stdout = after_marker(&stdout, marker.as_bytes())
+        .ok_or_else(|| other("이 서버에서는 원격 명령을 실행할 수 없습니다."))?;
+    Ok(Output {
+        stdout,
+        stderr,
+        exit,
+    })
+}
+
+/// What a streamed run leaves once stdout has gone to the caller.
+pub struct Streamed {
+    pub stderr: Vec<u8>,
+}
+
+/// Like `run_refusable`, for output too long to hold or wanted as it arrives. `on_stdout` gets each
+/// piece of stdout after the marker line and can stop the run; the channel closes either way.
+/// `max_output` limits only what is kept here: rc-file output and stderr.
+pub async fn stream_refusable(
+    handle: &client::Handle<Host>,
+    script: &str,
+    limits: Limits,
+    mut on_stdout: impl FnMut(&[u8]) -> ControlFlow<()>,
+) -> Result<Streamed, Refusable> {
+    let work = async {
+        let (mut open, marker) = start(handle, script).await?;
+        let channel = open.0.as_mut().unwrap();
+        let (mut before, mut stderr) = (Some(Vec::new()), Vec::new());
+        while let Some(message) = channel.wait().await {
+            match message {
+                ChannelMsg::Data { data } => {
+                    let piece = match &mut before {
+                        None => data.to_vec(),
+                        Some(buffer) => {
+                            buffer.extend_from_slice(&data);
+                            match marker_end(buffer, marker.as_bytes()) {
+                                Some(end) if end < buffer.len() => {
+                                    let rest = buffer.split_off(end + 1);
+                                    before = None;
+                                    rest
+                                }
+                                _ if buffer.len() > limits.max_output => {
+                                    return Err(Refusable::Failure(Failure::TooLarge));
+                                }
+                                _ => continue,
+                            }
+                        }
+                    };
+                    if on_stdout(&piece).is_break() {
+                        return Ok(Streamed { stderr });
+                    }
+                }
+                ChannelMsg::ExtendedData { data, .. } => {
+                    stderr.extend_from_slice(&data);
+                    if stderr.len() > limits.max_output {
+                        return Err(Refusable::Failure(Failure::TooLarge));
+                    }
+                }
+                ChannelMsg::Failure => return Err(other("서버가 원격 명령을 거부했습니다.")),
+                _ => {}
+            }
+        }
+        if before
+            .as_ref()
+            .is_some_and(|buffer| marker_end(buffer, marker.as_bytes()).is_none())
+        {
+            return Err(other("이 서버에서는 원격 명령을 실행할 수 없습니다."));
+        }
+        Ok(Streamed { stderr })
     };
     tokio::time::timeout(limits.timeout, work)
         .await
         .map_err(|_| Refusable::Failure(Failure::TimedOut))?
 }
 
+/// For commands that report as they go: each stdout line arrives as soon as the server sends it,
+/// so what came before a time limit is not lost with the rest.
+pub async fn run_lines(
+    handle: &client::Handle<Host>,
+    script: &str,
+    limits: Limits,
+    mut on_line: impl FnMut(&str) + Send,
+) -> Result<(), Failure> {
+    let mut lines = Lines::default();
+    let mut total = 0;
+    let result = stream_refusable(handle, script, limits, |data| {
+        total += data.len();
+        if total > limits.max_output {
+            return ControlFlow::Break(());
+        }
+        lines.feed(data, &mut on_line);
+        ControlFlow::Continue(())
+    })
+    .await;
+    lines.finish(&mut on_line);
+    if total > limits.max_output {
+        return Err(Failure::TooLarge);
+    }
+    result.map(drop).map_err(|failure| match failure {
+        Refusable::ChannelRefused => Failure::Other("원격 명령 채널을 열 수 없습니다.".into()),
+        Refusable::Failure(failure) => failure,
+    })
+}
+
+/// Cuts stdout into lines, however the pieces happen to arrive.
+#[derive(Default)]
+struct Lines {
+    pending: Vec<u8>,
+}
+impl Lines {
+    fn line(line: &[u8], on_line: &mut impl FnMut(&str)) {
+        on_line(&String::from_utf8_lossy(
+            line.strip_suffix(b"\r").unwrap_or(line),
+        ));
+    }
+    fn feed(&mut self, data: &[u8], on_line: &mut impl FnMut(&str)) {
+        self.pending.extend_from_slice(data);
+        let mut start = 0;
+        while let Some(at) = self.pending[start..].iter().position(|b| *b == b'\n') {
+            Self::line(&self.pending[start..start + at], on_line);
+            start += at + 1;
+        }
+        self.pending.drain(..start);
+    }
+    fn finish(self, on_line: &mut impl FnMut(&str)) {
+        if !self.pending.is_empty() {
+            Self::line(&self.pending, on_line);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Lines, after_marker, quote};
 
-    fn collected(chunks: &[&[u8]]) -> Vec<String> {
+    #[test]
+    fn lines_survive_being_split_across_pieces() {
         let mut seen = Vec::new();
-        let mut lines = Lines::new("M");
+        let mut lines = Lines::default();
         let mut record = |line: &str| seen.push(line.to_string());
-        for chunk in chunks {
-            lines.feed(chunk, &mut record);
+        for piece in [&b"one\ntw"[..], b"o\r\n", b"three"] {
+            lines.feed(piece, &mut record);
         }
         lines.finish(&mut record);
-        seen
-    }
-
-    #[test]
-    fn lines_start_after_the_marker_and_survive_being_split() {
-        assert_eq!(
-            collected(&[b"motd\nM\r\none\ntw", b"o\r\n", b"three"]),
-            ["one", "two", "three"]
-        );
-        assert!(collected(&[b"no marker here\n"]).is_empty());
+        assert_eq!(seen, ["one", "two", "three"]);
     }
 
     #[test]

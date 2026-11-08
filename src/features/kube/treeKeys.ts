@@ -1,3 +1,12 @@
+import type { TreeRow } from './tree';
+
+export const parentIndex = (rows: TreeRow[], index: number) => {
+  for (let at = index - 1; at >= 0; at--) if (rows[at].depth < rows[index].depth) return at;
+  return -1;
+};
+
+export const foldable = (row: TreeRow) => row.type === 'group' || row.type === 'nodes';
+
 export type TreeKeyAction =
   | 'down'
   | 'up'

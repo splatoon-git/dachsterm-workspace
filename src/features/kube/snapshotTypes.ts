@@ -24,6 +24,8 @@ export type KubePod = {
   ownerKind: string;
   ownerName: string;
   labels: Record<string, string>;
+  /** What a plain `kubectl logs` reads: the annotation, then the first in the spec. */
+  defaultContainer: string;
   containerCount: number;
   cpuRequest: number | null;
   memoryRequest: number | null;

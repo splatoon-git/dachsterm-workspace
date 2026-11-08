@@ -328,3 +328,41 @@ KV.3을 합친 커밋 전 트리. `cargo test -p dachsterm --lib --locked -- kub
 - 개요의 사용량과 추세: 이번 환경에 metrics-server가 없어 실제 값으로 그려 보지 않았다.
 - 패널 경계선 끌기, 실제 IME, 권한 없는 계정(`pods/exec`, Ingress·NetworkPolicy 조회 거부)은 실행하지 않았다.
 - Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다. `test-phase63-67-native.mjs`는 명령 이름만 고쳤고 원래 실행할 수 없는 상태다.
+
+## KV.5 앱 검증 (2026-11-08)
+
+### 환경
+
+- KV.2와 같은 kind 클러스터(노드 1개)와 OpenSSH 서버(`npm run kube:fixture -- dachsterm-kv5 up`, 끝난 뒤 `down`). 이미지는 `busybox:1.36`. 파드는 `chatty` 3개, `flood` 6개, `bulky` 30개(키워드가 없는 약 8MB 로그), `multi`(컨테이너 2개와 default-container annotation), `restarted`(한 번 재시작)다.
+- 검사: `node scripts/verify-kube-log-search.mjs --cluster=dachsterm-kv5 --keep`(`npm run test:kube-log-search`). 한 번 실행, 종료 0. 실행 파일은 커밋 직전 트리로 빌드했고 그 뒤로 바꾼 것은 문서뿐이다.
+
+### 합격 기준
+
+PASS 11줄.
+
+| 항목 | 결과 |
+|---|---|
+| 여러 파드 검색 | 워크로드 범위 파드 3개에서 15줄, 파드마다 5줄, 키워드 강조 |
+| 키워드 | `!level=debug` 제외와 대소문자 무시(9줄). `$(touch${IFS}/tmp/kv5-injected)`는 0줄이고 서버에 파일이 생기지 않음 |
+| 컨테이너 | 기본은 annotation의 컨테이너 1개, **컨테이너 전체**는 2개 |
+| 이전 인스턴스 | 재시작한 컨테이너의 이전 로그를 `이전` 표시와 함께 2줄로 |
+| 파드당 상한 | 일치 1,500줄인 파드가 1,000줄에서 멈추고 `파드당 1,000줄` 표시 |
+| 전체 상한 | 파드 6개 검색이 5,000줄에서 멈추고 `전체 5,000줄` 표시 |
+| 결과 행 | 클릭은 주변 로그, 우클릭은 그 파드의 로그 패널과 셸. 셸 안 `hostname` 확인 후 `exit`로 복귀 |
+| 실시간 따라가기 | 터미널 탭에 키워드로 거른 로그 표시, 탭 닫기 |
+| 취소 | 서버에 `kubectl ... logs`가 있는 동안 취소, 화면 `취소됨`, 이후 서버의 `kubectl ... logs` 프로세스 0개 |
+| 채널 거부 | 셸 탭으로 `MaxSessions`를 채운 뒤 2개만 닫고 검색: 동시 수를 줄였다는 안내가 나오고 실패 목록 없이 완료 |
+
+취소 시 서버 감시는 위 시나리오와 별도로 fixture의 dash에서 스크립트 조각만 돌려 확인했다. 300초짜리 프로세스를 대신 넣고 stdin을 닫으면 그 프로세스가 SIGTERM으로 끝나고(`EXIT 143`) `timeout 30`에 닿지 않았다. 앱 시나리오의 `bulky` 검색은 kubectl이 원래 짧게 끝나는 작업이라, 감시가 끊은 것인지 스스로 끝난 것인지는 앱 시나리오만으로는 구분되지 않는다.
+
+### 단위·UI
+
+커밋 전 트리. `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings`, `npm run typecheck`, 바꾼 파일 eslint·prettier 통과. `cargo test -p dachsterm --lib --locked -- log_ kube::shell kube::snapshot kube::settings kube::logs remote_exec` 58건, 뒤이어 `Streamed` 필드 제거와 전체 상한 잠금 변경 뒤 `-- log_ remote_exec` 30건 재실행. `vitest run src/features/kube` 189건. Playwright `kube-log-search` 9건(첫 실행의 1건 실패는 스펙의 사용량 데이터가 비어 대시보드 행이 없던 것으로, 고친 뒤 그 1건만 재실행 통과), 트리·대시보드를 고쳐 함께 돌린 `kube-tree`·`kube-dashboard`·`kube-workspace` 67건.
+
+### 미확인
+
+- 파드 100개 상한과 전체 60초 상한은 실제 클러스터에서 재지 않았다(단위 테스트와 Playwright 표시까지). 대상 하나의 16MiB 상한과 한 줄 4,096자 자르기는 단위 테스트까지다.
+- 트리·대시보드 우클릭으로 시작하는 경로와 `usePodShell`로 옮긴 트리의 셸 열기는 Playwright까지다. `test:kube-detail`은 재실행하지 않았고, 같은 훅을 쓰는 결과 행 셸만 실제 앱에서 확인했다.
+- `grep --line-buffered`는 busybox 서버에서 쓸 수 없다. kubectl을 busybox 환경에서 쓰는 서버의 실시간 따라가기는 확인하지 않았다.
+- 파일 저장은 만들지 않았다(설계안 KV.5). 대형 클러스터, 실제 IME, 권한 없는 계정은 실행하지 않았다.
+- Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.

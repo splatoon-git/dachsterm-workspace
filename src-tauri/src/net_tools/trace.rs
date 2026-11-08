@@ -255,9 +255,9 @@ const DETECT: &str = "export LC_ALL=C PATH=\"$PATH:/usr/sbin:/sbin\"\n\
     command -v tracepath >/dev/null 2>&1 && echo tracepath\n\
     true\n";
 
-fn partial(result: std::result::Result<Option<u32>, Failure>) -> Option<String> {
+fn partial(result: std::result::Result<(), Failure>) -> Option<String> {
     match result {
-        Ok(_) => None,
+        Ok(()) => None,
         Err(Failure::TimedOut) => Some(CUT_OFF.to_string()),
         Err(Failure::TooLarge) => Some(TOO_LONG.to_string()),
         Err(Failure::Other(message)) => Some(message),
@@ -290,7 +290,7 @@ async fn remote(tracer: &Tracer, handle: &client::Handle<Host>, host: &str, port
             return failed("서버에서 이름을 해석하지 못했습니다.");
         }
         match result {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(failure @ (Failure::TimedOut | Failure::Other(_))) => {
                 return failed(String::from(failure));
             }

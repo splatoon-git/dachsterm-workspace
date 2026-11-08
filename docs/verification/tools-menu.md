@@ -381,9 +381,11 @@ chroot의 `lsof`, `netstat`은 해당 형식을 출력하는 **대역 스크립�
 
 ### TL.10 회귀
 
-TL.8·TL.9가 함께 바꾼 `dial.rs`(로컬 다이얼 분리), `targets.rs`(`single_host`), `remote_exec.rs`(`execute`로 분리), 결과 행 메뉴가 닿는 범위만 돌렸다.
+TL.8·TL.9가 함께 바꾼 `dial.rs`(로컬 다이얼 분리), `targets.rs`(`single_host`), `remote_exec.rs`(`run_lines` 추가), 결과 행 메뉴가 닿는 범위만 돌렸다.
 
 `node scripts/test-port-tools-native.mjs --port-only`, 최종 빌드: 종료 0. 포트 개통 전 항목(로컬·리모트 결과 5종, 상한·확인, 취소, 2단계 판정, 미해결 상한 256, 자원 고갈, bash·nc 대체, 터미널 공유)과 포트 사용 여부 전 항목 PASS.
+
+dev 병합(KV.5)에서 `remote_exec.rs`가 충돌해 `run_lines`를 KV.5의 `stream_refusable` 위로 옮겼다. 병합본으로 다시 빌드해 `--from="trace: root sends TCP to the port"`(root·일반 계정·끊김·도구 없음)를 돌렸고 종료 0이다. Windows·macOS 타깃 `clippy -D warnings`, `cargo test --lib -- remote_exec net_tools::trace` 23/23도 병합본 기준이다.
 
 ### 이 검사가 잡은 결함
 
