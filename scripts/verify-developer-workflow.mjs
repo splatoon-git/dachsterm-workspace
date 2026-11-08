@@ -93,6 +93,10 @@ export async function verifyDeveloperWorkflow({
     assert(!ran(), 'the app ran the repository fsmonitor program');
     console.log('PASS native Git status bar, tab name and tooltip, tree marks, fsmonitor not run');
 
+    setStage('GE.11 prompt branch');
+    await showSidebarView(page, '연결');
+    await verifyPromptBranch({ page, pane, command, status, shell, repo, setStage });
+
     setStage('DX.6 change review and prompt');
     const reviewTab = page.locator('.tab-strip [role="tab"]').filter({ hasText: /^변경 검토 · / });
     const groupsBefore = await page.locator('.tab-strip').count();
@@ -185,6 +189,101 @@ export async function verifyDeveloperWorkflow({
     else await cleanup();
   }
   await verifyAgentList({ page, pane, command, connectNewTab, invoke, setStage });
+}
+
+/** GE.11: the badge on the prompt line, against what the app shows of the cursor's own line. */
+async function verifyPromptBranch({ page, pane, command, status, shell, repo, setStage }) {
+  const badge = pane().locator('.prompt-branch');
+  const textarea = pane().locator('.xterm-helper-textarea');
+  await expect(badge).toHaveText('⎇ main ●3', { timeout: 15000 });
+  const onCursorRow = async () => {
+    const [mark, cursor, screen] = await Promise.all([
+      badge.boundingBox(),
+      pane().locator('.xterm-rows .xterm-cursor').first().boundingBox(),
+      pane().locator('.xterm-screen').boundingBox(),
+    ]);
+    assert(mark && cursor && screen, 'badge, cursor and screen all have a place');
+    assert(Math.abs(mark.y - cursor.y) < 3, `badge at ${mark.y}, cursor line at ${cursor.y}`);
+    assert(
+      Math.abs(mark.x + mark.width - (screen.x + screen.width)) < 3,
+      'badge ends at the right',
+    );
+  };
+  await onCursorRow();
+
+  // The first prompt after a checkout already names the branch. The last query was a moment ago,
+  // so the 5 second prompt interval would still hold the status bar back without the branch event.
+  await command('git checkout -q -b ge11-native');
+  await expect(badge).toContainText('⎇ ge11-native', { timeout: 2000 });
+  await expect(status).toContainText('ge11-native', { timeout: 3000 });
+  await onCursorRow();
+  console.log('PASS native first prompt after checkout names the branch, status bar follows');
+
+  await command('git checkout -q --detach');
+  await expect(badge).toContainText(/⎇ @[0-9a-f]{7}/, { timeout: 2000 });
+  await command('git checkout -q main');
+  await expect(badge).toContainText('⎇ main', { timeout: 2000 });
+
+  // While a command runs and on the alternate screen there is no prompt to mark.
+  await textarea.pressSequentially('sleep 2');
+  await textarea.press('Enter');
+  await expect(badge).toHaveCount(0, { timeout: 1000 });
+  await expect(badge).toHaveCount(1, { timeout: 5000 });
+  await textarea.pressSequentially('less a.txt');
+  await textarea.press('Enter');
+  await expect(badge).toHaveCount(0, { timeout: 2000 });
+  await textarea.press('q');
+  await expect(badge).toHaveCount(1, { timeout: 5000 });
+  console.log('PASS native badge hidden while a command runs and in a full-screen program');
+
+  setStage('GE.11 prompt theme with its own branch');
+  // A prompt theme that already shows the branch needs no second copy.
+  await command("OLD_PS1=$PS1; PS1='(main) \\$ '");
+  await expect(badge).toHaveCount(0, { timeout: 2000 });
+  await command('PS1=$OLD_PS1');
+  await expect(badge).toHaveCount(1, { timeout: 2000 });
+
+  setStage('GE.11 long input line');
+  // A long line leaves no room, and the badge comes back when it is gone. This run keeps echo off
+  // elsewhere, and without echo the typed text never reaches the screen.
+  await command('stty echo');
+  await textarea.pressSequentially('x'.repeat(240));
+  await expect(badge).toHaveCount(0, { timeout: 2000 });
+  await textarea.press('Control+U');
+  await expect(badge).toHaveCount(1, { timeout: 2000 });
+  await command('stty -echo');
+
+  setStage('GE.11 setting and leaving the repository');
+
+  // The text is drawn over the terminal, so reading the screen does not see it.
+  const screenText = await pane().locator('.xterm-accessibility-tree').innerText();
+  assert(!screenText.includes('⎇'), 'the badge reached the terminal text');
+
+  // The setting's value, as GE.10 will save it. Other panes read it on this event.
+  await page.evaluate(() => {
+    const key = 'dachsterm.terminalPreferences';
+    const saved = JSON.parse(localStorage.getItem(key) ?? '{}');
+    localStorage.setItem(key, JSON.stringify({ ...saved, promptBranch: 'off' }));
+    window.dispatchEvent(new StorageEvent('storage', { key }));
+  });
+  await expect(badge).toHaveCount(0, { timeout: 2000 });
+  await page.evaluate(() => {
+    const key = 'dachsterm.terminalPreferences';
+    const saved = JSON.parse(localStorage.getItem(key) ?? '{}');
+    delete saved.promptBranch;
+    localStorage.setItem(key, JSON.stringify(saved));
+    window.dispatchEvent(new StorageEvent('storage', { key }));
+  });
+  await expect(badge).toHaveCount(1, { timeout: 2000 });
+
+  await command('cd /tmp');
+  await expect(badge).toHaveCount(0, { timeout: 2000 });
+  await command(`cd ${repo}`);
+  await expect(badge).toContainText('⎇ main', { timeout: 2000 });
+  // The shell's own git commands above run the repository's fsmonitor program. Only the app must
+  // not, which the next stage checks from this trace.
+  shell(`git -C ${repo} branch -q -D ge11-native; rm -f ${repo}-fsmonitor.ran`);
+  console.log('PASS native badge follows PS1, line length, the setting and leaving the repository');
 }
 
 /**

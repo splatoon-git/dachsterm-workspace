@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import '@xterm/xterm/css/xterm.css';
 import type { ThemeDefinition } from '../../themes/contract';
 import type { TerminalSession } from './session';
@@ -41,6 +48,7 @@ export function TerminalPane({
   theme,
   reconnect,
   close,
+  children,
 }: {
   session: TerminalSession;
   active: boolean;
@@ -49,6 +57,8 @@ export function TerminalPane({
   reconnect: () => void;
   /** Closes the tab, offered when the connection has ended. */
   close?: () => void;
+  /** Overlays from other features, placed over the terminal. */
+  children?: ReactNode;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
@@ -298,6 +308,7 @@ export function TerminalPane({
       )}
       <div className="live-terminal" ref={host} />
       <FailedCommandMarks session={session} />
+      {children}
     </section>
   );
 }

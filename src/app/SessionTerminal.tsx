@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore, type ComponentProps } from 'react';
 import { TerminalPane } from '../features/terminal/TerminalPane';
 import { ForwardPortDialog } from '../features/tunnels/ForwardPortDialog';
+import { PromptBranch } from './PromptBranch';
 
 /** Connects terminal signals to other features, which must not import each other directly. */
 export function SessionTerminal(props: ComponentProps<typeof TerminalPane>) {
@@ -12,7 +13,9 @@ export function SessionTerminal(props: ComponentProps<typeof TerminalPane>) {
   }, [active, connected, session]);
   return (
     <>
-      <TerminalPane {...props} />
+      <TerminalPane {...props}>
+        <PromptBranch session={session} active={active} />
+      </TerminalPane>
       {connected && state.serverLink && (
         <ForwardPortDialog
           session={session}

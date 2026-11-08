@@ -6,6 +6,7 @@ import {
   commandDuration,
   commandNotice,
   isLongCommand,
+  parseBranchReport,
   parseCommandMark,
   promptJumpKey,
   promptTarget,
@@ -72,6 +73,74 @@ beforeEach(() => {
   saveTerminalPreferences({ longCommandNotify: 30 });
 });
 afterEach(() => vi.useRealTimers());
+
+describe('branch reports', () => {
+  it('reads the name, empty outside a repository, and leaves other OSC 777 text alone', () => {
+    expect(parseBranchReport('DachsTerm;branch;main')).toBe('main');
+    expect(parseBranchReport('DachsTerm;branch;feature/한글')).toBe('feature/한글');
+    expect(parseBranchReport('DachsTerm;branch;')).toBe('');
+    expect(parseBranchReport('DachsTerm;program;vim')).toBeNull();
+    expect(parseBranchReport('notify;a;b')).toBeNull();
+  });
+
+  it('drops control characters and cuts a very long name', () => {
+    expect(parseBranchReport('DachsTerm;branch;a\x1b]0;b\x07c\x7f\x9cd')).toBe('a]0;bcd');
+    expect(parseBranchReport(`DachsTerm;branch;${'가'.repeat(300)}`)).toBe('가'.repeat(200));
+  });
+
+  it('keeps the report and tells listeners, but not while old output replays', () => {
+    const live = setup();
+    const heard: string[] = [];
+    live.marks.onBranch((branch) => heard.push(branch));
+    expect(live.marks.reportBranch('DachsTerm;branch;main')).toBe(true);
+    expect(live.marks.branch).toBe('main');
+    expect(heard).toEqual(['main']);
+    expect(live.marks.reportBranch('notify;a;b')).toBe(false);
+
+    const replay = setup(true);
+    replay.marks.onBranch((branch) => heard.push(branch));
+    expect(replay.marks.reportBranch('DachsTerm;branch;old')).toBe(true);
+    expect(replay.marks.branch).toBeNull();
+    expect(heard).toEqual(['main']);
+  });
+});
+
+describe('waiting prompt', () => {
+  it('waits from the prompt until the command starts, and says when that changes', () => {
+    const { marks, at } = setup();
+    const changed = vi.fn();
+    marks.subscribe(changed);
+    expect(marks.promptWaiting).toBe(false);
+    at(4);
+    vi.setSystemTime(5000);
+    marks.handle('A');
+    expect(marks.promptWaiting).toBe(true);
+    expect(marks.promptLine).toBe(4);
+    expect(marks.promptAt).toBe(5000);
+    expect(changed).toHaveBeenCalledTimes(1);
+    marks.handle('C');
+    expect(marks.promptWaiting).toBe(false);
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
+
+  it('ends at Enter where the shell reports no command start, not at an empty line', () => {
+    const { marks, lines, at } = setup();
+    marks.handle('A');
+    at(0, 2);
+    lines.set(0, '$ ');
+    marks.input('\r');
+    expect(marks.promptWaiting).toBe(true);
+    marks.input('ls\r');
+    expect(marks.promptWaiting).toBe(false);
+  });
+
+  it('does not wait on the alternate screen', () => {
+    const { marks, buffer } = setup();
+    marks.handle('A');
+    buffer.type = 'alternate';
+    expect(marks.promptWaiting).toBe(false);
+  });
+});
 
 describe('command marks', () => {
   it('reads A, C and D with its code, and nothing else', () => {

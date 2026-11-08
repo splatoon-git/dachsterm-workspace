@@ -24,7 +24,8 @@ export type GitResult =
 export type GitView = { repo: GitRepo } | { stopped: 'timeout' | 'tooLarge' } | null;
 
 /** What happened. The query runs at once unless the same folder was asked about too recently. */
-export type GitEvent = 'folder' | 'refresh' | 'prompt' | 'activate' | 'program' | 'manual';
+export type GitEvent =
+  'folder' | 'refresh' | 'prompt' | 'activate' | 'program' | 'manual' | 'branch';
 export const minInterval: Record<GitEvent, number> = {
   folder: 500,
   refresh: 500,
@@ -32,6 +33,8 @@ export const minInterval: Record<GitEvent, number> = {
   activate: 30_000,
   program: 5000,
   manual: 0,
+  // The shell's prompt names another branch than the last query did, so that answer is out of date.
+  branch: 0,
 };
 
 type Deps = {
@@ -173,6 +176,10 @@ export class GitScheduler {
 
 export const branchLabel = (repo: GitRepo) =>
   repo.branch ?? `(${repo.oid ? repo.oid.slice(0, 7) : '분리됨'})`;
+
+/** A query's branch in the shell hook's spelling: a name, `@` and 7 hex digits, or nothing. */
+export const hookBranch = (repo: GitRepo) =>
+  repo.branch ?? (repo.oid ? `@${repo.oid.slice(0, 7)}` : '');
 
 export const changeCount = (repo: GitRepo) => `${repo.entries.length}${repo.truncated ? '+' : ''}`;
 

@@ -49,12 +49,13 @@ export function attachTerminalIntegrations(terminal: Terminal, host: Integration
       agent.attention(now.state, now.detail);
   };
   // Long commands notify through the program notifier, which only agent-capable tabs have.
-  attachCommandMarks(terminal, {
+  const marks = attachCommandMarks(terminal, {
     replaying: () => agent?.replaying() ?? false,
     finished: agent && ((exit, ms) => agent.attention('command', commandNotice(exit, ms))),
   });
   parser.registerOscHandler(7, (value) => directory(value, true));
   parser.registerOscHandler(777, (value) => {
+    if (marks.reportBranch(value)) return true;
     const program = programMetadata(value);
     if (program !== undefined) {
       host.program(program);

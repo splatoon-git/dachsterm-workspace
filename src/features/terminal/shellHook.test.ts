@@ -1,10 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { autoGuidePrograms, shellHook } from './shellHook';
+import localRust from '../../../src-tauri/src/local.rs?raw';
+import { autoGuidePrograms, branchFunction, shellHook } from './shellHook';
 
 describe('shell hook', () => {
   it('keeps each shell part inside one single-quoted eval', () => {
     // A single quote inside a part would end its eval early and run the rest as typed text.
-    for (const guide of [true, false]) expect(shellHook({ guide }).match(/'/g)).toHaveLength(4);
+    for (const guide of [true, false]) expect(shellHook({ guide }).match(/'/g)).toHaveLength(6);
+  });
+
+  it('reports the branch between the folder and the prompt, in both shells', () => {
+    const hook = shellHook({ guide: false });
+    expect(
+      hook.match(/CurrentDir=%s\\007" "\$PWD"; __dachsterm_head; printf "\\033]133;A/g),
+    ).toHaveLength(2);
+    expect(hook.split('__dachsterm_head() {')).toHaveLength(2);
+  });
+
+  it('starts no process to find the branch', () => {
+    expect(branchFunction).not.toMatch(/\$\(|`|(^|[;|&{]\s*)(git|cat|sed|head|cut)\s/);
+  });
+
+  it('runs the same branch function in WSL tabs', () => {
+    expect(localRust).toContain(`__dachsterm_status=$?; ${branchFunction}; `);
+    expect(localRust).toMatch(/__dachsterm_head; printf '\\033\]133;A\\007'; \(exit/);
   });
 
   it('adds program notices only when the guide is on', () => {
@@ -44,6 +62,7 @@ describe('shell hook', () => {
       'printf "\\033]777;DachsTerm;program;%s\\007" "$p"',
       'printf "\\033]777;DachsTerm;end\\007"',
       'printf "\\033]777;DachsTerm;program;%s\\007" $w',
+      'printf "\\033]777;DachsTerm;branch;%s\\007" "$h"',
     ]);
   });
 
@@ -51,7 +70,7 @@ describe('shell hook', () => {
     const git = String.raw`case "$GIT_CONFIG_PARAMETERS" in *x*) ;; *) export GIT_CONFIG_PARAMETERS=''\''a'\''';; esac`;
     const hook = shellHook({ guide: false, git });
     expect(hook.startsWith(`${git}; if [ -n "$BASH_VERSION" ]`)).toBe(true);
-    expect(hook.slice(git.length).match(/'/g)).toHaveLength(4);
+    expect(hook.slice(git.length).match(/'/g)).toHaveLength(6);
     expect(shellHook({ guide: false })).not.toContain('GIT_CONFIG_PARAMETERS');
   });
 });

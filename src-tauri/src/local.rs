@@ -138,9 +138,10 @@ impl Target {
 // language mode forbids the calls below, and the shell's own prompt must keep working there.
 #[cfg(windows)]
 const POWERSHELL_FOLLOW: &str = "if($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage'){$global:__dachsterm_prompt=$function:prompt;function global:prompt{$p=$global:__dachsterm_prompt.Invoke() -join '';[Console]::Write(('{0}]1337;CurrentDir={1}{2}' -f [char]27,$ExecutionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath,[char]7));$p}}";
-// Keeps $? intact for a PS1 that shows the last exit status.
+// Keeps $? intact for a PS1 that shows the last exit status. __dachsterm_head is the text of
+// `branchFunction` in shellHook.ts, and a test there keeps the two equal.
 #[cfg(windows)]
-const WSL_FOLLOW: &str = r#"__dachsterm_status=$?; printf '\033]1337;CurrentDir=%s\007' "$PWD"; (exit $__dachsterm_status)"#;
+const WSL_FOLLOW: &str = r#"__dachsterm_status=$?; __dachsterm_head() { local d=$PWD g= h=; while :; do if [ -f "$d/.git/HEAD" ]; then g=$d/.git; break; elif [ -f "$d/.git" ]; then { read -r h < "$d/.git"; } 2>/dev/null; g=${h#gitdir: }; case $g in /*) ;; *) g=$d/$g;; esac; break; fi; [ -n "$d" ] || break; d=${d%/*}; done; h=; if [ -n "$g" ]; then { read -r h < "$g/HEAD"; } 2>/dev/null; fi; case $h in "ref: refs/heads/"[^.]*) h=${h#ref: refs/heads/};; "ref: "*) h=;; ?*) h=@${h:0:7};; esac; case $h in *[^[:print:]]*) h=;; esac; printf "\033]777;DachsTerm;branch;%s\007" "$h"; }; printf '\033]1337;CurrentDir=%s\007' "$PWD"; __dachsterm_head; printf '\033]133;A\007'; (exit $__dachsterm_status)"#;
 #[cfg(windows)]
 fn cmd_follow_prompt() -> String {
     let prompt = std::env::var("PROMPT").unwrap_or_else(|_| "$P$G".into());

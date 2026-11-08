@@ -35,6 +35,17 @@ export function parseCommandMark(value: string): Mark | null {
   return { kind, exit: Number.isInteger(exit) && exit >= 0 ? exit : 0 };
 }
 
+const branchPrefix = 'DachsTerm;branch;';
+const maxBranchLength = 200;
+/** The name in a hook's branch report, empty outside a repository. Null for any other OSC 777. */
+export function parseBranchReport(value: string) {
+  if (!value.startsWith(branchPrefix)) return null;
+  return Array.from(value.slice(branchPrefix.length))
+    .filter((c) => c > '\x1f' && (c < '\x7f' || c > '\x9f'))
+    .slice(0, maxBranchLength)
+    .join('');
+}
+
 /** Whether a finished command is long enough to notify about. 0 turns notifications off. */
 export const isLongCommand = (ms: number, thresholdSeconds: number) =>
   thresholdSeconds > 0 && ms >= thresholdSeconds * 1000;
@@ -73,11 +84,16 @@ export class CommandMarks {
   private typedFrom: { line: number; x: number } | null = null;
   private listeners = new Set<() => void>();
   private promptListeners = new Set<(replaying: boolean) => void>();
+  private branchListeners = new Set<(branch: string) => void>();
+  /** What the shell last reported, for the prompt it draws next. Null before any report. */
+  branch: string | null = null;
+  /** When the latest prompt began. */
+  promptAt = 0;
   constructor(
     private readonly terminal: Terminal,
     private readonly host: Host,
   ) {}
-  /** Changes to the failed lines. */
+  /** Changes to the failed lines and to whether a prompt is waiting. */
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
@@ -90,6 +106,32 @@ export class CommandMarks {
     return () => {
       this.promptListeners.delete(listener);
     };
+  }
+  /** Every branch report from the shell, never old output shown again. */
+  onBranch(listener: (branch: string) => void) {
+    this.branchListeners.add(listener);
+    return () => {
+      this.branchListeners.delete(listener);
+    };
+  }
+  /** Takes a hook's branch report. False for any other OSC 777 text. */
+  reportBranch(value: string) {
+    const branch = parseBranchReport(value);
+    if (branch === null) return false;
+    if (this.host.replaying()) return true;
+    this.branch = branch;
+    this.branchListeners.forEach((listener) => listener(branch));
+    this.changed();
+    return true;
+  }
+  /** The shell waits for a command at its prompt. */
+  get promptWaiting() {
+    const current = this.current;
+    return !!current && current.startedAt === undefined && this.normal;
+  }
+  /** The line the latest prompt began on, or -1 when it has left the buffer. */
+  get promptLine() {
+    return this.current?.prompt.line ?? -1;
   }
   private changed() {
     this.listeners.forEach((listener) => listener());
@@ -114,6 +156,7 @@ export class CommandMarks {
         current.startedAt = now;
         // The shell sends C after the Enter, from the line below the command.
         current.command = this.marker(-1);
+        this.changed();
       }
       return;
     }
@@ -127,7 +170,8 @@ export class CommandMarks {
   private prompt() {
     this.typedFrom = null;
     this.current = null;
-    if (!this.normal) return;
+    this.promptAt = Date.now();
+    if (!this.normal) return this.changed();
     const record: CommandRecord = { prompt: this.marker(0) };
     record.prompt.onDispose(() => {
       const index = this.records.indexOf(record);
@@ -142,6 +186,7 @@ export class CommandMarks {
     if (this.records.length > maxRecords) this.records[0].prompt.dispose();
     const replaying = this.host.replaying();
     this.promptListeners.forEach((listener) => listener(replaying));
+    this.changed();
   }
   /** What the user typed at the prompt, for shells that do not report command starts. */
   input(data: string) {
@@ -163,6 +208,7 @@ export class CommandMarks {
     if (!typed.trim()) return;
     current.startedAt = Date.now();
     current.command = this.marker(0);
+    this.changed();
   }
   /** Scrolls to the previous or next prompt. False when there is none to move to. */
   jump(direction: -1 | 1) {

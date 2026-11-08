@@ -14,13 +14,21 @@ const reportDirectory = String.raw`printf "\033]1337;CurrentDir=%s\007" "$PWD"`;
 // OSC 133 command boundaries: the last exit code, then a new prompt. Only the code leaves the shell.
 const commandEnd = String.raw`printf "\033]133;D;%s\007" "$s"`;
 const promptStart = String.raw`printf "\033]133;A\007"`;
+/**
+ * The branch of the folder, for the prompt that follows. Only shell builtins run, so a prompt starts
+ * no process, and the name is current at the first prompt after a checkout. A value with anything
+ * unprintable is dropped: `.git/HEAD` is a file in the folder, and must not reach the terminal as
+ * escape sequences. A reftable repository's HEAD names the stub `.invalid`, which is no branch.
+ * local.rs has the same text for WSL tabs, and a test keeps the two equal.
+ */
+export const branchFunction = `__dachsterm_head() { local d=$PWD g= h=; while :; do if [ -f "$d/.git/HEAD" ]; then g=$d/.git; break; elif [ -f "$d/.git" ]; then { read -r h < "$d/.git"; } 2>/dev/null; g=\${h#gitdir: }; case $g in /*) ;; *) g=$d/$g;; esac; break; fi; [ -n "$d" ] || break; d=\${d%/*}; done; h=; if [ -n "$g" ]; then { read -r h < "$g/HEAD"; } 2>/dev/null; fi; case $h in "ref: refs/heads/"[^.]*) h=\${h#ref: refs/heads/};; "ref: "*) h=;; ?*) h=@\${h:0:7};; esac; case $h in *[^[:print:]]*) h=;; esac; printf "\\033]777;DachsTerm;branch;%s\\007" "$h"; }`;
 
 // Bash 3.2 (macOS) must parse every part. A scalar PROMPT_COMMAND is prepended, because Bash before
 // 5.1 runs only element 0 of an array and a scalar may end in ";". The prompt function keeps $? for
 // the commands after it, and Bash drops the line from its history. Everything sits in one
 // single-quoted eval, so no part may contain a single quote.
 const bashEnd = `__dachsterm_end() { if [ -n "$__dachsterm_prog" ]; then unset __dachsterm_prog; ${programEnd}; fi; }`;
-const bashPrompt = `__dachsterm_cwd() { local s=$?; __dachsterm_end; ${commandEnd}; ${reportDirectory}; ${promptStart}; return $s; }`;
+const bashPrompt = `__dachsterm_cwd() { local s=$?; __dachsterm_end; ${commandEnd}; ${reportDirectory}; __dachsterm_head; ${promptStart}; return $s; }`;
 // Bash 4.4+ prints PS0 when a command starts and never for an empty line. Bash 3.2 ignores it, and
 // the app takes the Enter typed at the prompt instead.
 const bashCommandStart = String.raw`case "$PS0" in *133*) ;; *) PS0="\e]133;C\a$PS0";; esac`;
@@ -39,7 +47,7 @@ const bashHistory = String.raw`case "$(HISTTIMEFORMAT= builtin history 1)" in *_
 // the Bash wrapper also leaves out.
 const zshEnd = `__dachsterm_end() { if [[ -n $__dachsterm_prog ]]; then unset __dachsterm_prog; ${programEnd}; fi }`;
 // Zsh restores $? for each precmd function, so this sees the command's code wherever it runs.
-const zshPrompt = `__dachsterm_cwd() { local s=$?; __dachsterm_end; ${commandEnd}; ${reportDirectory}; ${promptStart}; }`;
+const zshPrompt = `__dachsterm_cwd() { local s=$?; __dachsterm_end; ${commandEnd}; ${reportDirectory}; __dachsterm_head; ${promptStart}; }`;
 const zshPrecmd = `(( \${precmd_functions[(Ie)__dachsterm_cwd]} )) || precmd_functions+=(__dachsterm_cwd)`;
 // Zsh runs preexec only for a command, never for an empty line.
 const zshCommandStart = [
@@ -66,6 +74,7 @@ export function shellHook({ guide, git }: { guide: boolean; git?: string }) {
     bashHistory,
   ];
   const zsh = [zshEnd, zshPrompt, zshPrecmd, ...zshCommandStart, ...(guide ? zshGuide : [])];
-  const hook = `if [ -n "$BASH_VERSION" ]; then eval '${bash.join('; ')}'; elif [ -n "$ZSH_VERSION" ]; then eval '${zsh.join('; ')}'; fi`;
+  // The function is the same for both shells and long, so it is typed once.
+  const hook = `if [ -n "$BASH_VERSION" ]; then eval '${bash.join('; ')}'; elif [ -n "$ZSH_VERSION" ]; then eval '${zsh.join('; ')}'; fi; if [ -n "$BASH_VERSION$ZSH_VERSION" ]; then eval '${branchFunction}'; fi`;
   return git ? `${git}; ${hook}` : hook;
 }
