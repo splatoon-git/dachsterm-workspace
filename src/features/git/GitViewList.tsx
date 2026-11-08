@@ -1,5 +1,6 @@
 import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { isMenuKey, type MenuPoint } from '../../components/ContextMenu';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
 import { Icon } from '../../components/Icon';
 import { changeLabel, changeMark } from './gitDiff';
 import type { GitActionItem } from './gitWriteMenu';
@@ -43,7 +44,7 @@ function RowButtons({ items }: { items: GitActionItem[] }) {
           // The row's keyboard route to these is its menu, so a long list stays one tab stop.
           tabIndex={-1}
           aria-label={item.label}
-          title={item.label}
+          data-tip={item.label}
           disabled={item.disabled}
           onClick={item.run}
         >
@@ -99,6 +100,7 @@ function FileRow({
         menu(row, event.currentTarget);
       }}
     >
+      <FileTypeIcon name={name} />
       <span className="git-row-name">{name}</span>
       {showFolder && folder && <span className="git-row-folder">{folder}</span>}
       <RowButtons items={buttons} />

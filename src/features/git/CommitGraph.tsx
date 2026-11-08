@@ -94,9 +94,20 @@ function Body({
   );
 }
 
-function Tool({ icon, label, run }: { icon: IconName; label: string; run: () => void }) {
+function Tool({
+  icon,
+  label,
+  tip,
+  run,
+}: {
+  icon: IconName;
+  label: string;
+  /** What it does, for someone who does not know the icon. */
+  tip: string;
+  run: () => void;
+}) {
   return (
-    <button type="button" className="git-view-tool" aria-label={label} title={label} onClick={run}>
+    <button type="button" className="git-view-tool" aria-label={label} data-tip={tip} onClick={run}>
       <Icon name={icon} size={14} />
     </button>
   );
@@ -154,7 +165,7 @@ export function CommitGraph({
               className="git-graph-scope"
               aria-label={`표시 범위 ${text.label}`}
               aria-pressed={scope === 'all'}
-              title={text.title}
+              data-tip={text.title}
               onClick={() => {
                 const next = scope === 'all' ? 'auto' : 'all';
                 setScope(next);
@@ -164,11 +175,38 @@ export function CommitGraph({
               <Icon name="branch" size={13} />
               {text.label}
             </button>
-            <Tool icon="target" label="현재 커밋으로 이동" run={toHead} />
-            <Tool icon="gitFetch" label="fetch" run={actions.fetch} />
-            <Tool icon="gitPull" label="pull" run={actions.pull} />
-            <Tool icon="gitPush" label="push" run={actions.push} />
-            <Tool icon="refresh" label="이력 새로 고침" run={actions.refresh} />
+            <Tool
+              icon="target"
+              label="현재 커밋으로 이동"
+              tip="현재 커밋(HEAD)으로 이동"
+              run={toHead}
+            />
+            <Tool
+              icon="gitFetch"
+              label="fetch"
+              tip={
+                'fetch\n원격의 새 커밋을 받아 옵니다. 작업 파일은 그대로입니다. 터미널에서 실행합니다.'
+              }
+              run={actions.fetch}
+            />
+            <Tool
+              icon="gitPull"
+              label="pull"
+              tip={'pull\n원격 변경을 현재 브랜치에 합칩니다. 터미널에서 실행합니다.'}
+              run={actions.pull}
+            />
+            <Tool
+              icon="gitPush"
+              label="push"
+              tip={'push\n이 브랜치의 커밋을 원격으로 보냅니다. 터미널에서 실행합니다.'}
+              run={actions.push}
+            />
+            <Tool
+              icon="refresh"
+              label="이력 새로 고침"
+              tip="이력 새로 고침"
+              run={actions.refresh}
+            />
           </div>
         )}
       </div>

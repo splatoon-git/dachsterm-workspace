@@ -20,6 +20,24 @@ export function placeMenu(at: MenuPoint, size: MenuSize, viewport: MenuSize): Me
   };
 }
 
+/** Centered under an element, or above it when the window has no room below. */
+export function placeTip(
+  element: { left: number; right: number; top: number; bottom: number },
+  size: MenuSize,
+  viewport: MenuSize,
+): MenuPoint {
+  const gap = 4;
+  const centered = (element.left + element.right - size.width) / 2;
+  const below = element.bottom + gap;
+  return {
+    x: Math.max(MARGIN, Math.min(centered, viewport.width - MARGIN - size.width)),
+    y:
+      below + size.height <= viewport.height - MARGIN
+        ? below
+        : Math.max(MARGIN, element.top - gap - size.height),
+  };
+}
+
 /** The next enabled item for a navigation key, wrapping around. -1 when nothing is enabled. */
 export function nextEnabled(disabled: boolean[], current: number, key: string): number {
   const count = disabled.length;

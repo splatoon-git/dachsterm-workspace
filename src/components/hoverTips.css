@@ -1,0 +1,17 @@
+.hover-tip {
+  position: fixed;
+  z-index: 110;
+  top: 0;
+  left: 0;
+  max-width: min(320px, calc(100vw - 8px));
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-panel);
+  box-shadow: var(--shadow-popup);
+  color: var(--color-text-primary);
+  font-size: var(--font-small);
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  white-space: pre-line;
+}

@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
 import { isMenuKey, type MenuPoint } from '../../components/ContextMenu';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
 import { Icon, type IconName } from '../../components/Icon';
 import { changeLabel, changeMark, type DiffFile } from './gitDiff';
 import {
@@ -138,6 +139,7 @@ function CommitFile({
         }
       }}
     >
+      <FileTypeIcon name={name} />
       <span className="git-row-name">{name}</span>
       {folder && <span className="git-row-folder">{folder}</span>}
       <span className="git-row-mark" data-change={file.change}>

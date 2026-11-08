@@ -1,0 +1,34 @@
+/* Tones come from the theme's status colors, so every theme gets a readable set. */
+.file-type-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-secondary);
+}
+.file-type-icon[data-tone='info'] {
+  color: var(--color-status-info);
+}
+.file-type-icon[data-tone='warning'] {
+  color: var(--color-status-warning);
+}
+.file-type-icon[data-tone='success'] {
+  color: var(--color-status-success);
+}
+.file-type-icon[data-tone='error'] {
+  color: var(--color-status-error);
+}
+.file-type-icon[data-tone='accent'] {
+  color: var(--color-action-primary);
+}
+/* A pseudo-element, so the letters are not part of the row's text. */
+.file-type-icon[data-glyph]::before {
+  content: attr(data-glyph);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 16px;
+}

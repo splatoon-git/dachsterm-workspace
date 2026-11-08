@@ -239,11 +239,21 @@
 .git-commit textarea {
   width: 100%;
   resize: vertical;
+  font-family: var(--font-ui);
   font-size: var(--font-small);
 }
 .git-commit-actions {
   display: flex;
   gap: 1px;
+}
+.git-commit-tip {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+/* Lets the wrapper see the pointer, for the reason the button cannot be pressed yet. */
+.git-commit-tip button:disabled {
+  pointer-events: none;
 }
 .git-commit-button {
   flex: 1;
