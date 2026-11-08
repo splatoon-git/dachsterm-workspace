@@ -6,7 +6,12 @@ import assert from 'node:assert/strict';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
-import { chooseTabMenu, openNewConnectionForm, openSettings } from './native-workspace.mjs';
+import {
+  chooseTabMenu,
+  openNewConnectionForm,
+  openSettings,
+  showSidebarView,
+} from './native-workspace.mjs';
 import { checkServerDragFetch } from './native-drag-fetch.mjs';
 
 const promptFolder = '/home/probe/.cache/dachsterm/prompt';
@@ -455,6 +460,30 @@ export async function verifyAgentTerminal({
     )
     .toContain('DENIED_FAIL');
   assert.equal(shell(`git --git-dir ${work}.git log -1 --format=%s main`), 'c1');
+
+  // GE.9: the Git view types `git push` in this terminal, and the key card answers it there.
+  setStage('GE.9 push with the key card');
+  await command(
+    `cd ${work} && git checkout -q -B main && echo ge9 > f && git add f && git commit -qm ge9-key && ` +
+      `git remote add origin ssh://probe@127.0.0.1${work}.git; ` +
+      `git config core.sshCommand 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ` +
+      `-o BatchMode=yes -o LogLevel=ERROR' && git config branch.main.remote origin && ` +
+      `git config branch.main.merge refs/heads/main && printf 'GE9_%s\\n' READY`,
+  );
+  await output('GE9_READY');
+  await showSidebarView(page, 'Git');
+  const signView = page.locator('#git-sidebar');
+  await signView.getByRole('button', { name: 'Git 더 보기' }).click();
+  await page.getByRole('menuitem', { name: 'push', exact: true }).click();
+  await expect(signCard()).toContainText(mine, { timeout: 15000 });
+  await signCard().getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await expect
+    .poll(() => shell(`git --git-dir ${work}.git log -1 --format=%s main`), { timeout: 15000 })
+    .toBe('ge9-key');
+  await expect(signCard()).toHaveCount(0);
+  await showSidebarView(page, '연결');
+  console.log('PASS native Git view push is typed in the terminal and answered by the key card');
+
   const forwardProfile = (await invoke('sessions')).profiles.find((p) => p.name === forwardName);
   assert.equal(forwardProfile.forwardAgent, true);
   await page.getByRole('button', { name: `${forwardName} 탭 닫기`, exact: true }).click();
@@ -688,6 +717,29 @@ export async function verifyAgentTerminal({
   await output('SAVED_OK');
   await expect(credentialCard()).toHaveCount(0);
   console.log('PASS native "allow once" answers with the token saved in the app');
+
+  // GE.9: a push from the Git view reaches the same card. A new tab, so "allow once" is over.
+  setStage('GE.9 push with the credential card');
+  await reopen();
+  await command(
+    `cd ${httpsWork} && git checkout -q -B main && echo ge9 > f && git add f && git commit -qm ge9-https && ` +
+      `git remote add origin ${httpsUrl}; git config http.sslVerify false && ` +
+      `git config branch.main.remote origin && git config branch.main.merge refs/heads/main && ` +
+      `printf 'GE9_%s\\n' HTTPS_READY`,
+  );
+  await output('GE9_HTTPS_READY');
+  await showSidebarView(page, 'Git');
+  const credentialView = page.locator('#git-sidebar');
+  await credentialView.getByRole('button', { name: 'Git 더 보기' }).click();
+  await page.getByRole('menuitem', { name: 'push', exact: true }).click();
+  await expect(credentialCard()).toContainText('git.test:3000', { timeout: 15000 });
+  await credentialCard().getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await expect(credentialCard()).toHaveCount(0);
+  await output('main -> main');
+  await showSidebarView(page, '연결');
+  console.log(
+    'PASS native Git view push is typed in the terminal and answered by the credential card',
+  );
 
   await reopen();
   await httpsPush(3, 'REFUSED');

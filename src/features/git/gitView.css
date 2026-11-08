@@ -147,3 +147,102 @@
 .git-row-mark[data-change='untracked'] {
   color: var(--color-status-info);
 }
+/* GE.9: the commit box under the header and the output list at the bottom. */
+.git-commit {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm) var(--space-sm);
+}
+.git-commit textarea {
+  width: 100%;
+  resize: vertical;
+  font-size: var(--font-small);
+}
+.git-commit-actions {
+  display: flex;
+  gap: 1px;
+}
+.git-commit-button {
+  flex: 1;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+}
+.git-commit-more {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+}
+.git-commit-more svg {
+  transform: rotate(90deg);
+}
+.git-output {
+  flex-shrink: 0;
+  max-height: 40%;
+  overflow-y: auto;
+  border-top: var(--border-width-default) solid var(--color-border-default);
+  padding: var(--space-xs) var(--space-sm);
+}
+.git-output summary {
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.git-output ol {
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.git-output li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+.git-output code {
+  font-family: var(--font-mono);
+}
+.git-output small {
+  margin-left: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+.git-output li[data-result='failed'] small,
+.git-output p {
+  color: var(--color-status-error);
+}
+.git-output p {
+  margin: 0;
+}
+.git-dialog-files,
+.git-branch-list {
+  max-height: 240px;
+  margin: var(--space-sm) 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.git-dialog-files li {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--font-small);
+}
+.git-branch-list button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.git-branch-list button:hover {
+  background: var(--color-surface-subtle);
+}
+.git-dialog-heading {
+  margin: var(--space-sm) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.git-dialog-command {
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-small);
+}

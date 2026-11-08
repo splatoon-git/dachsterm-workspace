@@ -45,6 +45,7 @@ fn main() {
             "git_status",
             "local_git_status",
             "git_view",
+            "git_apply",
             "git_refs",
             "git_diff_files",
             "git_diff_file",

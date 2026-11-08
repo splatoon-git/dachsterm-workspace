@@ -201,7 +201,166 @@ export async function verifyDeveloperWorkflow({
     if (failure) await cleanup().catch(() => {});
     else await cleanup();
   }
+  await verifyGitWrite({ page, pane, command, shell, setStage });
   await verifyAgentList({ page, pane, command, connectNewTab, invoke, setStage });
+}
+
+/** GE.9: each action of the Git view in the real app, read back with the server's own git. */
+async function verifyGitWrite({ page, pane, command, shell, setStage }) {
+  const work = '/tmp/dachsterm-git-write';
+  const remote = `${work}-remote.git`;
+  const git = (args) => shell(`git -C ${work} ${args}`);
+  const view = page.locator('#git-sidebar');
+  const rows = (name) => view.getByRole('region', { name, exact: true }).locator('.git-row-name');
+  const row = (name, file) =>
+    view.getByRole('region', { name, exact: true }).locator('.git-row').filter({ hasText: file });
+  const menu = (name) => page.getByRole('menuitem', { name, exact: true }).click();
+  const more = async (item) => {
+    await view.getByRole('button', { name: 'Git 더 보기' }).click();
+    await menu(item);
+  };
+  const dialog = (name) => page.getByRole('dialog', { name, exact: true });
+  const error = view.locator('.git-view-error');
+  const textarea = pane().locator('.xterm-helper-textarea');
+  shell(
+    `rm -rf ${work} ${remote}; mkdir -p ${work} && git init -q --bare ${remote} && cd ${work} && ` +
+      `git init -q && git checkout -q -b main && git config user.email p@example.invalid && ` +
+      `git config user.name p && echo a > edit.txt && echo a > gone.txt && git add . && ` +
+      `git commit -qm init && git remote add origin ${remote} && git push -q -u origin main && ` +
+      `echo b > edit.txt && echo b > gone.txt && echo n > 'new [1].txt' && echo n > 'new 1.txt'`,
+  );
+  try {
+    setStage('GE.9 stage and commit');
+    await command(`cd ${work}`);
+    await showSidebarView(page, 'Git');
+    await expect(rows('변경')).toHaveText(['edit.txt', 'gone.txt'], { timeout: 15000 });
+    await row('변경', 'edit.txt').click({ button: 'right' });
+    await menu('스테이지');
+    await expect(rows('스테이지됨')).toHaveText(['edit.txt']);
+    assert.equal(git('diff --cached --name-only'), 'edit.txt');
+    await row('스테이지됨', 'edit.txt').click({ button: 'right' });
+    await menu('스테이지 취소');
+    await expect(rows('스테이지됨')).toHaveCount(0);
+    await row('변경', 'edit.txt').click({ button: 'right' });
+    await menu('스테이지');
+    await expect(rows('스테이지됨')).toHaveText(['edit.txt']);
+    const message = view.getByRole('textbox', { name: '커밋 메시지' });
+    await message.fill('첫 커밋 ge9');
+    await message.press('Control+Enter');
+    await expect(rows('스테이지됨')).toHaveCount(0);
+    await expect(message).toHaveValue('');
+    assert.equal(git('log -1 --format=%s'), '첫 커밋 ge9');
+    await message.fill('고친 커밋 ge9');
+    await view.getByRole('button', { name: '커밋 더 보기' }).click();
+    await menu('이전 커밋 고치기 (--amend)');
+    await expect(message).toHaveValue('');
+    assert.equal(git('log -1 --format=%s'), '고친 커밋 ge9');
+    assert.equal(git('rev-list --count HEAD'), '2');
+    console.log('PASS native Git view stage, unstage, commit and amend on the SSH tab');
+
+    setStage('GE.9 discard');
+    await row('변경', 'gone.txt').click({ button: 'right' });
+    await menu('변경 버리기…');
+    const discard = dialog('변경 버리기');
+    await expect(discard.getByRole('list', { name: '대상 파일' })).toHaveText('gone.txt');
+    await expect(discard.getByRole('button', { name: '취소', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(discard).toHaveCount(0);
+    assert.equal(shell(`cat ${work}/gone.txt`), 'b');
+    await row('변경', 'gone.txt').click({ button: 'right' });
+    await menu('변경 버리기…');
+    await discard.getByRole('button', { name: '변경 버리기', exact: true }).click();
+    await expect(rows('변경')).toHaveCount(0);
+    assert.equal(shell(`cat ${work}/gone.txt`), 'a');
+    await row('추적 안 함', 'new [1].txt').click({ button: 'right' });
+    await menu('파일 삭제…');
+    await dialog('추적 안 함 파일 삭제').getByRole('button', { name: '삭제', exact: true }).click();
+    await expect(rows('추적 안 함')).toHaveText(['new 1.txt']);
+    assert.equal(shell(`ls ${work}/new*`), `${work}/new 1.txt`);
+    console.log('PASS native discard asks with Cancel chosen, and a name is not a pattern');
+
+    setStage('GE.9 branch, tag and stash');
+    await more('새 브랜치…');
+    await dialog('새 브랜치').getByRole('textbox', { name: '이름' }).fill('ge9/작업');
+    await dialog('새 브랜치').getByRole('button', { name: '만들고 전환' }).click();
+    await expect(view.locator('.git-view-branch')).toContainText('ge9/작업', { timeout: 15000 });
+    await more('브랜치 전환…');
+    await dialog('브랜치 전환').getByRole('button', { name: 'main', exact: true }).click();
+    await expect(view.locator('.git-view-branch')).toContainText('main', { timeout: 15000 });
+    assert.equal(git('symbolic-ref --short HEAD'), 'main');
+    await more('태그…');
+    await dialog('태그').getByRole('textbox', { name: '이름' }).fill('v9');
+    await dialog('태그').getByRole('button', { name: '태그 만들기' }).click();
+    await expect.poll(() => git('tag -l v9')).toBe('v9');
+    await more('stash 넣기…');
+    await dialog('stash 넣기').getByRole('checkbox', { name: '추적 안 함 파일 포함' }).check();
+    await dialog('stash 넣기').getByRole('button', { name: '넣기', exact: true }).click();
+    await expect(rows('추적 안 함')).toHaveCount(0);
+    assert.equal(git('stash list --format=%gs').includes('WIP'), true);
+    await more('stash 꺼내기');
+    await expect(rows('추적 안 함')).toHaveText(['new 1.txt']);
+    assert.equal(git('stash list'), '');
+    console.log('PASS native branch, checkout, tag and stash through their dialogs');
+
+    setStage('GE.9 terminal actions');
+    await more('push');
+    await expect
+      .poll(() => shell(`git --git-dir ${remote} log -1 --format=%s main`))
+      .toBe('고친 커밋 ge9');
+    await expect(textarea).toBeFocused();
+    await command("printf 'AFTER%s\\n' _PUSH");
+    await expect
+      .poll(() => pane().locator('.xterm-accessibility-tree').innerText())
+      .toContain('AFTER_PUSH');
+    await more('fetch');
+    await command("printf 'AFTER%s\\n' _FETCH");
+    await expect
+      .poll(() => pane().locator('.xterm-accessibility-tree').innerText())
+      .toContain('AFTER_FETCH');
+    console.log('PASS native fetch and push are typed at the prompt of the tab');
+
+    setStage('GE.9 busy terminal');
+    await textarea.pressSequentially('sleep 4');
+    await textarea.press('Enter');
+    await more('pull');
+    await expect(error).toHaveText('터미널이 사용 중입니다.');
+    await sleep(4500);
+
+    // What the user has half typed is not added to. Echo is off in this run, and without echo the
+    // text never reaches the screen. The typing waits for the prompt after this command.
+    setStage('GE.9 half-typed input');
+    const screen = () => pane().locator('.xterm-accessibility-tree').innerText();
+    await command("stty echo; printf 'ECHO%s\\n' _ON");
+    await expect.poll(screen).toContain('ECHO_ON');
+    await sleep(500);
+    await textarea.pressSequentially('echo half');
+    await expect.poll(screen).toContain('echo half');
+    await more('fetch');
+    await expect(error).toHaveText('터미널 프롬프트에 입력 중인 글자가 있습니다.');
+    await textarea.press('Control+U');
+    await command('stty -echo');
+    console.log('PASS native a running command and half-typed text block the terminal actions');
+
+    setStage('GE.9 force push');
+    git('commit --amend -qm rewritten --allow-empty');
+    await more('push 강제(안전)…');
+    const force = dialog('강제 push');
+    await expect(force.getByRole('button', { name: '취소', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(force).toHaveCount(0);
+    await sleep(500);
+    assert.equal(shell(`git --git-dir ${remote} log -1 --format=%s main`), '고친 커밋 ge9');
+    await more('push 강제(안전)…');
+    await force.getByRole('button', { name: '강제 push', exact: true }).click();
+    await expect
+      .poll(() => shell(`git --git-dir ${remote} log -1 --format=%s main`))
+      .toBe('rewritten');
+    console.log('PASS native force push uses --force-with-lease after its confirmation');
+  } finally {
+    shell(`rm -rf ${work} ${remote}`);
+    await command('cd /tmp').catch(() => {});
+    await showSidebarView(page, '연결').catch(() => {});
+  }
 }
 
 /** GE.11: the badge on the prompt line, against what the app shows of the cursor's own line. */
