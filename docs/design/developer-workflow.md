@@ -497,29 +497,74 @@ exec tmux attach -t '=<이름>'
 **연결:**
 
 - 세션 고급 옵션 **HTTPS Git 자격 증명 전달**. 기본은 꺼짐이고 SSH 키 전달과 따로 켠다. 세션 파일로 켜지지 않는다. 경유 호스트에는 요청하지 않는다.
-- 최종 서버에 접속한 뒤 `streamlocal_forward`(russh 0.65.1에 있음)로 소켓을 연다. 경로는 연결마다 128비트 난수 이름이다. `$XDG_RUNTIME_DIR`이 있고 사용자만 접근할 수 있으면(0700) 그 아래에 두고, 없으면 `/tmp` 아래에 둔다. 소켓 권한은 sshd의 `StreamLocalBindMask`(기본 0177)로 사용자 전용이 된다. 서버가 거부하면(`AllowStreamLocalForwarding no`, `DisableForwarding`) 연결당 한 번 안내한다.
+- 최종 서버에 접속한 뒤 `streamlocal_forward`(russh 0.65.1에 있음)로 소켓을 연다. 경로는 연결마다 128비트 난수 이름이다.
+  - 위치: 그 연결의 `remote_exec`로 `$XDG_RUNTIME_DIR`을 읽는다. 값이 있고 사용자 소유 0700이며 경로가 `[A-Za-z0-9/._-]`로만 되어 있으면 그 아래에 둔다. 아니면 `/tmp` 아래에 둔다.
+  - 소켓 권한은 sshd의 `StreamLocalBindMask`(기본 0177)로 사용자 전용이 된다(실측 `srw-------`, OpenSSH 7.4~10.6).
+  - 서버가 거부하면(`AllowStreamLocalForwarding no`, `DisableForwarding`) 연결당 한 번 안내한다. 실측에서 두 경우 모두 전달 요청만 실패하고 셸은 계속 쓸 수 있었다.
 - `Handler::server_channel_open_forwarded_streamlocal`은 이 연결이 연 경로만 받고 나머지는 거부한다. 핸들러에는 위임 호출만 넣는다(`ssh.rs` 순증 금지, DX.11의 키 읽기 이동으로 상쇄).
 - 정상 종료할 때는 전달을 취소하고 그 연결의 `remote_exec`로 자기 소켓 파일 하나만 지운다(`[ -S <경로> ] && rm -f -- <경로>`).
+  - 실측에서 sshd는 연결이 끝나거나 전달을 취소해도 소켓 파일을 지우지 않았다. 그래서 직접 지운다.
+  - 비정상 종료로 남은 파일은 `XDG_RUNTIME_DIR`이면 마지막 로그아웃 때 폴더째 사라진다. `/tmp`이면 남는다. 남은 파일에 대한 `get`은 조용히 끝나고, 경로가 매번 달라 다음 연결과 겹치지 않는다.
 
 **git에 알리는 방법:** 셸의 환경 변수로 helper 하나를 **덧붙인다.** 사용자의 기존 helper 설정은 지우지 않는다.
 
-- helper 값: `!f() { [ "$1" = get ] || return 0; exec git credential-cache --socket '<경로>' get; }; f`
-- **`get`만 전달한다.** `store`와 `erase`는 helper가 아무것도 하지 않는다. `store`에는 암호가 실려 있고, `credential-cache`는 `store` 때 소켓이 없으면 서버에 실제 캐시 데몬을 띄워 암호를 서버 메모리에 남긴다. `get`은 데몬을 띄우지 않는다.
-- 전달 방식은 모든 git 버전이 읽는 `GIT_CONFIG_PARAMETERS`에 덧붙이는 것을 1안으로 한다. `GIT_CONFIG_COUNT`는 git 2.31부터라 Ubuntu 20.04(2.25), CentOS 7(1.8)에서 동작하지 않는다. 두 방식을 함께 넣으면 helper가 두 번 불려 카드가 두 번 뜰 수 있으므로 하나만 쓴다. 최종 방식은 DX.12.0 실측으로 정한다.
-- **일반 셸:** 기존 셸 훅(`shellHook.ts`, 파일을 쓰지 않음)에 `export` 한 줄을 더한다. 이 옵션이 켜져 있으면 경로 따라가기와 조작표가 모두 꺼져 있어도 이 부분은 넣는다. Bash 3.2와 Zsh에서 동작해야 한다. fish와 csh는 훅이 없어 안내서의 수동 한 줄로만 지원한다.
-- **tmux 세션:** tmux 탭에는 아무것도 입력하지 않는다(DX.3). 그래서 `terminal_start.rs`의 시작 명령에서 새 세션은 `new-session -e`, 기존 세션은 `set-environment`로 세션 환경에 넣어 **새 패널**에 적용한다. 재접속하면 이미 열린 패널은 이전 경로를 가리킨다. `SSH_AUTH_SOCK`과 같은 문제이므로, DX.10 후속으로 남은 기본 명령의 갱신 줄 하나에 두 값을 함께 넣는다. 경로가 사라진 경우 `get`이 조용히 실패하고 git이 원래대로 터미널에서 묻는다.
+- helper 값: `!f() { [ "$1" = get ] && [ -S <경로> ] && [ -O <경로> ] || return 0; exec git credential-cache --socket <경로> get; }; f`
+  - **소유자 확인(`-S`, `-O`)을 넣는다(DX.12.0에서 추가).** 이전 경로는 오래 남는다. 소켓 파일은 연결이 끝나도 남고, tmux 서버의 전역 환경과 열린 패널은 이전 값을 계속 가진다. `/tmp`의 오래된 파일이 정리된 뒤 다른 사용자가 같은 이름으로 소켓을 만들면, 그 패널의 `get`(호스트, 사용자 이름)을 받고 임의의 값으로 답할 수 있다. 내 소유의 소켓이 아니면 helper는 아무것도 하지 않는다. bash, dash, busybox ash에서 확인했다.
+  - 경로는 따옴표 없이 넣는다. 이 값은 `GIT_CONFIG_PARAMETERS`의 작은따옴표 항목 안에 들어가므로 작은따옴표를 쓰면 인용이 깨진다. 그래서 경로를 `[A-Za-z0-9/._-]`로 제한한다(위치 규칙).
+- **`get`만 전달한다.** `store`와 `erase`는 helper가 아무것도 하지 않는다. `store`에는 암호가 실려 있다. 실측에서 원래 `credential-cache store`는 받는 쪽 없는 0700 폴더 경로(`XDG_RUNTIME_DIR`과 같은 조건)에서 서버에 캐시 데몬을 띄우고 암호를 서버 메모리에 남겼다(git 1.8~2.56). `/tmp`에서는 폴더 권한 검사로 데몬이 뜨지 않았다. `get`은 어느 경우에도 데몬을 띄우지 않는다.
+- **서버의 기존 helper가 값을 저장할 수 있다(DX.12.0에서 추가).** git은 인증에 성공하면 설정된 **모든** helper에 `store`를 보낸다. 우리 helper가 무시해도, 서버 사용자가 `credential.helper=store`를 써 두었으면 전달한 토큰이 서버의 `~/.git-credentials`에 평문으로 저장되고, `cache`이면 서버 메모리에 남는다. 처리는 다음과 같다.
+  - 연결 후 한 번 `remote_exec`로 홈 폴더에서 `git config --get-all credential.helper`를 읽는다. 값이 있으면 카드에 "서버의 helper(`<이름>`)가 이 값을 저장할 수 있습니다"를 표시한다.
+  - 저장소별 설정은 미리 알 수 없으므로 안내서에도 적는다.
+  - 사용자 helper를 끄는 방식(`credential.helper=` 초기화)은 쓰지 않는다. 사용자의 서버 설정을 바꾸는 것과 같기 때문이다.
+- 전달 방식은 `GIT_CONFIG_PARAMETERS`에 덧붙이는 것으로 **확정한다(DX.12.0).**
+  - 근거: git 1.8.3.1, 2.17.1, 2.25.1, 2.39.5, 2.56.0에서 인용과 실제 push까지 동작했다. 이전 형식의 기존 값(`'core.pager=less -R' 'user.name=a b'`) 뒤에 공백 하나로 붙여도 둘 다 해석됐다.
+  - 순서: 사용자의 전역 helper가 먼저 불리고 우리 helper는 그 뒤다. 앞의 helper가 값을 주면 우리 helper는 불리지 않는다.
+  - `GIT_CONFIG_COUNT`는 쓰지 않는다. git 2.31부터만 동작하고, 두 방식을 함께 넣으면 helper가 두 번 불린다.
+- **일반 셸:** 기존 셸 훅(`shellHook.ts`, 파일을 쓰지 않음)에 `export` 한 줄을 더한다. 이 옵션이 켜져 있으면 경로 따라가기와 조작표가 모두 꺼져 있어도 이 부분은 넣는다.
+  - 형식: `export GIT_CONFIG_PARAMETERS="${GIT_CONFIG_PARAMETERS:+$GIT_CONFIG_PARAMETERS }'credential.helper=<helper 값>'"`. Bash 3.2.57, Bash 4.2, Zsh 5.9가 같은 값을 만든다(실측).
+  - 같은 셸에 두 번 붙이지 않는다. 두 번 붙으면 거부했을 때 helper가 다시 불려 카드가 두 번 뜬다.
+  - fish와 csh는 훅이 없어 안내서의 수동 한 줄로만 지원한다.
+- **tmux 세션(DX.12.0 실측으로 수정):** tmux 탭에는 아무것도 입력하지 않는다(DX.3). 그래서 `terminal_start.rs`의 시작 명령에서 세션 환경에 값을 넣어 **새 패널**에 적용한다.
+  - **`new-session -e`를 그대로 쓰지 않는다.** tmux 1.8, 2.6, 3.0a에서는 `unknown option -- e`로 시작 명령 전체가 실패한다(3.3a, 3.8은 동작, 3.1·3.2는 미측정).
+  - 시작 명령의 형태는 다음과 같다. `-e`가 실패해도 세션은 만들어지지 않으므로 대체 생성과 겹치지 않는다(실측).
+    ```sh
+    tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -qx -- <이름> ||
+      tmux new-session -d -s <이름> -e "GIT_CONFIG_PARAMETERS=…" 2>/dev/null ||
+      tmux new-session -d -s <이름>
+    tmux set-environment -t <이름> GIT_CONFIG_PARAMETERS "…"
+    exec tmux attach-session -t <이름>
+    ```
+  - `set-environment`는 1.8부터 모든 버전에서 이후 새 창과 분할 패널에 적용된다.
+  - 있는지 확인할 때 `has-session -t <이름>`을 쓰지 않는다. `work`가 없고 `work2`만 있어도 접두사 일치로 성공한다(1.8, 3.0a, 3.8 실측). `=<이름>` 정확 일치는 tmux 1.8이 지원하지 않는다. 그래서 `list-sessions -F`와 `grep -x`로 확인한다.
+  - `set-environment`와 `attach-session`의 대상은 `<이름>`으로 쓴다. 정확히 같은 이름의 세션이 있으면 접두사 일치보다 먼저 선택된다(실측).
+  - **한계:**
+    - `-e`가 없는 tmux에서 서버가 이미 다른 세션으로 떠 있으면, 새로 만든 세션의 첫 패널에는 값이 없다. 이후 창과 패널부터 적용된다.
+    - tmux 서버가 새로 뜰 때는 시작 명령의 환경이 서버 전역 환경이 되어 첫 패널을 포함한 모든 패널이 받는다. 이 값은 연결이 끝난 뒤에도 그 서버의 다른 세션에 남는다. 소유자 확인과 조용한 실패 때문에 위험하지 않다.
+  - 재접속하면 이미 열린 패널은 이전 경로를 가리킨다. `SSH_AUTH_SOCK`과 같은 문제이므로, DX.10 후속으로 남은 기본 명령의 갱신 줄 하나에 두 값을 함께 넣는다.
+  - 경로가 사라진 경우 `get`이 조용히 끝나고(실측: 파일 없음, 남은 파일, 받는 쪽 없음 모두 종료 0·출력 없음) git이 다음 helper나 터미널 질문으로 넘어간다.
 
 **요청 처리(`git_credential.rs` 새 파일, 프로토콜 파서는 순수 함수로 분리):**
 
-- 요청 하나는 64KiB 이하다. `action=get` 줄과 git 자격 증명 형식(`key=value`)만 받고, `timeout`, `capability[]`, `wwwauth[]` 같은 모르는 키는 무시한다. NUL이나 제어문자가 있으면 버린다. 연결당 동시 채널은 4개이고, 같은 호스트의 카드는 한 번에 하나만 띄운다.
+- **형식(DX.12.0 실측, git 1.8~2.56 동일):** 요청은 `action=get`, `timeout=900`, 자격 증명 줄 순서이고 빈 줄 없이 끝난다. 클라이언트가 쓰기 쪽을 닫아 채널 EOF가 온다. 앱은 EOF까지 읽는다. 답은 `username=…`, `password=…` 줄을 쓰고 채널을 닫는다(클라이언트는 EOF까지 읽어 git에 넘긴다). 빈 답이나 바로 닫기는 "값 없음"으로 처리돼 git이 다음 단계로 넘어간다.
+- 요청 하나는 64KiB 이하다. `action=get` 줄과 git 자격 증명 형식(`key=value`)만 받는다. `timeout`, `capability[]`(git 2.46 이후), `wwwauth[]`(git-lfs 3.x) 같은 모르는 키는 무시한다. 답에 `capability[]`는 넣지 않는다(git 2.56에서 push 성공). NUL이나 제어문자가 있으면 버린다. 연결당 동시 채널은 4개이고, 같은 호스트의 카드는 한 번에 하나만 띄운다.
+- **반복 요청 차단(DX.12.0에서 추가):** 같은 연결·같은 호스트의 `get`이 10초 안에 5번을 넘으면 그 뒤 60초 동안 카드 없이 빈 답을 보내고 연결당 한 번 안내한다. 실측에서 서버가 계속 401을 주자 git-lfs 2.9.2는 `get`과 `erase`를 초당 약 40번 반복했다. 이를 막지 않으면 카드가 연달아 뜨거나, "10분 허용" 중에는 토큰이 반복 전송된다.
 - `protocol=https`만 받는다. `http`는 토큰이 평문으로 나가므로 거부하고 연결당 한 번 안내한다.
-- **승인 카드(`GitCredentialCard`, 서명 카드와 같은 자리):** 세션 이름, 호스트, 경로(git이 보낸 경우), 사용자 이름(있으면)을 보여주고 "이 PC의 자격 증명이 **서버로 전달됩니다**"라고 표시한다. 서명과 달리 값 자체가 서버로 가기 때문이다. 선택지는 **거부**, **이번만 허용**, **이 연결에서 10분 허용**(같은 호스트), **직접 입력**이다. 60초 안에 답이 없으면 거부한다. 거부하면 빈 답을 보내 git이 원래대로 터미널에서 묻게 한다. 탭에는 `입력 대기`를 표시하고 포커스 밖이면 알림을 보낸다(DX.2와 같음).
+- **승인 카드(`GitCredentialCard`, 서명 카드와 같은 자리):** 세션 이름, 호스트, 경로(git이 보낸 경우), 사용자 이름(있으면)을 보여주고 "이 PC의 자격 증명이 **서버로 전달됩니다**"라고 표시한다. 서명과 달리 값 자체가 서버로 가기 때문이다. 서버에 기존 helper가 있으면 위의 저장 경고를 함께 표시한다.
+  - 선택지는 **거부**, **이번만 허용**, **이 연결에서 10분 허용**(같은 호스트), **직접 입력**이다. 60초 안에 답이 없으면 거부한다. 거부하면 빈 답을 보내 git이 원래대로 터미널에서 묻게 한다. 탭에는 `입력 대기`를 표시하고 포커스 밖이면 알림을 보낸다(DX.2와 같음).
+  - **"이번만 허용"은 승인 뒤 30초 동안 같은 연결·같은 호스트·같은 사용자 이름의 요청에 다시 쓴다(DX.12.0에서 추가).** 실측에서 LFS push 한 번에 `get`이 3번(git 1, LFS 2), clone에 2번 왔다. 이 처리가 없으면 push 한 번에 카드가 세 번 뜬다.
+  - 경로는 서버의 `credential.useHttpPath`가 켜진 경우에만 온다. 기본 설정에서는 호스트만 보인다(실측).
 - **승인한 뒤에 값을 가져온다.** 먼저 가져오면 자격 증명 관리자의 로그인 창이 승인 전에 뜰 수 있기 때문이다. 가져오는 순서는 다음과 같다.
   1. 앱에 저장한 이 호스트의 토큰
   2. 이 PC의 `git credential fill`
      - 대상: 자격 증명 관리자, macOS 키체인, wincred 등 사용자가 설정한 helper
      - 실행: `spawn_blocking`, 콘솔 창 없음, `GIT_TERMINAL_PROMPT=0`, 120초 제한
      - 저장된 값이 없으면 관리자가 브라우저 로그인을 띄울 수 있다. 성공하면 같은 값으로 `git credential approve`를 불러 다음부터 묻지 않게 한다.
+     - 실측(Windows, GCM 2.6.1):
+       - 창 없는 프로세스에서도 GCM이 로그인 창을 띄우고, 입력값을 돌려준다(종료 0).
+       - 취소하면 128로 바로 끝난다. 저장값이 없을 때 `GIT_TERMINAL_PROMPT=0`에서 멈추지 않는다.
+       - 이름이 확인되지 않는 호스트는 GCM이 창을 띄우기 전에 실패한다(약 0.6초).
+       - 앱이 `GCM_INTERACTIVE=never`를 물려받으면 창이 뜨지 않는다. 이 값은 사용자의 선택이므로 앱이 바꾸지 않는다.
+       - macOS 키체인은 대기(Mac).
   3. 둘 다 없으면 카드가 입력 칸으로 바뀐다(사용자 이름, 토큰, "이 PC에 저장")
 - **이 PC의 git 찾기(규칙 §11):** 이름만으로 실행하지 않는다.
   - Windows: `PATH`의 `git.exe`, 없으면 `%ProgramFiles%\Git\cmd\git.exe`
@@ -531,28 +576,30 @@ exec tmux attach -t '=<이름>'
 
 **합격 (Docker 검사):**
 
-- HTTPS Git 서버(Basic 인증)에 여러 git 버전의 서버에서 push한다. 대상: 1.8, 2.17, 2.25, 2.39, 최신.
+- HTTPS Git 서버(Basic 인증, `tests/git-https`)에 여러 git 버전의 서버에서 push한다. 대상: 1.8, 2.17, 2.25, 2.39, 최신. git-lfs가 있는 서버는 LFS 객체도 push한다.
 - 이 PC 쪽 출처 세 가지(앱 저장, `git credential fill`, 직접 입력)가 모두 동작하고, 거부하면 git이 터미널에서 묻는다.
 - `store`와 `erase`는 서버에 데몬을 남기지 않는다.
-- 다음 경우에는 거부한다: `http`, 남의 소켓 경로, 64KiB를 넘는 요청, 채널 5개째.
-- tmux의 새 패널에 적용된다.
+- 다음 경우에는 거부한다: `http`, 남의 소켓 경로, 64KiB를 넘는 요청, 채널 5개째, 10초 안 6번째 `get`.
+- 다른 사용자 소유의 소켓이 helper 경로에 있으면 helper가 요청을 보내지 않는다.
+- LFS push 한 번에 카드가 한 번만 뜬다("이번만 허용").
+- tmux 1.8과 최신 tmux의 새 패널에 적용되고, 시작 명령이 실패하지 않는다.
 
 **합격 (수동):** 실제 GitHub, GitLab.com, Bitbucket을 이 PC의 자격 증명 관리자로 확인하고, 자체 설치형 GitLab이 있으면 함께 확인한다.
 
 #### DX.12.0 — 실측 (게이트)
 
-DX.0처럼 구현 전에 확인하고 `docs/verification/agent-terminal.md`에 기록한다. 실측 전에는 사실로 취급하지 않는다.
+**완료(2026-11-08).** 구현 전에 확인했고, 상세는 [git-credential](../verification/git-credential.md)에 기록했다. Docker 서버 5종(git 1.8.3.1·2.17.1·2.25.1·2.39.5·2.56.0, OpenSSH 7.4~10.6, tmux 1.8~3.8)과 systemd 서버, OpenSSH 클라이언트의 `ssh -R`, 임시 응답 프로그램, HTTPS Git 서버(`tests/git-https`)를 썼다. 위 DX.12 본문에는 결과를 반영했다.
 
-| 질문 | 결과에 따른 처리 |
-|---|---|
-| `credential-cache --socket`의 요청 형식(`action`, `timeout`, 그 뒤 자격 증명 줄, 쓰기 쪽 종료)과 응답 처리가 git 1.8~최신에서 같은가 | 파서 확정. 다르면 버전별 분기 |
-| 연결이 없는 소켓 경로에서 `get`이 조용히 끝나고 git이 다음 helper나 터미널 질문으로 넘어가는가 | 경로가 사라진 경우의 동작 확정 |
-| `GIT_CONFIG_PARAMETERS`에 덧붙인 `!` helper가 1.8~최신에서 인용까지 맞게 동작하고, 사용자의 기존 helper 뒤에 붙는가 | 전달 방식 확정. 안 되면 `GIT_CONFIG_COUNT`와 버전 판별 |
-| sshd의 원격 소켓 전달 기본값, 소켓 권한, 연결이 끝난 뒤 소켓 파일이 남는지, `StreamLocalBindUnlink` | 정리 방식 확정 |
-| SSH 접속의 `exec` 환경에 `$XDG_RUNTIME_DIR`이 있는가(pam_systemd 유무별) | 소켓 위치 확정 |
-| tmux `new-session -e`(3.0 이상)와 `set-environment`가 새 패널에 적용되는가, 더 오래된 tmux에서는 어떻게 되는가 | tmux 지원 범위 확정 |
-| Windows 자격 증명 관리자와 macOS 키체인의 `git credential fill`이 창 없는 앱 프로세스에서 로그인 창을 띄우고 값을 돌려주는가. 저장값이 없을 때 `GIT_TERMINAL_PROMPT=0`에서 멈추지 않는가 | 이 PC 쪽 출처 확정 |
-| Git LFS 전송이 같은 helper를 거쳐 동작하는가 | 안내서에 지원 여부 기록 |
+| 질문 | 결과 | 처리 |
+|---|---|---|
+| `credential-cache --socket`의 요청 형식과 응답 처리가 git 1.8~최신에서 같은가 | 같다. `action=get`, `timeout=900`, 자격 증명 줄, 빈 줄 없음, 쓰기 쪽 종료. 최신은 `capability[]`, LFS 3.x는 `wwwauth[]`를 더한다 | 파서 하나. 버전 분기 없음 |
+| 연결 없는 소켓에서 `get`이 조용히 끝나고 다음으로 넘어가는가 | 그렇다. 파일 없음, 남은 파일, 받는 쪽 없음, 빈 답, 즉시 종료 모두 종료 0·출력 없음 | 별도 처리 없음 |
+| `GIT_CONFIG_PARAMETERS`에 덧붙인 helper의 인용과 순서 | 1.8~2.56 모두 동작, 사용자 helper 뒤. **사용자 helper도 `store`로 값을 받는다** | 방식 확정. 서버 helper 경고 추가 |
+| sshd 기본값, 소켓 권한, 남는 소켓, `StreamLocalBindUnlink` | 전달 허용·0177·`no`. 연결 종료와 취소 뒤에도 파일이 남는다 | 직접 삭제 유지. helper에 소유자 확인 추가 |
+| exec 환경의 `$XDG_RUNTIME_DIR` | pam_systemd가 있으면 `/run/user/<uid>` 0700, 마지막 세션 종료 후 폴더째 삭제. 없으면 값 없음 | 설계대로 |
+| tmux `new-session -e`와 `set-environment` | `-e`는 1.8·2.6·3.0a에서 명령 전체 실패, 3.3a·3.8 동작. `set-environment`는 1.8부터 동작. 1.8은 `=이름` 미지원, `has-session`은 접두사 일치 | 시작 명령 형태 수정 |
+| 이 PC의 `git credential fill` | Windows: 격리 `store`와 GCM 2.6.1 모두 창 없는 프로세스에서 동작. GCM은 로그인 창을 띄우고 값을 돌려준다. 멈추지 않는다. macOS 키체인은 대기(Mac) | 설계대로 |
+| Git LFS가 같은 helper를 쓰는가 | 쓴다(2.3.4~3.8.1). push 한 번에 `get` 3번. 계속 401이면 오래된 LFS가 반복 요청 | "이번만 허용" 30초, 반복 요청 차단 추가 |
 
 ### DX.13 — 로컬·WSL 탭의 SSH 키 제공 (2026-11-08 추가)
 
@@ -668,7 +715,7 @@ DX.11·DX.12의 세션별 설정(`serde(default)`, 세션 JSON v3 내보내기·
 - 앱은 사용자 동작 없이 터미널에 글자를 입력하지 않는다. 프롬프트 전달은 Enter를 보내지 않는다. 에이전트 시작만 사용자가 최종 명령을 확인한 뒤 실행한다.
 - 서명 요청 내용, diff 내용, 의견을 로그와 진단 내보내기에 넣지 않는다.
 - 내장 agent(DX.11)는 키를 서버로 보내지 않는다. 로그인 키는 키 전달을 켠 연결의 수명 동안만, 추가 키는 서명 순간이나 승인한 10분 동안만 메모리에 둔다. RSA SHA-1 서명은 하지 않는다.
-- HTTPS 자격 증명 전달(DX.12)은 **값 자체가 서버로 간다.** 서버의 root는 그 순간 토큰을 볼 수 있다. 그래서 기본 꺼짐, 호스트별 승인, `https`만 허용, `get`만 전달(서버에 캐시 데몬을 남기지 않음), 서버가 보낸 값은 저장하지 않음을 지킨다. 무인 push에는 DX.2처럼 서버 전용 배포 토큰을 권한다.
+- HTTPS 자격 증명 전달(DX.12)은 **값 자체가 서버로 간다.** 서버의 root는 그 순간 토큰을 볼 수 있다. 그래서 기본 꺼짐, 호스트별 승인, `https`만 허용, `get`만 전달(서버에 캐시 데몬을 남기지 않음), 서버가 보낸 값은 저장하지 않음을 지킨다. 서버 사용자의 기존 helper(`store`, `cache`)는 git이 보내는 `store`로 전달된 값을 저장할 수 있으므로 카드와 안내서에 알린다. helper는 자기 소유의 소켓에만 요청을 보낸다(DX.12.0). 무인 push에는 DX.2처럼 서버 전용 배포 토큰을 권한다.
 - 원격 소켓은 연결마다 난수 경로이고 사용자 전용 권한이며, 앱은 자기가 연 경로의 채널만 받는다.
 - 로컬 pipe와 소켓(DX.13·DX.14)은 탭마다 난수 이름이고 현재 사용자만 접근하며, 원격 클라이언트를 거부하고, 탭을 닫으면 사라진다. 같은 사용자의 다른 프로그램이 이름을 알아내 접근하더라도 앱의 키 서명과 자격 증명은 그 탭의 승인을 거친다.
 
@@ -685,7 +732,7 @@ DX.11·DX.12의 세션별 설정(`serde(default)`, 세션 JSON v3 내보내기·
 | macOS 실기기 | Finder 앱의 `SSH_AUTH_SOCK`, agent 전달, tmux, 단축키, 검토 패널 | `mac-verify`. CI와 Windows 결과로 대체하지 않는다 |
 | 단위 (DX.11·DX.12) | 알고리즘별 서명과 공개키 검증, RSA 플래그와 SHA-1 거부, 키 목록 합치기, 자격 증명 요청 파서(모르는 키, 제어문자, 상한), helper 값 인용 | `cargo test`, Vitest |
 | 실제 프로토콜 (DX.11) | 시스템 agent 없이 로그인 키와 Git 전용 키로 push, 거부, `ssh-add -D` 차단, RSA SHA-2 | `probe:phase1` 확장 |
-| 실제 프로토콜 (DX.12) | HTTPS Git 서버(Basic 인증)와 git 1.8~최신 서버 이미지, 세 출처, 거부, 데몬 미생성, tmux 새 패널. 이 PC 쪽은 격리한 `HOME`과 `store` helper로 사용자의 실제 자격 증명 관리자를 건드리지 않는다 | `probe:phase1` 확장 |
+| 실제 프로토콜 (DX.12) | HTTPS Git 서버(Basic 인증, LFS, `tests/git-https`)와 git 1.8~최신 서버 이미지, 세 출처, 거부, 데몬 미생성, 남의 소유 소켓 무시, LFS 반복 요청, tmux 1.8~최신 새 패널. 이 PC 쪽은 격리한 `HOME`과 `store` helper로 사용자의 실제 자격 증명 관리자를 건드리지 않는다 | `probe:phase1` 확장 |
 | 네이티브 (DX.11·DX.12) | 이 PC의 `ssh-agent`를 끈 그대로 승인·Passphrase 입력·push, 자격 증명 카드의 네 선택지 | `run-phase1 --native --agent-only` 확장 |
 | 실제 호스팅 (DX.11·DX.12) | GitHub, GitLab.com, Bitbucket의 SSH·HTTPS push. 자격 증명 관리자와 버전을 함께 기록 | 수동 |
 | macOS 실기기 (DX.11·DX.12) | Finder 앱에서 시스템 agent 없이 키 전달, 키체인 `git credential fill`, `/usr/bin/git` 설치 창이 뜨지 않음 | `mac-verify`, M.15에 추가 |
