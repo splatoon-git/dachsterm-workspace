@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-detail"
+description = "Enables the kube_detail command without any pre-configured scope."
+commands.allow = ["kube_detail"]
+
+[[permission]]
+identifier = "deny-kube-detail"
+description = "Denies the kube_detail command without any pre-configured scope."
+commands.deny = ["kube_detail"]

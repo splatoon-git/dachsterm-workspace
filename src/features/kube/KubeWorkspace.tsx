@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
+import type { PodRef } from './detailTypes';
 import { KubeSetup } from './KubeSetup';
-import { KubeTree } from './KubeTree';
+import { KubeTreeScreen, type PanelState } from './KubeTreeScreen';
+import type { PodTerminalRequest } from './podShell';
 import { freshness } from './polling';
 import { readLastScreen, writeLastScreen } from './screenPref';
 import { initialTreeView } from './tree';
@@ -41,6 +43,8 @@ export function KubeWorkspace({
   showTerminal,
   showWorkspace,
   copy,
+  focusPod,
+  openTerminal,
 }: {
   connectionId: string;
   /** Saved only for a session opened as a Kubernetes session. */
@@ -54,10 +58,13 @@ export function KubeWorkspace({
   showTerminal: () => void;
   showWorkspace: () => void;
   copy: (command: string) => KubeCopyResult;
+  focusPod: PodRef | null;
+  openTerminal: (request: PodTerminalRequest) => void;
 }) {
   const [phase, setPhase] = useState<Phase>({ name: 'detecting' });
   const [screen, setScreen] = useState<KubeScreen>(() => readLastScreen(session));
   const [treeView, setTreeView] = useState(initialTreeView);
+  const [panel, setPanel] = useState<PanelState>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
@@ -218,12 +225,18 @@ export function KubeWorkspace({
             />
           )}
           {phase.name === 'open' && screen === 'tree' && (
-            <KubeTree
+            <KubeTreeScreen
               store={store}
               session={session}
               focused={focused}
               view={treeView}
               setView={setTreeView}
+              connectionId={connectionId}
+              kube={phase.settings}
+              panel={panel}
+              setPanel={setPanel}
+              focusPod={focusPod}
+              openTerminal={openTerminal}
             />
           )}
           {phase.name === 'open' && screen !== 'tree' && (

@@ -2,7 +2,14 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KubeCopyResult } from '../../../src/features/kube/KubeWorkspace';
+import type {
+  Detail,
+  DetailKind,
+  PodLogs,
+  ShellCheck,
+} from '../../../src/features/kube/detailTypes';
 import type { Detection, KubeDisplay } from '../../../src/features/kube/kubeModel';
+import type { PodTerminalRequest } from '../../../src/features/kube/podShell';
 import type { Snapshot, SnapshotKind } from '../../../src/features/kube/snapshotTypes';
 import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
@@ -20,8 +27,15 @@ declare global {
       snapshots?: Partial<Record<SnapshotKind, Snapshot>>;
       /** `visible` starts true; the spec turns it off through `setVisible`. */
       setVisible?: (visible: boolean) => void;
+      /** Answers to `kube_detail` by `kind`, `kube_logs` and `kube_terminal_probe`. */
+      podAnswers?: {
+        detail?: Partial<Record<DetailKind, Detail>>;
+        logs?: PodLogs;
+        probe?: ShellCheck;
+      };
       calls: { command: string; args: Record<string, unknown> }[];
       copied: string[];
+      terminals: PodTerminalRequest[];
     };
   }
 }
@@ -29,6 +43,7 @@ declare global {
 const state = window.__kube;
 state.calls = [];
 state.copied = [];
+state.terminals = [];
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
@@ -48,6 +63,11 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
           elapsedMs: 1,
         };
       }
+      if (command === 'kube_detail')
+        return structuredClone(state.podAnswers?.detail?.[args.kind as DetailKind] ?? null);
+      if (command === 'kube_logs') return structuredClone(state.podAnswers?.logs ?? null);
+      if (command === 'kube_terminal_probe')
+        return structuredClone(state.podAnswers?.probe ?? { kind: 'ready' });
       return null;
     },
   },
@@ -75,6 +95,8 @@ function Harness() {
         if ('typed' in state.copyResult) setDisplay('terminal');
         return state.copyResult;
       }}
+      focusPod={null}
+      openTerminal={(request) => state.terminals.push(request)}
     />
   );
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-terminal-close"
+description = "Enables the kube_terminal_close command without any pre-configured scope."
+commands.allow = ["kube_terminal_close"]
+
+[[permission]]
+identifier = "deny-kube-terminal-close"
+description = "Denies the kube_terminal_close command without any pre-configured scope."
+commands.deny = ["kube_terminal_close"]

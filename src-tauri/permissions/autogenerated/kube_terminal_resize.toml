@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-terminal-resize"
+description = "Enables the kube_terminal_resize command without any pre-configured scope."
+commands.allow = ["kube_terminal_resize"]
+
+[[permission]]
+identifier = "deny-kube-terminal-resize"
+description = "Denies the kube_terminal_resize command without any pre-configured scope."
+commands.deny = ["kube_terminal_resize"]

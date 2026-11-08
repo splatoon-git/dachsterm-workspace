@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type ComponentProps } from 'react';
 import { KubeWorkspace, type KubeCopyResult } from '../features/kube/KubeWorkspace';
 import { kubeDisplay } from '../features/kube/kubeModel';
+import type { PodTerminalRequest } from '../features/kube/podShell';
 import { FtpPane } from '../features/sftp/FtpPane';
 import { usePaneView } from '../features/terminal/paneView';
 import type { TerminalSession } from '../features/terminal/session';
@@ -10,12 +11,13 @@ import { SessionTerminal } from './SessionTerminal';
 import './sessionPane.css';
 
 type TerminalProps = ComponentProps<typeof SessionTerminal>;
+type KubeProps = TerminalProps & { openPodTerminal: (request: PodTerminalRequest) => void };
 
 /** Chooses what a session's tab shows: FTP files, its terminal, or the Kubernetes workspace. */
 export function SessionPane({
   open,
   ...props
-}: TerminalProps & { open: ComponentProps<typeof FtpPane>['open'] }) {
+}: KubeProps & { open: ComponentProps<typeof FtpPane>['open'] }) {
   if (capabilities(props.session).terminal) return <KubeOrTerminal {...props} />;
   return (
     <FtpPane session={props.session} open={open} reconnect={props.reconnect} close={props.close} />
@@ -37,7 +39,7 @@ function copyInto(session: TerminalSession, command: string): KubeCopyResult {
   return { typed: 'wait' };
 }
 
-function KubeOrTerminal(props: TerminalProps) {
+function KubeOrTerminal({ openPodTerminal, ...props }: KubeProps) {
   const { session, active, focused } = props;
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const view = usePaneView(session.view);
@@ -62,6 +64,8 @@ function KubeOrTerminal(props: TerminalProps) {
           showTerminal={() => session.view.set({ kubeTerminal: true })}
           showWorkspace={() => session.view.set({ kubeTerminal: false })}
           copy={(command) => copyInto(session, command)}
+          focusPod={view.kubeFocus}
+          openTerminal={openPodTerminal}
         />
       )}
       <SessionTerminal

@@ -14,6 +14,8 @@ pub enum KubeState {
     Unreachable,
     /// The server would not open another channel on this connection (`MaxSessions`).
     ChannelLimit,
+    /// The pod is gone: deleted, or replaced under a new name.
+    NotFound,
     /// `top` has no metrics-server to read from. Requests and limits are shown instead.
     MetricsMissing,
     /// A query hit the app's time or output limit. Set by the runner, not read from kubectl's words.
@@ -52,6 +54,8 @@ pub fn classify(exit: Option<u32>, stderr: &[u8]) -> KubeState {
     let has = |needle: &str| line.contains(needle);
     if has("You must be logged in to the server") {
         KubeState::AuthFailed
+    } else if has("(NotFound)") {
+        KubeState::NotFound
     } else if has("Error from server (Forbidden)") {
         KubeState::Forbidden
     } else if has("context was not found") {
@@ -72,6 +76,48 @@ pub fn classify(exit: Option<u32>, stderr: &[u8]) -> KubeState {
             message: unknown_text(line, exit),
         }
     }
+}
+
+/// What the no-op `sh -c 'exit 0'` run in a container before opening a shell tab found.
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ShellCheck {
+    Ready,
+    /// A distroless image: `sh` itself could not start.
+    NoShell,
+    /// The container is not running, such as a crash loop between attempts.
+    NotRunning,
+    Blocked {
+        state: KubeState,
+    },
+}
+
+/// Measured against containerd in KV.4 (docs/verification/kubernetes-workspace.md).
+pub fn classify_shell(exit: Option<u32>, stderr: &[u8]) -> ShellCheck {
+    let state = classify(exit, stderr);
+    let KubeState::Unknown { message } = &state else {
+        return match state {
+            KubeState::Ready => ShellCheck::Ready,
+            state => ShellCheck::Blocked { state },
+        };
+    };
+    if message.contains("exec: \"sh\"") || message.contains("executable file not found") {
+        ShellCheck::NoShell
+    } else if message.contains("container not found") || message.contains("not created or running")
+    {
+        ShellCheck::NotRunning
+    } else {
+        ShellCheck::Blocked { state }
+    }
+}
+
+/// `--previous` with no earlier instance. Between restarts kubelet has already collected it, and
+/// then the sentence comes on stdout with exit code 0.
+pub fn no_previous_logs(exit: Option<u32>, stdout: &[u8], stderr: &[u8]) -> bool {
+    let unavailable = stdout.starts_with(b"unable to retrieve container logs for");
+    let missing = exit != Some(0)
+        && String::from_utf8_lossy(stderr).contains("previous terminated container");
+    unavailable || missing
 }
 
 fn unknown_text(line: &str, exit: Option<u32>) -> String {
@@ -131,6 +177,51 @@ mod tests {
         for (line, expected) in cases {
             assert_eq!(classify(Some(1), line.as_bytes()), expected, "{line}");
         }
+    }
+
+    #[test]
+    fn reads_the_measured_exec_and_log_messages() {
+        let no_shell = "error: Internal error occurred: error executing command in container: failed to exec in container: failed to start exec \"f7\": OCI runtime exec failed: exec failed: unable to start container process: exec: \"sh\": executable file not found in $PATH";
+        assert_eq!(
+            classify_shell(Some(1), no_shell.as_bytes()),
+            ShellCheck::NoShell
+        );
+        assert_eq!(
+            classify_shell(
+                Some(1),
+                b"error: unable to upgrade connection: container not found (\"c\")"
+            ),
+            ShellCheck::NotRunning
+        );
+        assert_eq!(classify_shell(Some(0), b""), ShellCheck::Ready);
+        assert_eq!(
+            classify_shell(
+                Some(1),
+                b"Error from server (NotFound): pods \"nopod\" not found"
+            ),
+            ShellCheck::Blocked {
+                state: KubeState::NotFound
+            }
+        );
+        assert_eq!(
+            classify(
+                Some(1),
+                b"error: error from server (NotFound): pods \"nopod\" not found in namespace \"m1\""
+            ),
+            KubeState::NotFound
+        );
+        assert!(no_previous_logs(
+            Some(1),
+            b"",
+            b"Error from server (BadRequest): previous terminated container \"main\" in pod \"web\" not found"
+        ));
+        assert!(no_previous_logs(
+            Some(0),
+            b"unable to retrieve container logs for containerd://7b8c",
+            b""
+        ));
+        assert!(!no_previous_logs(Some(0), b"crashing-now\n", b""));
+        assert!(!no_previous_logs(Some(1), b"", b"error: something else"));
     }
 
     #[test]

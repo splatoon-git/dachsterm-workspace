@@ -122,6 +122,7 @@ async function open(page: Page, snapshots: Answers = healthy) {
         copyResult: { typed: 'wait' },
         calls: [],
         copied: [],
+        terminals: [],
       };
     },
     { detection, snapshots },
@@ -142,6 +143,222 @@ const setAnswers = (page: Page, snapshots: Answers) =>
   }, snapshots);
 const setVisible = (page: Page, visible: boolean) =>
   page.evaluate((visible) => window.__kube.setVisible?.(visible), visible);
+
+const container = (name: string) => ({
+  name,
+  image: 'img:1',
+  ready: true,
+  restarts: 0,
+  state: 'running' as const,
+  reason: '',
+  message: '',
+  exitCode: null,
+  startedAt: '',
+  finishedAt: '',
+  containerId: `containerd://${name}`,
+  last: null,
+  cpuRequest: null,
+  memoryRequest: null,
+  cpuLimit: null,
+  memoryLimit: null,
+});
+const overviewAnswer = (patch = {}) => ({
+  state: { kind: 'ready' as const },
+  data: {
+    kind: 'overview' as const,
+    namespace: 'web',
+    name: 'api-1',
+    uid: 'u1',
+    phase: 'Running',
+    reason: '',
+    message: '',
+    node: 'n1',
+    podIp: '10.0.0.1',
+    hostIp: '10.0.0.2',
+    qosClass: 'Burstable',
+    created: '2026-11-08T10:00:00Z',
+    deleting: false,
+    ownerKind: 'ReplicaSet',
+    ownerName: 'api-7f9c',
+    defaultContainer: '',
+    labels: { app: 'api' },
+    initContainers: [],
+    containers: [container('app')],
+    ...patch,
+  },
+});
+const logsAnswer = {
+  state: { kind: 'ready' as const },
+  text: 'alpha line\nbeta line\n',
+  previous: false,
+  previousMissing: false,
+  truncated: false,
+};
+const setPodAnswers = (page: Page, answers: Window['__kube']['podAnswers']) =>
+  page.evaluate((answers) => {
+    window.__kube.podAnswers = answers;
+  }, answers);
+const podPanel = (page: Page) => page.locator('.kube-panel');
+
+test('Enter opens the log panel beside the tree and Esc returns to the same pod', async ({
+  page,
+}) => {
+  await open(page);
+  await setPodAnswers(page, { detail: { overview: overviewAnswer() }, logs: logsAnswer });
+  await row(page, 'api-1').click();
+  await page.keyboard.press('Enter');
+  await expect(podPanel(page).getByLabel('로그', { exact: true })).toContainText('beta line');
+  await page.keyboard.press('Escape');
+  await expect(podPanel(page)).toHaveCount(0);
+  await expect(row(page, 'api-1')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tree', { name: '클러스터 트리' })).toBeFocused();
+  const logs = await page.evaluate(() =>
+    window.__kube.calls.filter((call) => call.command === 'kube_logs'),
+  );
+  expect(logs[0].args).toMatchObject({ container: 'app', tail: 500, previous: false });
+});
+
+test('a group row still folds on Enter and only pods have the menu', async ({ page }) => {
+  await open(page);
+  await row(page, 'Deployment/api').click();
+  await page.keyboard.press('Enter');
+  await expect(row(page, 'api-1')).toHaveCount(0);
+  await expect(podPanel(page)).toHaveCount(0);
+  await row(page, 'Deployment/api').click({ button: 'right' });
+  await expect(page.getByRole('menu', { name: '파드 메뉴' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+});
+
+test('the log panel filters by keyword and says when there is no previous instance', async ({
+  page,
+}) => {
+  await open(page);
+  await setPodAnswers(page, {
+    detail: { overview: overviewAnswer() },
+    logs: { ...logsAnswer, previousMissing: true },
+  });
+  await row(page, 'api-1').dblclick();
+  const panel = podPanel(page);
+  await expect(panel.getByRole('status')).toContainText('직전 인스턴스가 없어');
+  await panel.getByLabel('로그 필터', { exact: true }).fill('alpha');
+  await expect(panel.getByLabel('로그', { exact: true })).toContainText('alpha line');
+  await expect(panel.getByLabel('로그', { exact: true })).not.toContainText('beta line');
+  await panel.getByRole('button', { name: '따라가기', exact: true }).click();
+  const launches = await page.evaluate(() => window.__kube.terminals.map((t) => t.launch));
+  expect(launches[0]).toMatchObject({ kind: 'podLogs', pod: 'api-1', container: 'app' });
+});
+
+test('S opens a shell tab with the annotated container', async ({ page }) => {
+  await open(page);
+  await setPodAnswers(page, {
+    detail: {
+      overview: overviewAnswer({
+        defaultContainer: 'main',
+        containers: [container('side'), container('main')],
+      }),
+    },
+    probe: { kind: 'ready' },
+  });
+  await row(page, 'api-1').click();
+  await page.keyboard.press('s');
+  await expect.poll(() => page.evaluate(() => window.__kube.terminals.length)).toBe(1);
+  const [request] = await page.evaluate(() => window.__kube.terminals);
+  expect(request.launch).toMatchObject({ kind: 'podShell', pod: 'api-1', container: 'main' });
+  expect(request.title).toBe('prod · api-1');
+});
+
+test('a pod with several containers asks which one, once', async ({ page }) => {
+  await open(page);
+  await setPodAnswers(page, {
+    detail: { overview: overviewAnswer({ containers: [container('a'), container('b')] }) },
+  });
+  await row(page, 'api-1').click();
+  await page.keyboard.press('s');
+  const picker = page.getByRole('menu', { name: '파드 메뉴' });
+  await expect(picker.getByRole('menuitem')).toHaveText(['a', 'b']);
+  await picker.getByRole('menuitem', { name: 'b' }).click();
+  await expect.poll(() => page.evaluate(() => window.__kube.terminals.length)).toBe(1);
+  await row(page, 'api-1').click();
+  await page.keyboard.press('s');
+  await expect.poll(() => page.evaluate(() => window.__kube.terminals.length)).toBe(2);
+  await expect(picker).toHaveCount(0);
+});
+
+test('a shell that cannot start says why and opens nothing', async ({ page }) => {
+  await open(page);
+  await setPodAnswers(page, {
+    detail: { overview: overviewAnswer() },
+    probe: { kind: 'noShell' },
+  });
+  await row(page, 'api-1').click();
+  await page.keyboard.press('s');
+  await expect(page.getByRole('alert')).toContainText('셸(sh)이 없어');
+  await setPodAnswers(page, {
+    detail: { overview: overviewAnswer() },
+    probe: { kind: 'blocked', state: { kind: 'channelLimit' } },
+  });
+  await page.keyboard.press('s');
+  await expect(page.getByRole('alert')).toContainText('동시 세션 한도');
+  expect(await page.evaluate(() => window.__kube.terminals.length)).toBe(0);
+});
+
+test('the context menu reaches events and a problem pod opens on its cause', async ({ page }) => {
+  await open(page);
+  await setPodAnswers(page, {
+    detail: {
+      overview: overviewAnswer({
+        name: 'crash-1',
+        ownerKind: '',
+        ownerName: '',
+        containers: [
+          {
+            ...container('app'),
+            ready: false,
+            state: 'waiting',
+            reason: 'CrashLoopBackOff',
+            restarts: 7,
+            last: {
+              reason: 'OOMKilled',
+              message: '',
+              exitCode: 137,
+              startedAt: '',
+              finishedAt: '2026-11-08T11:59:00Z',
+            },
+          },
+        ],
+      }),
+      events: {
+        state: { kind: 'ready' },
+        data: {
+          kind: 'events',
+          items: [
+            {
+              eventType: 'Warning',
+              reason: 'BackOff',
+              count: 3,
+              time: '2026-11-08T11:58:00Z',
+              message: 'Back-off restarting failed container',
+            },
+          ],
+        },
+      },
+    },
+    logs: { ...logsAnswer, previous: true, text: 'dying words\n' },
+  });
+  await row(page, 'crash-1').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /이벤트/ }).click();
+  await expect(podPanel(page)).toContainText('BackOff');
+  await page.keyboard.press('Escape');
+  await expect(podPanel(page)).toHaveCount(0);
+  await row(page, 'crash-1').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /상세/ }).click();
+  const cause = page.locator('.kube-cause');
+  await expect(cause.locator('table')).toContainText('OOMKilled');
+  await expect(cause.locator('table')).toContainText('137');
+  await expect(cause).toContainText('Back-off restarting failed container');
+  await expect(cause.getByLabel('장애 원인 로그', { exact: true })).toContainText('dying words');
+  await expect(cause.getByRole('heading', { name: /직전 인스턴스 로그/ })).toBeVisible();
+});
 
 test('the tree opens first, grouped by workload', async ({ page }) => {
   await open(page);
@@ -482,6 +699,7 @@ test('nothing is polled before the setup is finished', async ({ page }) => {
         copyResult: { typed: 'wait' },
         calls: [],
         copied: [],
+        terminals: [],
       };
     },
     { detection: { ...detection, saved: null } },

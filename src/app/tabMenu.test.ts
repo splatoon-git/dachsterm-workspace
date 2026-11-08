@@ -17,6 +17,7 @@ const local = {
 const podtree = {
   profile: blankProfile(),
   podtree: {
+    kind: 'script' as const,
     location: { kind: 'local' as const, id: 'x' },
     context: 'c',
     namespace: 'n',

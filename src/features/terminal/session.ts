@@ -10,13 +10,8 @@ import { ProgramStatus } from './programStatus';
 import { PaneView } from './paneView';
 import { AgentSignQueue } from './agentSign';
 import { InputQueue } from './inputQueue';
-import type {
-  LocalTarget,
-  PodTreeLaunch,
-  SessionEvent as Event,
-  SessionState,
-} from './sessionTypes';
-export type { LocalCatalog, LocalTarget, PodTreeLaunch, SessionState } from './sessionTypes';
+import type { KubeLaunch, LocalTarget, SessionEvent as Event, SessionState } from './sessionTypes';
+export type { KubeLaunch, LocalCatalog, LocalTarget, SessionState } from './sessionTypes';
 import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -123,7 +118,8 @@ export class TerminalSession {
     theme: ThemeDefinition,
     readonly onConnected: () => void,
     readonly localTarget?: LocalTarget,
-    readonly podtree?: PodTreeLaunch,
+    /** Reassigned only to point a cut pod shell at the workload's new pod before `reconnect`. */
+    public podtree?: KubeLaunch,
   ) {
     this.terminal = new Terminal({
       theme: terminalTheme(theme),
@@ -176,10 +172,10 @@ export class TerminalSession {
     });
   }
   private get backend() {
-    return this.podtree ? 'podtree' : this.localTarget ? 'local' : 'terminal';
+    return this.podtree ? 'kube_terminal' : this.localTarget ? 'local' : 'terminal';
   }
   private get closeCommand() {
-    return this.podtree ? 'podtree_close' : this.localTarget ? 'local_close' : 'disconnect';
+    return this.podtree ? 'kube_terminal_close' : this.localTarget ? 'local_close' : 'disconnect';
   }
   private setDirectory(path: string) {
     if (this.current.directory !== path)
@@ -228,7 +224,7 @@ export class TerminalSession {
     this.bindEvents(this.channel, id);
     try {
       await (this.podtree
-        ? call('podtree_open', {
+        ? call('kube_terminal_open', {
             id,
             launch: this.podtree,
             cols: this.terminal.cols,

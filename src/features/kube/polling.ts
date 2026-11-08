@@ -125,7 +125,9 @@ export function stateNote(state: KubeState): string {
     case 'configUnreadable':
       return '쿠버네티스 설정을 읽을 수 없음';
     case 'channelLimit':
-      return '서버 세션 한도로 조회를 미룸';
+      return '서버의 동시 세션 한도에 걸림';
+    case 'notFound':
+      return '파드를 찾을 수 없음';
     case 'metricsMissing':
       return 'metrics-server 없음';
     case 'timedOut':

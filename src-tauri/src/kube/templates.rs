@@ -64,3 +64,11 @@ pub const EVENTS: &str = concat!(
     "{{.lastTimestamp}}\t{{.eventTime}}\t{{.metadata.creationTimestamp}}\t",
     "{{with .message}}{{urlquery .}}{{end}}\n{{end}}",
 );
+
+/// `kube_detail`'s events for one pod: Normal and Warning alike, unlike `EVENTS` above.
+pub const POD_EVENTS: &str = concat!(
+    "{{range .items}}{{.type}}\t",
+    "{{with .reason}}{{urlquery .}}{{end}}\t{{.count}}\t",
+    "{{.lastTimestamp}}\t{{.eventTime}}\t{{.metadata.creationTimestamp}}\t",
+    "{{with .message}}{{urlquery .}}{{end}}\n{{end}}",
+);

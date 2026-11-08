@@ -48,6 +48,7 @@ import { GroupDialog } from './GroupDialog';
 import { useReviewTabs } from './useReviewTabs';
 import { useFileTabs } from './useFileTabs';
 import { useToolTabs } from './useToolTabs';
+import { useKubeTabs } from './useKubeTabs';
 import { useVaultGate } from './useVaultGate';
 import { tmuxCloseNotice } from './tmuxNotice';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
@@ -275,7 +276,8 @@ export function App() {
   useAppShortcuts(keptByFile, runShortcut);
   function requestConnect(profile: Profile, existing?: TerminalSession, opening?: Opening) {
     if (existing?.podtree) {
-      setPodtreeOpen(true);
+      if (existing.podtree.kind === 'script') setPodtreeOpen(true);
+      else void kubeTabs.reconnect(existing);
       return;
     }
     if (existing?.localTarget) {
@@ -322,6 +324,7 @@ export function App() {
     t.localTarget
       ? openLocal(t.localTarget, beside)
       : requestConnect(savedProfile(t), undefined, { beside });
+  const kubeTabs = useKubeTabs({ workspace, theme, tabs, setTabs, closeTab });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
   const files = useFileTabs({ workspace, sessions: tabs, narrow, fail: setError });
   const tools = useToolTabs({
@@ -435,6 +438,7 @@ export function App() {
         open={(path, pinned) => files.open(session, path, pinned)}
         reconnect={() => reconnectTab(session)}
         close={() => closeTab(session)}
+        openPodTerminal={(request) => kubeTabs.open(session, request)}
       />
     );
   };
@@ -651,13 +655,10 @@ export function App() {
           locals={localCatalog.targets}
           close={() => setPodtreeOpen(false)}
           open={(launch, title) => {
-            const profile = { ...blankProfile(), name: `PodTree · ${launch.context}`, host: title };
-            const session = new TerminalSession(profile, theme, () => {}, undefined, launch);
-            setTabs((previous) => [...previous, session]);
-            workspace.open(sessionRef(session));
+            if (launch.kind !== 'script') return;
+            void kubeTabs.start(launch, `PodTree · ${launch.context}`, title).connect(null);
             setPodtreeOpen(false);
             closeDrawer();
-            void session.connect(null);
           }}
         />
       )}

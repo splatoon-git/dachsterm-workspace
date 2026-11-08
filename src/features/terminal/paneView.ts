@@ -13,6 +13,8 @@ export type PaneViewState = {
   kube: boolean;
   /** The workspace is open but the user went to its server terminal. */
   kubeTerminal: boolean;
+  /** A pod shell ended: the tree's cursor goes back to this pod. A new object asks again. */
+  kubeFocus: { namespace: string; name: string } | null;
 };
 
 const closed: PaneViewState = {
@@ -22,6 +24,7 @@ const closed: PaneViewState = {
   pinned: null,
   kube: false,
   kubeTerminal: false,
+  kubeFocus: null,
 };
 
 /** Per-session view state. It lives on the session so that moving a tab never resets it. */

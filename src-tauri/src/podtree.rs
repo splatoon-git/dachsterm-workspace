@@ -27,14 +27,8 @@ pub struct Location {
     pub kind: String,
     pub id: String,
 }
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Launch {
-    pub location: Location,
-    pub context: String,
-    pub namespace: String,
-    pub operational: bool,
-}
+pub use launch::Launch;
+use launch::{Labels, ScriptLaunch};
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inspection {
@@ -69,7 +63,7 @@ impl PodTrees {
             .unwrap()
             .get(id)
             .cloned()
-            .ok_or("PodTree 탭이 종료되었습니다.".into())
+            .ok_or("쿠버네티스 터미널 탭이 종료되었습니다.".into())
     }
 }
 use crate::remote_exec::quote;
@@ -239,7 +233,7 @@ async fn execute(
 }
 const DEPS: &str = "((BASH_VERSINFO[0]>=4)) || exit 10; for d in kubectl awk sort mktemp ps base64; do command -v \"$d\" >/dev/null || exit 11; done; ";
 #[tauri::command]
-pub async fn podtree_inspect(
+pub async fn kube_terminal_inspect(
     state: State<'_, AppState>,
     location: Location,
     context: Option<String>,
@@ -270,7 +264,7 @@ pub async fn podtree_inspect(
     }
     Ok(result)
 }
-async fn stage(state: &AppState, launch: &Launch) -> Result<(String, String)> {
+async fn stage(state: &AppState, launch: &ScriptLaunch) -> Result<(String, String)> {
     name(&launch.context, false)?;
     name(&launch.namespace, true)?;
     // stdin contains only a bundled public script, never kubeconfig or authentication material.
@@ -302,7 +296,7 @@ fn emit(sink: &Channel<Event>, status: &str, message: &str) {
     });
 }
 #[tauri::command]
-pub async fn podtree_open(
+pub async fn kube_terminal_open(
     state: State<'_, AppState>,
     id: String,
     launch: Launch,
@@ -310,7 +304,7 @@ pub async fn podtree_open(
     rows: u16,
     on_event: Channel<Event>,
 ) -> Result<()> {
-    uuid::Uuid::parse_str(&id).map_err(|_| "PodTree ID 오류")?;
+    uuid::Uuid::parse_str(&id).map_err(|_| "터미널 ID 오류")?;
     if !(2..=1000).contains(&cols) || !(1..=1000).contains(&rows) {
         return Err("PTY 크기 오류".into());
     }
@@ -324,7 +318,7 @@ pub async fn podtree_open(
             || entries.len() >= 16
             || entries.contains_key(&id)
         {
-            return Err("PodTree 탭 상한 또는 ID 중복/앱 종료".into());
+            return Err("쿠버네티스 터미널 탭 상한(16개) 또는 앱 종료 중입니다.".into());
         }
         entries.insert(
             id.clone(),
@@ -335,34 +329,23 @@ pub async fn podtree_open(
             }),
         );
     }
-    let prepared = stage(&state, &launch).await;
-    let (path, command) = match prepared {
+    let launch::Prepared {
+        location,
+        command,
+        labels,
+        staged,
+    } = match launch::prepare(&state, &launch).await {
         Ok(v) => v,
         Err(e) => {
             manager.entries.lock().unwrap().remove(&id);
             return Err(e);
         }
     };
-    let title = format!(
-        "PodTree · {} · {} · {} · 임시 경로 {}",
-        launch.context,
-        if launch.namespace.is_empty() {
-            "전체 namespace"
-        } else {
-            &launch.namespace
-        },
-        if launch.operational {
-            "운영 모드"
-        } else {
-            "조회 모드"
-        },
-        path
-    );
-    let result = if launch.location.kind == "ssh" {
+    let result = if location.kind == "ssh" {
         start_ssh(
             &state,
             id.clone(),
-            &launch.location,
+            &location,
             command,
             cols,
             rows,
@@ -370,14 +353,14 @@ pub async fn podtree_open(
             rx,
             stopped,
             acked,
-            title,
+            labels,
         )
         .await
     } else {
         start_local(
             &state,
             id.clone(),
-            &launch.location,
+            &location,
             command,
             cols,
             rows,
@@ -385,19 +368,16 @@ pub async fn podtree_open(
             rx,
             stopped,
             acked,
-            title,
+            labels.title,
         )
         .await
     };
     if result.is_err() {
         manager.entries.lock().unwrap().remove(&id);
-        let _ = execute(
-            &state,
-            &launch.location,
-            &format!("rm -f -- {0}/podtree.sh; rmdir -- {0}", quote(&path)),
-            &[],
-        )
-        .await;
+        if let Some(path) = staged {
+            let cleanup = format!("rm -f -- {0}/podtree.sh; rmdir -- {0}", quote(&path));
+            let _ = execute(&state, &location, &cleanup, &[]).await;
+        }
     }
     result
 }
@@ -413,7 +393,7 @@ async fn start_ssh(
     mut rx: mpsc::Receiver<Input>,
     mut stop: watch::Receiver<bool>,
     mut ack: watch::Receiver<u64>,
-    title: String,
+    labels: Labels,
 ) -> Result<()> {
     let handle = state.connections.handle(&location.id)?;
     let mut parent = state.connections.control(&location.id)?.stop.subscribe();
@@ -425,12 +405,15 @@ async fn start_ssh(
         Ok::<_, russh::Error>(c.0.take().unwrap())
     })
     .await
-    .map_err(|_| "PodTree PTY 시간 초과")?
-    .map_err(|_| "PodTree PTY 실행 실패")?;
+    .map_err(|_| "터미널을 여는 시간이 초과되었습니다.")?
+    .map_err(|error| match error {
+        russh::Error::ChannelOpenFailure(_) => "서버의 동시 세션 한도(MaxSessions)에 걸려 터미널을 열 수 없습니다. 다른 탭이나 파일 전송을 줄이고 다시 시도하세요.",
+        _ => "터미널을 열지 못했습니다.",
+    })?;
     let manager = state.podtrees.clone();
     tokio::spawn(async move {
         let (mut reader, writer) = channel.split();
-        emit(&sink, "connected", &title);
+        emit(&sink, "connected", &labels.title);
         let output = async {
             let mut seq = 0;
             while let Some(m) = reader.wait().await {
@@ -455,9 +438,7 @@ async fn start_ssh(
                         }
                     }
                     russh::ChannelMsg::ExitStatus { exit_status } if exit_status != 0 => {
-                        return Err(
-                            "PodTree 프로세스가 실패했습니다. 터미널 안내를 확인하세요.".into()
-                        );
+                        return Err(labels.failed.to_string());
                     }
                     _ => {}
                 }
@@ -470,7 +451,7 @@ async fn start_ssh(
                     Input::Data(b) => writer.data(&b[..]).await,
                     Input::Resize(c, r) => writer.window_change(c, r, 0, 0).await,
                 }
-                .map_err(|_| "PodTree 입력 실패")?;
+                .map_err(|_| "터미널 입력 실패")?;
             }
             Ok::<_, String>(())
         };
@@ -484,7 +465,7 @@ async fn start_ssh(
         let _ = writer.close().await;
         manager.entries.lock().unwrap().remove(&id);
         match result {
-            Ok(()) => emit(&sink, "closed", "PodTree 종료"),
+            Ok(()) => emit(&sink, "closed", labels.closed),
             Err(e) => emit(&sink, "error", &e),
         };
     });
@@ -639,19 +620,24 @@ async fn start_local(
     .map_err(|_| "PodTree PTY 작업 실패")?
 }
 #[tauri::command]
-pub fn podtree_input(state: State<AppState>, id: String, data: String) -> Result<()> {
+pub fn kube_terminal_input(state: State<AppState>, id: String, data: String) -> Result<()> {
     if data.len() > 16384 {
-        return Err("PodTree 입력 상한 초과".into());
+        return Err("터미널 입력 상한 초과".into());
     }
     state
         .podtrees
         .control(&id)?
         .input
         .try_send(Input::Data(data.into_bytes()))
-        .map_err(|_| "PodTree 입력 대기열 초과".into())
+        .map_err(|_| "터미널 입력 대기열 초과".into())
 }
 #[tauri::command]
-pub fn podtree_resize(state: State<AppState>, id: String, cols: u16, rows: u16) -> Result<()> {
+pub fn kube_terminal_resize(
+    state: State<AppState>,
+    id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<()> {
     if !(2..=1000).contains(&cols) || !(1..=1000).contains(&rows) {
         return Err("PTY 크기 오류".into());
     }
@@ -660,10 +646,10 @@ pub fn podtree_resize(state: State<AppState>, id: String, cols: u16, rows: u16) 
         .control(&id)?
         .input
         .try_send(Input::Resize(cols.into(), rows.into()))
-        .map_err(|_| "PodTree resize 대기열 초과".into())
+        .map_err(|_| "터미널 resize 대기열 초과".into())
 }
 #[tauri::command]
-pub fn podtree_ack(state: State<AppState>, id: String, seq: u64) -> Result<()> {
+pub fn kube_terminal_ack(state: State<AppState>, id: String, seq: u64) -> Result<()> {
     let c = state.podtrees.control(&id)?;
     if seq == *c.ack.borrow() + 1 {
         let _ = c.ack.send(seq);
@@ -671,7 +657,7 @@ pub fn podtree_ack(state: State<AppState>, id: String, seq: u64) -> Result<()> {
     Ok(())
 }
 #[tauri::command]
-pub fn podtree_close(state: State<AppState>, id: String) {
+pub fn kube_terminal_close(state: State<AppState>, id: String) {
     if let Ok(c) = state.podtrees.control(&id) {
         let _ = c.stop.send(true);
     }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { call, errorText } from '../../lib/ipc';
-import type { LocalTarget, PodTreeLaunch, TerminalSession } from './session';
+import type { KubeLaunch, LocalTarget, TerminalSession } from './session';
 type Inspection = { contexts: string[]; current: string; namespaces: string[]; warning: string };
 export function PodTreeDialog({
   sessions,
@@ -12,7 +12,7 @@ export function PodTreeDialog({
   sessions: TerminalSession[];
   locals: LocalTarget[];
   close: () => void;
-  open: (launch: PodTreeLaunch, title: string) => void;
+  open: (launch: KubeLaunch, title: string) => void;
 }) {
   const targets = [
     ...sessions
@@ -49,7 +49,7 @@ export function PodTreeDialog({
     setBusy(true);
     setError('');
     try {
-      const result = await call<Inspection>('podtree_inspect', {
+      const result = await call<Inspection>('kube_terminal_inspect', {
         location: selected.location,
         context: next || null,
       });
@@ -159,7 +159,10 @@ export function PodTreeDialog({
           disabled={busy || !inspection || !context || !selected}
           onClick={() => {
             if (selected)
-              open({ location: selected.location, context, namespace, operational }, selected.name);
+              open(
+                { kind: 'script', location: selected.location, context, namespace, operational },
+                selected.name,
+              );
           }}
         >
           전용 탭 열기 · {operational ? '운영' : '조회'}

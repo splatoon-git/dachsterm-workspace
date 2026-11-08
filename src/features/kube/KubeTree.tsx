@@ -1,6 +1,7 @@
 import {
   memo,
   useEffect,
+  useEffectEvent,
   useId,
   useLayoutEffect,
   useMemo,
@@ -10,6 +11,8 @@ import {
   type KeyboardEvent,
   type SetStateAction,
 } from 'react';
+import { anchorBelow, isMenuKey, type MenuPoint } from '../../components/ContextMenu';
+import type { PodRef } from './detailTypes';
 import { KubeTreeRow } from './KubeTreeRow';
 import { kindNotes, stateNote, type SnapshotStore } from './polling';
 import {
@@ -27,10 +30,12 @@ import {
 } from './tree';
 import { visibleRange } from './treeFormat';
 import { leavesFilter, treeKeyAction } from './treeKeys';
-import { filterActive, matches, parseFilter, podViews } from './treePods';
+import { filterActive, matches, parseFilter, podViews, type PodView } from './treePods';
 import { readTreePrefs, writeTreePrefs } from './treePrefs';
 
 const ROW_HEIGHT = 26;
+
+export type PodAction = 'logs' | 'shell' | 'events' | 'detail' | 'menu';
 
 const parentIndex = (rows: TreeRow[], index: number) => {
   for (let at = index - 1; at >= 0; at--) if (rows[at].depth < rows[index].depth) return at;
@@ -46,6 +51,11 @@ export const KubeTree = memo(function KubeTree({
   focused,
   view,
   setView,
+  onPod,
+  panelOpen,
+  closePanel,
+  focusPod,
+  focusSignal,
 }: {
   store: SnapshotStore;
   /** Which session this tree's folding and grouping are saved under. */
@@ -54,6 +64,13 @@ export const KubeTree = memo(function KubeTree({
   /** Held by the workspace, so coming back from another screen keeps the filter and selection. */
   view: TreeView;
   setView: Dispatch<SetStateAction<TreeView>>;
+  onPod: (action: PodAction, view: PodView, at?: MenuPoint) => void;
+  panelOpen: boolean;
+  closePanel: () => void;
+  /** A pod shell ended: put the cursor back on its pod. A new object asks again. */
+  focusPod: PodRef | null;
+  /** Bumped when something beside the tree closes and focus should come back. */
+  focusSignal: number;
 }) {
   const [{ grouping, collapsed }, setPrefs] = useState(() => {
     const saved = readTreePrefs(session);
@@ -73,7 +90,7 @@ export const KubeTree = memo(function KubeTree({
   // The keys work only with focus on the tree, so an opened or newly focused pane gives it focus.
   useEffect(() => {
     if (focused) body.current?.focus({ preventScroll: true });
-  }, [focused]);
+  }, [focused, focusSignal]);
 
   useLayoutEffect(() => {
     const element = body.current;
@@ -159,10 +176,39 @@ export const KubeTree = memo(function KubeTree({
     body.current?.focus({ preventScroll: true });
   };
 
+  const jumpTo = useEffectEvent((pod: PodRef) => {
+    const index = rows.findIndex(
+      (row) =>
+        row.type === 'pod' &&
+        row.view.pod.namespace === pod.namespace &&
+        row.view.pod.name === pod.name,
+    );
+    if (index >= 0) goTo(index);
+    body.current?.focus({ preventScroll: true });
+  });
+  useEffect(() => {
+    if (focusPod) jumpTo(focusPod);
+  }, [focusPod]);
+
+  const rowAnchor = () => {
+    const element = document.getElementById(rowDom(activeIndex));
+    return element ? anchorBelow(element) : undefined;
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (isMenuKey(event)) {
+      if (active?.type !== 'pod') return;
+      event.preventDefault();
+      onPod('menu', active.view, rowAnchor());
+      return;
+    }
     const action = treeKeyAction(event);
     if (!action) return;
     event.preventDefault();
+    if (action === 'close') {
+      if (panelOpen) closePanel();
+      return;
+    }
     if (action === 'filter') {
       filterBox.current?.focus();
       filterBox.current?.select();
@@ -198,8 +244,14 @@ export const KubeTree = memo(function KubeTree({
         else if (parentIndex(rows, activeIndex) >= 0) goTo(parentIndex(rows, activeIndex));
         return;
       case 'activate':
-        // A pod's Enter opens its log panel in KV.4.
-        fold(active);
+        if (active.type === 'pod') onPod('logs', active.view);
+        else fold(active);
+        return;
+      case 'shell':
+        if (active.type === 'pod') onPod('shell', active.view, rowAnchor());
+        return;
+      case 'events':
+        if (active.type === 'pod') onPod('events', active.view);
         return;
     }
   };
@@ -324,6 +376,15 @@ export const KubeTree = memo(function KubeTree({
                   now={pods.collectedAt ?? 0}
                   select={() => select(index)}
                   fold={() => fold(row)}
+                  open={row.type === 'pod' ? () => onPod('logs', row.view) : undefined}
+                  menu={
+                    row.type === 'pod'
+                      ? (at) => {
+                          select(index);
+                          onPod('menu', row.view, at);
+                        }
+                      : undefined
+                  }
                 />
               );
             })}

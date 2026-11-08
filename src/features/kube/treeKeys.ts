@@ -6,6 +6,9 @@ export type TreeKeyAction =
   | 'activate'
   | 'filter'
   | 'grouping'
+  | 'shell'
+  | 'events'
+  | 'close'
   | 'home'
   | 'end'
   | 'pageDown'
@@ -26,6 +29,9 @@ const actions: Record<string, TreeKeyAction> = {
   Space: 'activate',
   Slash: 'filter',
   KeyG: 'grouping',
+  KeyS: 'shell',
+  KeyE: 'events',
+  Escape: 'close',
   Home: 'home',
   End: 'end',
   PageDown: 'pageDown',

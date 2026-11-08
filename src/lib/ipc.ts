@@ -41,6 +41,25 @@ export type KubeSettings = {
   kubeconfig: string;
   operate: boolean;
 };
+/** A tab on an SSH connection that is already open. `kube_terminal_open` runs a fixed command. */
+export type PodTerminalLaunch =
+  | {
+      kind: 'podShell';
+      connection: string;
+      kube: KubeSettings;
+      namespace: string;
+      pod: string;
+      container: string;
+    }
+  | {
+      kind: 'podLogs';
+      connection: string;
+      kube: KubeSettings;
+      namespace: string;
+      pod: string;
+      container: string;
+      tail: number;
+    };
 /** A key file the built-in agent offers. Only the backend sets `secretRef`. */
 export type ForwardKey = { path: string; secretRef?: string | null };
 /** A one-time start command for a new tab, given to `connect` and never saved. */
