@@ -27,6 +27,8 @@ declare global {
       status: 'connected' | 'closed';
       calls: { path: string; options: { large: boolean; encoding: string | null } }[];
       opened: string[];
+      /** The folders whose rows asked to open or close. */
+      toggled?: string[];
       /** Every `file_write`, in order. */
       writes: { path: string; content: string; encoding: string; baseHash: string | null }[];
       /** Answers for the next writes; after these, each write saves as `saved-N`. */
@@ -160,7 +162,7 @@ function Harness() {
                 key={path}
                 row={row(path)}
                 selected={false}
-                toggle={() => {}}
+                toggle={() => (state.toggled ??= []).push(path)}
                 onDoubleClick={() => document.body.setAttribute('data-panel-open', path)}
               />
             ))}

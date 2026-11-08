@@ -97,7 +97,7 @@ export function CommitHoverCard({
           type="button"
           className="git-view-tool"
           aria-label="해시 복사"
-          title={copied ? '복사했습니다' : '해시 복사'}
+          data-tip={copied ? '복사했습니다' : `전체 해시 복사\n${commit.hash}`}
           onClick={() => {
             copy(commit.hash);
             setCopied(true);

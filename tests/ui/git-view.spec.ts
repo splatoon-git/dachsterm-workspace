@@ -560,6 +560,56 @@ test('a deleted file has no open button, and a group acts on all of its files', 
   await expect(group(page, '충돌').locator('.git-group-bar .git-row-actions')).toHaveCount(0);
 });
 
+test('each button says what it does, even when it cannot be pressed', async ({ page }) => {
+  await open(page, {
+    result: { ...repo, entries: [entry('a', { worktree: 'modified' })] } as GitViewResult,
+  });
+  await expect(page.locator('.git-graph-row').first()).toBeVisible();
+  const tip = page.getByRole('tooltip');
+  await expect(tip).toHaveCount(0);
+  await page.getByRole('button', { name: 'Git 새로 고침' }).hover();
+  await expect(tip).toHaveText('Git 상태와 이력 새로 고침');
+  await page.getByRole('button', { name: 'fetch', exact: true }).hover();
+  await expect(tip).toContainText('원격의 새 커밋을 받아 옵니다');
+  // The commit button is disabled here, which is exactly when the reason is wanted.
+  await page.locator('.git-commit-tip').hover();
+  await expect(tip).toHaveText('스테이지된 변경이 없습니다');
+  await page.locator('.git-view-sync').hover();
+  await expect(tip).toHaveText('origin/main 대비 앞섬 2 · 뒤처짐 1');
+  await page.mouse.move(700, 450);
+  await expect(tip).toHaveCount(0);
+});
+
+test('the message box uses the interface font', async ({ page }) => {
+  await open(page);
+  const fonts = await page
+    .getByRole('textbox', { name: '커밋 메시지' })
+    .evaluate((box) => [
+      getComputedStyle(box).fontFamily,
+      getComputedStyle(document.body).fontFamily,
+    ]);
+  expect(fonts[0]).toBe(fonts[1]);
+});
+
+test('files show what kind they are in the list and in a commit', async ({ page }) => {
+  await open(page);
+  await expect(rowOf(page, '변경', 'both.ts').locator('[data-file-type]')).toHaveAttribute(
+    'data-file-type',
+    'ts',
+  );
+  await expect(rowOf(page, '변경', 'README.md').locator('[data-file-type]')).toHaveAttribute(
+    'data-file-type',
+    'markdown',
+  );
+  // The icon's letters are not part of the file's name.
+  await expect(rowOf(page, '변경', 'both.ts').locator('.git-row-name')).toHaveText('both.ts');
+  await row(page, 'merge feature').click();
+  await expect(page.locator('.git-graph-detail [data-file-type]')).toHaveAttribute(
+    'data-file-type',
+    'ts',
+  );
+});
+
 test('a commit copies its hash and subject, and the keyboard opens it', async ({ page }) => {
   await open(page);
   await row(page, 'root').click({ button: 'right' });

@@ -116,6 +116,29 @@ test.describe('opening files', () => {
     expect((await state(page)).calls).toHaveLength(2);
   });
 
+  test('a click on a folder row opens it, and a modifier only selects', async ({ page }) => {
+    await open(page, { '/dir/': text('') });
+    await row(page, 'dir/').click();
+    expect((await state(page)).toggled).toEqual(['/dir/']);
+    await row(page, 'dir/').click({ modifiers: ['ControlOrMeta'] });
+    await row(page, 'dir/').click({ modifiers: ['Shift'] });
+    expect((await state(page)).toggled).toEqual(['/dir/']);
+    await page.getByRole('button', { name: '펼치기: dir/' }).click();
+    expect((await state(page)).toggled).toEqual(['/dir/', '/dir/']);
+  });
+
+  test('a file shows its kind, a folder stays a folder', async ({ page }) => {
+    await open(page, { '/a.ts': text(''), '/dir/': text('') });
+    await expect(row(page, 'a.ts').locator('[data-file-type]')).toHaveAttribute(
+      'data-file-type',
+      'ts',
+    );
+    await expect(row(page, 'dir/').locator('[data-file-type]')).toHaveCount(0);
+    // The name still takes the row's free space, not the icon.
+    const icon = (await row(page, 'a.ts').locator('[data-file-type]').boundingBox())!;
+    expect(icon.width).toBe(16);
+  });
+
   test('folders and links keep the panel behaviour', async ({ page }) => {
     await open(page, { '/dir/': text(''), '/x.link': text('') });
     await row(page, 'dir/').click();

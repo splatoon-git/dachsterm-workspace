@@ -1,5 +1,6 @@
 import { formatBytes } from '../../lib/formatBytes';
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes } from 'react';
+import { FileTypeIcon } from '../../components/FileTypeIcon';
 import { Icon, type IconName } from '../../components/Icon';
 import type { MenuItem } from '../../components/ContextMenu';
 import { fileMarkLabels, useFileDecorations } from '../../components/fileDecorations';
@@ -140,7 +141,10 @@ export function FileTreeRow<T extends FileEntry>({
         {...button}
         onClick={(event) => {
           onClick?.(event);
-          if (file && !(event.ctrlKey || event.metaKey || event.shiftKey)) open?.(file, false);
+          // A modifier only changes the selection.
+          if (event.ctrlKey || event.metaKey || event.shiftKey) return;
+          if (row.directory) toggle();
+          else if (file) open?.(file, false);
         }}
         onDoubleClick={(event) => {
           if (file) open?.(file, true);
@@ -150,7 +154,7 @@ export function FileTreeRow<T extends FileEntry>({
         className={`file-row ${selected ? 'selected' : ''}`}
         aria-pressed={selected}
       >
-        <Icon name={row.directory ? 'folder' : 'file'} size={15} />
+        {row.directory ? <Icon name="folder" size={15} /> : <FileTypeIcon name={row.name} />}
         <span data-git-name={mark && treeMarks !== 'letter' ? mark : undefined}>
           {row.label}
           {row.symlink ? ' ↗' : ''}

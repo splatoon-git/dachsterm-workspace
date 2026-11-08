@@ -46,7 +46,11 @@ export type IconName =
   | 'undo'
   | 'check'
   | 'cloud'
-  | 'tag';
+  | 'tag'
+  | 'react'
+  | 'gear'
+  | 'flask'
+  | 'image';
 const paths: Record<IconName, string> = {
   game: 'M7 7h10c3 0 4 3 4 7s-2 5-4 3l-2-2H9l-2 2c-2 2-4 1-4-3s1-7 4-7z M8 10v5 M5.5 12.5h5 M16 11h.01 M18 14h.01',
   server: 'M4 3h16v7H4z M4 14h16v7H4z M7 6.5h.01 M7 17.5h.01 M11 6.5h6 M11 17.5h6',
@@ -100,6 +104,11 @@ const paths: Record<IconName, string> = {
   check: 'M5 12.5l4.5 4.5L19 7',
   cloud: 'M7 18a4 4 0 0 1-.6-8A6 6 0 0 1 18 9.5a4.2 4.2 0 0 1-.5 8.5z',
   tag: 'M3 12V4h8l10 10-8 8z M7.5 8.5h.01',
+  react:
+    'M2 12a10 4 0 1 0 20 0a10 4 0 1 0 -20 0 M7 3.34a10 4 60 1 0 10 17.32a10 4 60 1 0 -10 -17.32 M17 3.34a10 4 120 1 0 -10 17.32a10 4 120 1 0 10 -17.32 M12 12h.01',
+  gear: 'M12 19a7 7 0 1 0 0-14 7 7 0 0 0 0 14z M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z M12 2v3 M12 19v3 M2 12h3 M19 12h3 M4.9 4.9L7 7 M17 17l2.1 2.1 M4.9 19.1L7 17 M17 7l2.1-2.1',
+  flask: 'M9 3h6 M10 3v6l-5.5 10a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3 M7.5 15h9',
+  image: 'M3 4h18v16H3z M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M21 15l-5-5L5 20',
 };
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return (

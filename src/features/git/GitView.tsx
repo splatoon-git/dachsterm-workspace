@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useHoverTips } from '../../components/HoverTips';
 import { ResizeHandle } from '../../components/ResizeHandle';
 import { editExternally } from '../../lib/externalEdit';
 import { subscribeGitChanges } from '../../lib/gitChanges';
@@ -124,6 +125,7 @@ export function GitView({
 }) {
   const model = useGitView(session);
   const { measure, ...panes } = useGitPanes();
+  const tips = useHoverTips();
   const [tree, setTree] = useState(readTree);
   const [notice, setNotice] = useState('');
   const [graphRefresh, setGraphRefresh] = useState(0);
@@ -231,7 +233,7 @@ export function GitView({
       write.setDraft('');
   };
   return (
-    <div className="git-view">
+    <div className="git-view" {...tips.handlers}>
       <GitViewHeader
         repo={repo}
         refresh={refresh}
@@ -321,6 +323,7 @@ export function GitView({
       </div>
       <GitOutput log={write.log} />
       {menu.menu}
+      {tips.element}
       {dialog && repo && (
         <GitWriteDialog
           request={dialog}

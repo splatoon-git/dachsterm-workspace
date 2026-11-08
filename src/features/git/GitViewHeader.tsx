@@ -26,7 +26,7 @@ export function GitViewHeader({
             <button
               type="button"
               className="git-view-branch"
-              title={`${repo.root}\n누르면 브랜치를 전환합니다`}
+              data-tip={`브랜치 전환\n${repo.root}`}
               disabled={busy}
               onClick={switchBranch}
             >
@@ -37,7 +37,7 @@ export function GitViewHeader({
               </span>
             </button>
             {repo.upstream && (
-              <span className="git-view-sync" title={upstream ?? undefined}>
+              <span className="git-view-sync" data-tip={upstream ?? undefined}>
                 ↑{repo.ahead} ↓{repo.behind}
               </span>
             )}
@@ -48,7 +48,7 @@ export function GitViewHeader({
         type="button"
         className="git-view-tool"
         aria-label="Git 새로 고침"
-        title="새로 고침"
+        data-tip="Git 상태와 이력 새로 고침"
         onClick={refresh}
       >
         <Icon name="refresh" size={14} />
@@ -57,7 +57,7 @@ export function GitViewHeader({
         type="button"
         className="git-view-tool"
         aria-label="Git 더 보기"
-        title="더 보기"
+        data-tip="더 보기: 브랜치, 태그, stash, 강제 push 등"
         onClick={(e) => more(e.currentTarget)}
       >
         <Icon name="more" size={14} />

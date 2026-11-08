@@ -645,7 +645,7 @@ main {
   padding: 2px 8px 2px 0;
   font-size: 11px;
 }
-.file-row > span {
+.file-row > span:not(.file-type-icon) {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
