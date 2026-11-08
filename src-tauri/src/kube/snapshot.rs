@@ -244,13 +244,13 @@ pub fn parse(kind: Kind, text: &str, namespace: &str) -> Option<Data> {
     })
 }
 
-fn records(text: &str) -> impl Iterator<Item = &str> {
+pub(super) fn records(text: &str) -> impl Iterator<Item = &str> {
     text.lines()
         .map(|line| line.strip_suffix('\r').unwrap_or(line))
         .filter(|line| !line.is_empty())
 }
 
-fn fields<const N: usize>(line: &str) -> Option<[&str; N]> {
+pub(super) fn fields<const N: usize>(line: &str) -> Option<[&str; N]> {
     if line.len() > MAX_LINE {
         return None;
     }
@@ -262,7 +262,7 @@ fn lines<T>(text: &str, parse: fn(&str) -> Option<T>) -> Option<Vec<T>> {
 }
 
 /// Text shown to the user, with the control characters and length a cluster could send removed.
-fn shown(value: &str, limit: usize) -> String {
+pub(super) fn shown(value: &str, limit: usize) -> String {
     if value == NO_VALUE {
         return String::new();
     }
@@ -278,7 +278,7 @@ fn text(value: &str) -> String {
 }
 
 /// Reverses Go's `urlquery`.
-fn decode(value: &str) -> String {
+pub(super) fn decode(value: &str) -> String {
     let bytes = value.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut at = 0;
@@ -307,7 +307,7 @@ fn is_true(value: &str) -> bool {
 }
 
 /// A missing count is zero: a Deployment with no ready replica has no `readyReplicas` at all.
-fn count(value: &str) -> Option<u32> {
+pub(super) fn count(value: &str) -> Option<u32> {
     if value.is_empty() || value == NO_VALUE {
         Some(0)
     } else {

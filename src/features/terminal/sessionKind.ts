@@ -1,6 +1,6 @@
 import type { Profile } from '../../lib/ipc';
 import type { Source } from '../../lib/source';
-import type { LocalTarget, PodTreeLaunch } from './sessionTypes';
+import type { KubeLaunch, LocalTarget } from './sessionTypes';
 
 export type SessionKind = 'ssh' | 'local' | 'podtree' | 'ftp';
 export type SessionCapabilities = {
@@ -23,7 +23,7 @@ export type SessionCapabilities = {
 type SessionLike = {
   profile: Pick<Profile, 'protocol'>;
   localTarget?: LocalTarget;
-  podtree?: PodTreeLaunch;
+  podtree?: KubeLaunch;
 };
 
 export function sessionKind(session: SessionLike): SessionKind {

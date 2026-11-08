@@ -98,7 +98,7 @@ function serviceLevels(view: PodView): Level[] {
  * Grouped by owner so every cluster reads the same. A ReplicaSet's name is its Deployment's name
  * plus the pod's `pod-template-hash`. Without that label it stays a ReplicaSet.
  */
-function ownerOf(pod: KubePod) {
+export function ownerOf(pod: Pick<KubePod, 'ownerKind' | 'ownerName' | 'labels'>) {
   if (!pod.ownerKind) return null;
   const suffix = `-${pod.labels['pod-template-hash'] ?? ''}`;
   if (pod.ownerKind === 'ReplicaSet' && suffix.length > 1 && pod.ownerName.endsWith(suffix))

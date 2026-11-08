@@ -84,6 +84,7 @@ async function open(page: Page, snapshots: Answers = healthy, answer: Detection 
         copyResult: { typed: 'wait' },
         calls: [],
         copied: [],
+        terminals: [],
       };
     },
     { answer, snapshots },

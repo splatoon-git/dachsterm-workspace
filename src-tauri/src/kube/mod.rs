@@ -1,8 +1,11 @@
 //! Backend of the Kubernetes workspace (docs/design/kubernetes-workspace.md). Commands validate and
 //! delegate; the work is in the modules below.
+mod detail;
 mod detect;
+mod logs;
 mod runner;
 mod settings;
+mod shell;
 mod slots;
 mod snapshot;
 mod state;
@@ -11,13 +14,17 @@ use crate::{
     AppState,
     storage::{Result, Store},
 };
+use detail::{Detail, DetailKind, PodTarget};
 use detect::{Detection, Source, detect};
+use logs::{LogRequest, Logs};
 use runner::Runner;
 use serde::Deserialize;
 pub use settings::{KubeSettings, Workspace};
-use settings::{check_context, check_kubeconfig, check_kubectl};
+use settings::{check_context, check_kubeconfig, check_kubectl, check_namespace, check_pod};
+pub use shell::{check_target, logs_command, shell_command};
 pub use slots::Slots;
 use snapshot::{Kind, Snapshot, collect};
+use state::ShellCheck;
 use tauri::{AppHandle, Manager, State};
 
 #[derive(Deserialize)]
@@ -121,6 +128,101 @@ pub async fn kube_snapshot(
         .await
         .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
     Ok(collect(&Runner::Ssh(&handle), &kube, kind).await)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PodRef {
+    namespace: String,
+    pod: String,
+}
+
+fn check_pod_ref(target: &PodRef) -> Result<()> {
+    if target.namespace.is_empty() {
+        return Err("파드의 namespace가 필요합니다.".into());
+    }
+    check_namespace(&target.namespace)?;
+    check_pod(&target.pod)
+}
+
+#[tauri::command]
+pub async fn kube_detail(
+    state: State<'_, AppState>,
+    slots: State<'_, Slots>,
+    id: String,
+    kube: KubeSettings,
+    target: PodRef,
+    kind: DetailKind,
+) -> Result<Detail> {
+    kube.validate()?;
+    check_pod_ref(&target)?;
+    let handle = state.connections.handle(&id)?;
+    let slot = slots.for_connection(&id);
+    let _turn = slot
+        .acquire_owned()
+        .await
+        .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
+    let target = PodTarget {
+        namespace: &target.namespace,
+        pod: &target.pod,
+    };
+    Ok(detail::read(&Runner::Ssh(&handle), &kube, target, kind).await)
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn kube_logs(
+    state: State<'_, AppState>,
+    slots: State<'_, Slots>,
+    id: String,
+    kube: KubeSettings,
+    target: PodRef,
+    container: String,
+    tail: u32,
+    previous: bool,
+) -> Result<Logs> {
+    check_target(&kube, &target.namespace, &target.pod, &container)?;
+    let handle = state.connections.handle(&id)?;
+    let slot = slots.for_connection(&id);
+    let _turn = slot
+        .acquire_owned()
+        .await
+        .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
+    let request = LogRequest {
+        namespace: &target.namespace,
+        pod: &target.pod,
+        container: &container,
+        tail,
+        previous,
+    };
+    Ok(logs::fetch(&Runner::Ssh(&handle), &kube, request).await)
+}
+
+/// Runs a no-op in the container first, so a tab is only opened when a shell can start.
+#[tauri::command]
+pub async fn kube_terminal_probe(
+    state: State<'_, AppState>,
+    slots: State<'_, Slots>,
+    id: String,
+    kube: KubeSettings,
+    target: PodRef,
+    container: String,
+) -> Result<ShellCheck> {
+    check_target(&kube, &target.namespace, &target.pod, &container)?;
+    let handle = state.connections.handle(&id)?;
+    let slot = slots.for_connection(&id);
+    let _turn = slot
+        .acquire_owned()
+        .await
+        .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
+    Ok(shell::probe(
+        &Runner::Ssh(&handle),
+        &kube,
+        &target.namespace,
+        &target.pod,
+        &container,
+    )
+    .await)
 }
 
 #[cfg(test)]

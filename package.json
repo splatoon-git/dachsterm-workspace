@@ -35,7 +35,8 @@
     "kube:fixture": "wsl -d Ubuntu-24.04 -- bash scripts/kube-fixture.sh",
     "test:kube-detect": "node scripts/verify-kube-detect.mjs",
     "test:kube-dashboard": "node scripts/verify-kube-tree.mjs --dashboard",
-    "test:kube-tree": "node scripts/verify-kube-tree.mjs"
+    "test:kube-tree": "node scripts/verify-kube-tree.mjs",
+    "test:kube-detail": "node scripts/verify-kube-detail.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

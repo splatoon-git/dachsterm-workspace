@@ -47,12 +47,28 @@ impl Kubectl<'_> {
             quote(context),
         )
     }
+    /// For a long-lived `exec` or `logs -f`, where `--request-timeout` would end the stream.
+    pub fn streaming(&self, context: &str, args: &str) -> String {
+        format!("{} --context {} {args}", self.prefix(), quote(context))
+    }
 }
 
 pub enum Failed {
     /// The script could not start or finish; the caller decides whether that matters.
     Stopped(remote_exec::Failure),
     ChannelLimit,
+}
+impl Failed {
+    pub fn into_state(self) -> KubeState {
+        match self {
+            Failed::ChannelLimit => KubeState::ChannelLimit,
+            Failed::Stopped(remote_exec::Failure::TimedOut) => KubeState::TimedOut,
+            Failed::Stopped(remote_exec::Failure::TooLarge) => KubeState::TooLarge,
+            Failed::Stopped(failure) => KubeState::Unknown {
+                message: String::from(failure),
+            },
+        }
+    }
 }
 
 impl Runner<'_> {
@@ -88,14 +104,7 @@ impl Runner<'_> {
         let output = self
             .script(command, limits)
             .await
-            .map_err(|failed| match failed {
-                Failed::ChannelLimit => KubeState::ChannelLimit,
-                Failed::Stopped(remote_exec::Failure::TimedOut) => KubeState::TimedOut,
-                Failed::Stopped(remote_exec::Failure::TooLarge) => KubeState::TooLarge,
-                Failed::Stopped(failure) => KubeState::Unknown {
-                    message: String::from(failure),
-                },
-            })?;
+            .map_err(Failed::into_state)?;
         match classify(output.exit, &output.stderr) {
             KubeState::Ready => Ok(output),
             state => Err(state),

@@ -223,7 +223,7 @@ try {
   ]) {
     const context = location.kind === 'ssh' ? 'kind-dachsterm-podtree-check' : 'dachsterm-viewer';
     stage = `podtree-${location.kind}-inspect`;
-    const inspection = await invoke('podtree_inspect', {
+    const inspection = await invoke('kube_terminal_inspect', {
       location,
       context,
     });
@@ -262,23 +262,23 @@ try {
     await pod.locator('.xterm-helper-textarea').focus();
     for (const key of ['s', 'P', 'T', 'N', 'Delete', 'R', 'X', 'V']) {
       stage = `podtree-${location.kind}-readonly-${key}`;
-      await invoke('podtree_input', { id: podId, data: key === 'Delete' ? '\u001b[3~' : key });
+      await invoke('kube_terminal_input', { id: podId, data: key === 'Delete' ? '\u001b[3~' : key });
 
       await expect(pod.locator('.xterm-accessibility-tree')).toContainText(/읽기 전용|read-only/);
     }
     stage = `podtree-${location.kind}-logs`;
     await pod.locator('.xterm-helper-textarea').focus();
-    await invoke('podtree_input', { id: podId, data: '\u001b[F' });
+    await invoke('kube_terminal_input', { id: podId, data: '\u001b[F' });
     await expect(pod.locator('.xterm-accessibility-tree')).toContainText(
       'dachsterm-check/log-demo',
     );
-    await invoke('podtree_input', { id: podId, data: '\r' });
+    await invoke('kube_terminal_input', { id: podId, data: '\r' });
     await expect(pod.locator('.xterm-accessibility-tree')).toContainText('DACHSTERM_POD_LOG');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
     await page.keyboard.press('Escape');
     stage = `podtree-${location.kind}-resize`;
-    await invoke('podtree_resize', { id: podId, cols: 95, rows: 28 });
+    await invoke('kube_terminal_resize', { id: podId, cols: 95, rows: 28 });
     await page.screenshot({ path: `target/verification/podtree-${location.kind}.png` });
     stage = `podtree-${location.kind}-close`;
     await chooseTabMenu(page, '연결 종료', pod);
@@ -366,29 +366,29 @@ try {
     timeout: 25000,
   });
   await page.waitForTimeout(1800);
-  await invoke('podtree_input', { id: operation.id, data: '\u001b[F' });
+  await invoke('kube_terminal_input', { id: operation.id, data: '\u001b[F' });
   await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
     'dachsterm-check/log-demo',
   );
   stage = 'podtree-events';
-  await invoke('podtree_input', { id: operation.id, data: 'e' });
+  await invoke('kube_terminal_input', { id: operation.id, data: 'e' });
   await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
     /Scheduled|Created|Started/,
   );
-  await invoke('podtree_input', { id: operation.id, data: '\r' });
+  await invoke('kube_terminal_input', { id: operation.id, data: '\r' });
   await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
     'ctx:kind-dachsterm-podtree-check',
   );
   stage = 'podtree-forward-confirm';
-  await invoke('podtree_input', { id: operation.id, data: 'P' });
+  await invoke('kube_terminal_input', { id: operation.id, data: 'P' });
   await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
     'local port-forward:',
   );
-  await invoke('podtree_input', { id: operation.id, data: 'y' });
+  await invoke('kube_terminal_input', { id: operation.id, data: 'y' });
   await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
     /local:remote|로컬:원격/,
   );
-  await invoke('podtree_input', { id: operation.id, data: '43187:80\r' });
+  await invoke('kube_terminal_input', { id: operation.id, data: '43187:80\r' });
   await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
     'Forwarding from',
   );
@@ -412,7 +412,7 @@ try {
   ]);
   try {
     await expect(
-      invoke('podtree_inspect', { location: { kind: 'ssh', id: sshId }, context: null }),
+      invoke('kube_terminal_inspect', { location: { kind: 'ssh', id: sshId }, context: null }),
     ).rejects.toBeTruthy();
   } finally {
     docker([
@@ -426,7 +426,7 @@ try {
   result.checks.push('Actual SSH missing kubectl is reported; no automatic install');
   stage = 'podtree-unsupported';
   await expect(
-    invoke('podtree_inspect', { location: { kind: 'local', id: 'powershell' }, context: null }),
+    invoke('kube_terminal_inspect', { location: { kind: 'local', id: 'powershell' }, context: null }),
   ).rejects.toBeTruthy();
   result.checks.push(
     'PowerShell rejected as a Bash execution target; restricted RBAC context namespace listing denial surfaced',

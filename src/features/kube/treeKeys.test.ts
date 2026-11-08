@@ -12,6 +12,12 @@ const press = (code: string, patch: Partial<Parameters<typeof treeKeyAction>[0]>
   });
 
 describe('tree keys', () => {
+  it('opens the shell and events by physical key, so a Korean input mode still works', () => {
+    expect(press('KeyS')).toBe('shell');
+    expect(press('KeyE')).toBe('events');
+    expect(press('Escape')).toBe('close');
+  });
+
   it.each([
     ['ArrowDown', 'down'],
     ['KeyJ', 'down'],

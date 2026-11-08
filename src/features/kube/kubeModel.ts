@@ -12,6 +12,7 @@ export type KubeState =
   | { kind: 'contextMissing' }
   | { kind: 'unreachable' }
   | { kind: 'channelLimit' }
+  | { kind: 'notFound' }
   | { kind: 'metricsMissing' }
   | { kind: 'timedOut' }
   | { kind: 'tooLarge' }
@@ -49,6 +50,7 @@ export function setupStep(detection: Detection): SetupStep {
     case 'configMissing':
       return 'manual';
     case 'channelLimit':
+    case 'notFound':
     case 'metricsMissing':
     case 'timedOut':
     case 'tooLarge':
@@ -114,7 +116,8 @@ export function setupGuide(state: KubeState): Guide | null {
         title: '서버의 동시 세션 한도에 걸렸습니다',
         body: '이 연결에서 이미 많은 작업이 실행 중입니다. 파일 전송이나 다른 탭을 줄이고 다시 확인하세요.',
       };
-    // Only polling reports these three; setup checks read too little to reach them.
+    // Only polling and the pod views report these; setup checks read too little to reach them.
+    case 'notFound':
     case 'metricsMissing':
     case 'timedOut':
     case 'tooLarge':

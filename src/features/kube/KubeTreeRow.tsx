@@ -116,6 +116,8 @@ export function KubeTreeRow({
   now,
   select,
   fold,
+  open,
+  menu,
 }: {
   row: TreeRow;
   domId: string;
@@ -127,6 +129,10 @@ export function KubeTreeRow({
   now: number;
   select: () => void;
   fold: () => void;
+  /** Double click on a pod. */
+  open?: () => void;
+  /** Right click on a pod. */
+  menu?: (at: { x: number; y: number }) => void;
 }) {
   const cells = cellsOf(row, metrics, now);
   const foldable = row.type === 'group' || row.type === 'nodes';
@@ -142,6 +148,12 @@ export function KubeTreeRow({
       className={`kube-tree-row ${active ? 'active' : ''} ${foldable ? 'group' : ''}`}
       style={{ top }}
       onClick={select}
+      onDoubleClick={open}
+      onContextMenu={(event) => {
+        if (!menu) return;
+        event.preventDefault();
+        menu({ x: event.clientX, y: event.clientY });
+      }}
       title={cells.title}
     >
       <span className="kube-tree-name" style={{ paddingLeft: row.depth * 16 }}>

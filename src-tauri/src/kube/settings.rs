@@ -62,6 +62,28 @@ pub fn check_namespace(name: &str) -> Result<()> {
     }
 }
 
+/// A pod name, from the cluster or the screen: DNS subdomain rules.
+pub fn check_pod(name: &str) -> Result<()> {
+    let edge = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit();
+    let valid = name.len() <= 253
+        && name.starts_with(edge)
+        && name.ends_with(edge)
+        && name.chars().all(|c| edge(c) || c == '-' || c == '.');
+    if valid {
+        Ok(())
+    } else {
+        Err("파드 이름이 올바르지 않습니다.".into())
+    }
+}
+
+/// A DNS label, the same rule as a namespace except that it cannot be empty.
+pub fn check_container(name: &str) -> Result<()> {
+    if name.is_empty() || check_namespace(name).is_err() {
+        return Err("컨테이너 이름이 올바르지 않습니다.".into());
+    }
+    Ok(())
+}
+
 /// The word is written into a command line, so only characters that mean nothing to a shell pass.
 fn plain_word(word: &str) -> bool {
     !word.is_empty()
@@ -150,6 +172,19 @@ mod tests {
         for bad in ["-a", "a-", "A", "a_b", "a b", &"a".repeat(64)] {
             assert!(check_namespace(bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn pods_and_containers_follow_the_kubernetes_name_rules() {
+        for good in ["a", "web-8544d7896d-hfw9p", "web-0", "pod.with.dots"] {
+            assert!(check_pod(good).is_ok(), "{good}");
+        }
+        for bad in ["", "-a", "a-", "A", "a b", "a;b", "$(id)", "a\nb"] {
+            assert!(check_pod(bad).is_err(), "{bad:?}");
+            assert!(check_container(bad).is_err(), "{bad:?}");
+        }
+        assert!(check_container("main").is_ok());
+        assert!(check_container("a.b").is_err());
     }
 
     #[test]

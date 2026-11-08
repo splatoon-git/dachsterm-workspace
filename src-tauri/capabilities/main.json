@@ -106,6 +106,8 @@
     "allow-kube-detect",
     "allow-kube-save",
     "allow-kube-snapshot",
+    "allow-kube-detail",
+    "allow-kube-logs",
     "allow-git-config-read",
     "allow-git-config-preview",
     "allow-git-config-write",
@@ -138,11 +140,12 @@
     "allow-log-action",
     "allow-log-auto",
     "allow-log-auto-get",
-    "allow-podtree-inspect",
-    "allow-podtree-open",
-    "allow-podtree-input",
-    "allow-podtree-resize",
-    "allow-podtree-ack",
-    "allow-podtree-close"
+    "allow-kube-terminal-inspect",
+    "allow-kube-terminal-open",
+    "allow-kube-terminal-input",
+    "allow-kube-terminal-resize",
+    "allow-kube-terminal-ack",
+    "allow-kube-terminal-close",
+    "allow-kube-terminal-probe"
   ]
 }
