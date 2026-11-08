@@ -164,6 +164,7 @@ pub fn run() {
                     }
                 });
             }
+            app.manage(kube::Slots::default());
             app.manage(AppState {
                 instance_lock,
                 locals: Arc::default(),
@@ -249,6 +250,7 @@ pub fn run() {
             git_diff::git_diff_file,
             kube::kube_detect,
             kube::kube_save,
+            kube::kube_snapshot,
             agent_keys::agent_sign_reply,
             local_agent::settings::local_agent_settings,
             local_agent::settings::local_agent_save,

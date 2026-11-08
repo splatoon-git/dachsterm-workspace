@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KubeCopyResult } from '../../../src/features/kube/KubeWorkspace';
 import type { Detection, KubeDisplay } from '../../../src/features/kube/kubeModel';
+import type { Snapshot, SnapshotKind } from '../../../src/features/kube/snapshotTypes';
 import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
 import '../../../src/app/styles.css';
@@ -15,6 +16,10 @@ declare global {
       /** What the terminal says when a command is typed. */
       copyResult: KubeCopyResult;
       persist: boolean;
+      /** Answers to `kube_snapshot` by kind. A kind that is absent has an unreachable cluster. */
+      snapshots?: Partial<Record<SnapshotKind, Snapshot>>;
+      /** `visible` starts true; the spec turns it off through `setVisible`. */
+      setVisible?: (visible: boolean) => void;
       calls: { command: string; args: Record<string, unknown> }[];
       copied: string[];
     };
@@ -33,6 +38,16 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         const detections = state.detections;
         return structuredClone(detections.length > 1 ? detections.shift() : detections[0]);
       }
+      if (command === 'kube_snapshot') {
+        const answer = state.snapshots?.[args.kind as SnapshotKind];
+        if (answer) return structuredClone(answer);
+        return {
+          state: { kind: 'unreachable' },
+          data: null,
+          collectedAt: Date.now(),
+          elapsedMs: 1,
+        };
+      }
       return null;
     },
   },
@@ -43,10 +58,15 @@ const { KubeWorkspace } = await import('../../../src/features/kube/KubeWorkspace
 
 function Harness() {
   const [display, setDisplay] = useState<Exclude<KubeDisplay, 'off'>>('workspace');
+  const [visible, setVisible] = useState(true);
+  state.setVisible = setVisible;
   return (
     <KubeWorkspace
       connectionId="connection"
       persist={state.persist}
+      session="profile"
+      visible={visible}
+      focused
       display={display}
       showTerminal={() => setDisplay('terminal')}
       showWorkspace={() => setDisplay('workspace')}

@@ -38,8 +38,11 @@ impl Kubectl<'_> {
     }
     /// Always names the context: the global current-context is neither used nor changed.
     pub fn cluster(&self, context: &str, args: &str) -> String {
+        self.cluster_within(context, 8, args)
+    }
+    pub fn cluster_within(&self, context: &str, seconds: u32, args: &str) -> String {
         format!(
-            "{} --context {} --request-timeout=8s {args}",
+            "{} --context {} --request-timeout={seconds}s {args}",
             self.prefix(),
             quote(context),
         )
@@ -63,14 +66,32 @@ impl Runner<'_> {
             })
     }
 
-    /// Runs a kubectl command and returns its stdout, or the state that stopped it.
+    /// Runs a setup check. It lists almost nothing, so running out of time means no API server.
     pub async fn kubectl(&self, command: &str) -> Result<Output, KubeState> {
+        self.kubectl_bounded(command, KUBECTL)
+            .await
+            .map_err(|state| match state {
+                KubeState::TimedOut => KubeState::Unreachable,
+                KubeState::TooLarge => KubeState::Unknown {
+                    message: String::from(remote_exec::Failure::TooLarge),
+                },
+                state => state,
+            })
+    }
+
+    /// Runs a kubectl command and returns its stdout, or the state that stopped it.
+    pub async fn kubectl_bounded(
+        &self,
+        command: &str,
+        limits: Limits,
+    ) -> Result<Output, KubeState> {
         let output = self
-            .script(command, KUBECTL)
+            .script(command, limits)
             .await
             .map_err(|failed| match failed {
                 Failed::ChannelLimit => KubeState::ChannelLimit,
-                Failed::Stopped(remote_exec::Failure::TimedOut) => KubeState::Unreachable,
+                Failed::Stopped(remote_exec::Failure::TimedOut) => KubeState::TimedOut,
+                Failed::Stopped(remote_exec::Failure::TooLarge) => KubeState::TooLarge,
                 Failed::Stopped(failure) => KubeState::Unknown {
                     message: String::from(failure),
                 },

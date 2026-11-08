@@ -105,6 +105,7 @@
     "allow-git-apply",
     "allow-kube-detect",
     "allow-kube-save",
+    "allow-kube-snapshot",
     "allow-git-config-read",
     "allow-git-config-preview",
     "allow-git-config-write",

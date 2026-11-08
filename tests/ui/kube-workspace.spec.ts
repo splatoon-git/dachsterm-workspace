@@ -57,7 +57,7 @@ test('the first connection asks for a context and saves the choice', async ({ pa
   await expect(page.locator('.kube-setup-found')).toContainText('/usr/local/bin/kubectl');
   await page.getByLabel('namespace', { exact: true }).selectOption('web');
   await page.getByRole('button', { name: '시작', exact: true }).click();
-  await expect(page.locator('.kube-empty')).toContainText('대시보드');
+  await expect(page.getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   await expect(page.getByRole('tablist', { name: '쿠버네티스 화면' })).toContainText('dev');
   const [save] = await calls(page, 'kube_save');
   expect(save.args.kube).toEqual({
@@ -91,14 +91,14 @@ test('an account that cannot list namespaces types one', async ({ page }) => {
   await expect(page.getByText('이 계정은 namespace 목록을 볼 수 없어')).toBeVisible();
   await page.getByLabel('namespace', { exact: true }).fill('team-a');
   await page.getByRole('button', { name: '시작', exact: true }).click();
-  await expect(page.locator('.kube-empty')).toBeVisible();
+  await expect(page.getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   const [save] = await calls(page, 'kube_save');
   expect((save.args.kube as { namespace: string }).namespace).toBe('team-a');
 });
 
 test('a saved session opens directly', async ({ page }) => {
   await open(page, [found({ kind: 'ready' }, { saved })]);
-  await expect(page.locator('.kube-empty')).toContainText('대시보드');
+  await expect(page.getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   await expect(page.getByLabel('context', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: '쿠버네티스 화면' })).toContainText('prod');
   expect(await calls(page, 'kube_save')).toEqual([]);
@@ -106,7 +106,7 @@ test('a saved session opens directly', async ({ page }) => {
 
 test('a saved cluster that is down keeps the screen and says so', async ({ page }) => {
   await open(page, [found({ kind: 'unreachable' }, { saved })]);
-  await expect(page.locator('.kube-empty')).toBeVisible();
+  await expect(page.getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   await expect(page.getByRole('tablist', { name: '쿠버네티스 화면' })).toContainText(
     '클러스터 연결 불가',
   );
@@ -133,7 +133,7 @@ test('an unreadable config offers the copy and a recheck that finishes by itself
   );
   await expect(tabs).toContainText('Enter를 누르고');
   await tabs.getByRole('button', { name: '다시 확인', exact: true }).click();
-  await expect(page.locator('.kube-empty')).toContainText('대시보드');
+  await expect(page.getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   const [save] = await calls(page, 'kube_save');
   expect((save.args.kube as { context: string }).context).toBe('only');
 });
@@ -186,7 +186,7 @@ test('a missing kubectl takes a typed command', async ({ page }) => {
 test('a terminal session is not saved', async ({ page }) => {
   await open(page, [found({ kind: 'ready' })], { persist: false });
   await page.getByRole('button', { name: '시작', exact: true }).click();
-  await expect(page.locator('.kube-empty')).toBeVisible();
+  await expect(page.getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   expect(await calls(page, 'kube_save')).toEqual([]);
 });
 

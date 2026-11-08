@@ -14,6 +14,11 @@ pub enum KubeState {
     Unreachable,
     /// The server would not open another channel on this connection (`MaxSessions`).
     ChannelLimit,
+    /// `top` has no metrics-server to read from. Requests and limits are shown instead.
+    MetricsMissing,
+    /// A query hit the app's time or output limit. Set by the runner, not read from kubectl's words.
+    TimedOut,
+    TooLarge,
     Unknown {
         message: String,
     },
@@ -51,6 +56,11 @@ pub fn classify(exit: Option<u32>, stderr: &[u8]) -> KubeState {
         KubeState::Forbidden
     } else if has("context was not found") {
         KubeState::ContextMissing
+    } else if has("Metrics API not available")
+        || has("metrics not available yet")
+        || has("Metrics not available")
+    {
+        KubeState::MetricsMissing
     } else if has("was refused") || has("Unable to connect to the server") {
         KubeState::Unreachable
     } else if has("error loading config file") && has("permission denied") {
@@ -112,6 +122,10 @@ mod tests {
             (
                 "error: stat /home/probe/.kube/none: no such file or directory",
                 KubeState::ConfigMissing,
+            ),
+            (
+                "error: Metrics API not available",
+                KubeState::MetricsMissing,
             ),
         ];
         for (line, expected) in cases {

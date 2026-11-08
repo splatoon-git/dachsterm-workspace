@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-snapshot"
+description = "Enables the kube_snapshot command without any pre-configured scope."
+commands.allow = ["kube_snapshot"]
+
+[[permission]]
+identifier = "deny-kube-snapshot"
+description = "Denies the kube_snapshot command without any pre-configured scope."
+commands.deny = ["kube_snapshot"]

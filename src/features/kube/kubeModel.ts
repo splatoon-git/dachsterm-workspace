@@ -1,4 +1,5 @@
 import type { KubeSettings } from '../../lib/ipc';
+import { stateNote } from './polling';
 
 /** Mirrors `KubeState` in `kube/state.rs`, which is the only reader of kubectl's output. */
 export type KubeState =
@@ -11,6 +12,9 @@ export type KubeState =
   | { kind: 'contextMissing' }
   | { kind: 'unreachable' }
   | { kind: 'channelLimit' }
+  | { kind: 'metricsMissing' }
+  | { kind: 'timedOut' }
+  | { kind: 'tooLarge' }
   | { kind: 'unknown'; message: string };
 
 export type Detection = {
@@ -45,6 +49,9 @@ export function setupStep(detection: Detection): SetupStep {
     case 'configMissing':
       return 'manual';
     case 'channelLimit':
+    case 'metricsMissing':
+    case 'timedOut':
+    case 'tooLarge':
     case 'unknown':
       return 'retry';
   }
@@ -107,6 +114,11 @@ export function setupGuide(state: KubeState): Guide | null {
         title: '서버의 동시 세션 한도에 걸렸습니다',
         body: '이 연결에서 이미 많은 작업이 실행 중입니다. 파일 전송이나 다른 탭을 줄이고 다시 확인하세요.',
       };
+    // Only polling reports these three; setup checks read too little to reach them.
+    case 'metricsMissing':
+    case 'timedOut':
+    case 'tooLarge':
+      return { title: '쿠버네티스 조회가 끝나지 않았습니다', body: stateNote(state) };
     case 'unknown':
       return { title: '쿠버네티스 확인에 실패했습니다', body: state.message };
   }
@@ -144,10 +156,10 @@ export type KubeMenu = 'open' | 'close' | 'fixed';
 export const kubeMenu = (workspace: 'terminal' | 'kubernetes' | undefined, opened: boolean) =>
   workspace === 'kubernetes' ? 'fixed' : opened ? 'close' : 'open';
 
-/** Fixed screens of the workspace; KV.2 and later fill them. */
+/** Fixed screens of the workspace, the first screen first. KV.3 and later fill the others. */
 export const kubeScreens = [
-  { id: 'dashboard', label: '대시보드' },
   { id: 'tree', label: '트리' },
+  { id: 'dashboard', label: '대시보드' },
   { id: 'ingress', label: '인그레스' },
   { id: 'logs', label: '로그 검색' },
 ] as const;
