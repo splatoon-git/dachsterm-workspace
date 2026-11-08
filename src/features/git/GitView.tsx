@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { TerminalSession } from '../terminal/session';
+import { CommitGraph } from './CommitGraph';
 import { GitViewHeader } from './GitViewHeader';
 import { GitViewList } from './GitViewList';
 import { useGitViewMenu } from './GitViewMenu';
@@ -75,9 +76,14 @@ export function GitView({
   const model = useGitView(session);
   const [tree, setTree] = useState(readTree);
   const [notice, setNotice] = useState('');
+  const [graphRefresh, setGraphRefresh] = useState(0);
   const ready = model.state === 'ready' ? model : null;
   const repo: GitViewRepo | null = ready?.result?.kind === 'repo' ? ready.result : null;
   const groups = useMemo(() => (repo ? groupEntries(repo.entries) : []), [repo]);
+  const refresh = () => {
+    ready?.refresh();
+    setGraphRefresh((n) => n + 1);
+  };
   const menu = useGitViewMenu({
     repo,
     tree,
@@ -85,7 +91,7 @@ export function GitView({
       setTree(next);
       saveTree(next);
     },
-    refresh: () => ready?.refresh(),
+    refresh,
     review,
     notice: setNotice,
   });
@@ -128,7 +134,7 @@ export function GitView({
   const error = notice || (!model.result || repo ? model.error : '');
   return (
     <div className="git-view">
-      <GitViewHeader repo={repo} refresh={model.refresh} more={menu.more} />
+      <GitViewHeader repo={repo} refresh={refresh} more={menu.more} />
       <div className="git-view-body">
         {model.result ? (
           <ResultBody result={model.result} remote={model.remote} retry={model.refresh}>
@@ -150,6 +156,15 @@ export function GitView({
           </p>
         )}
       </div>
+      {repo && session && (
+        <CommitGraph
+          key={`${session.connectionId}\n${repo.root}`}
+          session={session}
+          folder={repo.root}
+          version={`${repo.oid}\n${repo.upstream}\n${repo.ahead}\n${repo.behind}\n${graphRefresh}`}
+          notice={setNotice}
+        />
+      )}
       {menu.menu}
     </div>
   );

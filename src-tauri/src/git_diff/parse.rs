@@ -83,7 +83,7 @@ fn section(fields: &mut std::slice::Iter<'_, &[u8]>) -> Vec<Vec<u8>> {
 }
 
 /// `--name-status -z`, NUL, `--numstat -z`, NUL, `ls-files --others -z`.
-pub(super) fn parse_list(stdout: &[u8]) -> DiffList {
+pub(crate) fn parse_list(stdout: &[u8]) -> DiffList {
     let all: Vec<&[u8]> = stdout.split(|b| *b == 0).collect();
     let mut fields = all.iter();
     let names = section(&mut fields);
