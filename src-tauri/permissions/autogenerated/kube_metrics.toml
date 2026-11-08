@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-metrics"
+description = "Enables the kube_metrics command without any pre-configured scope."
+commands.allow = ["kube_metrics"]
+
+[[permission]]
+identifier = "deny-kube-metrics"
+description = "Denies the kube_metrics command without any pre-configured scope."
+commands.deny = ["kube_metrics"]

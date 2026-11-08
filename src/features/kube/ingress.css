@@ -1,0 +1,90 @@
+/* The ingress screen of the Kubernetes workspace. */
+.kube-ingress {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-sm);
+  font-size: var(--font-small);
+}
+.kube-ingress-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.kube-ingress-tools input[type='search'] {
+  flex: 0 1 280px;
+  min-width: 120px;
+}
+.kube-ingress-tools label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.kube-ingress-stale {
+  color: var(--color-status-warning);
+}
+.kube-ingress-note {
+  margin: 0 0 var(--space-xs);
+  color: var(--color-text-secondary);
+}
+.kube-ingress-table {
+  min-width: 720px;
+}
+.kube-ingress-list,
+.kube-ingress-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kube-ingress-row {
+  display: grid;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 24px;
+  height: auto;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+button.kube-ingress-row:hover {
+  background: var(--color-action-hover);
+}
+.kube-ingress-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kube-ingress-row.host {
+  grid-template-columns: minmax(0, 2fr) 56px 48px 48px 48px 72px minmax(0, 2fr);
+  font-weight: 500;
+}
+.kube-ingress-row.head {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+.kube-ingress-row.path {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) 96px minmax(0, 1.5fr) 72px minmax(
+      0,
+      1fr
+    ) 32px;
+  padding-left: var(--space-lg);
+  color: var(--color-text-secondary);
+}
+.kube-ingress-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kube-ingress-bad,
+.kube-ingress-problem {
+  color: var(--color-status-error);
+}

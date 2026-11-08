@@ -92,8 +92,15 @@ pub enum ShellCheck {
     },
 }
 
-/// Measured against containerd in KV.4 (docs/verification/kubernetes-workspace.md).
+/// Measured against containerd in KV.0 and KV.4 (docs/verification/kubernetes-workspace.md). Once
+/// kubectl has reached the container, 126 and 127 are the container's codes rather than the
+/// missing-kubectl signal, and kubectl says so on its own line.
 pub fn classify_shell(exit: Option<u32>, stderr: &[u8]) -> ShellCheck {
+    if matches!(exit, Some(126 | 127))
+        && String::from_utf8_lossy(stderr).contains("command terminated with exit code")
+    {
+        return ShellCheck::NoShell;
+    }
     let state = classify(exit, stderr);
     let KubeState::Unknown { message } = &state else {
         return match state {
@@ -101,13 +108,50 @@ pub fn classify_shell(exit: Option<u32>, stderr: &[u8]) -> ShellCheck {
             state => ShellCheck::Blocked { state },
         };
     };
-    if message.contains("exec: \"sh\"") || message.contains("executable file not found") {
+    if message.contains("exec: \"sh\"")
+        || message.contains("executable file not found")
+        || (message.contains("exec") && message.contains("no such file or directory"))
+    {
         ShellCheck::NoShell
     } else if message.contains("container not found") || message.contains("not created or running")
     {
         ShellCheck::NotRunning
     } else {
         ShellCheck::Blocked { state }
+    }
+}
+
+/// Why an address gave no metrics. It is an answer, not a failure: most ports have none.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NoMetrics {
+    NotFound,
+    Refused,
+    NotPrometheus,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ProxyRead {
+    Answered,
+    Absent(NoMetrics),
+    Blocked(KubeState),
+}
+
+/// `get --raw` through a pod's proxy. Both words were measured in KV.0: a 404 from the port, and a
+/// port nothing listens on. A pod that is gone also says NotFound, and that one is a real failure.
+pub fn classify_proxy(exit: Option<u32>, stderr: &[u8]) -> ProxyRead {
+    match classify(exit, stderr) {
+        KubeState::Ready => ProxyRead::Answered,
+        KubeState::NotFound
+            if String::from_utf8_lossy(stderr)
+                .contains("could not find the requested resource") =>
+        {
+            ProxyRead::Absent(NoMetrics::NotFound)
+        }
+        KubeState::Unknown { message } if message.contains("connection refused") => {
+            ProxyRead::Absent(NoMetrics::Refused)
+        }
+        state => ProxyRead::Blocked(state),
     }
 }
 
@@ -222,6 +266,66 @@ mod tests {
         ));
         assert!(!no_previous_logs(Some(0), b"crashing-now\n", b""));
         assert!(!no_previous_logs(Some(1), b"", b"error: something else"));
+    }
+
+    #[test]
+    fn a_container_without_sh_is_told_apart_from_a_missing_kubectl() {
+        assert_eq!(
+            classify_shell(Some(127), b"command terminated with exit code 127"),
+            ShellCheck::NoShell
+        );
+        assert_eq!(
+            classify_shell(Some(127), b"sh: 1: /opt/kubectl: not found"),
+            ShellCheck::Blocked {
+                state: KubeState::KubectlMissing
+            }
+        );
+        let stat = "error: Internal error occurred: error executing command in container: failed to exec in container: failed to start exec \"f7\": OCI runtime exec failed: exec failed: unable to start container process: exec: \"/bin/cat\": stat /bin/cat: no such file or directory";
+        assert_eq!(
+            classify_shell(Some(1), stat.as_bytes()),
+            ShellCheck::NoShell
+        );
+        let forbidden = "Error from server (Forbidden): pods \"a\" is forbidden: User \"p\" cannot create resource \"pods/exec\" in API group \"\" in the namespace \"n\"";
+        assert_eq!(
+            classify_shell(Some(1), forbidden.as_bytes()),
+            ShellCheck::Blocked {
+                state: KubeState::Forbidden
+            }
+        );
+    }
+
+    /// The lines are what real kubectl printed in KV.0.
+    #[test]
+    fn a_port_without_metrics_is_an_answer_and_a_gone_pod_is_not() {
+        assert_eq!(classify_proxy(Some(0), b""), ProxyRead::Answered);
+        assert_eq!(
+            classify_proxy(
+                Some(1),
+                b"Error from server (NotFound): the server could not find the requested resource"
+            ),
+            ProxyRead::Absent(NoMetrics::NotFound)
+        );
+        assert_eq!(
+            classify_proxy(
+                Some(1),
+                b"Error from server (ServiceUnavailable): error trying to reach service: dial tcp 10.244.0.5:9: connect: connection refused"
+            ),
+            ProxyRead::Absent(NoMetrics::Refused)
+        );
+        assert_eq!(
+            classify_proxy(
+                Some(1),
+                b"Error from server (NotFound): pods \"api-1\" not found"
+            ),
+            ProxyRead::Blocked(KubeState::NotFound)
+        );
+        assert_eq!(
+            classify_proxy(
+                Some(1),
+                b"Error from server (Forbidden): pods \"api-1\" is forbidden: cannot get resource \"pods/proxy\""
+            ),
+            ProxyRead::Blocked(KubeState::Forbidden)
+        );
     }
 
     #[test]

@@ -68,6 +68,33 @@ pub const EVENTS: &str = concat!(
     "{{with .message}}{{urlquery .}}{{end}}\n{{end}}",
 );
 
+/// `kube_ingress`. Seven fields, with `host;path;pathType;service;port|` for each path. A path is
+/// the one value here the API server leaves free, so it goes through `urlquery`.
+pub const INGRESSES: &str = concat!(
+    "{{range .items}}{{.metadata.namespace}}\t{{.metadata.name}}\t",
+    "{{with .spec.ingressClassName}}{{.}}{{else}}{{with .metadata.annotations}}",
+    "{{index . \"kubernetes.io/ingress.class\"}}{{end}}{{end}}\t",
+    "{{range .status.loadBalancer.ingress}}{{with .ip}}{{.}}{{end}}{{with .hostname}}{{.}}{{end}},{{end}}\t",
+    "{{range .spec.tls}}{{with .secretName}}{{.}}{{end}};{{range .hosts}}{{.}},{{end}}|{{end}}\t",
+    "{{with .spec.defaultBackend}}{{with .service}}{{.name}};",
+    "{{with .port}}{{if .number}}{{.number}}{{else}}{{.name}}{{end}}{{end}}{{end}}{{end}}\t",
+    "{{range .spec.rules}}{{$h := .host}}{{with .http}}{{range .paths}}",
+    "{{$h}};{{with .path}}{{urlquery .}}{{end}};{{.pathType}};",
+    "{{with .backend.service}}{{.name}};",
+    "{{with .port}}{{if .number}}{{.number}}{{else}}{{.name}}{{end}}{{end}}{{else}};{{end}}|",
+    "{{end}}{{else}}{{$h}};;;;|{{end}}{{end}}\n{{end}}",
+);
+
+/// Names only. `-o name` would leave out the namespace when listing every namespace.
+pub const SECRET_NAMES: &str =
+    "{{range .items}}{{.metadata.namespace}}\t{{.metadata.name}}\n{{end}}";
+
+pub const INGRESS_CONTROLLERS: &str = concat!(
+    "{{range .items}}{{.metadata.namespace}}\t{{.metadata.name}}\t",
+    "{{with .metadata.annotations}}{{index . \"kubectl.kubernetes.io/default-container\"}}{{end}}\t",
+    "{{(index .spec.containers 0).name}}\n{{end}}",
+);
+
 /// `kube_detail`'s events for one pod: Normal and Warning alike, unlike `EVENTS` above.
 pub const POD_EVENTS: &str = concat!(
     "{{range .items}}{{.type}}\t",

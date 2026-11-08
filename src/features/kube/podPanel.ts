@@ -1,13 +1,15 @@
 import type { ContainerDetail, PodEvent, PodOverview } from './detailTypes';
 import { ownerOf } from './tree';
 
-export type PodPanelTab = 'logs' | 'cause' | 'overview' | 'events' | 'yaml' | 'relations';
+export type PodPanelTab =
+  'logs' | 'cause' | 'overview' | 'runtime' | 'events' | 'yaml' | 'relations';
 export type PodPanelTarget = { namespace: string; name: string; tab: PodPanelTab };
 
 const tabLabels: { id: PodPanelTab; label: string }[] = [
   { id: 'logs', label: '로그' },
   { id: 'cause', label: '장애 원인' },
   { id: 'overview', label: '개요' },
+  { id: 'runtime', label: '런타임' },
   { id: 'events', label: '이벤트' },
   { id: 'yaml', label: 'YAML' },
   { id: 'relations', label: '관계' },
@@ -92,7 +94,8 @@ export function importantEvents(events: PodEvent[], limit: number): PodEvent[] {
 const STORE_PREFIX = 'dachsterm.kube.container.';
 const MAX_REMEMBERED = 200;
 
-const workloadKey = (pod: PodOverview) => {
+/** `namespace/Kind/name`, or `namespace/pod` for a pod with no owner. */
+export const workloadKey = (pod: PodOverview) => {
   const owner = ownerOf(pod);
   return `${pod.namespace}/${owner ? `${owner.kind}/${owner.name}` : pod.name}`;
 };

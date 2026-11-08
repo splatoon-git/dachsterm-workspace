@@ -166,6 +166,7 @@ pub fn run() {
                 });
             }
             app.manage(kube::Slots::default());
+            app.manage(kube::WatchSlots::default());
             app.manage(kube::LogSearches::default());
             app.manage(AppState {
                 instance_lock,
@@ -254,10 +255,13 @@ pub fn run() {
             kube::kube_save,
             kube::kube_snapshot,
             kube::kube_detail,
+            kube::kube_ingress,
             kube::kube_logs,
             kube::kube_log_search,
             kube::kube_log_cancel,
             kube::kube_terminal_probe,
+            kube::kube_metrics,
+            kube::kube_probe,
             agent_keys::agent_sign_reply,
             local_agent::settings::local_agent_settings,
             local_agent::settings::local_agent_save,

@@ -20,6 +20,7 @@ const subscribeVisibility = (change: () => void) => {
   return () => document.removeEventListener('visibilitychange', change);
 };
 const documentVisible = () => document.visibilityState !== 'hidden';
+export const useDocumentVisible = () => useSyncExternalStore(subscribeVisibility, documentVisible);
 
 /**
  * Polls while `shown`. Each kind waits for its own previous request, and the backend holds a
@@ -32,7 +33,7 @@ export function useKubeSnapshots(id: string, settings: KubeSettings | null, show
     history: emptyHistory(),
   }));
   const [now, setNow] = useState(() => Date.now());
-  const visible = useSyncExternalStore(subscribeVisibility, documentVisible);
+  const visible = useDocumentVisible();
   const schedule = useRef<Schedule | null>(null);
   /** Set only while polling. A request that outlives a hide finds nothing here and stops. */
   const pump = useRef<(() => void) | null>(null);

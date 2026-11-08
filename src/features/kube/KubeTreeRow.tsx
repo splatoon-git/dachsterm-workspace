@@ -1,3 +1,4 @@
+import { useContext } from 'react';
 import type { TreeRow } from './tree';
 import {
   formatAge,
@@ -8,6 +9,7 @@ import {
   usedOfTotal,
 } from './treeFormat';
 import type { Health } from './treePods';
+import { WorkersContext } from './workerContext';
 
 type Cell = { text: string; title?: string };
 type Cells = {
@@ -136,6 +138,7 @@ export function KubeTreeRow({
 }) {
   const cells = cellsOf(row, metrics, now);
   const foldable = row.type === 'group' || row.type === 'nodes';
+  const worker = useContext(WorkersContext).cells.get(row.type === 'group' ? row.group.id : '');
   return (
     <div
       id={domId}
@@ -187,8 +190,10 @@ export function KubeTreeRow({
       <span title={cells.cpu.title}>{cells.cpu.text}</span>
       <span title={cells.memory.title}>{cells.memory.text}</span>
       <span>{cells.node}</span>
-      {/* KV.9 shows the app workers here for a workload being watched, such as "사용 8/8". */}
-      <span />
+      <span className="kube-worker-cell" title={worker?.title || undefined}>
+        {worker?.text}
+        {worker?.suspect && <b> ⚠ 의심</b>}
+      </span>
       <span>{cells.age}</span>
     </div>
   );

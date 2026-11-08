@@ -50,7 +50,7 @@ export function LogSearchForm({
             </option>
           ))}
         </select>
-        {form.scope.kind !== 'all' && (
+        {form.scope.kind !== 'all' && form.scope.kind !== 'controller' && (
           <>
             <input
               type="search"
