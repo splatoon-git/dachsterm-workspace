@@ -18,7 +18,7 @@ describe('theme contract', () => {
   it('preserves the classic default and safely falls back for unknown persisted IDs', () => {
     expect(defaultTheme.id).toBe('pms-retro-light');
     expect(new Set(themes.map((theme) => theme.id)).size).toBe(themes.length);
-    expect(themes).toHaveLength(12);
+    expect(themes).toHaveLength(16);
     expect(getTheme('removed')).toBe(defaultTheme);
     expect(getTheme(null)).toBe(defaultTheme);
     for (const theme of themes) {

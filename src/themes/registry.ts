@@ -13,6 +13,12 @@ import {
   greenTheme,
   amberTheme,
 } from './presets/collection';
+import {
+  retroLightTheme,
+  retroDarkTheme,
+  retroBlueLightTheme,
+  retroBlueDarkTheme,
+} from './presets/retro';
 export const themes: readonly ThemeDefinition[] = [
   lightTheme,
   whiteTheme,
@@ -22,6 +28,10 @@ export const themes: readonly ThemeDefinition[] = [
   catppuccinTheme,
   gruvboxLightTheme,
   gruvboxDarkTheme,
+  retroLightTheme,
+  retroDarkTheme,
+  retroBlueLightTheme,
+  retroBlueDarkTheme,
   solarizedLightTheme,
   solarizedDarkTheme,
   greenTheme,

@@ -15,7 +15,8 @@ async function launch() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   await new Promise((resolve) => server.close(resolve));
-  app = spawn(path.resolve('target/debug/dachsterm.exe'), [], {
+  // DACHSTERM_EXE points at a build kept apart from a running `tauri dev`, which locks target/.
+  app = spawn(path.resolve(process.env.DACHSTERM_EXE ?? 'target/debug/dachsterm.exe'), [], {
     stdio: 'ignore',
     windowsHide: true,
     env: {
@@ -73,6 +74,10 @@ try {
     ['Catppuccin Mocha', 'catppuccin-mocha'],
     ['Gruvbox Light', 'gruvbox-light'],
     ['Gruvbox Dark', 'gruvbox-dark'],
+    ['Retro Light', 'retro-light'],
+    ['Retro Dark', 'retro-dark'],
+    ['Retro Blue Light', 'retro-blue-light'],
+    ['Retro Blue Dark', 'retro-blue-dark'],
     ['Solarized Light', 'solarized-light'],
     ['Solarized Dark', 'solarized-dark'],
     ['Terminal Green', 'terminal-green'],
@@ -80,7 +85,7 @@ try {
     ['DachsTerm Classic', 'pms-retro-light'],
   ]) {
     await page.getByRole('button', { name: '설정', exact: true }).click();
-    await expect(page.getByRole('radio')).toHaveCount(12);
+    await expect(page.getByRole('radio')).toHaveCount(16);
     await page.getByRole('radio', { name, exact: true }).check();
     await expect(page.locator('html')).toHaveAttribute('data-theme', id);
     await page.keyboard.press('Escape');
@@ -108,7 +113,7 @@ try {
   await expect(page.getByRole('radio', { name: 'Dracula', exact: true })).toBeChecked();
   await expect(page.getByRole('radio', { name: 'Dracula', exact: true })).toBeFocused();
   console.log(
-    'PASS native themes: 12 palettes, existing xterm, close focus, full app restart persistence.',
+    'PASS native themes: 16 palettes, existing xterm, close focus, full app restart persistence.',
   );
 } finally {
   // Close only the process created by this script; keep isolated data for failure inspection.
