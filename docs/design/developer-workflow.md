@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.14**, 설계일: **2026-11-07**(DX.11~DX.14는 2026-11-08 추가).
-- 현재 상태: **DX.1~DX.10 구현. 실제 CLI 에이전트·외부 push 수동 확인과 Mac 실기기(M.15) 대기. DX.11~DX.14 설계 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **DX.1~DX.10 구현. 실제 CLI 에이전트·외부 push 수동 확인과 Mac 실기기(M.15) 대기. DX.11~DX.14 설계 완료, DX.13.0 Windows 실측 완료(Mac 항목 대기), 나머지 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -559,11 +559,11 @@ DX.0처럼 구현 전에 확인하고 `docs/verification/agent-terminal.md`에 �
 | 탭 | 통로 | 셸에 넣는 값 |
 |---|---|---|
 | Windows 로컬 (PowerShell, 명령 프롬프트) | named pipe `\\.\pipe\dachsterm-agent-<난수>`. 현재 사용자만 접근하고 원격 클라이언트는 거부한다(`PIPE_REJECT_REMOTE_CLIENTS`) | `SSH_AUTH_SOCK`=그 pipe. Git for Windows의 기본 ssh는 pipe를 읽지 못하므로 `GIT_SSH`=`%SystemRoot%\System32\OpenSSH\ssh.exe`(존재할 때만) |
-| WSL | 위와 같은 Windows pipe | `WSLENV`로 `SSH_AUTH_SOCK`을 넘기고 `GIT_SSH`=`/mnt/c/Windows/System32/OpenSSH/ssh.exe`(interop). WSL의 git이 Windows `ssh.exe`를 실행하고, 그 `ssh.exe`가 pipe로 앱에 닿는다 |
+| WSL | 위와 같은 Windows pipe | wsl.exe의 Windows 환경에 `SSH_AUTH_SOCK`=그 pipe를 넣고 **`WSLENV`에는 넣지 않는다**. interop으로 실행된 Windows 프로그램은 그 wsl.exe의 환경을 상속하고, Linux 쪽 `SSH_AUTH_SOCK`은 그대로 둔다. `GIT_SSH`=`%SystemRoot%\System32\OpenSSH\ssh.exe`는 `WSLENV`에 `GIT_SSH/up`로 넣어 WSL 경로로 바꾼다. WSL의 git이 Windows `ssh.exe`를 실행하고, 그 `ssh.exe`가 pipe로 앱에 닿는다 |
 | macOS 로컬 | 앱 전용 0700 폴더 안의 Unix 소켓. 경로는 104바이트 이하 | `SSH_AUTH_SOCK`=그 소켓 |
 
 - **`GIT_SSH`를 고른 이유:** git의 우선순위는 `GIT_SSH_COMMAND` > `core.sshCommand` > `GIT_SSH`다. 가장 낮은 `GIT_SSH`를 써서 사용자가 직접 정한 ssh 설정을 덮지 않는다.
-- **WSL의 한계:** git만 Windows `ssh.exe`를 거친다. WSL 안에서 직접 치는 `ssh`는 Linux `ssh`라 이 agent에 닿지 않는다. WSL2는 Windows pipe와 Unix 소켓을 바로 잇지 못하고, 중계에는 `socat` 같은 서버 쪽 도구가 필요하기 때문이다(§10 후속). Windows `ssh.exe`는 Windows 쪽 `known_hosts`와 `~/.ssh/config`를 쓴다. 안내서에 적는다.
+- **WSL의 한계:** git만 Windows `ssh.exe`를 거친다. WSL 안에서 직접 치는 `ssh`는 Linux `ssh`라 이 agent에 닿지 않는다. WSL2는 Windows pipe와 Unix 소켓을 바로 잇지 못하고, 중계에는 `socat` 같은 서버 쪽 도구가 필요하기 때문이다(§10 후속). 대신 사용자가 WSL 안에서 쓰던 Linux agent 설정도 건드리지 않는다. Windows `ssh.exe`는 Windows 쪽 `known_hosts`와 `~/.ssh/config`를 쓴다. 안내서에 적는다.
 - **키 목록과 승인:** DX.11의 `agent_keys.rs`를 그대로 쓴다.
   - 앱의 키(`localAgentKeys`)와 이 PC의 시스템 agent 키를 합친다.
   - **앱의 키 서명은 그 탭에 카드를 띄워 승인받는다.** 로컬 셸 안에서 CLI 에이전트가 push할 수도 있기 때문이다.
@@ -572,11 +572,33 @@ DX.0처럼 구현 전에 확인하고 `docs/verification/agent-terminal.md`에 �
 - **승인 이벤트의 소유자:** DX.2의 요청은 연결 ID에 묶여 있다. 로컬 탭은 로컬 세션 ID를 쓰므로 "요청을 받을 탭" 식별자로 일반화한다. `Broker` 상태에 저장하지 않는 규칙은 같다.
 - **코드 위치:** `local_agent.rs` 새 파일이 pipe와 소켓 수신, 탭 수명을 맡는다. `local.rs`(490줄)에는 환경 변수를 넣는 호출만 더한다.
 
+**DX.13.0 실측 반영(2026-11-08, [기록](../verification/local-agent.md)):**
+
+- **WSL에서 `SSH_AUTH_SOCK`을 `WSLENV`로 넘기지 않는다.** 처음 설계는 `WSLENV`로 넘기는 것이었다.
+  - 넘기면 Linux 쪽에도 `\\.\pipe\...` 값이 생긴다. Linux `ssh-add`가 `No such file or directory`로 실패하고, 사용자가 WSL 안에서 쓰던 agent 설정을 가릴 수 있다.
+  - 넘기지 않아도 interop으로 실행된 Windows 프로그램은 자기를 띄운 wsl.exe의 Windows 환경을 받는다. 동시에 연 두 세션이 서로 다른 값을 받았다.
+  - 이 상속은 Microsoft 문서에 적혀 있지 않다. 그래서 아래 합격 항목으로 매번 확인한다. 어느 WSL 버전에서 깨지면 플래그 없는 `WSLENV`로 바꾸고, Linux 쪽 부작용을 안내서에 적는다.
+- **WSL SSH는 후속으로 미루지 않는다.**
+  - WSL git 2.43.0이 interop으로 Windows `ssh.exe`를 실행했고, 사용자 정의 pipe의 agent로 서명해 push했다.
+  - `GIT_SSH/up`는 `/mnt/c/WINDOWS/System32/OpenSSH/ssh.exe`로 바뀌고, git은 이를 ssh 변형(`-p`, `SendEnv`)으로 실행한다.
+- **처음 보는 호스트의 질문.** Windows `ssh.exe`의 호스트키 질문은 Windows 콘솔로 나온다.
+  - 앱 탭과 같은 ConPTY 안의 wsl.exe에서는 질문이 탭에 보이고 `yes`를 입력할 수 있었다.
+  - 콘솔 없이 띄운 wsl.exe에서는 보이지 않고 멈춘다. 앱 탭은 항상 ConPTY이므로 해당하지 않는다.
+- **`GIT_SSH/up` 변환 실패.** 자동 마운트를 끈 배포판처럼 `C:`가 마운트되지 않았으면 이렇게 된다.
+  - wsl.exe가 탭을 열 때 `wsl: Failed to translate '<경로>'` 한 줄을 출력한다.
+  - `GIT_SSH` 없이 시작하므로 git은 원래대로 Linux `ssh`를 쓴다. 안내서에 적는다.
+- **확인한 버전과 우선순위.** Windows 11 기본 OpenSSH 9.5p2(`ssh.exe`·`ssh-add.exe` 9.5.6.4)는 `SSH_AUTH_SOCK`의 사용자 정의 pipe를 쓴다.
+  - Git for Windows(2.51.2)에 동봉된 ssh는 pipe를 열기만 하고 실패한다(`Bad file descriptor`). 그래서 `GIT_SSH`가 필요하다.
+  - 우선순위 `GIT_SSH_COMMAND` > `core.sshCommand` > `GIT_SSH`는 실측과 같다.
+- **agent가 받는 메시지.** Windows `ssh.exe`는 서명 전에 type 27 확장(session-bind)을 보낸다. `ssh-add -D`는 type 19와 type 9를 보낸다. DX.11의 처리와 필터로 충분하다.
+
 **합격:**
 
 - `ssh-agent` 서비스가 꺼진 이 PC에서 PowerShell 탭의 `ssh-add -l`이 앱의 키를 보여준다.
 - 같은 탭에서 Git for Windows로 SSH push가 승인 후 성공하고, 거부하면 실패한다.
 - WSL 탭의 git push가 같은 방식으로 동작한다.
+- WSL 탭의 Linux 쪽 `SSH_AUTH_SOCK`은 바뀌지 않는다. interop으로 실행한 `ssh-add.exe -l`은 그 탭의 키를 보여준다. 동시에 연 두 WSL 탭은 서로의 pipe를 쓰지 않는다.
+- 처음 보는 호스트로 push하면 호스트키 질문이 PowerShell 탭과 WSL 탭에 보이고 답할 수 있다.
 - 탭을 닫으면 pipe와 소켓이 사라진다. 다른 사용자 계정에서는 pipe에 닿지 못한다.
 - Mac 로컬 탭은 실기기에서 확인한다.
 
@@ -585,21 +607,40 @@ DX.0처럼 구현 전에 확인하고 `docs/verification/agent-terminal.md`에 �
 **필요한 이유:** Windows·Mac 로컬 탭의 HTTPS는 이 PC의 Git 자격 증명 관리자가 이미 처리하므로 앱이 끼어들지 않는다. **WSL 안의 git만** Windows 자격 증명 관리자를 보지 못한다. DX.12의 요청 처리를 WSL 탭에 연결한다.
 
 - **설정:** `wslGitCredentials`(설정 창 › 에이전트, 기본 꺼짐). 새로 여는 WSL 탭부터 적용한다.
-- **helper:** 앱 실행 파일 자체를 helper로 쓴다. `dachsterm.exe git-credential get`으로 실행되면 앱 화면을 띄우지 않는다. `main.rs`에서 Tauri 초기화와 인스턴스 잠금보다 먼저 분기한다. 이 helper는 표준 입력의 요청을 탭의 pipe(`DACHSTERM_CREDENTIAL_PIPE`, `WSLENV`로 전달)로 보내고 답을 표준 출력으로 돌려준다. WSL에는 아무것도 설치하지 않는다.
-- **git에 알리는 방법:** WSL 실행 환경(`wsl_follow_env`)에 helper 설정을 더한다. 방식(`GIT_CONFIG_PARAMETERS`에 덧붙이기)과 `get`만 전달하는 규칙은 DX.12와 같다. helper 경로는 앱 실행 파일 경로를 WSL 경로로 바꾼 값이다. 자동 마운트 위치를 `/mnt`로 가정하지 않고 DX.13.0에서 확인한다.
+- **helper:** 앱 실행 파일 자체를 helper로 쓴다. `dachsterm.exe git-credential get`으로 실행되면 앱 화면을 띄우지 않는다. `main.rs`에서 Tauri 초기화와 인스턴스 잠금보다 먼저 분기한다. 이 helper는 표준 입력의 요청을 탭의 pipe(`DACHSTERM_CREDENTIAL_PIPE`)로 보내고 답을 표준 출력으로 돌려준다. 이 값은 wsl.exe의 Windows 환경에 넣고 `WSLENV`에는 넣지 않는다. helper는 interop으로 실행된 Windows 프로그램이라 그 값을 상속한다(DX.13의 `SSH_AUTH_SOCK`과 같음). WSL에는 아무것도 설치하지 않는다.
+- **git에 알리는 방법:** WSL 실행 환경(`wsl_follow_env`)에 helper 설정을 더한다. 방식(`GIT_CONFIG_PARAMETERS`에 덧붙이기)과 `get`만 전달하는 규칙은 DX.12와 같다.
+  - helper 경로는 탭을 열 때 미리 바꾸지 않는다. helper 값 안에서 **실행할 때 `wslpath -u '<앱 실행 파일의 Windows 경로>'`로 구한다.**
+    - 예: `!f() { [ "$1" = get ] || return 0; p=$(wslpath -u '<경로>') || return 0; exec "$p" git-credential get; }; f`
+    - 경로 안의 작은따옴표는 이스케이프한다. `GIT_CONFIG_PARAMETERS` 안의 인용은 DX.12.0 결과를 따른다.
+  - 자동 마운트 위치를 `/mnt`로 가정하지 않는다. 변환에 실패하면 `get`이 조용히 끝나고 git이 원래대로 묻는다.
+
+**DX.13.0 실측 반영(2026-11-08, [기록](../verification/local-agent.md)):**
+
+- **콘솔용 실행 파일을 따로 배포하지 않는다.** `windows_subsystem = "windows"`(PE 하위 시스템 2) 실행 파일을 WSL interop으로 실행한 결과다.
+  - 표준 입력·출력·오류, 종료 코드, 1MiB 왕복, git `credential fill`의 값 소비가 모두 이어졌다.
+  - ConPTY 탭 안에서도 같다.
+  - 시작 시간은 20회 중앙값 18ms로, 콘솔(30ms)과 `cmd.exe /c exit`(35ms)보다 빨랐다.
+  - 측정한 것은 150KB짜리 임시 실행 파일이다. 앱 실행 파일로 다시 재는 일은 구현 때 한다.
+  - debug 빌드는 `cfg_attr` 때문에 콘솔 하위 시스템이지만 똑같이 동작한다.
+- **helper 경로를 `WSLENV`의 `/p`로 넘기지 않는다.** 처음 설계는 "WSL 경로로 바꾼 값"을 미리 넣는 것이었다.
+  - `/p`는 마운트되지 않은 경로(`Z:\...`, UNC)에서 탭을 열 때마다 `wsl: Failed to translate '<경로>'`를 화면에 출력하고 변수를 뺀다.
+  - 실행 시점의 `wslpath`는 helper를 쓸 때만 실패하고, 실패해도 화면에 아무것도 남기지 않는다.
+  - `wsl.conf`의 `root`를 바꾼 배포판에서 `wslpath`와 `/p`의 결과는 이 PC 설정을 바꾸지 않아 확인하지 않았다. 두 변환 모두 WSL 자신의 마운트 정보를 쓰므로 `root`를 따를 것으로 보지만, 사실로 취급하지 않는다.
 - **처리:** 요청 파서, 승인 카드, 이 PC 쪽 출처(앱 저장 토큰, `git credential fill`, 직접 입력)는 DX.12의 `git_credential.rs`를 그대로 쓴다. 카드는 그 WSL 탭에 뜬다.
 - **합격:** WSL 탭에서 HTTPS 저장소 push가 Windows 자격 증명 관리자의 값으로 승인 후 성공한다. 관리자가 없으면 직접 입력으로 성공한다. 설정을 끄면 WSL의 git이 원래대로 동작한다.
 
 #### DX.13.0 — 실측 (게이트)
 
-| 질문 | 결과에 따른 처리 |
-|---|---|
-| Windows 11 기본 OpenSSH의 `ssh.exe`, `ssh-add.exe`가 `SSH_AUTH_SOCK`에 준 named pipe 경로를 쓰는가(버전 기록) | DX.13 Windows 방식 확정 |
-| Git for Windows가 `GIT_SSH`로 Windows `ssh.exe`를 쓰고, `core.sshCommand`가 있으면 그것을 우선하는가 | 환경 변수 확정 |
-| WSL2 git이 interop으로 Windows `ssh.exe`를 실행해 push하는가. `WSLENV`로 넘긴 `SSH_AUTH_SOCK`을 그 `ssh.exe`가 받는가 | DX.13 WSL 방식 확정. 안 되면 WSL SSH는 후속 |
-| `windows_subsystem = "windows"` 실행 파일을 WSL interop의 helper로 실행할 때 표준 입출력이 이어지는가. 시작 시간 | DX.14 helper 방식 확정. 안 되면 콘솔용 작은 실행 파일을 함께 배포 |
-| WSL 자동 마운트 위치(`wsl.conf`의 `root`)를 바꾼 경우의 경로 변환 | helper 경로 계산 확정 |
-| Finder로 실행한 Mac 앱이 띄운 로컬 셸에 시스템 `SSH_AUTH_SOCK`이 있는가(DX.0 미실측 항목과 같음) | DX.13 Mac에서 시스템 agent 합치기 확정 |
+2026-11-08 Windows 11에서 실측했다. 상세는 [검증 기록](../verification/local-agent.md)에 있고, 설계에 반영한 내용은 DX.13·DX.14의 "DX.13.0 실측 반영"에 있다.
+
+| 질문 | 결과에 따른 처리 | 결과 (2026-11-08) |
+|---|---|---|
+| Windows 11 기본 OpenSSH의 `ssh.exe`, `ssh-add.exe`가 `SSH_AUTH_SOCK`에 준 named pipe 경로를 쓰는가(버전 기록) | DX.13 Windows 방식 확정 | **쓴다.** OpenSSH_for_Windows 9.5p2(파일 9.5.6.4). 설계대로 |
+| Git for Windows가 `GIT_SSH`로 Windows `ssh.exe`를 쓰고, `core.sshCommand`가 있으면 그것을 우선하는가 | 환경 변수 확정 | **그렇다.** Git 2.51.2. 동봉 ssh는 pipe를 쓰지 못한다. 설계대로 |
+| WSL2 git이 interop으로 Windows `ssh.exe`를 실행해 push하는가. `WSLENV`로 넘긴 `SSH_AUTH_SOCK`을 그 `ssh.exe`가 받는가 | DX.13 WSL 방식 확정. 안 되면 WSL SSH는 후속 | **push한다. 받는다.** 그러나 `WSLENV` 없이 상속하는 쪽이 Linux를 건드리지 않아 그렇게 바꿨다 |
+| `windows_subsystem = "windows"` 실행 파일을 WSL interop의 helper로 실행할 때 표준 입출력이 이어지는가. 시작 시간 | DX.14 helper 방식 확정. 안 되면 콘솔용 작은 실행 파일을 함께 배포 | **이어진다.** 중앙값 18ms(임시 실행 파일). 설계대로 |
+| WSL 자동 마운트 위치(`wsl.conf`의 `root`)를 바꾼 경우의 경로 변환 | helper 경로 계산 확정 | 이 PC는 기본 `/mnt/`. 바꾼 경우는 미검증. 실행 시 `wslpath -u`로 바꿨다 |
+| Finder로 실행한 Mac 앱이 띄운 로컬 셸에 시스템 `SSH_AUTH_SOCK`이 있는가(DX.0 미실측 항목과 같음) | DX.13 Mac에서 시스템 agent 합치기 확정 | **대기(Mac)** |
 
 ## 5. IPC
 
@@ -676,7 +717,7 @@ DX.11·DX.12의 세션별 설정(`serde(default)`, 세션 JSON v3 내보내기·
 | 네이티브 (DX.11·DX.12) | 이 PC의 `ssh-agent`를 끈 그대로 승인·Passphrase 입력·push, 자격 증명 카드의 네 선택지 | `run-phase1 --native --agent-only` 확장 |
 | 실제 호스팅 (DX.11·DX.12) | GitHub, GitLab.com, Bitbucket의 SSH·HTTPS push. 자격 증명 관리자와 버전을 함께 기록 | 수동 |
 | macOS 실기기 (DX.11·DX.12) | Finder 앱에서 시스템 agent 없이 키 전달, 키체인 `git credential fill`, `/usr/bin/git` 설치 창이 뜨지 않음 | `mac-verify`, M.15에 추가 |
-| 네이티브 (DX.13·DX.14) | `ssh-agent`가 꺼진 이 PC의 PowerShell·WSL 탭에서 `ssh-add -l`, SSH push(Docker의 Git 서버), WSL HTTPS push, 탭 종료 후 pipe 소멸 | `test-local-native` 확장 |
+| 네이티브 (DX.13·DX.14) | `ssh-agent`가 꺼진 이 PC의 PowerShell·WSL 탭에서 `ssh-add -l`, SSH push(Docker의 Git 서버), WSL HTTPS push, 탭 종료 후 pipe 소멸, WSL Linux 쪽 `SSH_AUTH_SOCK` 불변과 두 WSL 탭의 pipe 분리(DX.13.0), 처음 보는 호스트의 질문 표시 | `test-local-native` 확장 |
 | macOS 실기기 (DX.13) | 로컬 탭의 소켓, 시스템 agent 합치기, push | `mac-verify`, M.15에 추가 |
 
 ## 9. 구현 순서
