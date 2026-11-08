@@ -86,9 +86,7 @@ export function App() {
   );
   // No tab survives a restart, so the file view would open empty.
   const [sidebarView, setSidebarView] = useState<SidebarView>('connections');
-  const closeDrawer = () => {
-    if (window.innerWidth <= 700) setSidebarOpen(false);
-  };
+  const closeDrawer = () => window.innerWidth <= 700 && setSidebarOpen(false);
   // A new SSH connection shows its files, but a drawer must not cover a narrow window's terminal.
   const revealFiles = () => {
     setSidebarView('files');
@@ -647,6 +645,7 @@ export function App() {
         sending={input.sending}
         input={tabs.length > 0 && <InputScopeControl input={input} />}
         agents={agents}
+        showGit={() => void showSidebar('git')}
       />
       {tabMenu.element}
       {files.dialog}

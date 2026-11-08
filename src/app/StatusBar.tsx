@@ -78,6 +78,7 @@ export function StatusBar({
   input,
   sending,
   agents,
+  showGit,
 }: {
   session?: TerminalSession;
   /** The focused file tab's encoding, line ending, indentation and language. */
@@ -90,6 +91,8 @@ export function StatusBar({
   sending?: boolean;
   /** Every tab's program state. Only the main window gathers them. */
   agents?: AgentBoardState;
+  /** Opens the sidebar's Git view. A detached window has none. */
+  showGit?: () => void;
 }) {
   const can = session && capabilities(session);
   return (
@@ -100,7 +103,7 @@ export function StatusBar({
         ) : session ? (
           <>
             <Target key={session.connectionId} session={session} />
-            <GitStatusItem session={session} />
+            <GitStatusItem session={session} showGit={showGit} />
           </>
         ) : (
           <span>
@@ -115,7 +118,7 @@ export function StatusBar({
       <div className="status-right">
         {file}
         {agents && <AgentBoard board={agents} />}
-        {session && can?.log && <Recording key={session.connectionId} session={session} />}
+        {session && can?.log && <Recording key={`log-${session.connectionId}`} session={session} />}
         {input}
         {session && can?.monitor && <MonitorBar key={session.connectionId} session={session} />}
       </div>

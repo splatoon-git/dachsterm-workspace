@@ -217,9 +217,11 @@ async function checkLocalGit(page, command, pane) {
       .locator('#git-sidebar')
       .getByRole('region', { name: '추적 안 함', exact: true })
       .locator('.git-row-name');
-  await showSidebarView(page, 'Git');
+  // GE.12: the status bar item is what opens the view here, from the file view shown above.
+  await status.click();
+  await expect(page.locator('#sidebar-tab-git')).toHaveAttribute('aria-selected', 'true');
   await expect(gitRows()).toHaveText(['new.txt'], { timeout: 15000 });
-  console.log('PASS PowerShell tab: the Git view lists the untracked file');
+  console.log('PASS PowerShell tab: the status bar opens the Git view, which lists the file');
   // GE.9: this PC's git, without a shell. PowerShell reports no prompts, so a typed command asks.
   const gitView = page.locator('#git-sidebar');
   await gitRows().click({ button: 'right' });

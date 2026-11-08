@@ -72,7 +72,7 @@ export async function verifyDeveloperWorkflow({
   try {
     await command(`cd ${repo}`);
     await expect(status).toHaveText('main ●3', { timeout: 15000 });
-    await expect(status).toHaveAttribute('aria-label', 'Git main, 변경 3개. 새로 고침');
+    await expect(status).toHaveAttribute('aria-label', 'Git main, 변경 3개. Git 보기 열기');
     await expect(status).toHaveAttribute('title', /업스트림 없음/);
     const tab = page.locator('.tab-strip .session-tab.selected [role="tab"]').first();
     await expect(tab).toHaveAttribute('aria-label', /Git main, 변경 3개/);
