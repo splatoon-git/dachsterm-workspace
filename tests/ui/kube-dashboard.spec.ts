@@ -167,7 +167,7 @@ test('empty areas say there is no problem and stay on the screen', async ({ page
 test('ingress and workers keep their place for later tasks', async ({ page }) => {
   await open(page);
   await expect(region(page, '인그레스')).toContainText('아직 준비 중입니다.');
-  await expect(region(page, '워커')).toContainText('아직 준비 중입니다.');
+  await expect(region(page, '워커')).toContainText('감시 중인 워크로드가 없습니다.');
 });
 
 test('a kind the account may not read gives its reason, not "no problem"', async ({ page }) => {

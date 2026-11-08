@@ -11,6 +11,7 @@ import type {
 import type { Detection, KubeDisplay } from '../../../src/features/kube/kubeModel';
 import type { SearchEvent } from '../../../src/features/kube/logSearchModel';
 import type { PodTerminalRequest } from '../../../src/features/kube/podShell';
+import type { MetricsRead, ProbeRead } from '../../../src/features/kube/runtimeTypes';
 import type { Snapshot, SnapshotKind } from '../../../src/features/kube/snapshotTypes';
 import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
@@ -33,6 +34,13 @@ declare global {
         detail?: Partial<Record<DetailKind, Detail>>;
         logs?: PodLogs;
         probe?: ShellCheck;
+      };
+      /** Answers to `kube_metrics` by target kind (by port for `pod`) and to `kube_probe`. */
+      runtime?: {
+        candidates?: MetricsRead;
+        threads?: MetricsRead;
+        ports?: Record<number, MetricsRead>;
+        probe?: ProbeRead;
       };
       /** Sent to the running search's channel, with Tauri's message numbering. */
       emitSearch?: (event: SearchEvent) => void;
@@ -87,6 +95,21 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
           elapsedMs: 1,
         };
       }
+      if (command === 'kube_metrics') {
+        const target = args.target as { kind: string; port?: number };
+        const runtime = state.runtime;
+        const answer =
+          target.kind === 'candidates'
+            ? runtime?.candidates
+            : target.kind === 'threads'
+              ? runtime?.threads
+              : runtime?.ports?.[target.port ?? 0];
+        return structuredClone(
+          answer ?? { state: { kind: 'unreachable' }, data: null, elapsedMs: 1 },
+        );
+      }
+      if (command === 'kube_probe')
+        return structuredClone(state.runtime?.probe ?? { kind: 'noShell' });
       if (command === 'kube_detail')
         return structuredClone(state.podAnswers?.detail?.[args.kind as DetailKind] ?? null);
       if (command === 'kube_logs') return structuredClone(state.podAnswers?.logs ?? null);

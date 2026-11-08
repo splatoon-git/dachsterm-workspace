@@ -110,6 +110,8 @@
     "allow-kube-logs",
     "allow-kube-log-search",
     "allow-kube-log-cancel",
+    "allow-kube-metrics",
+    "allow-kube-probe",
     "allow-git-config-read",
     "allow-git-config-preview",
     "allow-git-config-write",

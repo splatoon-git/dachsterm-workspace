@@ -2,6 +2,8 @@ import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { ContextMenu, type MenuPoint, type MenuRequest } from '../../components/ContextMenu';
 import { MetricChart } from '../../components/MetricChart';
 import { ItemRow, TargetMenu } from './DashboardRows';
+import type { PodRef } from './detailTypes';
+import { WorkerPanel } from './WorkerPanel';
 import {
   buildDashboard,
   share,
@@ -204,6 +206,7 @@ export const KubeDashboard = memo(function KubeDashboard({
   namespace,
   reveal,
   searchLogs,
+  openRuntime,
 }: {
   store: SnapshotStore;
   history: DashboardHistory;
@@ -211,6 +214,7 @@ export const KubeDashboard = memo(function KubeDashboard({
   namespace: string;
   reveal: (target: TreeTarget) => void;
   searchLogs: (scope: SearchScope) => void;
+  openRuntime: (pod: PodRef) => void;
 }) {
   const board = useMemo(() => buildDashboard(store, history), [store, history]);
   const [menu, setMenu] = useState<MenuRequest | null>(null);
@@ -353,11 +357,7 @@ export const KubeDashboard = memo(function KubeDashboard({
             <p className="kube-dash-empty">아직 준비 중입니다.</p>
           </section>
 
-          {/* KV.9 connects worker occupancy and suspected non-returning workers here. */}
-          <section className="kube-dash-panel" aria-label="워커">
-            <h3>워커</h3>
-            <p className="kube-dash-empty">아직 준비 중입니다.</p>
-          </section>
+          <WorkerPanel now={board.now} reveal={reveal} openRuntime={openRuntime} />
 
           <Panel title="최근 경고" part={board.warnings} wide>
             {(list) => (

@@ -200,10 +200,10 @@
   left: 0;
   display: grid;
   /* Each row is its own grid, so only fixed tracks keep the columns lined up. */
-  grid-template-columns: minmax(0, 1fr) 150px 64px 64px 104px 104px 130px 76px 52px;
+  grid-template-columns: minmax(0, 1fr) 150px 64px 64px 104px 104px 130px 112px 52px;
   align-items: center;
   width: 100%;
-  min-width: 980px;
+  min-width: 1016px;
   height: 26px;
   padding: 0 var(--space-sm);
   box-sizing: border-box;

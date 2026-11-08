@@ -76,6 +76,11 @@ pub fn check_pod(name: &str) -> Result<()> {
     }
 }
 
+/// A node name is a DNS subdomain, the same rule as a pod's.
+pub fn check_node(name: &str) -> Result<()> {
+    check_pod(name).map_err(|_| "노드 이름이 올바르지 않습니다.".to_string())
+}
+
 /// A DNS label, the same rule as a namespace except that it cannot be empty.
 pub fn check_container(name: &str) -> Result<()> {
     if name.is_empty() || check_namespace(name).is_err() {

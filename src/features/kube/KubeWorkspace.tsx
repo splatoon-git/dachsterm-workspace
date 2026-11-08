@@ -13,6 +13,8 @@ import { initialTreeView } from './tree';
 import type { TreeTarget } from './treeReveal';
 import { useKubeSnapshots } from './useKubeSnapshots';
 import { useLogSearch } from './useLogSearch';
+import { useWorkerWatch } from './useWorkerWatch';
+import { WorkersContext } from './workerContext';
 import {
   finishesAfterRecheck,
   kubeScreens,
@@ -168,6 +170,14 @@ export function KubeWorkspace({
     [setSearchForm, openScreen],
   );
 
+  const openRuntime = useCallback(
+    (pod: PodRef) => {
+      setPanel({ namespace: pod.namespace, name: pod.name, tab: 'runtime', problem: false });
+      openScreen('tree');
+    },
+    [openScreen],
+  );
+
   const copyToTerminal = (command: string) => {
     const result = copy(command);
     if ('blocked' in result) setNote(result.blocked);
@@ -185,6 +195,13 @@ export function KubeWorkspace({
     connectionId,
     phase.name === 'open' ? phase.settings : null,
     visible && display === 'workspace',
+  );
+  const workers = useWorkerWatch(
+    connectionId,
+    phase.name === 'open' ? phase.settings : null,
+    visible && display === 'workspace',
+    store.pods.data,
+    session,
   );
   const fresh = freshness(store, now);
   const warning =
@@ -225,79 +242,84 @@ export function KubeWorkspace({
         </span>
       </div>
       {display === 'workspace' && (
-        <div className="kube-body">
-          {phase.name === 'detecting' && <p className="kube-detecting">클러스터를 확인하는 중…</p>}
-          {detection && (
-            <KubeSetup
-              detection={detection}
-              busy={busy}
-              error={error}
-              note={note}
-              recheck={recheck}
-              chooseContext={(context) =>
-                run(
-                  {
-                    mode: 'manual',
-                    kubectl: detection.kubectl,
-                    kubeconfig: detection.kubeconfig,
-                  },
-                  context,
-                  false,
-                )
-              }
-              start={(context, namespace) => {
-                setBusy(true);
-                finish(settingsFrom(detection, context, namespace))
-                  .catch((e: unknown) => setError(errorText(e)))
-                  .finally(() => setBusy(false));
-              }}
-              copy={copyToTerminal}
-            />
-          )}
-          {phase.name === 'open' && screen === 'tree' && (
-            <KubeTreeScreen
-              store={store}
-              session={session}
-              focused={focused}
-              view={treeView}
-              setView={setTreeView}
-              connectionId={connectionId}
-              kube={phase.settings}
-              panel={panel}
-              setPanel={setPanel}
-              focusPod={focusPod}
-              openTerminal={openTerminal}
-              searchLogs={searchLogs}
-            />
-          )}
-          {phase.name === 'open' && screen === 'dashboard' && (
-            <KubeDashboard
-              store={store}
-              history={history}
-              namespace={phase.settings.namespace}
-              reveal={reveal}
-              searchLogs={searchLogs}
-            />
-          )}
-          {phase.name === 'open' && screen === 'logs' && (
-            <LogSearch
-              search={logSearch}
-              store={store}
-              connectionId={connectionId}
-              kube={phase.settings}
-              session={session}
-              focusRequest={searchFocus}
-              openTerminal={openTerminal}
-            />
-          )}
-          {phase.name === 'open' && screen === 'ingress' && (
-            <div className="kube-empty" role="tabpanel">
-              <h2>{kubeScreens.find((item) => item.id === screen)?.label}</h2>
-              <p>이 화면은 아직 준비 중입니다.</p>
-            </div>
-          )}
-          {phase.name === 'detecting' && error && <p role="alert">{error}</p>}
-        </div>
+        <WorkersContext.Provider value={workers}>
+          <div className="kube-body">
+            {phase.name === 'detecting' && (
+              <p className="kube-detecting">클러스터를 확인하는 중…</p>
+            )}
+            {detection && (
+              <KubeSetup
+                detection={detection}
+                busy={busy}
+                error={error}
+                note={note}
+                recheck={recheck}
+                chooseContext={(context) =>
+                  run(
+                    {
+                      mode: 'manual',
+                      kubectl: detection.kubectl,
+                      kubeconfig: detection.kubeconfig,
+                    },
+                    context,
+                    false,
+                  )
+                }
+                start={(context, namespace) => {
+                  setBusy(true);
+                  finish(settingsFrom(detection, context, namespace))
+                    .catch((e: unknown) => setError(errorText(e)))
+                    .finally(() => setBusy(false));
+                }}
+                copy={copyToTerminal}
+              />
+            )}
+            {phase.name === 'open' && screen === 'tree' && (
+              <KubeTreeScreen
+                store={store}
+                session={session}
+                focused={focused}
+                view={treeView}
+                setView={setTreeView}
+                connectionId={connectionId}
+                kube={phase.settings}
+                panel={panel}
+                setPanel={setPanel}
+                focusPod={focusPod}
+                openTerminal={openTerminal}
+                searchLogs={searchLogs}
+              />
+            )}
+            {phase.name === 'open' && screen === 'dashboard' && (
+              <KubeDashboard
+                store={store}
+                history={history}
+                namespace={phase.settings.namespace}
+                reveal={reveal}
+                searchLogs={searchLogs}
+                openRuntime={openRuntime}
+              />
+            )}
+            {phase.name === 'open' && screen === 'logs' && (
+              <LogSearch
+                search={logSearch}
+                store={store}
+                connectionId={connectionId}
+                kube={phase.settings}
+                session={session}
+                focusRequest={searchFocus}
+                openTerminal={openTerminal}
+              />
+            )}
+            {phase.name === 'open' && screen === 'ingress' && (
+              <div className="kube-empty" role="tabpanel">
+                <h2>{kubeScreens.find((item) => item.id === screen)?.label}</h2>
+                <p>이 화면은 아직 준비 중입니다.</p>
+              </div>
+            )}
+            {phase.name === 'detecting' && error && <p role="alert">{error}</p>}
+          </div>
+        </WorkersContext.Provider>
       )}
     </div>
   );
