@@ -28,6 +28,7 @@ import { verifyTerminalBasics } from './verify-terminal-basics.mjs';
 import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
 import { verifyAgentLaunch, verifyDeveloperWorkflow } from './verify-developer-workflow.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
+import { verifyEditSaveCard } from './verify-edit-save-card.mjs';
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-native-'));
 const screenshots = path.resolve('test-results-native');
 await mkdir(screenshots, { recursive: true });
@@ -266,6 +267,23 @@ try {
   await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/home/probe', {
     timeout: 20000,
   });
+  if (process.env.DACHSTERM_EDIT_ONLY === '1') {
+    await verifyEditSaveCard({
+      page,
+      pane,
+      invoke,
+      docker,
+      probe,
+      directory,
+      screenshots,
+      showConnections,
+      connected,
+      setStage: (value) => {
+        stage = value;
+      },
+    });
+    throw finishedEarly;
+  }
   stage = 'U3 tunnel visual editor and real forwarding';
   await verifyTunnels({ page, invoke, docker, probe, screenshots });
   stage = 'AT agent terminal';
@@ -980,7 +998,12 @@ try {
       : 'PASS all Phase 1 Windows native integration checks',
   );
 } catch (error) {
-  if (error === finishedEarly) console.log('PASS agent terminal checks only');
+  if (error === finishedEarly)
+    console.log(
+      process.env.DACHSTERM_EDIT_ONLY === '1'
+        ? 'PASS external edit checks only'
+        : 'PASS agent terminal checks only',
+    );
   else await reportFailure(error);
 } finally {
   if (paused) docker(['unpause', probe('CONTAINER')]);
