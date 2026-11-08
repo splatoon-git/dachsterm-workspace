@@ -243,7 +243,7 @@ export function App() {
     void session.connect(null);
   }
   const keptByFile = (shortcut: AppShortcut) => files.keepsShortcut(shortcut);
-  useAppShortcuts(keptByFile, (shortcut) => {
+  const runShortcut = (shortcut: AppShortcut) => {
     switch (shortcut.name) {
       case 'fullscreen':
         return void toggleFullscreen();
@@ -283,7 +283,8 @@ export function App() {
       case 'settings':
         return setSettingsOpen(true);
     }
-  });
+  };
+  useAppShortcuts(keptByFile, runShortcut);
   function requestConnect(profile: Profile, existing?: TerminalSession, opening?: Opening) {
     if (existing?.podtree) {
       setPodtreeOpen(true);
@@ -456,22 +457,13 @@ export function App() {
           전체화면 종료 · F11
         </button>
       )}
-      <TitleBar
-        fail={setError}
-        end={
-          <HeaderActions
-            commands={() => setCommandsOpen(true)}
-            tunnels={() => setTunnelsOpen(true)}
-            help={() => setHelpOpen(true)}
-            settings={() => setSettingsOpen(true)}
-          />
-        }
-      >
+      <TitleBar fail={setError} end={<HeaderActions run={runShortcut} />}>
         <HeaderMenus
           sidebarOpen={sidebarOpen}
           toggleSidebar={() =>
             fullscreen ? void showSidebar(sidebarView) : setSidebarOpen((v) => !v)
           }
+          tunnels={() => runShortcut({ name: 'tunnels' })}
           activeGame={activeGame}
           openGame={openGame}
           preview={() => workspace.open({ kind: 'preview' })}

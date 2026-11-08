@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type {} from './fixtures/tunnels';
+import { openTools } from './helpers';
 
 /** Opens a saved tunnel's ⋯ menu and returns one of its items. */
 async function tunnelItem(page: Page, row: Locator, item: string) {
@@ -13,6 +14,22 @@ async function expectTunnelItemDisabled(page: Page, row: Locator, item: string) 
   await expect(await tunnelItem(page, row, item)).toBeDisabled();
   await page.keyboard.press('Escape');
 }
+
+test('the tools menu and the title bar icon both open the tunnel window', async ({ page }) => {
+  await page.goto('/');
+  const dialog = page.getByRole('dialog', { name: 'SSH 터널' });
+  await openTools(page);
+  await page
+    .locator('.toolbar-menu-items')
+    .getByRole('button', { name: '터널', exact: true })
+    .click();
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('.toolbar-menu')).not.toHaveAttribute('open');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await page.getByRole('button', { name: '터널', exact: true }).click();
+  await expect(dialog).toBeVisible();
+});
 
 test('tunnel save/list/start/stop, errors, autostart and delete protect the saved configuration', async ({
   page,

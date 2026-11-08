@@ -640,7 +640,7 @@ SSH 서버에서 ZIP, TAR, TAR.GZ를 압축하고 푼다. 서버에 Python3와 L
 
 ## 터널
 
-맨 위의 **터널** 아이콘(Ctrl+Shift+U)에서 Local, Remote 목적지를 지정하거나 SOCKS5 TCP CONNECT를 쓴다.
+맨 위의 **터널** 아이콘이나 **도구 → 터널**(Ctrl+Shift+U)에서 Local, Remote 목적지를 지정하거나 SOCKS5 TCP CONNECT를 쓴다.
 
 - 127.0.0.1 루프백에만 바인딩한다. SOCKS5 UDP/BIND와 공개 인터페이스 바인딩은 지원하지 않는다.
 - 실행 터널은 최대 32개, 터널당 동시 스트림은 64개다.
