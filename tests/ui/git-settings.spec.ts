@@ -230,8 +230,10 @@ test('the credentials moved here keep their controls', async ({ page }) => {
   await expect(
     page.getByRole('region', { name: '저장한 Git 자격 증명', exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByLabel('WSL 탭에 이 PC의 HTTPS Git 자격 증명 제공', { exact: true }),
-  ).not.toBeChecked();
+  // macOS has no WSL tabs, so the app leaves this setting out there.
+  const wsl = page.getByLabel('WSL 탭에 이 PC의 HTTPS Git 자격 증명 제공', { exact: true });
+  const isMac = await page.evaluate(() => /Macintosh|Mac OS X/.test(navigator.userAgent));
+  if (isMac) await expect(wsl).toHaveCount(0);
+  else await expect(wsl).not.toBeChecked();
   await expect(page.getByLabel('Git 상태 자동 조회', { exact: true })).toBeChecked();
 });

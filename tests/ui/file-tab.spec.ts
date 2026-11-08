@@ -366,6 +366,8 @@ const dirtyTab = (page: Page, name: string) =>
 // The fixture page is Chromium on every OS, where the app takes Ctrl as well as Cmd.
 const modS = 'Control+s';
 const modShiftS = 'Control+Shift+s';
+// Undo is the editor's own binding, which takes only Cmd on macOS.
+const undo = 'ControlOrMeta+z';
 
 /** Clicks into the editor, types at the very end of the text and waits for the unsaved mark. */
 async function typeAtEnd(page: Page, value: string) {
@@ -392,7 +394,7 @@ test.describe('editing and saving', () => {
     await row(page, 'a.txt').click();
     await typeAtEnd(page, 'x');
     await expect(dirtyTab(page, 'a.txt')).toBeVisible();
-    await page.keyboard.press('Control+z');
+    await page.keyboard.press(undo);
     await expect(tab(page, 'a.txt')).toBeVisible();
   });
 
