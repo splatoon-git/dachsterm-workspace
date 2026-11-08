@@ -83,6 +83,7 @@
     "allow-local-files-change",
     "allow-local-files-batch",
     "allow-local-files-download",
+    "allow-local-file-pick",
     "allow-local-files-edit",
     "allow-files-drag-prepare",
     "allow-files-drag-out",

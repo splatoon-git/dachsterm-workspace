@@ -39,14 +39,14 @@ function IconButton({
 export function HeaderMenus({
   sidebarOpen,
   toggleSidebar,
-  tunnels,
+  tools,
   activeGame,
   openGame,
   preview,
 }: {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
-  tunnels: () => void;
+  tools: { tunnels: () => void; editor: () => void };
   activeGame: GameId | null;
   openGame: (id: GameId) => void;
   /** Opens the terminal preview, which only the browser run without a backend offers. */
@@ -63,9 +63,13 @@ export function HeaderMenus({
         run={toggleSidebar}
       />
       <ToolbarMenu label="도구">
-        <button onClick={tunnels}>
+        <button onClick={tools.tunnels}>
           <Icon name="tunnel" size={14} />
           터널
+        </button>
+        <button onClick={tools.editor}>
+          <Icon name="file" size={14} />
+          문서 편집기
         </button>
         <span className="menu-label">게임</span>
         <nav aria-label="게임 목록">

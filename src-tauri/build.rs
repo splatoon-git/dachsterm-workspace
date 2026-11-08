@@ -28,6 +28,7 @@ fn main() {
             "local_files_change",
             "local_files_batch",
             "local_files_download",
+            "local_file_pick",
             "local_files_edit",
             "files_drag_prepare",
             "files_drag_out",

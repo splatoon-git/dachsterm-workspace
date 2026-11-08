@@ -10,22 +10,27 @@ import { FileStatusItems } from '../features/editor/FileStatusItems';
 import { fileDocument, unsavedFileIds, useFileDirty } from '../features/editor/fileDocuments';
 import type { TerminalSession } from '../features/terminal/session';
 import { sessionKind, sessionSource } from '../features/terminal/sessionKind';
+import { errorText } from '../lib/ipc';
 import { sameSource, type Source } from '../lib/source';
 import type { AppShortcut } from './appShortcuts';
+import { chooseDocument, type PickedDocument } from './documentPicker';
 import { commitDiffTarget, diffTargetOf, sameDiffTarget } from './gitDiffTabs';
 import { PlainTab } from './GroupTabBar';
 import type { Workspace } from './useWorkspaceLayout';
 import { tabKey, type TabRef } from './workspaceLayout';
 import { replacedPreview, type DocumentPlacement, type DocumentRef } from './workspaceTabs';
 
-/** A file open in a tab, and the terminal tab it was opened from. */
+/** The terminal a file tab was opened from. A document from the tools menu has none. */
+type FileOwner =
+  { kind: 'terminal'; sessionTabId: string; connectionId: string } | { kind: 'none' };
+
+/** A file open in a tab, and who it belongs to. */
 type FileTab = {
   id: string;
   source: Source;
   path: string;
   name: string;
-  sessionTabId: string;
-  connectionId: string;
+  owner: FileOwner;
   /** Present on a diff tab: what its two sides are. */
   diff?: GitDiffTarget;
 };
@@ -33,6 +38,11 @@ type FileTab = {
 /** Files waiting on the save question. `settle` answers a window close instead of closing tabs. */
 type Closing = { ids: string[]; busy: boolean; settle?: (closed: boolean) => void };
 
+const ownedBy = (session: TerminalSession): FileOwner => ({
+  kind: 'terminal',
+  sessionTabId: session.tabId,
+  connectionId: session.connectionId,
+});
 const refOf = (file: FileTab): DocumentRef => ({ kind: file.diff ? 'diff' : 'file', id: file.id });
 const keyOf = (file: FileTab) => tabKey(refOf(file));
 /** Only a Windows path uses a backslash as a separator; elsewhere it is part of a file name. */
@@ -63,11 +73,12 @@ function FileCell({
     owner?.subscribe ?? noSubscribe,
     owner?.snapshot ?? noStatus,
   );
-  // A local file does not depend on the terminal. A server file needs the very connection it
-  // came from: a reconnected tab has a new one.
+  // A tab with no terminal has no connection to lose, and a local file does not depend on the
+  // terminal. A server file needs the very connection it came from: a reconnected tab has a new one.
   const live =
+    file.owner.kind === 'none' ||
     file.source.kind === 'local' ||
-    (owner?.connectionId === file.connectionId && snapshot?.status === 'connected');
+    (owner?.connectionId === file.owner.connectionId && snapshot?.status === 'connected');
   if (file.diff)
     return (
       <GitDiffPane
@@ -134,10 +145,13 @@ export function useFileTabs({
   workspace,
   sessions,
   narrow,
+  fail,
 }: {
   workspace: Workspace;
   sessions: TerminalSession[];
   narrow: boolean;
+  /** Reports what kept the tools menu from opening a document. */
+  fail: (message: string) => void;
 }) {
   const [files, setFiles] = useState<FileTab[]>([]);
   const [closing, setClosing] = useState<Closing | null>(null);
@@ -145,6 +159,15 @@ export function useFileTabs({
   const leaving = useRef(false);
   const find = (id: string) => files.find((file) => file.id === id);
   const fileOf = (key: string) => files.find((item) => keyOf(item) === key);
+  const sessionOf = ({ owner }: FileTab) =>
+    owner.kind === 'terminal'
+      ? sessions.find((session) => session.tabId === owner.sessionTabId)
+      : undefined;
+  const openedFile = (source: Source, path: string) =>
+    files.find(
+      (file) =>
+        !file.diff && sameSource(file.source, source) && comparable(file.path) === comparable(path),
+    );
   const focused = fileOf(workspace.focusedGroup.active);
   const focusedId = focused?.id;
   /** A diff is tied to its file in the repository, so Ctrl+Shift+S keeps its usual meaning there. */
@@ -177,10 +200,7 @@ export function useFileTabs({
   const open = (session: TerminalSession, path: string, pinned: boolean) => {
     const source = sessionSource(session);
     if (!source) return;
-    const existing = files.find(
-      (file) =>
-        !file.diff && sameSource(file.source, source) && comparable(file.path) === comparable(path),
-    );
+    const existing = openedFile(source, path);
     if (existing) return showExisting(existing, pinned);
     const id = crypto.randomUUID();
     const tab: DocumentRef = { kind: 'file', id, preview: !pinned };
@@ -189,14 +209,33 @@ export function useFileTabs({
       sessionKind(session) === 'ftp' && !narrow
         ? { keepVisible: tabKey({ kind: 'session', tabId: session.tabId }) }
         : {};
-    show(tab, placement, {
-      id,
-      source,
-      path,
-      name: nameOf(path),
-      sessionTabId: session.tabId,
-      connectionId: session.connectionId,
-    });
+    show(tab, placement, { id, source, path, name: nameOf(path), owner: ownedBy(session) });
+  };
+  /** A deliberate choice in the OS picker, so it is pinned rather than a preview. */
+  const openPicked = ({ source, path }: PickedDocument) => {
+    const existing = openedFile(source, path);
+    if (existing) return showExisting(existing, true);
+    const id = crypto.randomUUID();
+    // macOS gives a Korean name decomposed. The path stays as it is, since it names the real file.
+    const name = nameOf(path).normalize('NFC');
+    show(
+      { kind: 'file', id, preview: false },
+      {},
+      { id, source, path, name, owner: { kind: 'none' } },
+    );
+  };
+  // The picker can stay open for a long time, and the tabs can change while it does.
+  const latestOpenPicked = useRef(openPicked);
+  useEffect(() => {
+    latestOpenPicked.current = openPicked;
+  });
+  const pickDocument = () => {
+    chooseDocument().then(
+      (picked) => {
+        if (picked) latestOpenPicked.current(picked);
+      },
+      (e: unknown) => fail(errorText(e)),
+    );
   };
   const showDiff = (session: TerminalSession, diff: GitDiffTarget | null, pinned: boolean) => {
     const source = sessionSource(session);
@@ -214,8 +253,7 @@ export function useFileTabs({
         source,
         path: repoFilePath(diff.folder, diff.path),
         name: nameOf(diff.path),
-        sessionTabId: session.tabId,
-        connectionId: session.connectionId,
+        owner: ownedBy(session),
         diff,
       },
     );
@@ -281,6 +319,7 @@ export function useFileTabs({
   );
   return {
     open,
+    pickDocument,
     openDiff,
     openCommitFile,
     close,
@@ -303,7 +342,7 @@ export function useFileTabs({
     /** The terminal a focused file tab came from, so the sidebar stays on its connection. */
     owner: (key: string) => {
       const file = fileOf(key);
-      return file && sessions.find((session) => session.tabId === file.sessionTabId);
+      return file && sessionOf(file);
     },
     status: (tab: TabRef | undefined) =>
       tab?.kind === 'file' ? <FileStatusItems id={tab.id} /> : undefined,
@@ -329,7 +368,7 @@ export function useFileTabs({
         file && (
           <FileCell
             file={file}
-            owner={sessions.find((session) => session.tabId === file.sessionTabId)}
+            owner={sessionOf(file)}
             pin={() => workspace.pinDocument(tabKey(tab))}
             renamed={(path) =>
               setFiles((old) =>

@@ -335,7 +335,7 @@ export function App() {
       ? openLocal(t.localTarget, beside)
       : requestConnect(savedProfile(t), undefined, { beside });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
-  const files = useFileTabs({ workspace, sessions: tabs, narrow });
+  const files = useFileTabs({ workspace, sessions: tabs, narrow, fail: setError });
   useWindowClose({
     confirm: async () => settleSurvivorBeforeClose() && files.confirmWindowClose(),
     blocked: () => !settleSurvivorBeforeClose() || files.hasUnsaved(),
@@ -463,7 +463,7 @@ export function App() {
           toggleSidebar={() =>
             fullscreen ? void showSidebar(sidebarView) : setSidebarOpen((v) => !v)
           }
-          tunnels={() => runShortcut({ name: 'tunnels' })}
+          tools={{ tunnels: () => runShortcut({ name: 'tunnels' }), editor: files.pickDocument }}
           activeGame={activeGame}
           openGame={openGame}
           preview={() => workspace.open({ kind: 'preview' })}

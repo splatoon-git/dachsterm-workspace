@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { FileRead } from '../../src/features/editor/fileRead';
+import type { LocalTarget } from '../../src/features/terminal/sessionTypes';
 import type {} from './fixtures/file-tab';
 
 const facts = { size: 1234, modified: 1_700_000_000 };
@@ -276,6 +277,120 @@ test.describe('showing formats', () => {
       .toBeGreaterThan(0);
     await expect(page.locator('.file-tab svg')).toHaveCount(0);
     expect(await page.evaluate(() => window.__pwned)).toBeUndefined();
+  });
+});
+
+test.describe('a document opened from the tools menu, with no terminal', () => {
+  const note = 'C:\\문서\\한글 메모.txt';
+  const noteName = '한글 메모.txt';
+  const targets: LocalTarget[] = [
+    { id: 'wsl:Ubuntu', name: 'Ubuntu', kind: 'wsl', follow: 'launch' },
+    { id: 'powershell', name: 'Windows PowerShell', kind: 'shell', follow: 'launch' },
+  ];
+  type Picks = NonNullable<Window['__fileTab']['picks']>;
+
+  async function openEmpty(page: Page, files: Files, picks: Picks, listed = targets) {
+    await page.addInitScript(
+      (value) => {
+        window.__fileTab = value as typeof window.__fileTab;
+      },
+      {
+        files,
+        status: 'connected',
+        calls: [],
+        opened: [],
+        writes: [],
+        answers: [],
+        noSession: true,
+        picks,
+        targets: listed,
+        sources: [],
+        failures: [],
+      } satisfies Window['__fileTab'],
+    );
+    await page.goto('/tests/ui/fixtures/file-tab.html');
+    await expect(tab(page, '시작하기')).toBeVisible();
+  }
+  const choose = async (page: Page) => {
+    await page.getByText('도구', { exact: true }).click();
+    await page.getByRole('button', { name: '문서 편집기', exact: true }).click();
+  };
+
+  test('the picked file opens pinned on the first shell of this PC, and saves', async ({
+    page,
+  }) => {
+    await openEmpty(page, { [note]: text('메모 내용') }, [note]);
+    await choose(page);
+    await expect(tab(page, noteName)).toHaveCSS('font-style', 'normal');
+    await expect(editor(page)).toContainText('메모');
+    await expect(page.locator('.file-tab-banner')).toHaveCount(0);
+    await expect(tab(page, '시작하기')).toBeVisible();
+
+    await editor(page).click();
+    await page.keyboard.type('추가');
+    await expect(page.getByRole('tab', { name: `${noteName} 저장 안 됨` })).toBeVisible();
+    await page.keyboard.press(modS);
+    await expect(tab(page, noteName)).toBeVisible();
+    const shell = { kind: 'local', targetId: 'powershell' };
+    const after = await state(page);
+    expect(after.calls.map((call) => call.path)).toEqual([note]);
+    expect(after.sources).toEqual([shell, shell]);
+    expect(after.writes).toHaveLength(1);
+    expect(after.writes[0].path).toBe(note);
+    expect(after.writes[0].content).toContain('추가');
+  });
+
+  test('closing an unsaved document asks first', async ({ page }) => {
+    await openEmpty(page, { [note]: text('메모 내용') }, [note]);
+    await choose(page);
+    await expect(editor(page)).toContainText('메모');
+    await editor(page).click();
+    await page.keyboard.type('버림');
+    const dirty = page.getByRole('tab', { name: `${noteName} 저장 안 됨` });
+    await expect(dirty).toBeVisible();
+    const closeTab = page.getByRole('button', { name: `${noteName} 탭 닫기` });
+    const asked = page.getByRole('dialog', { name: `${noteName} 저장` });
+
+    await closeTab.click();
+    await asked.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(asked).toHaveCount(0);
+    await expect(dirty).toBeVisible();
+
+    await closeTab.click();
+    await asked.getByRole('button', { name: '저장 안 함', exact: true }).click();
+    await expect(dirty).toHaveCount(0);
+    expect((await state(page)).writes).toHaveLength(0);
+  });
+
+  test('a closed picker opens nothing, and the same file keeps one tab', async ({ page }) => {
+    await openEmpty(page, { [note]: text('메모 내용') }, [null, note, note]);
+    await choose(page);
+    await expect.poll(async () => (await state(page)).picks).toEqual([note, note]);
+    await expect(page.locator('.file-tab')).toHaveCount(0);
+
+    await choose(page);
+    await expect(tab(page, noteName)).toBeVisible();
+    await choose(page);
+    await expect.poll(async () => (await state(page)).picks).toEqual([]);
+    await expect(tab(page, noteName)).toHaveCount(1);
+    expect((await state(page)).failures).toEqual([]);
+  });
+
+  test('a decomposed Korean name reads composed, and the real path is kept', async ({ page }) => {
+    const decomposed = `/Users/me/${'한글.txt'.normalize('NFD')}`;
+    await openEmpty(page, { [decomposed]: text('메모') }, [decomposed]);
+    await choose(page);
+    await expect(tab(page, '한글.txt')).toBeVisible();
+    expect((await state(page)).calls[0].path).toBe(decomposed);
+  });
+
+  test('without a shell of this PC it says so and opens nothing', async ({ page }) => {
+    await openEmpty(page, { [note]: text('메모') }, [note], [targets[0]]);
+    await choose(page);
+    await expect
+      .poll(async () => (await state(page)).failures)
+      .toEqual(['이 PC의 로컬 셸을 찾지 못해 파일을 열 수 없습니다.']);
+    await expect(page.locator('.file-tab')).toHaveCount(0);
   });
 });
 

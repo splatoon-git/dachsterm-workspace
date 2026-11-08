@@ -20,6 +20,7 @@
     "test:native": "node scripts/run-phase1.mjs --native",
     "test:drag-out": "node scripts/test-local-native.mjs --drag-only",
     "test:file-tab": "node scripts/test-local-native.mjs --file-tab-only",
+    "test:document-editor": "node scripts/test-local-native.mjs --document-editor-only",
     "test:git-settings": "node scripts/test-local-native.mjs --git-settings-only",
     "test:git-diff": "node scripts/test-local-native.mjs --git-diff-only",
     "test:native:edit": "node scripts/run-phase1.mjs --native --edit-only --reuse-build",

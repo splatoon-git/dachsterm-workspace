@@ -35,6 +35,7 @@ import {
   checkRepositorySettings,
 } from './verify-git-settings.mjs';
 import { checkGitDiff } from './verify-git-diff.mjs';
+import { checkDocumentEditor } from './verify-document-editor.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 // `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab,
@@ -42,7 +43,9 @@ if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.
 // DX.15 Git status steps, `--drop-only` only the GE.2 file drop steps, `--drag-only` only the GE.3
 // drag out to the file manager, which moves the real pointer for a few seconds, and
 // `--file-tab-only` only the GE.5 file tab steps, `--git-settings-only` only the GE.10
-// Settings → Git steps, and `--git-diff-only` only the GE.8 diff tab steps.
+// Settings → Git steps, `--git-diff-only` only the GE.8 diff tab steps, and
+// `--document-editor-only` only the TL.4 steps, which open no terminal at all.
+const documentEditorOnly = process.argv.includes('--document-editor-only');
 const agentOnly = process.argv.includes('--agent-only');
 const dropOnly = process.argv.includes('--drop-only');
 const dragOnly = process.argv.includes('--drag-only');
@@ -1194,6 +1197,10 @@ async function checkWslCredentials(page, command) {
 }
 try {
   const page = await launch();
+  if (documentEditorOnly) {
+    await checkDocumentEditor(page, directory, app.pid);
+    throw finished;
+  }
   await expect(
     page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기'),
   ).toBeVisible({ timeout: 15000 });
