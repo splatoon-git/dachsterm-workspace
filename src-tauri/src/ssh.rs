@@ -1,8 +1,5 @@
 use crate::storage::{Profile, Result, Store};
-use russh::{
-    ChannelMsg, Disconnect, client,
-    keys::{HashAlg, PublicKeyOrCertificate},
-};
+use russh::{ChannelMsg, Disconnect, client, keys::PublicKeyOrCertificate};
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -16,6 +13,7 @@ use tokio::{
 use zeroize::Zeroizing;
 mod event;
 mod host_key;
+pub(crate) mod route;
 pub use event::{AuthPrompt, Event};
 
 pub struct AuthReply {
@@ -48,6 +46,7 @@ pub struct Connections {
     pub live: Mutex<HashMap<String, std::sync::Weak<client::Handle<Host>>>>,
     pub launches: crate::terminal_start::Launches,
     pub git: crate::git_credential::Forwards,
+    pub net: crate::net_tools::link::Links,
 }
 impl Connections {
     pub fn ftp_session(&self, id: &str) -> Result<Arc<crate::ftp::Session>> {
@@ -114,56 +113,10 @@ impl Connections {
         sink: Sink,
         store: Arc<Store>,
     ) -> Result<()> {
-        profile.validate()?;
-        let resolved = crate::routes::resolve(&profile, &store.list()?.profiles)?;
-        if resolved.len() != hops.len() + 1
-            || resolved.iter().zip(&hops).any(|(a, b)| a.id != b.0.id)
-        {
-            return Err("경유 경로가 변경되었습니다. 다시 연결하세요.".into());
-        }
-        let broker = Arc::new(crate::windows::Broker::new(sink));
-        let event_broker = broker.clone();
-        let sink: Sink = Arc::new(move |event| event_broker.send(event));
-        let (input, rx) = mpsc::channel(64);
-        let (auth_reply, replies) = mpsc::channel(1);
-        let (stop, mut stopped) = watch::channel(false);
-        let host_stop = stopped.clone();
-        let (trust, trusted) = watch::channel(None);
-        let trust_request = Arc::new(Mutex::new(None));
-        let (ack, acked) = watch::channel(0);
-        {
-            let mut entries = self.entries.lock().unwrap();
-            if entries.len() >= 32 {
-                return Err("동시 연결은 최대 32개입니다.".into());
-            }
-            if entries.contains_key(&id) {
-                return Err("이미 사용 중인 연결 ID입니다.".into());
-            }
-            entries.insert(
-                id.clone(),
-                Arc::new(Control {
-                    auth_reply,
-                    profile: profile.clone(),
-                    input,
-                    stop,
-                    trust,
-                    trust_request: trust_request.clone(),
-                    ack,
-                    broker,
-                    agent: Arc::default(),
-                }),
-            );
-        }
+        let (sink, channels) = self.register(&id, &profile, &hops, sink, &store)?;
+        let mut stopped = channels.stop.clone();
         let manager = self.clone();
         tokio::spawn(async move {
-            let channels = Receivers {
-                replies,
-                input: rx,
-                trust: trusted,
-                trust_request,
-                ack: acked,
-                stop: host_stop,
-            };
             let work = async {
                 if profile.protocol == "ssh" {
                     run(
@@ -194,14 +147,7 @@ impl Connections {
             // A stop first removes the server's credential socket, while the connection still exists.
             let stopping = crate::git_credential::stopping(&mut stopped, &manager, &id);
             let result = tokio::select! {biased;_ = stopping=>Ok(()),r=work=>r};
-            if let Ok(control) = manager.control(&id) {
-                let _ = control.stop.send(true);
-            }
-            manager.logs.close(&id);
-            manager.ftp.lock().unwrap().remove(&id);
-            manager.live.lock().unwrap().remove(&id);
-            manager.entries.lock().unwrap().remove(&id);
-            manager.launches.take(&id);
+            manager.finish(&id);
             let (status, message) = match result {
                 Ok(()) => ("closed", "연결이 종료되었습니다.".into()),
                 Err(e) => ("error", e),
@@ -212,6 +158,76 @@ impl Connections {
             });
         });
         Ok(())
+    }
+    /// Takes a connection slot and makes the channels its login answers arrive on. Terminals and
+    /// the network tools both start here, so `trust_host` and `auth_reply` serve either.
+    pub(crate) fn register(
+        &self,
+        id: &str,
+        profile: &Profile,
+        hops: &[(Profile, Option<Zeroizing<String>>)],
+        sink: Sink,
+        store: &Store,
+    ) -> Result<(Sink, Receivers)> {
+        profile.validate()?;
+        let resolved = crate::routes::resolve(profile, &store.list()?.profiles)?;
+        if resolved.len() != hops.len() + 1
+            || resolved.iter().zip(hops).any(|(a, b)| a.id != b.0.id)
+        {
+            return Err("경유 경로가 변경되었습니다. 다시 연결하세요.".into());
+        }
+        let broker = Arc::new(crate::windows::Broker::new(sink));
+        let event_broker = broker.clone();
+        let sink: Sink = Arc::new(move |event| event_broker.send(event));
+        let (input, rx) = mpsc::channel(64);
+        let (auth_reply, replies) = mpsc::channel(1);
+        let (stop, stopped) = watch::channel(false);
+        let (trust, trusted) = watch::channel(None);
+        let trust_request = Arc::new(Mutex::new(None));
+        let (ack, acked) = watch::channel(0);
+        let mut entries = self.entries.lock().unwrap();
+        if entries.len() >= 32 {
+            return Err("동시 연결은 최대 32개입니다.".into());
+        }
+        if entries.contains_key(id) {
+            return Err("이미 사용 중인 연결 ID입니다.".into());
+        }
+        entries.insert(
+            id.to_string(),
+            Arc::new(Control {
+                auth_reply,
+                profile: profile.clone(),
+                input,
+                stop,
+                trust,
+                trust_request: trust_request.clone(),
+                ack,
+                broker,
+                agent: Arc::default(),
+            }),
+        );
+        Ok((
+            sink,
+            Receivers {
+                replies,
+                input: rx,
+                trust: trusted,
+                trust_request,
+                ack: acked,
+                stop: stopped,
+            },
+        ))
+    }
+    /// Gives the slot back when a connection's task ends, however it ended.
+    pub(crate) fn finish(&self, id: &str) {
+        if let Ok(control) = self.control(id) {
+            let _ = control.stop.send(true);
+        }
+        self.logs.close(id);
+        self.ftp.lock().unwrap().remove(id);
+        self.live.lock().unwrap().remove(id);
+        self.entries.lock().unwrap().remove(id);
+        self.launches.take(id);
     }
 }
 pub struct Host {
@@ -282,39 +298,13 @@ impl client::Handler for Host {
         Ok(())
     }
 }
-// Cancellation and every early-return path explicitly disconnect the owned SSH task.
-struct SessionGuard(Option<Arc<client::Handle<Host>>>);
-impl std::ops::Deref for SessionGuard {
-    type Target = client::Handle<Host>;
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref().unwrap()
-    }
-}
-impl std::ops::DerefMut for SessionGuard {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        Arc::get_mut(self.0.as_mut().unwrap()).unwrap()
-    }
-}
-impl Drop for SessionGuard {
-    fn drop(&mut self) {
-        if let Some(session) = self.0.take() {
-            tokio::spawn(async move {
-                let _ = timeout(
-                    Duration::from_secs(2),
-                    session.disconnect(Disconnect::ByApplication, "closed", "en"),
-                )
-                .await;
-            });
-        }
-    }
-}
-struct Receivers {
+pub(crate) struct Receivers {
     replies: mpsc::Receiver<AuthReply>,
     input: mpsc::Receiver<Input>,
     trust: watch::Receiver<Option<bool>>,
     trust_request: Arc<Mutex<Option<String>>>,
     ack: watch::Receiver<u64>,
-    stop: watch::Receiver<bool>,
+    pub(crate) stop: watch::Receiver<bool>,
 }
 #[allow(clippy::too_many_arguments)]
 async fn run(
@@ -323,107 +313,30 @@ async fn run(
     hops: Vec<(Profile, Option<Zeroizing<String>>)>,
     paths: Vec<PathBuf>,
     sink: Sink,
-    channels: Receivers,
+    mut channels: Receivers,
     manager: Arc<Connections>,
     store: Arc<Store>,
     id: String,
 ) -> Result<()> {
+    let route = route::open(
+        route::Target {
+            profile: &p,
+            secret: Some(secret),
+            hops,
+            paths: &paths,
+            forward_agent: p.forward_agent,
+        },
+        &mut channels,
+        sink.clone(),
+        &manager,
+        &id,
+    )
+    .await?;
     let Receivers {
-        mut replies,
-        mut input,
-        trust,
-        trust_request,
-        mut ack,
-        stop,
+        mut input, mut ack, ..
     } = channels;
-    sink(Event::State {
-        status: "connecting".into(),
-        message: "서버에 연결하고 있습니다.".into(),
-    })?;
-    let route_text = crate::routes::describe(hops.iter().map(|(h, _)| h).chain([&p]));
-    let mut route = hops;
-    route.push((p.clone(), Some(secret)));
-    let mut owned: Vec<SessionGuard> = Vec::new();
-    for (index, (hop, secret)) in route.into_iter().enumerate() {
-        let label = format!("{}홉 {} ({}:{})", index + 1, hop.name, hop.host, hop.port);
-        let base_sink = sink.clone();
-        let context = label.clone();
-        let hop_sink: Sink = Arc::new(move |mut event| {
-            match &mut event {
-                Event::State { message, .. } => *message = format!("{context} · {message}"),
-                Event::AuthPrompt { name, .. } => *name = format!("{context} · {name}"),
-                _ => {}
-            }
-            base_sink(event)
-        });
-        sink(Event::State {
-            status: "connecting".into(),
-            message: format!("{route_text} · {label} 연결 중"),
-        })?;
-        manager.control(&id)?.trust.send_replace(None);
-        let work = async {
-            let stream: Box<dyn Transport> = if let Some(parent) = owned.last() {
-                Box::new(
-                    timeout(
-                        Duration::from_secs(hop.timeout),
-                        parent.channel_open_direct_tcpip(
-                            &hop.host,
-                            hop.port as u32,
-                            "127.0.0.1",
-                            0,
-                        ),
-                    )
-                    .await
-                    .map_err(|_| "경유 채널 시간 초과")?
-                    .map_err(|_| "경유 채널을 열 수 없습니다. 포워딩 허용과 목적지를 확인하세요.")?
-                    .into_stream(),
-                )
-            } else {
-                Box::new(
-                    timeout(
-                        Duration::from_secs(hop.timeout),
-                        tokio::net::TcpStream::connect((hop.host.as_str(), hop.port)),
-                    )
-                    .await
-                    .map_err(|_| "접속 시간이 초과되었습니다.")?
-                    .map_err(|_| "서버에 연결할 수 없습니다.")?,
-                )
-            };
-            let secret = match secret {
-                Some(s) => s,
-                None if matches!(hop.auth.as_str(), "password" | "key") => {
-                    crate::ssh_auth::hop_secret(&hop, &hop_sink, &mut replies).await?
-                }
-                None => Zeroizing::new(String::new()),
-            };
-            // Only the final server can match registered Remote forwarding IDs.
-            let handler_id = if hop.id == p.id {
-                id.clone()
-            } else {
-                format!("{id}-hop-{index}")
-            };
-            authenticate_hop(
-                &hop,
-                secret,
-                stream,
-                &paths,
-                hop_sink,
-                &trust,
-                trust_request.clone(),
-                &stop,
-                &manager,
-                &handler_id,
-                hop.id == p.id && p.forward_agent,
-                &mut replies,
-            )
-            .await
-        }
-        .await
-        .map_err(|e| format!("{label} 실패 · {e}"))?;
-        owned.push(work);
-    }
-    let session = owned.pop().ok_or("경유 경로가 비어 있습니다.")?;
-    let git = crate::git_credential::start(&session, &manager, &id).await;
+    let session = &route.session;
+    let git = crate::git_credential::start(session, &manager, &id).await;
     let channel = timeout(Duration::from_secs(p.timeout), async {
         let mut channel = session.channel_open_session().await?;
         crate::agent_forward::request(&mut channel, &manager, &id).await;
@@ -445,11 +358,7 @@ async fn run(
     .await
     .map_err(|_| "PTY 생성 시간이 초과되었습니다.")?
     .map_err(|_| "PTY를 열 수 없습니다.")?;
-    manager
-        .live
-        .lock()
-        .unwrap()
-        .insert(id.clone(), Arc::downgrade(session.0.as_ref().unwrap()));
+    route.publish(&manager, &id);
     manager.logs.register(&id, &p.encoding)?;
     crate::session_log::auto_start(
         &manager.logs,
@@ -461,7 +370,7 @@ async fn run(
     store.touch(&p.id)?;
     sink(Event::State {
         status: "connected".into(),
-        message: format!("연결됨 · {route_text}"),
+        message: format!("연결됨 · {}", route.description),
     })?;
     let (mut reader, writer) = channel.split();
     let output = async {
@@ -518,10 +427,9 @@ async fn run(
     let health = async {
         loop {
             tokio::time::sleep(Duration::from_millis(200)).await;
-            if let Some(i) = owned.iter().position(|h| h.is_closed()) {
+            if let Some(hop) = route.broken_hop() {
                 return Err(format!(
-                    "{}홉 연결이 끊어졌습니다. 종속 연결을 종료합니다. 재접속은 새 셸입니다.",
-                    i + 1
+                    "{hop}홉 연결이 끊어졌습니다. 종속 연결을 종료합니다. 재접속은 새 셸입니다."
                 ));
             }
         }
@@ -534,116 +442,4 @@ async fn run(
     )
     .await;
     result
-}
-
-trait Transport: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send {}
-impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send> Transport for T {}
-#[allow(clippy::too_many_arguments)]
-async fn authenticate_hop(
-    p: &Profile,
-    secret: Zeroizing<String>,
-    stream: Box<dyn Transport>,
-    paths: &[PathBuf],
-    sink: Sink,
-    trust: &watch::Receiver<Option<bool>>,
-    trust_request: Arc<Mutex<Option<String>>>,
-    stop: &watch::Receiver<bool>,
-    manager: &Arc<Connections>,
-    id: &str,
-    forward_agent: bool,
-    replies: &mut mpsc::Receiver<AuthReply>,
-) -> Result<SessionGuard> {
-    let mut preferred = russh::Preferred::default();
-    preferred.key.to_mut().extend([
-        russh::keys::Algorithm::Rsa {
-            hash: Some(HashAlg::Sha512),
-        },
-        russh::keys::Algorithm::Rsa {
-            hash: Some(HashAlg::Sha256),
-        },
-    ]);
-    let config = client::Config {
-        preferred,
-        keepalive_interval: Some(Duration::from_secs(p.keepalive)),
-        keepalive_max: 3,
-        channel_buffer_size: 8,
-        window_size: 256 * 1024,
-        maximum_packet_size: 32768,
-        ..Default::default()
-    };
-    let failure = Arc::new(Mutex::new(None));
-
-    let (waiting_tx, mut waiting) = watch::channel(false);
-    let handler = Host {
-        id: id.to_string(),
-        profile: p.clone(),
-        paths: paths.to_vec(),
-        sink: sink.clone(),
-        trust: {
-            let mut t = trust.clone();
-            t.borrow_and_update();
-            t
-        },
-        manager: manager.clone(),
-        trust_request,
-        failure: failure.clone(),
-        waiting: waiting_tx,
-        stop: stop.clone(),
-        forward_agent,
-    };
-    let handshake = client::connect_stream(Arc::new(config), stream, handler);
-    tokio::pin!(handshake);
-    let connected = loop {
-        tokio::select! {
-            result = &mut handshake => break result,
-            _ = waiting.changed() => {},
-            _ = tokio::time::sleep(Duration::from_secs(p.timeout)), if !*waiting.borrow() => return Err("SSH 협상 시간이 초과되었습니다.".into()),
-        }
-    };
-    let mut session = SessionGuard(Some(Arc::new(connected.map_err(|_| {
-        failure
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap_or("SSH 협상에 실패했습니다.".into())
-    })?)));
-    sink(Event::State {
-        status: "authenticating".into(),
-        message: "인증 중입니다.".into(),
-    })?;
-    let authentication = async {
-        if p.auth == "interactive" {
-            session
-                .authenticate_none(&p.username)
-                .await
-                .map_err(|_| "인증 협상 실패".to_string())
-        } else if p.auth == "agent" {
-            crate::ssh_auth::agent(&mut session, &p.username).await
-        } else if p.auth == "password" {
-            session
-                .authenticate_password(&p.username, secret.as_str())
-                .await
-                .map_err(|_| "비밀번호 인증에 실패했습니다.".to_string())
-        } else {
-            let key = crate::ssh_keys::load(&p.key_path, &secret)?;
-            if forward_agent {
-                crate::agent_keys::keep_login(manager, id, &key);
-            }
-            crate::ssh_auth::key(&mut session, &p.username, key).await
-        }
-    };
-    let auth = timeout(Duration::from_secs(p.timeout), authentication)
-        .await
-        .map_err(|_| "인증 시간이 초과되었습니다.")??;
-    drop(secret);
-    let partial = matches!(&auth, russh::client::AuthResult::Failure { partial_success: true, remaining_methods } if remaining_methods.contains(&russh::MethodKind::KeyboardInteractive));
-    let accepted = if p.auth == "interactive" && !auth.success() || partial {
-        crate::ssh_auth::interactive(&mut session, &p.username, &sink, replies).await?
-    } else {
-        auth.success()
-    };
-    if !accepted {
-        return Err("인증이 거부되었습니다. 사용자와 인증정보를 확인하세요.".into());
-    }
-    Ok(session)
 }

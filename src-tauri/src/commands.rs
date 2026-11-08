@@ -144,13 +144,7 @@ pub async fn connect(
     let secret = match secret {
         Some(s) if s.len() <= 16384 => Zeroizing::new(s),
         Some(_) => return Err("인증정보가 너무 깁니다.".into()),
-        None => {
-            let _guard = state.mutation.lock().unwrap();
-            match state.store.secret_ref(&profile_id)? {
-                Some(id) => state.vault.get(&state.store, &id)?,
-                None => Zeroizing::new(String::new()),
-            }
-        }
+        None => saved_secret(&state, &profile_id)?.unwrap_or_default(),
     };
     let pending_secret = std::sync::Mutex::new(if remember && !secret.is_empty() {
         Some(Zeroizing::new(secret.to_string()))
@@ -167,21 +161,7 @@ pub async fn connect(
         .filter(|c| c.profile_id == profile_id && c.auto_start)
         .collect::<Vec<_>>();
     let tunnel_connection = id.clone();
-    let hops = {
-        let _guard = state.mutation.lock().unwrap();
-        let mut route = crate::routes::resolve(&profile, &state.store.list()?.profiles)?;
-        route.pop();
-        route
-            .into_iter()
-            .map(|p| {
-                let secret = match state.store.secret_ref(&p.id)? {
-                    Some(reference) => Some(state.vault.get(&state.store, &reference)?),
-                    None => None,
-                };
-                Ok((p, secret))
-            })
-            .collect::<Result<Vec<_>>>()?
-    };
+    let hops = hop_secrets(&state, &profile)?;
     if let Some(launch) = launch {
         state.connections.launches.put(&id, launch);
     }
@@ -240,7 +220,34 @@ pub async fn connect(
     }
     started
 }
-fn same_credential_target(a: &Profile, b: &Profile) -> bool {
+/// The session's own secret, when one is saved.
+pub(crate) fn saved_secret(state: &AppState, id: &str) -> Result<Option<Zeroizing<String>>> {
+    let _guard = state.mutation.lock().unwrap();
+    match state.store.secret_ref(id)? {
+        Some(reference) => state.vault.get(&state.store, &reference).map(Some),
+        None => Ok(None),
+    }
+}
+/// The jump hosts on the way to a session, with the secrets saved for them.
+pub(crate) fn hop_secrets(
+    state: &AppState,
+    profile: &Profile,
+) -> Result<Vec<(Profile, Option<Zeroizing<String>>)>> {
+    let _guard = state.mutation.lock().unwrap();
+    let mut route = crate::routes::resolve(profile, &state.store.list()?.profiles)?;
+    route.pop();
+    route
+        .into_iter()
+        .map(|p| {
+            let secret = match state.store.secret_ref(&p.id)? {
+                Some(reference) => Some(state.vault.get(&state.store, &reference)?),
+                None => None,
+            };
+            Ok((p, secret))
+        })
+        .collect()
+}
+pub(crate) fn same_credential_target(a: &Profile, b: &Profile) -> bool {
     a.id == b.id
         && a.protocol == b.protocol
         && a.host == b.host

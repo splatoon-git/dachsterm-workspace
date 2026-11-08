@@ -1,0 +1,110 @@
+.tool-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  height: 100%;
+  padding: var(--space-lg);
+  overflow: auto;
+  background: var(--color-surface-panel);
+}
+.tool-pane h2 {
+  margin: 0;
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+.tool-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.tool-source legend {
+  float: left;
+  padding: 0;
+  margin-right: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.tool-source label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-small);
+}
+.tool-source-state {
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  overflow-wrap: anywhere;
+}
+.tool-session {
+  position: relative;
+}
+.tool-session > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 280px;
+}
+.tool-session-list {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  max-height: 320px;
+  margin-top: var(--space-xs);
+  padding: var(--space-xs);
+  overflow: auto;
+  background: var(--color-surface-panel);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+}
+.tool-session-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  justify-items: start;
+  gap: 0 var(--space-sm);
+  height: auto;
+  min-height: 40px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.tool-session-list button:hover {
+  background: var(--color-action-selected);
+}
+.tool-session-list strong,
+.tool-session-list span {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-session-list span {
+  grid-column: 1;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.tool-session-list small {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--color-text-secondary);
+}
+.tool-session-list p {
+  margin: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.tool-pending {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}

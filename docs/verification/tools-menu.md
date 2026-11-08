@@ -180,3 +180,58 @@ root 계정: Debian 12와 Alpine(정식 `traceroute` 설치) `traceroute -T -n -
 ### 제품 코드에서 확인한 것
 
 `src-tauri/src/tunnels.rs:180`과 `src-tauri/src/ssh.rs:369`도 `channel_open_direct_tcpip`를 `timeout`으로 드롭한다. 2번 A 실험과 같은 경로다. 이번 범위에서는 고치지 않았다.
+
+## TL.2·TL.5 도구 탭과 셸 없는 연결
+
+대상: 커밋 전 트리(`dev` `b5846ac`에서 갈라진 `feat/tl5-network-base`). 합격 기준은 [설계안 §8](../design/tools-menu.md#8-순서와-검증)이다.
+
+### 자동 검사
+
+| 명령 | 범위 | 결과 |
+|---|---|---|
+| `npm run typecheck` | 전체 | 종료 0 |
+| 바꾼 파일 `npx eslint`, `npx prettier --check` | 바꾼 파일 | 종료 0 |
+| `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` | Rust | 종료 0 |
+| `cargo test -p dachsterm --lib --locked net_tools` | 미사용 시간, 재사용 해제 | 5/5 |
+| `npx vitest run src/features/tools` | 출발지 상태, 재선택, 늦은 연결 정리 | 10/10 |
+| `npx vitest run src/app/workspaceLayout.test.ts` | 도구 탭의 열기·이동·분할·닫기·재시작 | 69/69(새 4건) |
+| Playwright `tools.spec.ts` | 메뉴 순서, 탭 하나, 출발지 목록, 카드, 마스터 암호 대기 | 7/7 |
+| Playwright `navigation`, `tunnels`, `ssh-key` | 기존 메뉴와 터널 위치 | 15/15 |
+| Playwright `file-tab.spec.ts -g "tools menu"` | 도구 메뉴의 문서 편집기 | 5/5 |
+
+전체 Vitest·Playwright와 `verify-windows.ps1` 전체는 바꾼 범위 밖이라 돌리지 않았다.
+
+### 실제 SSH (Windows 실제 앱, Docker OpenSSH)
+
+`npm run test:network-base`(`scripts/test-network-base-native.mjs`, `verify-windows.ps1 -Native`에 연결), 컨테이너 `dachsterm-tl5-network-*`. 종료 0.
+
+| 확인 | 결과 |
+|---|---|
+| 호스트 키 거부, 틀린 암호, 정상 로그인이 도구 탭 안의 카드로 처리됨 | 통과 |
+| 로그인 뒤 서버의 `sshd: probe` 1개, `@pts` 없음, 셸 0개, 터미널 탭 0개 | 통과 |
+| 자동 시작이 켜진 터널이 있는 세션에서 도구 연결은 터널을 시작하지 않음. 같은 세션의 터미널 연결은 시작함 | 통과 |
+| 저장된 암호가 있으면 카드 없이 연결 | 통과 |
+| 연결된 터미널 재사용: 로그인 1개, 셸 1개 유지, 카드 없음. 목록에 `연결됨` 표시 | 통과 |
+| 재사용 중인 도구 탭을 닫아도 터미널 유지, 터미널이 끝나면 도구가 종료를 표시 | 통과 |
+| 경유 경로: 두 단계 인증 카드, 신규 호스트 키, 로그인 2개, PTY·셸 없음, 탭 닫으면 0개 | 통과 |
+| 탭을 닫으면 서버 쪽 로그인이 사라짐 | 통과 |
+| 같은 세션 재선택이 미사용 시간을 다시 재고, 지나면 닫힘(시험값 6초, `DACHSTERM_TEST_NET_IDLE_SECONDS`는 debug 빌드 전용) | 통과 |
+
+이 검사가 잡은 결함: 암호 응답 뒤 호스트 키 질문이 오면 답한 인증 카드가 남았다. `applyLinkEvent`를 고치고 단위 테스트를 넣었다.
+
+### 터미널 연결 회귀
+
+| 명령 | 결과 |
+|---|---|
+| `node scripts/run-phase1.mjs --native --reuse-build` | 종료 0, PASS 77줄. 최초 호스트 키, 비밀번호·키·에이전트·추가 인증, 5탭, 분리 창, 재접속, 재시작, 마스터 암호, 변경된 호스트 키 차단 |
+| `node scripts/run-phase1.mjs --native --jumps --reuse-build` | 종료 0. 경유 인증 카드, 두 호스트 키 카드, 실제 PTY |
+| `node scripts/run-ftp.mjs --native-only --reuse-build` | 종료 0, PASS 6줄. FTP·FTPS 탭(같은 `start_route`를 지남) |
+| `node scripts/run-phase1.mjs --native --skip-app-build` (제품 엔진 프로브) | **종료 1.** `credential_checks/mod.rs:336`의 `one card for an LFS push`(카드 0장, push는 성공). 그 앞 PASS 46건은 통과 |
+
+프로브 실패는 **변경 전 커밋 `b5846ac`에서 같은 줄, 같은 값, 같은 PASS 46건으로 재현**돼 이번 변경의 회귀가 아니다. Git 자격 증명 코드는 바꾸지 않았다. 원인은 조사하지 않았다. 이 실패로 프로브의 그 뒤 항목(앱에 저장한 토큰 등)은 양쪽 모두 실행되지 않았다.
+
+### 미검증
+
+- Mac 실기기, CI.
+- 실제 5분 미사용(시험값으로만 확인).
+- 분리 창의 터미널 재사용. 코드 경로는 같지만 실행하지 않았다.

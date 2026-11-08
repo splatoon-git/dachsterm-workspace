@@ -16,13 +16,7 @@ import type {
   SessionEvent as Event,
   SessionState,
 } from './sessionTypes';
-export type {
-  AuthPrompt,
-  LocalCatalog,
-  LocalTarget,
-  PodTreeLaunch,
-  SessionState,
-} from './sessionTypes';
+export type { LocalCatalog, LocalTarget, PodTreeLaunch, SessionState } from './sessionTypes';
 import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';

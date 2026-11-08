@@ -124,6 +124,8 @@
     "allow-ssh-key-defaults",
     "allow-ssh-key-pick-folder",
     "allow-ssh-key-generate",
+    "allow-net-connect",
+    "allow-net-disconnect",
     "allow-git-credential-reply",
     "allow-git-credential-shell",
     "allow-git-credentials-saved",

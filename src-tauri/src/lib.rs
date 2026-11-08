@@ -35,6 +35,7 @@ mod local_links;
 mod login_path;
 mod maintenance;
 pub mod monitoring;
+pub mod net_tools;
 pub mod podtree;
 mod prompt_files;
 mod remote_exec;
@@ -289,6 +290,8 @@ pub fn run() {
             commands::disconnect,
             commands::trust_host,
             commands::auth_reply,
+            net_tools::net_connect,
+            net_tools::net_disconnect,
             commands::terminal_input,
             commands::terminal_resize,
             windows::detach_terminal,

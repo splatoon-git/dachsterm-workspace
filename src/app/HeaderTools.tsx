@@ -3,6 +3,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { LazySshKeyDialog } from '../components/NewSshKey';
 import { ToolbarMenu } from '../components/ToolbarMenu';
 import { games, type GameId } from '../features/games/catalog';
+import { networkTools, toolActions, type ToolId } from '../features/tools/catalog';
 import { desktop } from '../lib/ipc';
 import { modKey } from '../lib/platform';
 import type { AppShortcut } from './appShortcuts';
@@ -42,19 +43,26 @@ export function HeaderMenus({
   sidebarOpen,
   toggleSidebar,
   tools,
+  activeTool,
   activeGame,
   openGame,
   preview,
 }: {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
-  tools: { tunnels: () => void; editor: () => void };
+  tools: { tunnels: () => void; editor: () => void; network: (id: ToolId) => void };
+  activeTool: ToolId | null;
   activeGame: GameId | null;
   openGame: (id: GameId) => void;
   /** Opens the terminal preview, which only the browser run without a backend offers. */
   preview: () => void;
 }) {
   const [makingKey, setMakingKey] = useState(false);
+  const run = {
+    tunnels: tools.tunnels,
+    sshKey: () => setMakingKey(true),
+    editor: tools.editor,
+  };
   return (
     <>
       <IconButton
@@ -66,18 +74,25 @@ export function HeaderMenus({
         run={toggleSidebar}
       />
       <ToolbarMenu label="도구">
-        <button onClick={tools.tunnels}>
-          <Icon name="tunnel" size={14} />
-          터널
-        </button>
-        <button onClick={() => setMakingKey(true)}>
-          <Icon name="key" size={14} />
-          SSH 키 만들기
-        </button>
-        <button onClick={tools.editor}>
-          <Icon name="file" size={14} />
-          문서 편집기
-        </button>
+        {toolActions.map((tool) => (
+          <button key={tool.id} onClick={run[tool.id]}>
+            <Icon name={tool.icon} size={14} />
+            {tool.title}
+          </button>
+        ))}
+        <span className="menu-label">네트워크</span>
+        <nav aria-label="네트워크 도구 목록">
+          {networkTools.map((tool) => (
+            <button
+              key={tool.id}
+              aria-current={activeTool === tool.id ? 'page' : undefined}
+              onClick={() => tools.network(tool.id)}
+            >
+              <Icon name="activity" size={14} />
+              {tool.title}
+            </button>
+          ))}
+        </nav>
         <span className="menu-label">게임</span>
         <nav aria-label="게임 목록">
           {games.map((game) => (

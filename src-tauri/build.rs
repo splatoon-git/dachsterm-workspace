@@ -70,6 +70,8 @@ fn main() {
             "ssh_key_defaults",
             "ssh_key_pick_folder",
             "ssh_key_generate",
+            "net_connect",
+            "net_disconnect",
             "git_credential_reply",
             "git_credential_shell",
             "git_credentials_saved",
