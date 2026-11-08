@@ -3,7 +3,6 @@ use russh::{
     ChannelMsg, Disconnect, client,
     keys::{HashAlg, PublicKeyOrCertificate},
 };
-use serde::Serialize;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -15,45 +14,10 @@ use tokio::{
     time::timeout,
 };
 use zeroize::Zeroizing;
+mod event;
 mod host_key;
+pub use event::{AuthPrompt, Event};
 
-#[derive(Clone, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum Event {
-    Replay {
-        active: bool,
-    },
-    AuthPrompt {
-        challenge: String,
-        name: String,
-        instructions: String,
-        prompts: Vec<AuthPrompt>,
-    },
-    State {
-        status: String,
-        message: String,
-    },
-    HostKey {
-        challenge: String,
-        host: String,
-        port: u16,
-        algorithm: String,
-        fingerprint: String,
-    },
-    Data {
-        seq: u64,
-        bytes: Vec<u8>,
-    },
-    AgentSign(crate::agent_forward::SignRequest),
-    AgentNotice {
-        message: String,
-    },
-}
-#[derive(Clone, Serialize)]
-pub struct AuthPrompt {
-    pub prompt: String,
-    pub echo: bool,
-}
 pub struct AuthReply {
     pub challenge: String,
     pub responses: Zeroizing<Vec<String>>,
@@ -83,6 +47,7 @@ pub struct Connections {
     pub forwards: Mutex<HashMap<(String, u16), crate::tunnels::Forwarded>>,
     pub live: Mutex<HashMap<String, std::sync::Weak<client::Handle<Host>>>>,
     pub launches: crate::terminal_start::Launches,
+    pub git: crate::git_credential::Forwards,
 }
 impl Connections {
     pub fn ftp_session(&self, id: &str) -> Result<Arc<crate::ftp::Session>> {
@@ -226,7 +191,9 @@ impl Connections {
                     .await
                 }
             };
-            let result = tokio::select! {biased;_ = stopped.changed()=>Ok(()),r=work=>r};
+            // A stop first removes the server's credential socket, while the connection still exists.
+            let stopping = crate::git_credential::stopping(&mut stopped, &manager, &id);
+            let result = tokio::select! {biased;_ = stopping=>Ok(()),r=work=>r};
             if let Ok(control) = manager.control(&id) {
                 let _ = control.stop.send(true);
             }
@@ -302,6 +269,16 @@ impl client::Handler for Host {
         _: &mut client::Session,
     ) -> std::result::Result<(), Self::Error> {
         crate::agent_forward::open(self.forward_agent, &self.manager, &self.id, channel, reply);
+        Ok(())
+    }
+    async fn server_channel_open_forwarded_streamlocal(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        path: &str,
+        reply: client::ChannelOpenHandle,
+        _: &mut client::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        crate::git_credential::open(&self.manager, &self.id, path, channel, reply);
         Ok(())
     }
 }
@@ -446,6 +423,7 @@ async fn run(
         owned.push(work);
     }
     let session = owned.pop().ok_or("경유 경로가 비어 있습니다.")?;
+    let git = crate::git_credential::start(&session, &manager, &id).await;
     let channel = timeout(Duration::from_secs(p.timeout), async {
         let mut channel = session.channel_open_session().await?;
         crate::agent_forward::request(&mut channel, &manager, &id).await;
@@ -460,7 +438,8 @@ async fn run(
                 &[(russh::Pty::VERASE, 127), (russh::Pty::IUTF8, 1)],
             )
             .await?;
-        crate::terminal_start::begin(&channel, &p, manager.launches.take(&id)).await?;
+        let git = git.as_ref().map(|g| g.path());
+        crate::terminal_start::begin(&channel, &p, manager.launches.take(&id), git).await?;
         Ok::<_, russh::Error>(channel)
     })
     .await
@@ -548,6 +527,7 @@ async fn run(
         }
     };
     let result = tokio::select! {r=output=>r,r=input_loop=>r,r=health=>r};
+    crate::git_credential::finish(&manager, &id).await;
     let _ = timeout(
         Duration::from_secs(2),
         session.disconnect(Disconnect::ByApplication, "closed", "en"),

@@ -69,3 +69,24 @@
     grid-row: 2;
   }
 }
+
+/* Saved HTTPS Git credentials (DX.12): host and user only, each removable. */
+.git-credentials {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.git-credentials li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-size: var(--font-small);
+}
+.git-credentials span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

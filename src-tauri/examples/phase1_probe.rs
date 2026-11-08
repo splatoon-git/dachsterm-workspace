@@ -2,6 +2,7 @@
 mod queue_checks;
 // Runs the actual product engine against the ephemeral OpenSSH fixture. No secret output.
 mod agent_checks;
+mod credential_checks;
 mod git_checks;
 mod jump_checks;
 mod launch_checks;
@@ -177,6 +178,7 @@ fn base() -> Profile {
         forward_login_key: true,
         forward_keys: vec![],
         forward_system_agent: true,
+        forward_git_credentials: false,
         last_connected: None,
         has_secret: false,
     }
@@ -298,6 +300,13 @@ async fn run() -> Result<()> {
     let paths = vec![dir.path().join("known_hosts")];
     let store = Arc::new(Store::open(&dir.path().join("sessions.sqlite3"))?);
     let manager = Arc::new(Connections::default());
+    // `run-phase1 --credentials-only`: the HTTPS credential checks alone, after a change there.
+    if std::env::var_os("DACHSTERM_PROBE_CREDENTIALS_ONLY").is_some() {
+        if std::env::var_os("DACHSTERM_PROBE_VERSIONS_ONLY").is_none() {
+            credential_checks::run(&manager, &store, &paths, None).await?;
+        }
+        return credential_checks::versions(&manager, &store, &paths).await;
+    }
     let p = store.save(base(), None)?;
     let mut rejected = begin(&manager, &store, &paths, p.clone(), env("PASSWORD"))?;
     assert!(rejected.connected(false).await.is_err());
@@ -460,10 +469,11 @@ async fn run() -> Result<()> {
     mfa.key_path = rsa_path.to_string_lossy().into();
     mfa.port = env("MFA_PORT").parse()?;
     mfa.forward_agent = true;
+    mfa.forward_git_credentials = true;
     let mfa = store.save(mfa, None)?;
     let mut client = begin(&manager, &store, &paths, mfa.clone(), String::new())?;
     let mut challenged = false;
-    let mut notice = None;
+    let mut notices = vec![];
     loop {
         match client.event().await? {
             Event::HostKey { fingerprint, .. } => {
@@ -474,7 +484,7 @@ async fn run() -> Result<()> {
                 );
                 manager.control(&client.id)?.trust.send(Some(true))?;
             }
-            Event::AgentNotice { message } => notice = Some(message),
+            Event::AgentNotice { message } => notices.push(message),
             Event::AuthPrompt {
                 challenge, prompts, ..
             } => {
@@ -496,7 +506,13 @@ async fn run() -> Result<()> {
         }
     }
     assert!(challenged);
-    assert!(agent_checks::refused(notice.as_deref()));
+    assert_eq!(notices.len(), 2, "each refusal once");
+    assert!(
+        notices
+            .iter()
+            .any(|n| agent_checks::refused(Some(n)) && n.contains("키 전달"))
+    );
+    assert!(notices.iter().any(|n| n.contains("소켓 전달")));
     client.stop().await?;
     let mut client = begin(&manager, &store, &paths, mfa, String::new())?;
     loop {
@@ -508,9 +524,15 @@ async fn run() -> Result<()> {
     println!(
         "PASS RSA-only host verification, RSA SHA256 + PAM MFA, cancellation during challenge"
     );
-    println!("PASS a server refusing agent forwarding is reported once and the shell still opens");
+    println!(
+        "PASS a server refusing agent and socket forwarding is reported once each and the shell still opens"
+    );
     agent_checks::run(&manager, &store, &paths).await?;
     agent_checks::builtin::run(&manager, &store, &paths, dir.path()).await?;
+    // Their own database: an earlier check here turned the master password vault on.
+    let credential_store = Arc::new(Store::open(&dir.path().join("credentials.sqlite3"))?);
+    credential_checks::run(&manager, &credential_store, &paths, Some(&mut clients[0])).await?;
+    credential_checks::versions(&manager, &credential_store, &paths).await?;
     for i in 1..5 {
         let mut profile = base();
         profile.name = format!("fixture-{i}");
@@ -555,7 +577,14 @@ async fn run() -> Result<()> {
         c.marker("READY_TAB\r\n").await?;
         clients.push(c);
     }
-    assert!(manager.entries.lock().unwrap().len() == 5);
+    let open: Vec<String> = manager
+        .entries
+        .lock()
+        .unwrap()
+        .values()
+        .map(|c| c.profile.name.clone())
+        .collect();
+    assert_eq!(open.len(), 5, "open connections: {open:?}");
     for (i, c) in clients.iter_mut().enumerate() {
         c.send(&format!("printf 'ISOLATED_{i}\\n'\n")).await?;
         c.marker(&format!("ISOLATED_{i}\r\n")).await?;
@@ -641,7 +670,7 @@ async fn run() -> Result<()> {
 }
 #[tokio::main]
 async fn main() {
-    if timeout(Duration::from_secs(600 + stress_seconds()), run())
+    if timeout(Duration::from_secs(1500 + stress_seconds()), run())
         .await
         .is_ok_and(|r| r.is_ok())
     {

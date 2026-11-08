@@ -9,6 +9,7 @@ import { KittyKeyboard, modifiedEnter } from './kittyKeyboard';
 import { ProgramStatus } from './programStatus';
 import { PaneView } from './paneView';
 import { AgentSignQueue } from './agentSign';
+import { InputQueue } from './inputQueue';
 import type {
   LocalTarget,
   PodTreeLaunch,
@@ -52,7 +53,7 @@ export class TerminalSession {
     },
     supportsHook: () =>
       call<boolean>('terminal_supports_directory_hook', { id: this.connectionId }),
-    hook: () => shellHook({ guide: terminalPreferences().programGuide }),
+    hook: () => shellHook({ guide: terminalPreferences().programGuide, git: this.gitHook }),
     type: (data) => this.send(data),
     write: (data) => this.terminal.write(data),
     report: (status) => this.update({ ...this.current, directoryHook: status }),
@@ -60,9 +61,19 @@ export class TerminalSession {
   wantsDirectoryFollow() {
     return this.followDirectory ?? terminalPreferences().followDirectory;
   }
-  /** One hook carries folder reports and program notices, so either setting installs it. */
+  /** The connection's HTTPS Git helper line (DX.12), typed with the hook. */
+  private gitHook?: string;
+  /** One hook carries folder reports, program notices and the Git helper: any of them installs it. */
   private wantsShellHook() {
-    return this.wantsDirectoryFollow() || terminalPreferences().programGuide;
+    return !!this.gitHook || this.wantsDirectoryFollow() || terminalPreferences().programGuide;
+  }
+  /** tmux gets the helper from its start command instead, since nothing is typed there. */
+  private async loadGitHook(id: string) {
+    const { forwardGitCredentials, tmuxSession } = this.profile;
+    const asks = forwardGitCredentials && !tmuxSession && !this.localTarget && !this.podtree;
+    const hook =
+      asks && (await call<string | null>('git_credential_shell', { id }).catch(() => null));
+    if (id === this.connectionId) this.gitHook = hook || undefined;
   }
   setFollowDirectory(value: boolean) {
     this.followDirectory = value;
@@ -76,7 +87,7 @@ export class TerminalSession {
   }
   typeDirectoryHook() {
     this.directoryHookInstaller.cancel();
-    this.send(shellHook({ guide: terminalPreferences().programGuide }) + '\r');
+    this.send(shellHook({ guide: terminalPreferences().programGuide, git: this.gitHook }) + '\r');
     this.terminal.focus();
   }
   readonly tabId = crypto.randomUUID();
@@ -102,8 +113,11 @@ export class TerminalSession {
   private current: SessionState = { status: 'connecting', message: '연결 준비 중', hostKey: null };
   disposed = false;
   private pending = false;
-  private inputQueue: string[] = [];
-  private sending = false;
+  private readonly input = new InputQueue({
+    send: (data) => call(`${this.backend}_input`, { id: this.connectionId, data }),
+    notice: (message) => this.notice(message),
+    disposed: () => this.disposed,
+  });
   private replaying = false;
   private channel?: Channel<Event>;
   constructor(
@@ -278,7 +292,8 @@ export class TerminalSession {
           authPrompt: event,
           message: '서버의 추가 인증 응답을 입력하세요.',
         });
-      else if (event.type === 'agentSign') this.agentSign.add(event, id);
+      else if (event.type === 'agentSign' || event.type === 'gitCredential')
+        this.agentSign.add(event, id);
       else if (event.type === 'agentNotice') this.notice(event.message);
       else if (event.type === 'hostKey')
         this.update({
@@ -305,8 +320,10 @@ export class TerminalSession {
               rows: this.terminal.rows,
             }).catch((e) => this.notice(errorText(e)));
           this.onConnected();
-          if (this.autoDirectoryHook && this.wantsShellHook())
-            void this.directoryHookInstaller.install();
+          void this.loadGitHook(id).then(() => {
+            if (this.autoDirectoryHook && this.wantsShellHook())
+              void this.directoryHookInstaller.install();
+          });
         }
       }
     };
@@ -317,11 +334,12 @@ export class TerminalSession {
     this.channel = new Channel<Event>();
     this.bindEvents(this.channel, id);
     await call('attach_terminal', { id, onEvent: this.channel });
+    await this.loadGitHook(id);
   }
   release() {
     this.disposed = true;
     this.directoryHookInstaller.cancel();
-    this.inputQueue = [];
+    this.input.clear();
     this.terminal.dispose();
     this.listeners.clear();
   }
@@ -343,37 +361,7 @@ export class TerminalSession {
   send(data: string) {
     if (this.current.status !== 'connected' || this.replaying) return;
     this.directoryHookInstaller.noteInput();
-    // Bound both queued input and individual IPC messages. Preserve surrogate pairs.
-    if (this.inputQueue.reduce((n, s) => n + s.length, 0) + data.length > 65536) {
-      this.notice('붙여넣기는 한 번에 64KiB 이하로 나누어 주세요.');
-      return;
-    }
-    let chunk = '';
-    for (const character of data) {
-      chunk += character;
-      if (chunk.length >= 4096) {
-        this.inputQueue.push(chunk);
-        chunk = '';
-      }
-    }
-    if (chunk) this.inputQueue.push(chunk);
-    void this.flush();
-  }
-  private async flush() {
-    if (this.sending) return;
-    this.sending = true;
-    try {
-      while (this.inputQueue.length && !this.disposed)
-        await call(`${this.backend}_input`, {
-          id: this.connectionId,
-          data: this.inputQueue.shift()!,
-        });
-    } catch (e) {
-      this.inputQueue = [];
-      this.notice(errorText(e));
-    } finally {
-      this.sending = false;
-    }
+    this.input.push(data);
   }
   async disconnect() {
     await call(this.closeCommand, { id: this.connectionId }).catch((e) =>
@@ -384,7 +372,7 @@ export class TerminalSession {
     if (!['closed', 'error'].includes(this.current.status)) return;
     this.connectionId = crypto.randomUUID();
     this.profile = profile;
-    this.inputQueue = [];
+    this.input.clear();
     this.directoryHookInstaller.cancel();
     this.terminal.reset();
     this.keyboard.reset();

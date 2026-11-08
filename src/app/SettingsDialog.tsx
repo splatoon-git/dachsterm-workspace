@@ -3,6 +3,7 @@ import { Dialog } from '../components/Dialog';
 import { Icon, type IconName } from '../components/Icon';
 import { AgentPresetSettings } from '../features/agents/AgentPresetSettings';
 import { LocalAgentSettings } from '../features/agents/LocalAgentSettings';
+import { GitCredentialSettings } from '../features/agents/GitCredentialSettings';
 import { MaintenancePanel } from '../features/settings/MaintenancePanel';
 import { SessionManager } from '../features/sessions/SessionManager';
 import { SessionTransfer } from '../features/sessions/SessionTransfer';
@@ -33,7 +34,8 @@ const entries: Entry[] = [
     id: 'agents',
     label: '에이전트',
     icon: 'snippet',
-    summary: 'CLI 에이전트의 시작 명령과, 로컬 탭에서 쓸 SSH 키를 정합니다.',
+    summary:
+      'CLI 에이전트의 시작 명령, 로컬 탭에서 쓸 SSH 키, 서버에서 git push에 쓸 저장한 자격 증명을 정합니다.',
   },
   { id: 'vault', label: '암호 보관함', icon: 'lock', summary: vaultSummary },
   {
@@ -101,6 +103,7 @@ export function SettingsDialog({
       <>
         <AgentPresetSettings />
         <LocalAgentSettings />
+        <GitCredentialSettings />
       </>
     ),
     vault: <VaultPanel />,

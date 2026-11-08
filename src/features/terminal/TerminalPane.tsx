@@ -19,6 +19,7 @@ import { usePromptAttachments } from './usePromptAttachments';
 import { useInputReach } from './broadcastStatus';
 import { needsPasteConfirmation, useTerminalDisplay, useTerminalPreferences } from './preferences';
 import { AgentSignCard } from './AgentSignCard';
+import { GitCredentialCard } from './GitCredentialCard';
 import { currentSign } from './agentSign';
 const FIT_INTERVAL_MS = 60;
 const hasImage = (data: DataTransfer | null) =>
@@ -242,12 +243,20 @@ export function TerminalPane({
           </div>
         </div>
       )}
-      {sign && (
-        <AgentSignCard
+      {sign?.type === 'gitCredential' ? (
+        <GitCredentialCard
           key={sign.request}
           request={sign}
-          answer={(answer) => session.agentSign.answer(sign, answer)}
+          answer={(answer) => session.agentSign.answerCredential(sign, answer)}
         />
+      ) : (
+        sign && (
+          <AgentSignCard
+            key={sign.request}
+            request={sign}
+            answer={(answer) => session.agentSign.answer(sign, answer)}
+          />
+        )
       )}
       {state.authPrompt && (
         <AuthenticationPrompt

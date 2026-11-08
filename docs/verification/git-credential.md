@@ -158,3 +158,85 @@ git 1.8에는 `GIT_TERMINAL_PROMPT`가 없어 `/dev/tty`를 열려다 `No such d
 - 서버는 distro 패키지의 `openssh-server git tmux git-lfs`에 사용자 `probe`(공개키만)를 둔 이미지다. 클라이언트 키는 컨테이너 시작 시 만들었다.
 - HTTPS Git 서버는 `docker build -t dachsterm-git-https tests/git-https`로 만들어 Docker 네트워크에 `--network-alias git.test`로 띄운다.
 - 컨테이너, 네트워크, 시험 저장소는 실행 후 제거했다.
+
+## DX.12 구현 검증
+
+- 실행일: 2026-11-08, 브랜치 `feat/dx12-git-credentials`, 기준 `24cbbb7` 위 미커밋 트리. 설계에 반영한 결정은 [설계안 DX.12 "구현에서 정한 것"](../design/developer-workflow.md#dx12--https-git-자격-증명-전달-2026-11-08-추가)에 있다.
+- 비밀 취급: Git 서버 암호는 컨테이너가 만들고 검사 프로세스 환경에만 둔다. 출력에는 값이 나오지 않는다(셸은 `stty -echo`, 값은 파일로만 받는다). 이 PC 쪽 git은 격리 폴더(`HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM=1`)와 `store` helper로만 실행했다. 사용자의 자격 증명 관리자에는 묻지 않았다. 앱이 OS 저장소에 쓴 시험 항목은 검사가 지우고 지워졌음을 확인한다. 끝난 뒤 `cmdkey /list`에 `git.test` 대상은 0건이었다.
+
+### 자동 검사
+
+| 범위 | 명령 | 결과 |
+|---|---|---|
+| Rust 단위 | `cargo test -p dachsterm --lib --locked -- git_credential terminal_start storage settings vault` | 45 통과 |
+| Rust 정적 | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과 |
+| 프런트엔드 | `npm run typecheck`, 바꾼 파일 eslint·prettier | 통과 |
+| Vitest | `agentSign`, `shellHook`, `inputQueue`, `SessionTab`, `sessions/model` | 5파일 28건 통과 |
+| Playwright | `git-credential.spec.ts`(새 카드) 9건, 설정 창·세션 폼을 여는 `agent-launch`·`session-form` 11건 | 통과 |
+| 실제 프로토콜 | `node scripts/run-phase1.mjs`(= `npm run probe:phase1`) | 종료 0, PASS 60줄(자격 증명 8줄) |
+| 버전별 서버 | `node scripts/run-phase1.mjs --git-versions-only` | 종료 0, 서버 4종 PASS |
+| 네이티브 | `node scripts/run-phase1.mjs --native --agent-only --reuse-build` | 종료 0, PASS 36줄(자격 증명 5줄) |
+
+### 실제 프로토콜 (Docker)
+
+`tests/openssh`(Debian 12, git 2.39.5, tmux 3.3a, git-lfs)와 `tests/git-https`(Gitea, Basic 인증, LFS)를 검사용 Docker 네트워크에서 `git.test`로 붙였다. fixture에 `XDG_RUNTIME_DIR`(사용자 소유 0700), root 소유 소켓 `/tmp/dachsterm-git-rootowned`, 소켓 전달을 막은 MFA 서버(`AllowStreamLocalForwarding no`)를 더했다. 검사 코드는 `src-tauri/examples/credential_checks/`다.
+
+| 확인 | 결과 |
+|---|---|
+| 소켓 위치와 권한 | `XDG_RUNTIME_DIR` 아래, `srw-------`. 버전별 서버(값 없음)는 `/tmp` |
+| 셸에 넣는 줄 | 대화형 Bash에 두 번 입력해도 `GIT_CONFIG_PARAMETERS`에 helper가 한 번만 붙는다 |
+| 직접 입력 | 카드에서 입력한 값으로 push 성공, 카드 1번 |
+| `store`·`erase` | `git credential approve`·`reject` 뒤 `credential-cache--daemon` 없음(0700 폴더에서도) |
+| LFS | LFS 객체 push 한 번에 카드 1번("이번만 허용" 30초 재사용) |
+| 앱 저장 토큰 | 금고(`Vault::save`)와 참조로 저장한 토큰이 "이번만 허용"으로 push. 삭제 뒤 OS 항목이 사라진다 |
+| 이 PC의 `git credential fill` | 격리 `store`의 값으로 push |
+| 거부 | git이 터미널에서 `Username for 'https://git.test:3000'`을 묻고, 빈 답이면 push가 실패한다 |
+| 10분 허용 | 같은 연결의 다음 push는 카드 없이 성공 |
+| `http` | 카드 없이 거부, 연결당 안내 1번 |
+| 남의 소켓 | root 소유 소켓 경로로 helper를 바꿔도 요청이 가지 않는다(수신 기록 0바이트) |
+| 64KiB 초과 | 답 없이 닫힘, 카드 없음 |
+| 다섯째 채널 | 열린 채널 4개가 있을 때 거부, 카드 없음 |
+| 반복 요청 | 10초 안 11번째 `get`이 거부되고 안내 1번 |
+| 서버 helper 경고 | 서버 사용자 `credential.helper=store`가 카드의 `serverHelpers`에 보인다 |
+| 정상 종료 | 탭을 닫은 연결의 소켓 파일이 다음 연결에서 보이지 않는다 |
+| 소켓 전달 거부 서버 | 키 전달 거부와 함께 안내 1번, 셸은 열린다 |
+| tmux | 새 tmux 서버의 첫 패널, 새 창, 분할 패널이 이 연결의 helper를 받는다. 다시 연결하면 새 창·패널이 새 연결의 소켓을 받는다. 새 창의 `git credential fill`이 카드로 값을 받는다 |
+
+버전별 서버(`tests/git-servers`, `--git-versions` 또는 `--git-versions-only`): 각 서버에서 직접 입력으로 push, 데몬 없음, tmux 첫 패널·새 창·분할 패널·재접속 확인.
+
+| 이미지 | git | tmux | 결과 |
+|---|---|---|---|
+| centos:7 | 1.8.3.1(배포판 패키지) | 1.8 | 통과(`new-session -e` 실패 후 대체 생성) |
+| ubuntu:18.04 | 2.17.1(배포판 패키지) | 2.6 | 통과 |
+| ubuntu:20.04 | 2.25.1(배포판 패키지) | 3.0a | 통과 |
+| alpine:edge | 2.56.0 | 3.8 | 통과 |
+
+git 버전은 Alpine만 검사 출력에서 읽었다. 나머지는 DX.12.0 기록과 같은 배포판 패키지이고, 출력 파싱을 고친 뒤 다시 돌리지 않았다.
+
+검사를 만들며 고친 것:
+
+- 반복 요청 차단을 10초 안 5번에서 10번으로 바꿨다. LFS 저장소에서 push 두 번이 이어지면 6번이 되어 두 번째 push가 막혔다(제품 변경, 설계안 메모).
+- tmux 화면은 커서 이동으로 다시 그려져 줄 끝 표식이 맞지 않는다. tmux 결과는 같은 서버의 일반 셸 연결로 파일을 읽어 확인한다.
+- CentOS 7 sshd는 기본 `UseDNS yes`라 컨테이너에서 로그인이 멈춰 버전별 서버 설정에 `UseDNS no`를 넣었다.
+- 전체 실행에서는 앞 검사가 같은 세션 DB에 마스터 암호를 켜 두므로 자격 증명 검사는 별도 DB를 쓴다. 검사 동안 앞서 연 연결의 출력도 받아 ACK해 30초 렌더링 제한으로 끊기지 않게 한다.
+
+### 네이티브 (WebView2, 실제 앱)
+
+`scripts/verify-agent-terminal.mjs`의 DX.12 단계. 세션 폼의 **HTTPS Git 자격 증명 전달**을 켜고 연결해, 셸 훅이 helper 줄을 넣을 때까지 기다린 뒤 진행했다.
+
+- 카드에 저장소 서버, 세션 이름, "서버로 전달됩니다"가 보이고 탭이 `입력 대기`가 된다. 카드는 터미널의 포커스를 가져가지 않는다.
+- **직접 입력**과 **이 PC에 저장**으로 push 성공, `git_credentials_saved`에 `git.test:3000 · probe`.
+- 다시 연결한 뒤 **이번만 허용**은 저장 토큰으로 push.
+- **거부**하면 터미널에 git의 `Username for` 질문이 보인다.
+- 설정 창 › 에이전트 목록에서 지우면 목록과 저장값이 비고, 세션 삭제 뒤 `credentialWarning`이 없다.
+- 격리 `store`에 값을 두고 **이 연결에서 10분 허용**을 고르면 이 PC의 `git credential fill`로 push가 되고, 다음 push는 카드 없이 된다.
+
+### DX.12 대기
+
+| 항목 | 이유 |
+|---|---|
+| GitHub, GitLab.com, Bitbucket 실제 push(이 PC의 자격 증명 관리자) | 사용자의 실제 계정과 자격 증명 관리자가 필요하다. 수동 합격 항목 |
+| macOS 키체인 `git credential fill`, Finder 앱에서 `/usr/bin/git` 설치 창이 뜨지 않음, Mac 카드 동작 | Mac 실기기 필요(M.15) |
+| GCM 로그인 창이 앱의 "가져오는 중" 동안 뜨고 값이 돌아오는 흐름 | DX.12.0에서 GCM 자체는 확인했다. 앱을 거친 흐름은 실제 호스팅 확인 때 함께 본다 |
+| Windows·macOS CI | 푸시하지 않았다 |
+| fish·csh 수동 한 줄, 서버 helper 경고, 재접속 갱신 줄의 안내서 반영 | 설계 §9대로 DX.13과 함께 안내서를 고칠 때 |

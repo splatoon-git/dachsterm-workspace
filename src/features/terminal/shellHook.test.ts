@@ -46,4 +46,12 @@ describe('shell hook', () => {
       'printf "\\033]777;DachsTerm;program;%s\\007" $w',
     ]);
   });
+
+  it("puts the connection's Git helper line first, outside the evals", () => {
+    const git = String.raw`case "$GIT_CONFIG_PARAMETERS" in *x*) ;; *) export GIT_CONFIG_PARAMETERS=''\''a'\''';; esac`;
+    const hook = shellHook({ guide: false, git });
+    expect(hook.startsWith(`${git}; if [ -n "$BASH_VERSION" ]`)).toBe(true);
+    expect(hook.slice(git.length).match(/'/g)).toHaveLength(4);
+    expect(shellHook({ guide: false })).not.toContain('GIT_CONFIG_PARAMETERS');
+  });
 });

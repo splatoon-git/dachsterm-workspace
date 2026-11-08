@@ -19,7 +19,8 @@ export function hasConnectionOverrides(p: Profile) {
     (p.encoding ?? 'utf-8') !== 'utf-8' ||
     !!p.tlsCaPath ||
     !!p.tmuxSession ||
-    !!p.forwardAgent
+    !!p.forwardAgent ||
+    !!p.forwardGitCredentials
   );
 }
 export function inGroup(p: Profile, id: string, groups: Group[]) {

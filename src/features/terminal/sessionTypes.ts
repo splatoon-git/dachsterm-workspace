@@ -49,10 +49,23 @@ export type AgentSignRequest = {
   passphrase: boolean;
   seconds: number;
 };
+/** The server's git asks for an HTTPS credential. Every text field is already plain and short. */
+export type GitCredentialRequest = {
+  type: 'gitCredential';
+  request: string;
+  session: string;
+  host: string;
+  path: string | null;
+  username: string | null;
+  /** The server user's own Git helpers, which may keep the value after a push. */
+  serverHelpers: string[];
+  seconds: number;
+};
 export type SessionEvent =
   | { type: 'replay'; active: boolean }
   | AuthPrompt
   | AgentSignRequest
+  | GitCredentialRequest
   | { type: 'agentNotice'; message: string }
   | HostKey
   | { type: 'state'; status: string; message: string }

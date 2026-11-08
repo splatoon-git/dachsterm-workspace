@@ -37,6 +37,16 @@
     margin-bottom: var(--space-xs);
   }
 }
+/* The credential card says more than a signature card: its notes shrink with the details. */
+.git-credential-details {
+  flex-shrink: 1;
+  min-height: 3em;
+  overflow: auto;
+  font-size: var(--font-small);
+}
+.git-credential-details > p {
+  margin: 0 0 var(--space-sm);
+}
 .agent-sign-unlock {
   display: flex;
   flex-direction: column;

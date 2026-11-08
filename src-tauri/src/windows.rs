@@ -41,7 +41,10 @@ impl Broker {
                     s.bytes -= bytes.len();
                 }
             }
-        } else if !matches!(event, Event::AgentSign(_) | Event::AgentNotice { .. }) {
+        } else if !matches!(
+            event,
+            Event::AgentSign(_) | Event::AgentNotice { .. } | Event::GitCredential(_)
+        ) {
             // A sign request is answered once or refused by timeout. Replaying it to another
             // window would also hide the connection state behind it.
             s.state = Some(event.clone());

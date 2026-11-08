@@ -23,6 +23,8 @@ export type Profile = {
   forwardLoginKey?: boolean;
   forwardKeys?: ForwardKey[];
   forwardSystemAgent?: boolean;
+  /** HTTPS Git credentials through the server's git. Off unless the form turns it on. */
+  forwardGitCredentials?: boolean;
   lastConnected: number | null;
   hasSecret: boolean;
 };
