@@ -3,6 +3,7 @@ import {
   passphraseReason,
   signPurpose,
   signSource,
+  signText,
   type PendingSign,
   type SignAnswer,
   type SignDecision,
@@ -30,6 +31,7 @@ export function AgentSignCard({
   const [passphrase, setPassphrase] = useState('');
   const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
+  const text = signText(request);
   useEffect(() => {
     const started = Date.now();
     const timer = setInterval(
@@ -49,10 +51,10 @@ export function AgentSignCard({
   }
   return (
     <div className="trust-card agent-sign-card" role="alertdialog" aria-label="키 서명 요청">
-      <h2>서버가 이 PC의 키로 서명하려고 합니다</h2>
+      <h2>{text.title}</h2>
       <p>직접 실행한 작업(git push 등)이 보낸 요청인지 확인하세요. 모르는 요청이면 거부하세요.</p>
       <dl>
-        <dt>세션</dt>
+        <dt>{text.where}</dt>
         <dd>{request.session}</dd>
         <dt>용도</dt>
         <dd>{signPurpose(request)}</dd>
@@ -117,7 +119,7 @@ export function AgentSignCard({
             거부
           </button>
           <button disabled={busy} onClick={() => void send({ decision: 'connection' })}>
-            이 연결에서 10분 허용
+            {text.allow}
           </button>
           <button
             className="primary"

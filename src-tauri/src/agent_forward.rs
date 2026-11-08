@@ -6,10 +6,10 @@
 use crate::{
     agent_filter::{self, FAILURE, Purpose, Verdict},
     agent_keys::{self, AppKeys, Ask, Identity, Origin, Reply, Source},
+    approval::Notify,
     ssh::{Connections, Event},
     ssh_keys,
     storage::{ForwardKey, Profile, Result},
-    windows::Broker,
 };
 use russh::{
     Channel, ChannelMsg, client,
@@ -69,6 +69,8 @@ pub struct SignRequest {
     pub namespace: Option<String>,
     pub host_key: Option<String>,
     pub source: Source,
+    /// Asked by a program in a local tab (DX.13), not by a server.
+    pub local: bool,
     /// The key file is encrypted and not unlocked: allowing asks for its Passphrase.
     pub passphrase: bool,
     pub seconds: u64,
@@ -183,7 +185,7 @@ impl Agent {
     /// skips the card unless a key still has to be unlocked.
     async fn approve(
         &self,
-        broker: &Broker,
+        events: &dyn Notify,
         mut request: SignRequest,
         unlock: Option<Unlock>,
         wait: Duration,
@@ -203,7 +205,7 @@ impl Agent {
             .lock()
             .unwrap()
             .insert(id.clone(), Pending { sender, unlock });
-        let answer = if broker.send(Event::AgentSign(request)).is_ok() {
+        let answer = if events.notify(Event::AgentSign(request)).is_ok() {
             timeout(wait, answer).await.ok().and_then(|r| r.ok())
         } else {
             None
@@ -215,9 +217,9 @@ impl Agent {
         }
         Some(answer)
     }
-    fn notice_once(&self, flag: &AtomicBool, broker: &Broker, message: &str) {
+    fn notice_once(&self, flag: &AtomicBool, events: &dyn Notify, message: &str) {
         if !flag.swap(true, SeqCst) {
-            let _ = broker.send(Event::AgentNotice {
+            let _ = events.notify(Event::AgentNotice {
                 message: message.into(),
             });
         }
@@ -249,7 +251,7 @@ pub async fn request(channel: &mut Channel<client::Msg>, manager: &Connections, 
         control.agent.keys.forget();
         control.agent.notice_once(
             &control.agent.notified,
-            &control.broker,
+            &*control.broker,
             "서버가 키 전달을 허용하지 않아 이 연결에서는 사용할 수 없습니다.",
         );
     }
@@ -282,7 +284,7 @@ pub fn open(
     let use_system = control.profile.forward_system_agent;
     let mut relay = Relay {
         agent: control.agent.clone(),
-        broker: control.broker.clone(),
+        events: control.broker.clone(),
         session: control.profile.name.clone(),
         profile: control.profile.id.clone(),
         login_path: control.profile.key_path.clone(),
@@ -304,7 +306,7 @@ pub fn open(
         if relay.system.is_none() && relay.app_identities().await.is_empty() {
             relay
                 .agent
-                .notice_once(&relay.agent.notified, &relay.broker, NO_KEYS);
+                .notice_once(&relay.agent.notified, &*relay.events, NO_KEYS);
             return;
         }
         reply.accept().await;
@@ -345,7 +347,7 @@ impl Drop for Slot {
 
 struct Relay {
     agent: Arc<Agent>,
-    broker: Arc<Broker>,
+    events: Arc<dyn Notify>,
     session: String,
     profile: String,
     login_path: String,
@@ -430,7 +432,7 @@ impl Relay {
         };
         if identity.source() == Source::App && agent_keys::refuses_sha1(&key, flags) {
             self.agent
-                .notice_once(&self.agent.sha1_notified, &self.broker, SHA1_REFUSED);
+                .notice_once(&self.agent.sha1_notified, &*self.events, SHA1_REFUSED);
             return FAILURE.to_vec();
         }
         let held = match &identity.origin {
@@ -476,12 +478,13 @@ impl Relay {
             },
             host_key: self.host_key.clone(),
             source: identity.source(),
+            local: false,
             passphrase: false,
             seconds: 0,
         };
         let Some(answer) = self
             .agent
-            .approve(&self.broker, request, unlock, wait)
+            .approve(&*self.events, request, unlock, wait)
             .await
         else {
             return FAILURE.to_vec();
@@ -552,6 +555,7 @@ async fn exchange(local: &mut LocalStream, body: &[u8]) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::windows::Broker;
     use std::sync::Mutex as StdMutex;
 
     fn recorder() -> (Arc<Broker>, Arc<StdMutex<Vec<SignRequest>>>) {
@@ -575,6 +579,7 @@ mod tests {
             namespace: None,
             host_key: None,
             source: Source::System,
+            local: false,
             passphrase: false,
             seconds: 0,
         }
@@ -595,7 +600,7 @@ mod tests {
         let (agent2, broker2) = (agent.clone(), broker.clone());
         let task = tokio::spawn(async move {
             agent2
-                .approve(&broker2, request(), None, Duration::from_millis(300))
+                .approve(&*broker2, request(), None, Duration::from_millis(300))
                 .await
                 .is_some()
         });
@@ -648,7 +653,7 @@ mod tests {
         let (agent2, broker2) = (agent.clone(), broker.clone());
         let task = tokio::spawn(async move {
             agent2
-                .approve(&broker2, request(), Some(unlock), Duration::from_secs(30))
+                .approve(&*broker2, request(), Some(unlock), Duration::from_secs(30))
                 .await
         });
         let id = pending(&agent).await;

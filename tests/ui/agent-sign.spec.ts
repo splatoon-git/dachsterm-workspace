@@ -5,7 +5,7 @@ import type {} from './fixtures/agent-sign';
 const base: PendingSign = {
   type: 'agentSign',
   request: 'r1',
-  connectionId: 'c1',
+  owner: 'c1',
   session: '배포 서버',
   key: 'me@laptop',
   fingerprint: 'SHA256:abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG',
@@ -13,6 +13,7 @@ const base: PendingSign = {
   namespace: null,
   hostKey: 'SHA256:HOSTKEYhostkeyHOSTKEYhostkeyHOSTKEYhostkey0',
   source: 'system',
+  local: false,
   passphrase: false,
   seconds: 60,
 };
@@ -64,6 +65,17 @@ test('a signature names its purpose, and server text stays text', async ({ page 
   await expect(card).not.toContainText('로그인할 서버');
   await expect(card).toContainText('<img src=x onerror=alert(1)>');
   await expect(card.locator('img')).toHaveCount(0);
+});
+
+test('a local tab names the tab, not a server', async ({ page }) => {
+  const card = await open(page, { session: 'Windows PowerShell', local: true, source: 'app' });
+  await expect(card.getByRole('heading')).toHaveText(
+    '이 탭의 프로그램이 앱의 키로 서명하려고 합니다',
+  );
+  await expect(card).toContainText('Windows PowerShell');
+  await expect(card).toContainText('이 앱의 키 파일');
+  await card.getByRole('button', { name: '이 탭에서 10분 허용', exact: true }).click();
+  expect(await page.evaluate(() => window.__signAnswer)).toEqual({ decision: 'connection' });
 });
 
 test('every answer stays reachable in a narrow pane', async ({ page }) => {

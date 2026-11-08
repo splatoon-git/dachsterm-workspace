@@ -1,6 +1,7 @@
 mod agent_filter;
 pub mod agent_forward;
 pub mod agent_keys;
+mod approval;
 pub mod archive;
 pub mod broadcast;
 mod commands;

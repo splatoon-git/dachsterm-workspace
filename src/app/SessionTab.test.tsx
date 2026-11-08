@@ -84,7 +84,7 @@ describe('session tab status', () => {
   it('shows a sign request on its own connection as waiting for the user', async () => {
     const { agentSign, render, label } = setup();
     await render(false);
-    const request = (id: string, connectionId: string) =>
+    const request = (id: string, owner: string) =>
       act(() =>
         agentSign.add(
           {
@@ -97,10 +97,11 @@ describe('session tab status', () => {
             namespace: null,
             hostKey: null,
             source: 'system',
+            local: false,
             passphrase: false,
             seconds: 60,
           },
-          connectionId,
+          owner,
         ),
       );
     await request('old', 'before-reconnect');

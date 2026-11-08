@@ -46,8 +46,13 @@ pub struct Control {
     stopped: AtomicBool,
     exited: AtomicBool,
     ack: (Mutex<u64>, Condvar),
+    agent: Option<Arc<crate::agent_forward::Agent>>,
 }
 impl Control {
+    /// Sign requests of this tab, when it was opened with the app's agent (DX.13).
+    pub(crate) fn agent(&self) -> Option<Arc<crate::agent_forward::Agent>> {
+        self.agent.clone()
+    }
     pub(crate) fn ready(&self) -> bool {
         !self.stopped.load(Ordering::SeqCst) && !self.exited.load(Ordering::SeqCst)
     }
@@ -311,6 +316,7 @@ pub async fn local_open(
             stopped: AtomicBool::new(false),
             exited: AtomicBool::new(false),
             ack: (Mutex::new(0), Condvar::new()),
+            agent: None,
         });
         logs.register(&id, "utf-8")?;
         crate::session_log::auto_start(

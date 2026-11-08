@@ -29,7 +29,10 @@ export type AuthPrompt = {
   instructions: string;
   prompts: { prompt: string; echo: boolean }[];
 };
-/** A server asks the local agent to sign. Every text field is already plain and short. */
+/**
+ * A server, or a program in a local tab (`local`, DX.13), asks the app's agent to sign. Every text
+ * field is already plain and short.
+ */
 export type AgentSignRequest = {
   type: 'agentSign';
   request: string;
@@ -41,6 +44,7 @@ export type AgentSignRequest = {
   hostKey: string | null;
   /** `app`: a key file the app signs with. `system`: this PC's SSH agent signs. */
   source: 'app' | 'system';
+  local: boolean;
   /** The key file is encrypted: allowing asks for its Passphrase on the card. */
   passphrase: boolean;
   seconds: number;

@@ -288,9 +288,9 @@ pub async fn agent_sign_reply(
     remember: Option<bool>,
 ) -> Result<Reply> {
     let passphrase = passphrase.map(Zeroizing::new);
-    let control = state.connections.control(&id)?;
-    control.broker.check(window.label())?;
-    let unlock = control.agent.unlock_of(&request)?;
+    // `id` is the connection or the local tab the request came on (DX.13).
+    let agent = crate::approval::Owner::find(&state, window.label(), &id)?.agent()?;
+    let unlock = agent.unlock_of(&request)?;
     let typed = passphrase.is_some();
     let passphrase = match (passphrase, &unlock) {
         (Some(typed), _) => Some(typed),
@@ -310,7 +310,7 @@ pub async fn agent_sign_reply(
     let kept = passphrase
         .clone()
         .filter(|_| typed && remember == Some(true));
-    let reply = control.agent.answer(&request, decision, passphrase).await?;
+    let reply = agent.answer(&request, decision, passphrase).await?;
     let (Reply::Done { .. }, Some(unlock), Some(passphrase)) = (&reply, unlock, kept) else {
         return Ok(reply);
     };
