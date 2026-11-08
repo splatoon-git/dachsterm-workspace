@@ -16,6 +16,7 @@ mod editor_location;
 pub mod encoding;
 pub mod file_ops;
 mod file_read;
+mod file_write;
 pub mod ftp;
 pub mod git_apply;
 pub mod git_config;
@@ -216,6 +217,7 @@ pub fn run() {
             desktop_files::files_drag_out,
             desktop_files::files_reveal,
             file_read::file_read,
+            file_write::file_write,
             shell_probe::terminal_supports_directory_hook,
             desktop_bridge::clipboard_write_text,
             desktop_bridge::url_open,

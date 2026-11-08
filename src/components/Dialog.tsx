@@ -9,6 +9,13 @@ import './dialog.css';
 export type DialogSize = 'small' | 'medium' | 'large';
 
 /**
+ * Makes this button the one `Dialog` focuses, so Enter picks it. React's `autoFocus` prop does not
+ * write the attribute that `Dialog` looks for.
+ */
+export const defaultChoice = (button: HTMLButtonElement | null) =>
+  button?.setAttribute('autofocus', '');
+
+/**
  * The one dialog frame. The title (and a one-line description) sit in a fixed header, the
  * content scrolls, and a trailing `.form-actions` row stays pinned to the bottom as the footer.
  * Errors use `role="alert"` and show as a banner; see dialog.css for the rest of the layout.

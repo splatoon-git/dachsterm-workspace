@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Dialog } from '../../components/Dialog';
+import { defaultChoice, Dialog } from '../../components/Dialog';
 import { call, errorText } from '../../lib/ipc';
 import type { GitRefs } from './gitDiff';
 import type { GitViewRepo } from './gitViewModel';
@@ -13,12 +13,6 @@ import {
 import type { GitWrite } from './useGitWrite';
 
 const maxListed = 200;
-
-/**
- * Makes Cancel the button `Dialog` focuses: Enter on it cancels. The `autoFocus` prop does not do
- * this, since React applies it before the dialog opens and takes the focus with it.
- */
-const defaultChoice = (button: HTMLButtonElement | null) => button?.setAttribute('autofocus', '');
 
 /** A yes-or-no question. The answer that loses nothing is the one already chosen. */
 function Confirm({

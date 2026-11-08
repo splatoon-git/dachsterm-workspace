@@ -15,10 +15,13 @@ export type TabCommand =
   | 'reconnect'
   | 'close'
   | 'closeOthers'
+  | 'reload'
   | Preset;
 export type TabMenuState = {
   /** What the tab's session supports, or null for a game or the preview. */
   capabilities: SessionCapabilities | null;
+  /** A file tab, which can read its file again. */
+  reload?: boolean;
   /** Change review: null when the tab has none (not SSH), false while it cannot open yet. */
   review: boolean | null;
   /** The state of the tab's connection, or null for a tab without one. */
@@ -57,6 +60,7 @@ export function tabMenuEntries(state: TabMenuState): TabMenuEntry[] {
       shortcut: modKey('Shift+G'),
       disabled: !state.review,
     });
+  if (state.reload) view.push({ command: 'reload', label: '파일 다시 읽기' });
   const layout: TabMenuEntry[] = [];
   if (can?.split)
     layout.push(

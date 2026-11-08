@@ -545,7 +545,12 @@ impl Editors {
         Ok(())
     }
 }
-async fn atomic_replace(connections: &Connections, id: &str, old: &str, new: &str) -> Result<()> {
+pub(crate) async fn atomic_replace(
+    connections: &Connections,
+    id: &str,
+    old: &str,
+    new: &str,
+) -> Result<()> {
     let h = connections.handle(id)?;
     let channel = h.channel_open_session().await.map_err(sftp::failure)?;
     channel

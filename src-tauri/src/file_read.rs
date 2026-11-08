@@ -19,7 +19,7 @@ use format::{Kind, classify, decode};
 /// Text past this asks first, since the editor highlights and keeps every line.
 const TEXT_LIMIT: u64 = 2 * 1024 * 1024;
 /// The most a tab holds in memory. Matches what external editing fetches (`editor.rs`).
-const LIMIT: u64 = 32 * 1024 * 1024;
+pub(crate) const LIMIT: u64 = 32 * 1024 * 1024;
 const HEAD: u64 = 8 * 1024;
 const READ_TIMEOUT: Duration = Duration::from_secs(120);
 const NOT_A_FILE: &str = "파일이 아니어서 열 수 없습니다.";
@@ -109,7 +109,7 @@ const fn stopped(content: Content) -> Loaded {
     }
 }
 
-fn digest(bytes: &[u8]) -> String {
+pub(crate) fn digest(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -181,7 +181,7 @@ fn modified_seconds(metadata: &std::fs::Metadata) -> Option<u32> {
 }
 
 /// The last part of a path as a tab names it. Windows paths use either slash.
-fn file_name(path: &str, windows: bool) -> &str {
+pub(crate) fn file_name(path: &str, windows: bool) -> &str {
     let separators: &[char] = if windows { &['/', '\\'] } else { &['/'] };
     path.trim_end_matches(separators)
         .rsplit(separators)
@@ -242,7 +242,7 @@ async fn read_sftp(
     })
 }
 
-fn parent_of(path: &str) -> Result<&str> {
+pub(crate) fn parent_of(path: &str) -> Result<&str> {
     let (parent, _) = path
         .trim_end_matches('/')
         .rsplit_once('/')

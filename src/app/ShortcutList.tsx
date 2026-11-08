@@ -11,6 +11,7 @@ const rows: [string, string][] = [
   ['연결 검색', modKey('Shift+O')],
   ['파일', modKey('Shift+E')],
   ['터미널 검색', modKey('Shift+F')],
+  ['파일 저장 / 다른 이름으로 저장 (파일 탭)', `${modKey('S')} / ${modKey('Shift+S')}`],
   ['전체화면 / 종료', 'F11'],
   ['선택 터미널 확대 / 분할 복원', modKey('Shift+Enter')],
   ['칸 사이 포커스 이동', `${modKey('Alt')} + 방향키`],

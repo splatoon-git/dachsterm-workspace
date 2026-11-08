@@ -33,6 +33,7 @@ fn main() {
             "files_drag_out",
             "files_reveal",
             "file_read",
+            "file_write",
             "terminal_supports_directory_hook",
             "clipboard_write_text",
             "url_open",

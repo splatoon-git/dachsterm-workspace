@@ -1,6 +1,6 @@
 import { chromium, expect } from '@playwright/test';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -15,6 +15,87 @@ async function invoke(command, args = {}) {
     command,
     args,
   });
+}
+/** GE.6: a CP949 FTP server, where the encoding that saves is the one that read. */
+async function checkLegacySave() {
+  stage = 'GE.6 CP949 FTP connect';
+  await openNewConnectionForm(page);
+  const form = page.getByRole('dialog');
+  await form.getByLabel('이름', { exact: true }).fill('legacy UI fixture');
+  await form.getByLabel('프로토콜').selectOption('ftp');
+  await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
+  await form.getByLabel('포트', { exact: true }).fill(process.env.DACHSTERM_FTP_LEGACY_PORT);
+  await form.getByLabel('사용자', { exact: true }).fill('fixture');
+  await form.getByLabel('비밀번호', { exact: true }).fill(process.env.DACHSTERM_FTP_PASSWORD);
+  await form.getByLabel('인증정보 보관', { exact: true }).selectOption('replace');
+  await form.locator('summary', { hasText: '고급 옵션' }).click();
+  await form.getByLabel('FTP 파일명·명령 인코딩').selectOption('euc-kr');
+  await form.getByRole('button', { name: '저장 후 연결', exact: true }).click();
+  const pane = page.getByRole('region', { name: 'legacy UI fixture 파일', exact: true });
+  await expect(pane.getByRole('status')).toContainText('연결됨');
+  await expect(pane.locator('.file-list')).toHaveAttribute('aria-busy', 'false');
+
+  const home = path.join(process.env.DACHSTERM_FTP_ROOT, 'home');
+  const name = '한글 문서.txt';
+  const disk = path.join(home, name);
+  const cp949 = Buffer.from('c7d1b1db0a', 'hex'); // "한글\n"
+  await writeFile(disk, cp949);
+  const leftovers = async () => (await readdir(home)).filter((n) => n.includes('.dachsterm-'));
+  const onDisk = async () => (await readFile(disk)).toString('hex');
+  await pane.getByRole('button', { name: '파일 새로 고침', exact: true }).click();
+  await pane.locator('.file-row').filter({ hasText: name }).click();
+
+  stage = 'GE.6 CP949 FTP open';
+  const shown = page.locator(`[data-file-tab="/${name}"]`);
+  const editor = shown.locator('.view-lines').first();
+  await expect(editor).toContainText('한글', { timeout: 30000 });
+  await expect(page.getByLabel('파일 정보')).toContainText('CP949');
+  const edit = async (text) => {
+    await editor.click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type(text);
+  };
+
+  stage = 'GE.6 CP949 FTP save';
+  await edit('abc');
+  await page.keyboard.press('Control+s');
+  await expect.poll(onDisk, { timeout: 15000 }).toBe('c7d1b1db0a616263');
+  expect(await leftovers()).toEqual([]);
+
+  stage = 'GE.6 CP949 FTP refuses a character it cannot write';
+  await edit('😀');
+  await page.keyboard.press('Control+s');
+  await expect(shown.locator('.file-tab-banner[role="alert"]')).toContainText('쓸 수 없는 문자');
+  expect(await onDisk()).toBe('c7d1b1db0a616263');
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+
+  stage = 'GE.6 CP949 FTP conflict';
+  await writeFile(disk, Buffer.from('b9d9b2de', 'hex')); // "바꿈"
+  await edit('d');
+  await page.keyboard.press('Control+s');
+  const card = shown.getByRole('alertdialog', { name: '저장 충돌' });
+  await expect(card).toContainText('내용이 바뀌어');
+  expect(await onDisk()).toBe('b9d9b2de');
+  expect(await leftovers()).toEqual([]);
+  await card.getByRole('button', { name: '덮어쓰기', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '파일을 덮어씁니다' })
+    .getByRole('button', { name: '덮어쓰기', exact: true })
+    .click();
+  await expect(card).toHaveCount(0);
+  await expect.poll(onDisk).toMatch(/^c7d1b1db0a/);
+  expect(await leftovers()).toEqual([]);
+
+  stage = 'GE.6 CP949 FTP close asks';
+  await edit('e');
+  await page.getByRole('button', { name: `${name} 탭 닫기` }).click();
+  const asked = page.getByRole('dialog', { name: `${name} 저장` });
+  await asked.getByRole('button', { name: '저장 안 함', exact: true }).click();
+  await expect(shown).toHaveCount(0);
+  console.log(
+    'PASS GE.6 CP949 FTP: exact bytes, refused character, conflict, overwrite, close asks',
+  );
 }
 async function cleanup() {
   if (
@@ -293,6 +374,7 @@ try {
   console.log(
     'PASS native FTP/FTPS tabs: status bar security, file-only tab menu, drag split/merge/split down without reconnecting, transfer in a split, drag out cancelled, reconnect and transfer after it',
   );
+  await checkLegacySave();
 } catch (error) {
   console.error(`FAIL native FTP stage: ${stage} (${error.name}; details redacted)`);
   if (page) {

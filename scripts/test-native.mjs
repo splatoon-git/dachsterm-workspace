@@ -29,6 +29,7 @@ import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
 import { verifyAgentLaunch, verifyDeveloperWorkflow } from './verify-developer-workflow.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
 import { verifyEditSaveCard } from './verify-edit-save-card.mjs';
+import { verifyFileSave } from './verify-file-save.mjs';
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-native-'));
 const screenshots = path.resolve('test-results-native');
 await mkdir(screenshots, { recursive: true });
@@ -268,6 +269,16 @@ try {
     timeout: 20000,
   });
   if (process.env.DACHSTERM_EDIT_ONLY === '1') {
+    await verifyFileSave({
+      page,
+      pane,
+      invoke,
+      docker,
+      probe,
+      setStage: (value) => {
+        stage = value;
+      },
+    });
     await verifyEditSaveCard({
       page,
       pane,

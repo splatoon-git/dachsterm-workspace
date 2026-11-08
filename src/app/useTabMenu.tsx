@@ -17,6 +17,9 @@ export type TabActions = {
   reconnect: (session: TerminalSession) => void;
   /** Closes any tab by its key, with the checks each kind needs. */
   close: (key: string) => void;
+  reloadable: (key: string) => boolean;
+  /** Reads a file tab's file again. */
+  reload: (key: string) => void;
   /** After the window's tabs were laid out again, to put focus back on a terminal. */
   arranged: () => void;
 };
@@ -74,6 +77,7 @@ export function useTabMenu({
       disconnect: () => void session?.disconnect(),
       reconnect: () => session && actions.reconnect(session),
       close: () => actions.close(key),
+      reload: () => actions.reload(key),
       ...arrange(),
       closeOthers: () =>
         group.tabs.map(tabKey).forEach((other) => {
@@ -82,6 +86,7 @@ export function useTabMenu({
     };
     const entries = tabMenuEntries({
       capabilities: session ? capabilities(session) : null,
+      reload: actions.reloadable(key),
       review: reviewable(session),
       connection: !session ? null : ['closed', 'error'].includes(status!) ? 'ended' : 'live',
       recording: !!session && isRecording(logStatusOf(session.connectionId)),

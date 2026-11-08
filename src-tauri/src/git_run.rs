@@ -139,7 +139,7 @@ fn script(folder: &str, guard: Option<&SizeGuard>, commands: &[Vec<String>]) -> 
 
 /// `wsl.exe` runs the script in the distribution's own `sh` and git, since Windows git on
 /// `\\wsl.localhost` is slow and refuses repositories owned by the Linux user.
-fn wsl_args(target: &Target, script: String) -> Vec<String> {
+pub(crate) fn wsl_args(target: &Target, script: String) -> Vec<String> {
     let distribution = target.id.strip_prefix("wsl:").unwrap_or(&target.name);
     ["--distribution", distribution, "--exec", "sh", "-c"]
         .map(String::from)

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import type { Indent, LineBreak } from './editorTypes';
 import type { TextFacts } from './fileText';
 
 /** What the status bar shows for a file tab. The tab owns it; the bar lives outside the tab. */
@@ -6,6 +7,9 @@ export type FileStatus = TextFacts & {
   encoding: string;
   language: string;
   chooseEncoding: (encoding: string) => void;
+  /** Absent while the file cannot be edited. */
+  setLineBreak?: (lineBreak: LineBreak) => void;
+  setIndent?: (indent: Indent) => void;
 };
 
 const statuses = new Map<string, FileStatus>();
