@@ -702,13 +702,13 @@ PodTree 진입 메뉴는 지금 숨겨져 있다. 앱 화면으로 만드는 쿠
 
 **설정 → 테마 선택**에서 미리보기 카드를 고르면 저장 버튼 없이 현재 창과 열린 터미널에 바로 반영되고, 다음 실행에도 유지된다.
 
-| 분류   | 테마                                           |
-| ------ | ---------------------------------------------- |
-| 기본   | DachsTerm Classic                              |
-| 화이트 | GitHub White, Solarized Light                  |
-| 다크   | GitHub Dark, Dracula, Nord, Catppuccin Mocha   |
-| 레트로 | Gruvbox Light, Gruvbox Dark                    |
-| 터미널 | Solarized Dark, Terminal Green, Terminal Amber |
+| 분류   | 테마                                                                                    |
+| ------ | --------------------------------------------------------------------------------------- |
+| 기본   | DachsTerm Classic                                                                       |
+| 화이트 | GitHub White, Solarized Light                                                           |
+| 다크   | GitHub Dark, Dracula, Nord, Catppuccin Mocha                                            |
+| 레트로 | Gruvbox Light, Gruvbox Dark, Retro Light, Retro Dark, Retro Blue Light, Retro Blue Dark |
+| 터미널 | Solarized Dark, Terminal Green, Terminal Amber                                          |
 
 공식 팔레트를 참고한 DachsTerm용 변형이며, 작은 글자와 TUI 대비를 위해 일부 색상을 조정했다. 서버가 직접 지정하는 truecolor는 바꾸지 않는다.
 

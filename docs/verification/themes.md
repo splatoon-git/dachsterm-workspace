@@ -60,3 +60,34 @@
 ## 후속 Windows 통합 결과 (0.5.0, 2026-11-04)
 
 `npm run test:native` 실제 OpenSSH 연결·독립 창에서 Terminal Green 전환, 다른 창 토큰/storage 동기화와 SSH 입력·출력 유지, Classic 복귀를 검증했다. 전체12개 팔레트 검사는 위 독립 검사와 구분한다. 최종 NSIS0.5.0에 테마/게임 자산이 포함되었고 설치·실행·정상 종료·제거 통과. Mac 검증 대기는 유지한다.
+
+## T.2 레트로 팔레트 4종 (2026-11-08)
+
+사용자가 지정한 6색 팔레트를 `presets/retro.ts`에 추가했다. 화면 컴포넌트는 고치지 않았고, 등록은 `registry.ts`뿐이다.
+
+| 지정 색 | 쓰인 토큰 | 원본 그대로인가 |
+|---|---|---|
+| 배경 | `surface.app` (다크는 터미널 배경도) | 그대로 |
+| 표면 | `surface.panel` | 그대로 |
+| 메인 | `action.primary`, 포커스 링, 커서, 차트 1번 | 그대로 |
+| 포인트 | `action.accent`. 다크는 `status.warning`, ANSI yellow, 차트 4번도 | 그대로. 라이트의 경고·ANSI는 같은 색조를 어둡게 |
+| 서브 | 선택 배경과 경계선에 섞어 사용. Retro Dark는 ANSI magenta(차트 3번), Retro Blue Dark는 ANSI white로 원색 사용 | 라이트와 UI에서는 혼합 |
+| 텍스트 | `text.primary`, 터미널 전경 | 그대로 |
+
+대비 기준 때문에 파생한 값:
+
+- 메인 위 글자(`onAction`): Retro Light는 `#1C100A`, Retro Blue Light는 `#000000`. 흰 글자는 각각 3.71:1, 4.33:1, 지정 텍스트색은 3.00:1, 2.16:1로 4.5:1에 못 미친다.
+- 라이트 터미널 배경: 지정 표면(`#FFF9EE`, `#FFF9ED`)에서는 ANSI green·blue·cyan이 터미널 배경 4.5:1과 ANSI black 글자 4.5:1을 동시에 만족할 수 없어 Classic과 같은 `#FFFCF5`를 쓴다.
+- Retro Light의 `surface.header`는 메인색 포커스 링 3:1을 지키는 범위에서만 어둡게 했다(`#F3E7D2`).
+
+알려진 제한:
+
+- `action.primary`가 작은 글자색으로도 쓰이는 곳(`.link-button`, 전송 실행 중 표시, 마크다운 외부 링크, Git 범위 버튼, 명령 강조)은 Retro Light 3.54:1, Retro Blue Light 4.13:1이다. 계약 테스트는 이 조합을 검사하지 않는다.
+- `--color-action-accent`, `--color-action-on-accent`를 쓰는 CSS가 없어 포인트색이 앱 UI 강조로는 나타나지 않는다(기존 테마도 동일).
+
+실행 결과(커밋 전 트리, Windows):
+
+- `npx vitest run src/themes` 51/51, `npm run typecheck`, `npx eslint src/themes scripts/test-themes-native.mjs`, 바꾼 TS의 Prettier 통과.
+- `npx playwright test tests/ui/themes.spec.ts` 6/6. 16개 전환, 기존 xterm 유지, 재로드, 창 간 동기화, 1280·560·360px 배치.
+- `DACHSTERM_EXE=target/verification/debug/dachsterm.exe node scripts/test-themes-native.mjs` 종료 0. 실제 WebView2에서 16개 전환, 터미널 배경 동기화, Escape 포커스, 앱 재시작 후 복원. `tauri dev` 실행 중이라 별도 target에 빌드했다.
+- 미실행: 전체 스위트, 실제 SSH 연결 중 새 테마 전환(테마 경로 변경 없음), Mac 실기기(WKWebView 표시는 대기), CI.
