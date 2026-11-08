@@ -4,11 +4,11 @@ import { commandMarksOf } from '../terminal/commandMarks';
 import { terminalPreferences, useTerminalPreferences } from '../terminal/preferences';
 import type { TerminalSession } from '../terminal/session';
 import { sessionKind } from '../terminal/sessionKind';
-import { GitScheduler, treeMarks, type GitEvent, type GitResult } from './gitStatus';
+import { GitScheduler, gitPath, treeMarks, type GitEvent, type GitResult } from './gitStatus';
 
 /**
- * The Git status of one SSH tab. It listens to what the tab already reports (folder changes,
- * prompts, program states) and the views report tab switches and file tree refreshes.
+ * The Git status of one SSH, local or WSL tab. It listens to what the tab already reports (folder
+ * changes, prompts, program states) and the views report tab switches and file tree refreshes.
  */
 class GitStatusStore {
   private listeners = new Set<() => void>();
@@ -18,7 +18,10 @@ class GitStatusStore {
     this.scheduler = new GitScheduler({
       query: async (folder) => {
         const id = session.connectionId;
-        const result = await call<GitResult>('git_status', { id, folder });
+        const target = session.localTarget;
+        const result = await (target
+          ? call<GitResult>('local_git_status', { targetId: target.id, folder })
+          : call<GitResult>('git_status', { id, folder }));
         return id === session.connectionId ? result : null;
       },
       auto: () => terminalPreferences().gitStatus && this.connected,
@@ -59,11 +62,13 @@ class GitStatusStore {
     return this.session.snapshot().status === 'connected';
   }
   get directory() {
-    return this.session.snapshot().directory;
+    const folder = this.session.snapshot().directory;
+    return folder && gitPath(folder);
   }
   /** The folder the sidebar's file tree lists. */
   treeFolder: string | null = null;
-  listed = (folder: string) => {
+  listed = (listing: string) => {
+    const folder = gitPath(listing);
     if (folder !== this.treeFolder) {
       this.treeFolder = folder;
       this.changed();
@@ -72,7 +77,7 @@ class GitStatusStore {
   };
   request(event: GitEvent, folder = this.directory) {
     if (event === 'manual' && !this.connected) return;
-    this.scheduler.request(event, folder);
+    this.scheduler.request(event, folder && gitPath(folder));
   }
   private changed() {
     this.version++;
@@ -89,9 +94,10 @@ class GitStatusStore {
 
 const stores = new WeakMap<TerminalSession, GitStatusStore>();
 
-/** SSH tabs only. FTP and PodTree have no shell folder, and local tabs differ (design DX.5). */
+/** Tabs with a shell folder. FTP and PodTree have none. */
 export function gitStatusOf(session: TerminalSession | undefined) {
-  if (!session || sessionKind(session) !== 'ssh') return null;
+  const kind = session && sessionKind(session);
+  if (!session || (kind !== 'ssh' && kind !== 'local')) return null;
   let store = stores.get(session);
   if (!store) stores.set(session, (store = new GitStatusStore(session)));
   return store;
@@ -104,10 +110,11 @@ const noSession = { subscribe: () => () => {}, snapshot: () => undefined };
 export function useGitStatus(session: TerminalSession | undefined) {
   const store = gitStatusOf(session);
   useSyncExternalStore((store ?? noStore).subscribe, (store ?? noStore).snapshot);
-  const directory = useSyncExternalStore(
+  const reported = useSyncExternalStore(
     session?.subscribe ?? noSession.subscribe,
     () => session?.snapshot().directory,
   );
+  const directory = reported && gitPath(reported);
   const { gitStatus: auto } = useTerminalPreferences();
   if (!store) return null;
   return {
@@ -129,7 +136,7 @@ export function useGitFileMarks(session: TerminalSession | undefined) {
   const marks = useMemo(() => (repo ? treeMarks(repo) : null), [repo]);
   const listed = store?.listed;
   return useMemo(
-    () => (listed ? { mark: (path: string) => marks?.get(path), listed } : null),
+    () => (listed ? { mark: (path: string) => marks?.get(gitPath(path)), listed } : null),
     [listed, marks],
   );
 }

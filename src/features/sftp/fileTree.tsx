@@ -32,7 +32,8 @@ export function useFileTree<T extends FileEntry>(
   const decorations = useFileDecorations();
   // Each listing, the first one and every refresh, may bring new marks.
   useEffect(() => {
-    if (listing.path.startsWith('/')) decorations?.listed(listing.path);
+    // Absolute folders only: POSIX, and a local Windows drive.
+    if (/^(\/|[A-Za-z]:[\\/])/.test(listing.path)) decorations?.listed(listing.path);
   }, [decorations, listing]);
   const [state, setState] = useState<Tree<T>>({
     root: listing.path,

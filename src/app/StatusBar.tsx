@@ -97,7 +97,7 @@ export function StatusBar({
         ) : session ? (
           <>
             <Target key={session.connectionId} session={session} />
-            {sessionKind(session) === 'ssh' && <GitStatusItem session={session} />}
+            <GitStatusItem session={session} />
           </>
         ) : (
           <span>

@@ -1,5 +1,8 @@
-//! Read-only Git status of one remote folder (DX.5). Git queries live here and not in the command
-//! layer, so the diff review (DX.6) runs Git with the same program-free settings.
+//! Read-only Git status of one remote folder (DX.5), and of a local or WSL folder in `local`
+//! (DX.15). Git queries live here and not in the command layer, so the diff review (DX.6) runs Git
+//! with the same program-free settings.
+pub mod local;
+
 use crate::{
     AppState,
     remote_exec::{self, Failure, Limits, Output, quote},
@@ -96,6 +99,12 @@ pub(crate) fn first_line(stderr: &[u8]) -> String {
         .collect()
 }
 
+/// Git for Windows prints its root as `C:/path`.
+fn windows_root(root: &str) -> bool {
+    let bytes = root.as_bytes();
+    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/'
+}
+
 fn mark(kind: &str, xy: &str) -> Mark {
     match kind {
         "u" => Mark::Conflict,
@@ -113,7 +122,7 @@ fn parse(stdout: &[u8]) -> Option<GitStatus> {
     let root = String::from_utf8_lossy(&stdout[..newline])
         .trim_end_matches('\r')
         .to_string();
-    if !root.starts_with('/') {
+    if !root.starts_with('/') && !windows_root(&root) {
         return None;
     }
     let (mut branch, mut oid, mut upstream, mut ahead, mut behind) = (None, None, None, 0, 0);
@@ -311,6 +320,11 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
         assert!(parse(b"").is_none());
         assert!(parse(b"/r").is_none());
         assert!(parse(b"warning\n# branch.head main\0").is_none());
+        assert!(parse(b"C:\\r\n# branch.head main\0").is_none());
+        assert!(matches!(
+            parse(b"C:/Users/a/repo\n# branch.head main\0"),
+            Some(GitStatus::Repo { root, .. }) if root == "C:/Users/a/repo"
+        ));
         // A malformed record is skipped, not misread.
         let (.., entries, _) = repo(b"/r\n1 .M\0? \0? ok\0");
         assert_eq!(entries, vec![entry("ok", Mark::Untracked)]);

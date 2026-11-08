@@ -211,6 +211,7 @@ pub fn run() {
             remote_ports::remote_ports,
             terminal_start::tmux_current_path,
             git_status::git_status,
+            git_status::local::local_git_status,
             git_diff::git_refs,
             git_diff::git_diff_files,
             git_diff::git_diff_file,

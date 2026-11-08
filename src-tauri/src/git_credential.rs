@@ -7,6 +7,8 @@
 mod approval;
 pub mod commands;
 mod local;
+/// This PC's git, also used by the local Git status (DX.15).
+pub(crate) use local::git_program;
 pub mod protocol;
 pub mod wsl;
 

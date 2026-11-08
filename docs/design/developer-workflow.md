@@ -269,7 +269,7 @@ LC_ALL=C GIT_OPTIONAL_LOCKS=0 git -c core.fsmonitor=false status --porcelain=v2 
 
 - 탭: 작은 글씨 자리에 `작업 중 · main ●3`처럼 상태 뒤에 붙인다. 업스트림 차이는 툴팁에 넣는다. 접근성 이름에 전체 문장을 넣는다.
 - 파일 트리: 행 오른쪽에 `M`, `A`, `D`, `?`, `U`를 글자로 표시하고, 폴더에는 하위 변경 표시만 둔다. 색은 `status` 토큰만 쓴다.
-- 대상은 SSH 탭이다. FTP, PodTree, 로컬 탭에는 등록하지 않는다. 로컬 탭은 실행 경로 규칙(§11)과 WSL 경로 변환이 달라 후속으로 둔다.
+- 대상은 SSH 탭이다. FTP, PodTree, 로컬 탭에는 등록하지 않는다. 로컬 탭은 실행 경로 규칙(§11)과 WSL 경로 변환이 달라 후속으로 둔다. → 2026-11-08 DX.15에서 로컬·WSL 탭에도 넣었다(아래 DX.15).
 
 **기본 명령:** `guideData.ts`에 Git 분류를 추가한다. `status`, `diff --stat`, `log --oneline --graph`, `branch -vv`, `stash list`, `worktree list`, `reflog`. 읽기 명령만 넣고, 기존처럼 복사만 한다.
 
@@ -745,6 +745,21 @@ exec tmux attach -t '=<이름>'
 | WSL 자동 마운트 위치(`wsl.conf`의 `root`)를 바꾼 경우의 경로 변환 | helper 경로 계산 확정 | 이 PC는 기본 `/mnt/`. 바꾼 경우는 미검증. 실행 시 `wslpath -u`로 바꿨다 |
 | Finder로 실행한 Mac 앱이 띄운 로컬 셸에 시스템 `SSH_AUTH_SOCK`이 있는가(DX.0 미실측 항목과 같음) | DX.13 Mac에서 시스템 agent 합치기 확정 | **대기(Mac)** |
 
+### DX.15 — 로컬·WSL 탭의 Git 상태 표시 (2026-11-08 추가)
+
+**필요한 이유:** 저장소 폴더면 탭 종류와 상관없이 브랜치와 변경이 보여야 한다. 로컬·WSL 탭도 시작할 때 폴더 보고 훅을 받으므로(`local.rs`의 `POWERSHELL_FOLLOW`, cmd `PROMPT`, WSL `PROMPT_COMMAND`) 앱은 이미 셸의 폴더를 안다. DX.5는 조회를 SSH 연결에만 이어 두었을 뿐이다.
+
+**구현:**
+
+- 명령 `local_git_status(targetId, folder)`(`git_status/local.rs`). 결과 타입·상한(5초, 1MiB, 5000항목)·읽기 전용 설정은 DX.5와 같다.
+  - 로컬 셸(Windows PowerShell·cmd, Mac 기본 셸): DX.12의 `git_program()`으로 찾은 이 PC의 git을 셸 없이 `git -C <폴더> -c core.fsmonitor=false`, 환경 `LC_ALL=C`·`GIT_OPTIONAL_LOCKS=0`으로 실행한다. 콘솔 창은 띄우지 않는다.
+  - WSL: `wsl.exe --distribution <이름> --exec sh -c <DX.5 스크립트>`로 배포판 안의 git을 쓴다. Windows git으로 `\\wsl.localhost`를 읽으면 느리고 Linux 사용자 소유 저장소를 거부하기 때문이다.
+  - 저장소 루트는 Git이 출력한 실제 경로가 아니라 **셸이 보고한 폴더 표기**로 돌려준다(`--show-prefix`만큼 폴더에서 잘라냄). Windows 짧은 이름(`ADMINI~1`), `subst` 드라이브, 심볼릭 링크를 거쳐 들어가도 파일 트리 행 경로와 맞는다.
+- 프런트엔드: `gitStatusOf`가 로컬 탭도 받는다. Windows 경로는 `gitPath`로 `C:/...` 한 가지 표기로 맞춘다(셸은 `C:\repo`, 파일 패널은 `C:\repo/src`, Git은 `C:/repo`). POSIX 경로의 백슬래시는 파일 이름 글자이므로 바꾸지 않는다. 파일 트리는 Windows 드라이브 경로 목록도 Git에 알린다.
+- 셸 훅 조건: Git 자동 조회가 켜져 있으면 경로 따라가기와 조작표가 모두 꺼져 있어도 폴더 보고 훅을 넣는다(SSH·Mac 로컬 탭). 전에는 이 둘을 끄면 Git 표시도 조용히 사라졌다.
+- 설정 이름을 "SSH 폴더의 Git 상태 자동 조회"에서 "Git 상태 자동 조회"로 바꿨다.
+- 범위 밖: 로컬 탭의 변경 검토(DX.6)는 SSH 전용 그대로다. 추적하지 않는 새 폴더는 Git이 폴더 한 항목으로 알리므로 그 안의 파일에는 표시가 없다(DX.5와 같음).
+
 ## 5. IPC
 
 engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 입력 검증과 위임만 한다. 터미널 소유권이 필요한 명령은 `broker.check(window.label())`로 확인한다.
@@ -846,6 +861,7 @@ DX.11·DX.12의 세션별 설정(`serde(default)`, 세션 JSON v3 내보내기·
 | 16 | DX.13.0 | 로컬·WSL 실측 | 없음. DX.11, DX.12.0과 병렬 가능 | 질문의 답이 기록됨 |
 | 17 | DX.13 | 로컬·WSL 탭의 SSH 키 제공 | DX.11, DX.13.0 | 시스템 agent 없이 PowerShell·WSL에서 push |
 | 18 | DX.14 | WSL 탭의 HTTPS 자격 증명 | DX.12, DX.13 | WSL에서 HTTPS push |
+| 19 | DX.15 | 로컬·WSL 탭의 Git 상태 표시 | DX.5 | PowerShell·WSL 저장소 폴더에서 상태바와 파일 트리 표시 |
 
 - DX.11과 DX.12는 `ssh.rs` 핸들러, 세션 고급 옵션, 창 안 카드를 함께 고치므로 동시에 구현하지 않는다. DX.12.0과 DX.13.0은 코드를 바꾸지 않아 DX.11과 병렬로 진행할 수 있다.
 - DX.13은 DX.11이 끝나면 DX.12와 병렬로 진행할 수 있다. 겹치는 곳은 승인 이벤트의 소유자 일반화(DX.13)와 카드(DX.12)이므로, DX.13이 일반화를 먼저 머지하는 순서를 권한다.
@@ -861,7 +877,7 @@ DX.11·DX.12의 세션별 설정(`serde(default)`, 세션 JSON v3 내보내기·
 | 프로젝트 프리셋(서버, 폴더, 분할, 터널 묶음) | 후속. DX.7 사용 결과를 보고 판단한다 |
 | 원격 Docker 컨테이너 탭 | 후속. DX.3의 PTY + `exec` 경로와 DX.1을 재사용할 수 있다 |
 | 같은 SSH 연결의 탭 공유 | 후속. B1 터미널 통합 이후 |
-| 로컬 탭의 Git 표시, 독립 창의 검토 패널, 서버 파일 편집기 열기 | 후속 |
+| 로컬 탭의 변경 검토, 독립 창의 검토 패널, 서버 파일 편집기 열기 | 후속 (로컬 탭의 Git 표시는 DX.15에서 구현) |
 | 구문 강조(diff, 터미널 키워드) | 후속 |
 | Git 쓰기 동작, 그래프, 커밋 메시지 생성 | 제외. §1 경계 |
 | Mosh | 제외. tmux가 같은 문제를 더 넓은 서버에서 푼다. UDP와 서버 설치가 필요하다 |

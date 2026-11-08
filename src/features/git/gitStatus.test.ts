@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   GitScheduler,
+  gitPath,
   gitSentence,
   gitStatusText,
   gitTooltip,
@@ -228,5 +229,28 @@ describe('git status text', () => {
     expect(treeMarks(repo('/', { entries: [{ path: 'etc/x', mark: 'D' }] })).get('/etc')).toBe(
       'folder',
     );
+  });
+
+  it('reads Windows folders in the spelling Git prints', () => {
+    expect(gitPath('c:\\Users\\a\\repo')).toBe('C:/Users/a/repo');
+    // The local file panel joins children with a slash.
+    expect(gitPath('C:\\repo/src')).toBe('C:/repo/src');
+    expect(gitPath('\\\\wsl.localhost\\Ubuntu\\home')).toBe('//wsl.localhost/Ubuntu/home');
+    // A backslash is part of a POSIX file name.
+    expect(gitPath('/srv/a\\b')).toBe('/srv/a\\b');
+    const windows = repo('C:/repo', { entries: [{ path: 'src/main.rs', mark: 'M' }] });
+    expect(treeMarks(windows).get(gitPath('C:\\repo/src'))).toBe('folder');
+    expect(treeMarks(windows).get(gitPath('C:\\repo/src/main.rs'))).toBe('M');
+  });
+});
+
+describe('git status of a Windows folder', () => {
+  it('shows the repository for a folder below its root', async () => {
+    const { scheduler, flush } = setup((folder) =>
+      folder === 'C:/repo' ? repo('C:/repo') : { kind: 'notRepo', detail: '' },
+    );
+    scheduler.request('folder', 'C:/repo');
+    await flush();
+    expect(scheduler.view(gitPath('C:\\repo\\src'))).toEqual({ repo: repo('C:/repo') });
   });
 });

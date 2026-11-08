@@ -1,6 +1,9 @@
 import { fileMarkLabels, type FileMark } from '../../components/fileDecorations';
 
-/** Git status of SSH folders (DX.5): when to ask the server, and how a result reads. */
+/**
+ * Git status of a tab's folder (DX.5, local and WSL tabs DX.15): when to ask, and how a result
+ * reads. Folders are given in `gitPath` spelling.
+ */
 export type GitMark = Exclude<FileMark, 'folder'>;
 export type GitRepo = {
   kind: 'repo';
@@ -42,6 +45,16 @@ type Deps = {
   /** A manual query that could not finish, as the text to show. */
   failed(error: unknown): string;
 };
+
+/**
+ * One spelling per folder. A Windows shell reports `C:\repo`, the local file panel joins children
+ * as `C:\repo/src`, and Git prints `C:/repo`. A POSIX path is kept as is, since a backslash is an
+ * ordinary file name character there.
+ */
+export function gitPath(path: string) {
+  if (!/^([A-Za-z]:|[\\/]{2})/.test(path)) return path;
+  return path.replace(/\\/g, '/').replace(/^[a-z]:/, (drive) => drive.toUpperCase());
+}
 
 const inside = (path: string, root: string) =>
   path === root || path.startsWith(root.endsWith('/') ? root : `${root}/`);
