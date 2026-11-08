@@ -1,7 +1,7 @@
 # Git·파일 편집 작업 화면 — 설계안
 
 - 작업 ID: **GE.1~GE.13**, 설계일: **2026-11-08**. 관련 작업 DX.16(에이전트 시작 옵션)은 [developer-workflow DX.16](developer-workflow.md#dx16--에이전트-시작-옵션-2026-11-08-추가)에 있다.
-- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.2 구현 완료, 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
+- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.2 구현 완료, GE.4 Windows 시험 완료(Mac 실기기 대기), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
 - 선행: DX.15(로컬·WSL 탭 Git 상태, `dev` `d6d2ec4`).
 - 기준 자료: `dev` `57e32bb`의 코드, 2026-11-08 사용자 대화와 스크린샷(VS Code 소스 제어 화면, 앱의 WSL 파일 패널·우클릭 메뉴). 내용은 코드를 읽어 확인했고, 이 설계를 위한 실행 검증은 GE.2 말고는 없다.
 
@@ -92,6 +92,8 @@
 | 테마 | hex로 테마를 등록하고 테마 바뀔 때 다시 등록 | CSS 변수를 바로 씀 |
 
 합격 기준(둘 다 같은 기준): WebView2와 WKWebView에서 한글 조합(받침, 조합 중 커서 이동, 조합 중 저장 단축키), 일본어·중국어 IME 한 번씩, 10만 줄 파일 스크롤, 앱 테마 전환, diff 좌우·한 줄 보기, 웹 워커 로딩(Vite). Monaco가 Mac 한글 조합에서 글자를 잃거나 중복하면 CodeMirror 6로 간다. 편집기 코드는 게임처럼 lazy 로드한다.
+
+시험 결과(2026-11-08, [기록](../verification/editor-trial.md)): Windows 자동 측정 통과, **잠정 Monaco**. 입력은 `editContext: false`로 두 OS 모두 textarea 경로를 쓴다. 뒤 작업은 `src/features/editor/CodeEditor.tsx`만 쓰고, 부품 import는 `MonacoEditors.tsx` 한 파일로 eslint가 제한한다. 실제 IME 입력과 Mac 한글 조합([M.16](../verification/macos-readiness.md))을 본 뒤 확정한다.
 
 ### GE.5 — 파일 탭(보기)
 
