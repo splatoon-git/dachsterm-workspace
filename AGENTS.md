@@ -31,10 +31,17 @@ Mac 실행 결과와 알려진 차이는 [macos-readiness](docs/verification/mac
 
 1. `git status`를 확인한다. 다른 에이전트가 같은 트리에서 작업할 수 있으므로 내가 만들지 않은 변경은 건드리지 않는다.
 2. `docs/progress.md`의 상단과 상태 표, 해당 작업 ID의 섹션만 읽는다. `docs/roadmap.md`도 해당 절만 찾아 읽는다. 두 문서는 합쳐 300KB가 넘으니 전체를 읽지 않는다.
-3. 작업 ID를 정하면 시작 전에 `git worktree list`로 다른 작업 트리를 보고, 각 트리의 브랜치 이름과 미커밋 변경(`git -C <경로> status --short`, `git -C <경로> diff docs/progress.md`)으로 같은 작업 ID가 진행 중인지 확인한다. 겹치면 시작하지 말고 사용자에게 알린다. progress는 커밋돼야 공유되므로 main의 progress만 보고 판단하지 않는다.
-4. 기능 작업은 main이 아니라 작업 ID를 넣은 브랜치(예: `feat/dx5-git-status`)에서 한다. 다른 세션이 브랜치 이름으로 진행 중인 작업을 알 수 있게 하기 위해서다.
+3. 작업 ID를 정하면 시작 전에 `git worktree list`로 다른 작업 트리를 보고, 각 트리의 브랜치 이름과 미커밋 변경(`git -C <경로> status --short`, `git -C <경로> diff docs/progress.md`)으로 같은 작업 ID가 진행 중인지 확인한다. 겹치면 시작하지 말고 사용자에게 알린다. progress는 커밋돼야 공유되므로 dev의 progress만 보고 판단하지 않는다.
+4. 기능 작업은 `dev`에서 갈라진 작업 ID 브랜치(예: `feat/dx5-git-status`)에서 하고, 끝나면 `dev`에 병합한다. 다른 세션이 브랜치 이름으로 진행 중인 작업을 알 수 있게 하기 위해서다. 아래 브랜치 규칙을 따른다.
 5. 코드를 쓰기 전에 [engineering-rules](docs/engineering-rules.md)를 따른다. 구조를 바꾸기 전에는 [architecture-review](docs/architecture-review.md)의 정리 목록을 확인한다.
 6. 구현·검증 후와 세션 종료 전에 progress를 갱신한다. 파일, 검증 명령과 결과, 미검증 이유, 남은 작업 ID, 다음 첫 행동을 남겨 새 세션이 이전 대화 없이 이어갈 수 있게 한다.
+
+브랜치 규칙:
+
+- `dev`가 통합 브랜치다. 작업 브랜치와 worktree는 `dev`에서 만들고 `dev`에 병합한다.
+- `dev`와 작업 브랜치는 언제든 푸시해도 된다. CI는 `main` 푸시와 `main` 대상 PR에서만 돈다.
+- `main`은 사용자가 요청할 때만 `dev`로 fast-forward해 푸시한다(`git push origin dev:main`). 이때 Windows·macOS CI가 한 번 돈다. `main`에 직접 커밋하지 않는다.
+- `dev`에서 CI가 필요하면 Actions의 `workflow_dispatch`로 `dev`를 지정해 수동 실행한다.
 
 `Phase N 구현해` 요청:
 
