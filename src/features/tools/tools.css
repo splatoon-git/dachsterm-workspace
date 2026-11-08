@@ -1,5 +1,11 @@
 .tool-pane {
+  /* Every tool's fields and buttons share one height and end at the same right edge. */
+  --tool-control-height: 32px;
+  --tool-content-width: 880px;
   display: flex;
+  /* The cell is a flex row: without this the pane shrinks to its content. */
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   gap: var(--space-md);
   height: 100%;
@@ -12,11 +18,31 @@
   font-size: var(--font-body);
   font-weight: 600;
 }
+.tool-pane > * {
+  max-width: var(--tool-content-width);
+}
+.tool-pane button,
+.tool-pane input:not([type='radio'], [type='checkbox']),
+.tool-pane select {
+  box-sizing: border-box;
+  height: var(--tool-control-height);
+}
+.tool-pane button {
+  padding: 0 var(--space-md);
+  font-size: var(--font-small);
+  white-space: nowrap;
+}
+.tool-pane select {
+  width: 100%;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-small);
+}
 .tool-source {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm) var(--space-md);
+  min-height: var(--tool-control-height);
   margin: 0;
   padding: 0;
   border: 0;
@@ -137,6 +163,12 @@
 }
 .tool-form input {
   width: 100%;
+}
+/* Wide enough for the longest label, so swapping 점검 and 취소 does not move anything. */
+.tool-form > button,
+.service-trace-head button {
+  flex: 0 0 auto;
+  min-width: 72px;
 }
 .tool-error,
 .tool-notice,
@@ -265,6 +297,7 @@
 .service-trace-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-md);
 }
 .service-trace-head span {

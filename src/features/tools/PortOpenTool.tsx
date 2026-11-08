@@ -122,7 +122,11 @@ export function PortOpenTool({
             onChange={(event) => setSeconds(event.target.value)}
           />
         </label>
-        <button className="primary" type="submit" disabled={!state.running && !source}>
+        <button
+          className={state.running ? undefined : 'primary'}
+          type="submit"
+          disabled={!state.running && !source}
+        >
           {state.running ? '취소' : '점검'}
         </button>
       </form>

@@ -55,6 +55,38 @@ test('a network tool opens one tab, and closing it removes the tab', async ({ pa
   await expect(page.getByRole('region', { name: '포트 개통', exact: true })).toHaveCount(0);
 });
 
+test('each network tool fills its cell and its controls line up', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await page.goto('/');
+  const edges: number[] = [];
+  for (const title of ['포트 개통', '포트 사용 여부', '서비스 연결']) {
+    await openTools(page);
+    await page
+      .getByRole('navigation', { name: '네트워크 도구 목록' })
+      .getByRole('button', { name: title, exact: true })
+      .click();
+    const measured = await page
+      .getByRole('region', { name: title, exact: true })
+      .evaluate((pane) => {
+        const box = (element: Element) => element.getBoundingClientRect();
+        const form = pane.querySelector('.tool-form')!;
+        const controls = [...form.querySelectorAll('input, select, button')];
+        return {
+          pane: box(pane).width,
+          cell: box(pane.closest('.pane-cell')!).width,
+          heights: controls.map((control) => box(control).height),
+          right: box(form.querySelector('button')!).right - box(pane).left,
+          primary: [...pane.querySelectorAll('button.primary')].length,
+        };
+      });
+    expect(measured.pane, title).toBe(measured.cell);
+    expect(new Set(measured.heights).size, title).toBe(1);
+    expect(measured.primary, title).toBe(1);
+    edges.push(measured.right);
+  }
+  expect(new Set(edges).size).toBe(1);
+});
+
 test('local is the default source and asks the backend for nothing', async ({ page }) => {
   await page.goto(fixture);
   await expect(page.getByRole('radio', { name: '로컬', exact: true })).toBeChecked();

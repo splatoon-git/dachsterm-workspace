@@ -71,7 +71,11 @@ export function ServiceTool({
             ))}
           </select>
         </label>
-        <button className="primary" type="submit" disabled={!running && !source}>
+        <button
+          className={running ? undefined : 'primary'}
+          type="submit"
+          disabled={!running && !source}
+        >
           {running ? '취소' : '점검'}
         </button>
       </form>
