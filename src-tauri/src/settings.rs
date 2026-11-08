@@ -112,6 +112,8 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
         p.forward_keys.clear();
         p.forward_system_agent = true;
         p.forward_git_credentials = false;
+        p.workspace = Default::default();
+        p.kube = None;
     }
     let tunnels = store
         .tunnel_configs()?
@@ -377,6 +379,8 @@ pub(crate) fn apply_bundle(store: &Store, bundle: &mut Bundle, merges: &[Merge])
         p.forward_keys = saved.map_or_else(Vec::new, |old| old.forward_keys.clone());
         p.forward_system_agent = saved.is_none_or(|old| old.forward_system_agent);
         p.forward_git_credentials = saved.is_some_and(|old| old.forward_git_credentials);
+        p.workspace = saved.map_or_else(Default::default, |old| old.workspace);
+        p.kube = saved.and_then(|old| old.kube.clone());
         tx.execute(
             "INSERT INTO profiles(id,data,group_id) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET data=?2,group_id=?3",
             params![
@@ -522,8 +526,17 @@ mod tests {
             path: "git-key".into(),
             secret_ref: None,
         }];
+        saved.workspace = crate::kube::Workspace::Kubernetes;
+        saved.kube = Some(crate::kube::KubeSettings {
+            context: "prod".into(),
+            namespace: String::new(),
+            kubectl: "/k".into(),
+            kubeconfig: "/saved-kubeconfig".into(),
+            operate: true,
+        });
         let saved = store.save(saved, None).unwrap();
         let exported = String::from_utf8(export(&store).unwrap()).unwrap();
+        assert!(!exported.contains("workspace") && !exported.contains("saved-kubeconfig"));
         assert!(
             !exported.contains("tmuxSession") && !exported.contains("forwardAgent"),
             "export must not carry them"
@@ -540,9 +553,11 @@ mod tests {
             secret_ref: Some("someone-elses".into()),
         }];
         incoming.forward_login_key = true;
+        incoming.kube.as_mut().unwrap().operate = false;
         let mut fresh = incoming.clone();
         fresh.id = "fresh".into();
         fresh.host = "other.example".into();
+        fresh.kube.as_mut().unwrap().operate = true;
         fresh.forward_agent = true;
         fresh.forward_login_key = false;
         fresh.forward_system_agent = false;
@@ -563,12 +578,21 @@ mod tests {
         let profiles = store.list().unwrap().profiles;
         let merged = profiles.iter().find(|p| p.id == saved.id).unwrap();
         assert_eq!(merged.tmux_session, "mine");
+        assert!(
+            merged.kube.as_ref().unwrap().operate,
+            "a merge keeps the saved settings"
+        );
+        assert_eq!(merged.workspace, crate::kube::Workspace::Kubernetes);
         assert!(merged.forward_agent, "a file cannot turn it off either");
         assert_eq!(merged.forward_keys, saved.forward_keys);
         assert!(!merged.forward_login_key && !merged.forward_system_agent);
         assert!(merged.forward_git_credentials);
         let added = profiles.iter().find(|p| p.host == "other.example").unwrap();
         assert_eq!(added.tmux_session, "");
+        assert!(
+            added.kube.is_none() && added.workspace.is_terminal(),
+            "a file cannot set them"
+        );
         assert!(!added.forward_agent, "a file cannot turn it on");
         assert!(
             added.forward_keys.is_empty(),

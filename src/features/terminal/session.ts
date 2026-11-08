@@ -47,7 +47,9 @@ export class TerminalSession {
     directory: () => this.current.directory,
     mode: () => {
       // tmux may reattach to a pane where a program runs, so nothing may ever be typed there.
-      if (this.podtree || this.profile.protocol !== 'ssh' || this.profile.tmuxSession)
+      // A Kubernetes session's shell is hidden, and nothing is typed into a shell nobody sees.
+      const { protocol, tmuxSession, workspace } = this.profile;
+      if (this.podtree || protocol !== 'ssh' || tmuxSession || workspace === 'kubernetes')
         return 'none';
       return this.localTarget?.follow ?? 'remote';
     },

@@ -44,6 +44,7 @@ export type IconName =
   | 'gitPush'
   | 'target'
   | 'minus'
+  | 'kube'
   | 'undo'
   | 'check'
   | 'cloud'
@@ -102,6 +103,7 @@ const paths: Record<IconName, string> = {
   gitPush: 'M12 21V10 M7 15l5-5 5 5 M5 4h14',
   target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   minus: 'M5 12h14',
+  kube: 'M12 2.5l8 4v9l-8 6-8-6v-9z M12 8.5v7 M6.5 9.5l5.5 3 5.5-3',
   undo: 'M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3',
   check: 'M5 12.5l4.5 4.5L19 7',
   cloud: 'M7 18a4 4 0 0 1-.6-8A6 6 0 0 1 18 9.5a4.2 4.2 0 0 1-.5 8.5z',

@@ -138,7 +138,7 @@ export function ConnectionTree({
           }}
           title={`${p.username}@${p.host}:${p.port}\n더블클릭 또는 Enter로 연결 · 우클릭으로 수정과 삭제`}
         >
-          <Icon name="server" size={14} />
+          <Icon name={p.workspace === 'kubernetes' ? 'kube' : 'server'} size={14} />
           <strong>{p.name}</strong>
           {protocol !== 'ssh' && (
             <span className={`protocol-badge ${protocol}`}>{protocol.toUpperCase()}</span>

@@ -26,6 +26,7 @@ pub mod git_graph;
 pub mod git_run;
 pub mod git_status;
 pub mod hostkeys;
+pub mod kube;
 pub mod local;
 mod local_agent;
 mod local_files;
@@ -246,6 +247,8 @@ pub fn run() {
             git_diff::sides::git_file_diff,
             git_diff::git_diff_files,
             git_diff::git_diff_file,
+            kube::kube_detect,
+            kube::kube_save,
             agent_keys::agent_sign_reply,
             local_agent::settings::local_agent_settings,
             local_agent::settings::local_agent_save,

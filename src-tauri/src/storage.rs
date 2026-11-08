@@ -51,6 +51,12 @@ pub struct Profile {
     /// HTTPS Git credentials through the server's own git (DX.12). Off unless the form turns it on.
     #[serde(default, skip_serializing_if = "is_false")]
     pub forward_git_credentials: bool,
+    /// What the tab shows after connecting. Like `tmux_session`, never taken from a session file.
+    #[serde(default, skip_serializing_if = "crate::kube::Workspace::is_terminal")]
+    pub workspace: crate::kube::Workspace,
+    /// Filled by the first connection's detection, and only ever by the backend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kube: Option<crate::kube::KubeSettings>,
     #[serde(default)]
     pub last_connected: Option<i64>,
     #[serde(default)]
@@ -119,6 +125,8 @@ impl Profile {
             forward_keys: vec![],
             forward_system_agent: true,
             forward_git_credentials: false,
+            workspace: Default::default(),
+            kube: None,
             last_connected: None,
             has_secret: false,
         }
@@ -141,6 +149,12 @@ impl Profile {
             return Err("키 전달은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
         check_forward_keys(&self.forward_keys)?;
+        if self.protocol != "ssh" && (!self.workspace.is_terminal() || self.kube.is_some()) {
+            return Err("쿠버네티스 화면은 SSH 연결에서만 사용할 수 있습니다.".into());
+        }
+        if let Some(kube) = &self.kube {
+            kube.validate()?;
+        }
         if self.jump_ids.len() > crate::routes::MAX_HOPS
             || (self.protocol != "ssh" && !self.jump_ids.is_empty())
             || self.tags.len() > 32
@@ -551,9 +565,37 @@ pub(crate) mod tests {
             forward_keys: vec![],
             forward_system_agent: true,
             forward_git_credentials: false,
+            workspace: Default::default(),
+            kube: None,
             last_connected: None,
             has_secret: false,
         }
+    }
+    #[test]
+    fn a_kubernetes_workspace_needs_ssh_and_valid_settings() {
+        use crate::kube::{KubeSettings, Workspace};
+        let kube = KubeSettings {
+            context: "dev".into(),
+            namespace: String::new(),
+            kubectl: "/usr/local/bin/kubectl".into(),
+            kubeconfig: "/etc/k.yaml".into(),
+            operate: false,
+        };
+        let mut p = profile();
+        p.workspace = Workspace::Kubernetes;
+        p.kube = Some(kube.clone());
+        assert!(p.validate().is_ok());
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains("\"workspace\":\"kubernetes\"") && json.contains("\"kube\""));
+        let mut wrong = p.clone();
+        wrong.kube.as_mut().unwrap().kubectl = "kubectl; reboot".into();
+        assert!(wrong.validate().is_err());
+        let mut ftp = p.clone();
+        ftp.protocol = "ftp".into();
+        ftp.kube = None;
+        assert!(ftp.validate().is_err(), "FTP cannot use the workspace");
+        let plain = serde_json::to_string(&profile()).unwrap();
+        assert!(!plain.contains("workspace") && !plain.contains("\"kube\""));
     }
     #[test]
     fn forward_agent_needs_ssh() {

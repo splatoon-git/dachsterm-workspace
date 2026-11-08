@@ -1,3 +1,4 @@
+import type { KubeMenu } from '../features/kube/kubeModel';
 import type { SessionCapabilities } from '../features/terminal/sessionKind';
 import { modKey } from '../lib/platform';
 import type { Preset } from './workspaceLayout';
@@ -16,10 +17,13 @@ export type TabCommand =
   | 'close'
   | 'closeOthers'
   | 'reload'
+  | 'kube'
   | Preset;
 export type TabMenuState = {
   /** What the tab's session supports, or null for a game or the preview. */
   capabilities: SessionCapabilities | null;
+  /** What the menu can do with the Kubernetes workspace, when the session has one. */
+  kube?: KubeMenu | null;
   /** A file tab, which can read its file again. */
   reload?: boolean;
   /** Change review: null when the tab has none (not SSH), false while it cannot open yet. */
@@ -61,6 +65,12 @@ export function tabMenuEntries(state: TabMenuState): TabMenuEntry[] {
       disabled: !state.review,
     });
   if (state.reload) view.push({ command: 'reload', label: '파일 다시 읽기' });
+  if (state.kube === 'open' || state.kube === 'close')
+    view.push({
+      command: 'kube',
+      label: state.kube === 'open' ? '쿠버네티스 화면 열기' : '쿠버네티스 화면 닫기',
+      disabled: state.connection !== 'live',
+    });
   const layout: TabMenuEntry[] = [];
   if (can?.split)
     layout.push(
@@ -77,7 +87,8 @@ export function tabMenuEntries(state: TabMenuState): TabMenuEntry[] {
     layout.push({
       command: 'detach',
       label: '새 창으로 분리',
-      disabled: state.connection !== 'live',
+      // The workspace does not move to another window yet (design §3.1).
+      disabled: state.connection !== 'live' || state.kube === 'close' || state.kube === 'fixed',
     });
   // The whole window at once: for two tabs or more, or to gather one tab out of a split.
   const arrange: TabMenuEntry[] =

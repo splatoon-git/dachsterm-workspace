@@ -94,6 +94,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 timeout: 10,
                 keepalive: 5,
                 tmux_session: String::new(),
+                workspace: Default::default(),
+                kube: None,
                 forward_agent: false,
                 forward_login_key: true,
                 forward_keys: vec![],

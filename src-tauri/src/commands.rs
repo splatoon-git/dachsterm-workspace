@@ -18,7 +18,7 @@ pub fn sessions(state: State<AppState>) -> Result<Snapshot> {
 #[tauri::command]
 pub fn save_session(
     state: State<AppState>,
-    profile: Profile,
+    mut profile: Profile,
     secret_action: String,
     secret: Option<String>,
 ) -> Result<Profile> {
@@ -31,6 +31,12 @@ pub fn save_session(
     if !profile.id.is_empty() {
         crate::maintenance::snapshot(&state.store, &state.directory)?;
     }
+    // Detection fills this, and a form opened before that must not wipe it.
+    profile.kube = if profile.id.is_empty() {
+        None
+    } else {
+        state.store.profile(&profile.id)?.kube
+    };
     let old = state.store.secret_ref(&profile.id)?;
     // A stored credential cannot silently follow a changed destination/account/key.
     if secret_action == "keep" && !profile.id.is_empty() {

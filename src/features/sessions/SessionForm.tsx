@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { JumpEditor } from './JumpEditor';
 import { TmuxField } from './TmuxField';
+import { WorkspaceField } from './WorkspaceField';
 import { AgentForwardField } from './AgentForwardField';
 import { LoginKeyField } from './LoginKeyField';
 import { groupPath, hasConnectionOverrides } from './model';
@@ -145,6 +146,7 @@ export function SessionForm({
                   forwardAgent: e.target.value === 'ssh' && p.forwardAgent,
                   forwardKeys: e.target.value === 'ssh' ? p.forwardKeys : [],
                   forwardGitCredentials: e.target.value === 'ssh' && p.forwardGitCredentials,
+                  workspace: e.target.value === 'ssh' ? p.workspace : 'terminal',
                 }))
               }
             >
@@ -250,6 +252,7 @@ export function SessionForm({
               </label>
             </>
           )}
+          {profile.protocol === 'ssh' && <WorkspaceField profile={profile} field={field} />}
           <details
             ref={advanced}
             className="wide session-advanced"

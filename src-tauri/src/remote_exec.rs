@@ -34,6 +34,12 @@ impl From<Failure> for String {
     }
 }
 
+/// For callers that handle "the server would not open another channel" (`MaxSessions`) on its own.
+pub enum Refusable {
+    ChannelRefused,
+    Failure(Failure),
+}
+
 /// POSIX single-quote quoting.
 pub fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
@@ -77,7 +83,20 @@ pub async fn run(
     script: &str,
     limits: Limits,
 ) -> Result<Output, Failure> {
-    let other = |message: &str| Failure::Other(message.into());
+    run_refusable(handle, script, limits)
+        .await
+        .map_err(|failure| match failure {
+            Refusable::ChannelRefused => Failure::Other("원격 명령 채널을 열 수 없습니다.".into()),
+            Refusable::Failure(failure) => failure,
+        })
+}
+
+pub async fn run_refusable(
+    handle: &client::Handle<Host>,
+    script: &str,
+    limits: Limits,
+) -> Result<Output, Refusable> {
+    let other = |message: &str| Refusable::Failure(Failure::Other(message.into()));
     let marker = format!("DACHSTERM-{}", uuid::Uuid::new_v4().simple());
     let command = format!(
         "sh -c {}",
@@ -87,7 +106,10 @@ pub async fn run(
         let channel = handle
             .channel_open_session()
             .await
-            .map_err(|_| other("원격 명령 채널을 열 수 없습니다."))?;
+            .map_err(|error| match error {
+                russh::Error::ChannelOpenFailure(_) => Refusable::ChannelRefused,
+                _ => other("원격 명령 채널을 열 수 없습니다."),
+            })?;
         let mut open = OpenChannel(Some(channel));
         let channel = open.0.as_mut().unwrap();
         channel
@@ -104,14 +126,14 @@ pub async fn run(
                 _ => {}
             }
             if stdout.len() + stderr.len() > limits.max_output {
-                return Err(Failure::TooLarge);
+                return Err(Refusable::Failure(Failure::TooLarge));
             }
         }
         Ok((stdout, stderr, exit))
     };
     let (stdout, stderr, exit) = tokio::time::timeout(limits.timeout, work)
         .await
-        .map_err(|_| Failure::TimedOut)??;
+        .map_err(|_| Refusable::Failure(Failure::TimedOut))??;
     let stdout = after_marker(&stdout, marker.as_bytes())
         .ok_or_else(|| other("이 서버에서는 원격 명령을 실행할 수 없습니다."))?;
     Ok(Output {

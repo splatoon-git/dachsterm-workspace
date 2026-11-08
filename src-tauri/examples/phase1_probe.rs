@@ -174,6 +174,8 @@ fn base() -> Profile {
         timeout: 5,
         keepalive: 5,
         tmux_session: String::new(),
+        workspace: Default::default(),
+        kube: None,
         forward_agent: false,
         forward_login_key: true,
         forward_keys: vec![],

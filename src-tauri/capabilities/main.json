@@ -103,6 +103,8 @@
     "allow-local-git-status",
     "allow-git-view",
     "allow-git-apply",
+    "allow-kube-detect",
+    "allow-kube-save",
     "allow-git-config-read",
     "allow-git-config-preview",
     "allow-git-config-write",

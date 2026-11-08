@@ -1,7 +1,7 @@
 # 쿠버네티스 작업 화면 — 설계안
 
 - 작업 ID: **KV.0~KV.12**, 설계일: **2026-11-07**.
-- 현재 상태: **설계 완료, KV.0 kind 실측 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §20](../roadmap.md)이다.
+- 현재 상태: **설계 완료, KV.0 kind 실측 완료, KV.1 구현.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §20](../roadmap.md)이다.
 - 관계: [roadmap §16 6.7](../roadmap.md)의 PodTree 내장 후속이다. **PodTree는 기능 레퍼런스로 삼고 앱 화면으로 새로 만든다.** 공용 원격 실행은 [DX.1](developer-workflow.md)을 쓴다.
 - 기준 자료: 저장소 코드 `a01efa6`, 내장 스크립트 `podtree.sh` 2.4.0, 사용자의 실사용 요구. kind 클러스터 실측은 [검증 기록](../verification/kubernetes-workspace.md#kv0-실측-2026-11-08)에 있고, 실제 운영 클러스터 결과는 아직 없다. 확정되지 않은 동작은 **KV.0 실측**으로 표시한다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
 - 기능 이름은 미정이다. 이 문서는 "쿠버네티스 작업 화면"이라 부른다.
@@ -43,8 +43,8 @@
 | 기존 SSH 연결에 PTY 채널을 추가하는 코드가 있다 | `podtree.rs:420-431` | 파드 셸과 로그 탭을 새 SSH 연결 없이 연다. OTP를 다시 묻지 않는다 |
 | 이 탭은 부모 연결 종료 시 함께 닫히고 정리된다 | `podtree.rs:421,479` | 수명 관리를 재사용한다 |
 | 일반 SSH 연결은 항상 셸 PTY를 연다 | `ssh.rs:484-497` | 쿠버네티스 세션에도 셸이 있으므로 "서버 터미널" 전환을 추가 비용 없이 제공한다 |
-| `kubectl` 탐지가 `--noprofile --norc`로 실행된다 | `podtree.rs:103,172` | `.bashrc`의 `PATH`, `KUBECONFIG`를 못 찾을 수 있다. KV.1에서 고친다 |
-| `KUBECTL=kubectl`로 고정한다 | `podtree/launch.rs:13` | `microk8s kubectl` 등을 쓸 수 없다. KV.1에서 고친다 |
+| `kubectl` 탐지가 `--noprofile --norc`로 실행된다 | `podtree.rs:103,172` | `.bashrc`의 `PATH`, `KUBECONFIG`를 못 찾을 수 있다. 앱 화면은 KV.1에서 고쳤고, 터미널 UI는 진입점이 숨겨져 그대로 둔다(KV.12에서 제거) |
+| `KUBECTL=kubectl`로 고정한다 | `podtree/launch.rs:13` | `microk8s kubectl` 등을 쓸 수 없다. 앱 화면은 KV.1에서 고쳤고, 터미널 UI는 진입점이 숨겨져 그대로 둔다(KV.12에서 제거) |
 | 수집은 `-o go-template`으로 필요한 필드만 받는다 | `podtree.sh:599-625` | 템플릿을 참고한다. `kubectl`이 서버에서 돌아 SSH로 오는 양이 크게 줄어든다 |
 | 대시보드(`D`), 상태판(`w`), 문제 목록(`I`), 변화 기록(`H`), 관계(`v`)가 있다 | `podtree.sh:1347-1361` | 판정 기준의 레퍼런스로 쓴다 |
 | Ingress는 구성 정보만 읽는다. 트래픽 수집은 없다 | `podtree.sh:329`, `:1659` | 구성 점검은 옮기고, 메트릭은 새로 만든다(KV.8) |
@@ -111,6 +111,7 @@ kube?: {              // 첫 접속의 탐지가 채운다. 없으면 탭 안에
 | `src-tauri/src/kube/mod.rs` | 명령 등록과 입력 검증 |
 | `kube/runner.rs` | `kubectl` 호출 구성. `Ssh`만 먼저 구현하고 `Local`(KV.11)을 넣을 자리를 둔다 |
 | `kube/detect.rs` | `kubectl`, kubeconfig, context 탐지 |
+| `kube/state.rs`, `kube/settings.rs` | 상태 enum과 kubectl 출력 분류, 세션에 저장하는 값과 검증 |
 | `kube/snapshot.rs`, `kube/templates.rs` | go-template 정의, 파서, 트리와 대시보드 원본 데이터 |
 | `kube/detail.rs` | describe, YAML, 이벤트, 관계 |
 | `kube/log_search.rs` | 로그 검색 실행, 취소, 상한 |
@@ -120,7 +121,7 @@ kube?: {              // 첫 접속의 탐지가 채운다. 없으면 탭 안에
 | `kube/action.rs` | 쓰기 동작 enum과 운영 모드 재확인 |
 | `features/kube/KubeWorkspace.tsx`, `KubeDashboard.tsx`, `KubeTree.tsx`, `KubeDetail.tsx`, `KubeActions.tsx`, `IngressView.tsx`, `LogSearch.tsx`, `WorkerView.tsx` | 화면. 기능 CSS는 `kube.css` |
 | `features/kube/tree.ts`, `dashboard.ts`, `problems.ts`, `history.ts`, `workers.ts`, `polling.ts` | 묶기, 필터, 집계, 문제 판정, 변화 기록, 반환 판정, 조회 일정. 순수 로직 |
-| `features/kube/KubeSetup.tsx` | 첫 접속 때 탭 안에서 보여 주는 탐지, 권한 안내, context 선택 |
+| `features/kube/KubeSetup.tsx`, `kubeModel.ts` | 첫 접속 때 탭 안에서 보여 주는 탐지, 권한 안내, context 선택과 상태별 안내 |
 
 ### 3.3 파드 셸과 로그 탭
 
@@ -204,7 +205,18 @@ kubeconfig를 읽을 수 없으면 탭에 안내를 보여 준다.
 
 자동 실행하지 않고 버튼으로 두는 이유는 클러스터 관리자 인증 정보가 홈 폴더에 파일로 남기 때문이다. 기존 `~/.kube/config`를 덮어쓰지 않게 전용 파일을 쓴다. 서버와 계정 조합마다 한 번이면 되고, 인증서 갱신이나 클러스터 재설치로 복사본이 낡으면 인증 실패로 판별해 같은 안내를 다시 보여 준다.
 
-기존 터미널 UI에도 적용한다: `podtree/launch.rs`의 `KUBECTL=kubectl`과 `DEPS`의 `kubectl` 검사를 탐지 결과로 바꾼다. 함께 Windows에서 고를 수 없는 기본 셸을 실행 위치 목록(`PodTreeDialog.tsx:32`)에서 뺀다.
+기존 터미널 UI(`podtree/launch.rs`, `PodTreeDialog.tsx`)는 고치지 않는다. TW.9에서 진입점을 숨겨 화면에서 열리는 경로가 없고 KV.12에서 제거하기 때문이다(사용자 결정 2026-11-08).
+
+**구현에서 정한 것(KV.1):**
+
+- **저장된 세션의 확인:** 다시 탐지하지 않고 저장된 경로로 `get namespaces`까지 확인한다(rc를 읽지 않는다). 인증 실패, context 없음, kubeconfig 없음·읽기 불가면 설정 화면을 다시 보여 주고, 클러스터 연결 불가면 화면을 열고 헤더에 표시한다.
+- **복사본 우선:** `$KUBECONFIG`가 root 전용 파일을 가리켜도 읽을 수 있는 `~/.kube/dachsterm.config`가 있으면 그것을 쓴다. 안 그러면 복사 뒤에도 같은 안내가 반복된다. `kubectl`과 `$KUBECONFIG` 중 하나만 없어도 2단계를 실행한다.
+- **지나갈 수 없는 폴더:** kubeconfig의 상위 폴더에 들어갈 수 없으면 `test -e`가 없음을 내므로(KV.0 미확인 항목) 읽기 불가로 본다.
+- **복사 명령 입력:** 프롬프트를 보고하는 셸은 Enter까지 친다. 쿠버네티스 세션의 숨은 셸은 훅이 없어 상태를 모르므로(§3.1) 명령만 넣고 사용자가 Enter를 누른다. 전체 화면 프로그램이 돌면 막는다. 판단은 `features/terminal/shellReadiness.ts`로 옮겨 `gitTerminal.ts`와 함께 쓴다.
+- **탭 헤더 우클릭으로 연 화면:** 세션을 고치지 않으므로(§3.1) 고른 context는 저장하지 않고 그 탭이 열려 있는 동안만 쓴다. `kube_save`는 쿠버네티스 세션만 받는다.
+- **다시 확인 후 시작:** context가 하나면 바로 저장하고 화면으로 들어간다. 여럿이면 고르게 한다.
+- **`MaxSessions`:** `remote_exec::run_refusable`이 채널 거부를 `Refusable::ChannelRefused`로 돌려주고 `KubeState::ChannelLimit`이 된다. 앱의 russh 경로 실측은 [검증 기록](../verification/kubernetes-workspace.md#kv1-앱-검증-2026-11-08)에 있다.
+- **검사 환경:** `scripts/kube-fixture.sh`(`npm run kube:fixture -- <클러스터> [up|down|status]`), 합격 시나리오는 `scripts/verify-kube-detect.mjs`(`npm run test:kube-detect`).
 
 **합격:** `.bashrc`에만 `PATH`, `KUBECONFIG`가 있는 서버에서 동작한다. 첫 접속에서 설정을 마친 세션은 다음 접속부터 바로 화면이 열린다. root 전용 kubeconfig 서버에서 복사 버튼과 다시 확인으로 대시보드까지 들어간다.
 
@@ -393,7 +405,8 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이며 �
 
 | 명령 | 입력 | 동작 | 작업 |
 |---|---|---|---|
-| `kube_detect` | 연결 ID | `kubectl`, kubeconfig, context, namespace | KV.1 |
+| `kube_detect` | 연결 ID, 요청(`saved`·`scan`·`manual`), context | `kubectl`, kubeconfig, context, namespace | KV.1 |
+| `kube_save` | 연결 ID, 설정 | 쿠버네티스 세션에 설정 저장. `operate`는 바꾸지 않는다 | KV.1 |
 | `kube_snapshot` | 연결 ID, 종류 | 트리·대시보드 데이터와 수집 시각 | KV.2 |
 | `kube_detail` | 연결 ID, 대상, 종류 | 이벤트, YAML, 관계 | KV.4 |
 | `kube_terminal_*` | §3.3 | 기존 `podtree_*` 이름 변경 | KV.4 |

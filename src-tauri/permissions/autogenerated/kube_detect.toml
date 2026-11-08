@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-detect"
+description = "Enables the kube_detect command without any pre-configured scope."
+commands.allow = ["kube_detect"]
+
+[[permission]]
+identifier = "deny-kube-detect"
+description = "Denies the kube_detect command without any pre-configured scope."
+commands.deny = ["kube_detect"]

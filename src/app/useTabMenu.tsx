@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ContextMenu, type MenuPoint, type MenuRequest } from '../components/ContextMenu';
+import { kubeMenu } from '../features/kube/kubeModel';
 import { isRecording, logStatusOf } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
 import { capabilities } from '../features/terminal/sessionKind';
@@ -78,6 +79,10 @@ export function useTabMenu({
       reconnect: () => session && actions.reconnect(session),
       close: () => actions.close(key),
       reload: () => actions.reload(key),
+      kube: () => {
+        select();
+        if (session) session.view.set({ kube: !session.view.snapshot().kube, kubeTerminal: false });
+      },
       ...arrange(),
       closeOthers: () =>
         group.tabs.map(tabKey).forEach((other) => {
@@ -86,6 +91,10 @@ export function useTabMenu({
     };
     const entries = tabMenuEntries({
       capabilities: session ? capabilities(session) : null,
+      kube:
+        session && capabilities(session).kube
+          ? kubeMenu(session.profile.workspace, session.view.snapshot().kube)
+          : null,
       reload: actions.reloadable(key),
       review: reviewable(session),
       connection: !session ? null : ['closed', 'error'].includes(status!) ? 'ended' : 'live',
