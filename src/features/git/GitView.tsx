@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
+import { requestSettings } from '../../lib/settingsRequest';
 import type { TerminalSession } from '../terminal/session';
+import { sessionSource } from '../terminal/sessionKind';
 import { CommitGraph } from './CommitGraph';
 import { GitViewHeader } from './GitViewHeader';
 import { GitViewList } from './GitViewList';
@@ -25,11 +27,30 @@ function saveTree(tree: boolean) {
   }
 }
 
-function Empty({ title, text, action }: { title: string; text?: string; action?: () => void }) {
+function Empty({
+  title,
+  text,
+  action,
+  settings,
+}: {
+  title: string;
+  text?: string;
+  action?: () => void;
+  settings?: boolean;
+}) {
   return (
     <div className="file-empty">
       <h3>{title}</h3>
       {text && <p>{text}</p>}
+      {settings && (
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => requestSettings({ section: 'git' })}
+        >
+          설정 → Git
+        </button>
+      )}
       {action && (
         <button type="button" onClick={action}>
           다시 조회
@@ -59,6 +80,7 @@ function ResultBody({
     <Empty
       title={result.detail}
       text={remote ? '서버에 git을 설치한 뒤 다시 조회하세요.' : 'git을 설치한 뒤 다시 조회하세요.'}
+      settings
       action={retry}
     />
   );
@@ -80,6 +102,7 @@ export function GitView({
   const ready = model.state === 'ready' ? model : null;
   const repo: GitViewRepo | null = ready?.result?.kind === 'repo' ? ready.result : null;
   const groups = useMemo(() => (repo ? groupEntries(repo.entries) : []), [repo]);
+  const source = session && sessionSource(session);
   const refresh = () => {
     ready?.refresh();
     setGraphRefresh((n) => n + 1);
@@ -93,6 +116,10 @@ export function GitView({
     },
     refresh,
     review,
+    configure:
+      repo && source
+        ? () => requestSettings({ section: 'git', repo: { source, folder: repo.root } })
+        : undefined,
     notice: setNotice,
   });
   if (model.state === 'noTab')

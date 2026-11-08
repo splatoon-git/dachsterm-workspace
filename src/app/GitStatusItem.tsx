@@ -1,6 +1,7 @@
 import { gitSentence, gitStatusText, gitTooltip } from '../features/git/gitStatus';
 import { useGitStatus } from '../features/git/useGitStatus';
 import type { TerminalSession } from '../features/terminal/session';
+import { useGitDisplay } from '../lib/gitDisplay';
 
 const stopReasons = { timeout: '시간 초과', tooLarge: '출력이 너무 큼' };
 
@@ -11,7 +12,8 @@ const stopReasons = { timeout: '시간 초과', tooLarge: '출력이 너무 큼'
  */
 export function GitStatusItem({ session }: { session: TerminalSession }) {
   const git = useGitStatus(session);
-  if (!git?.directory) return null;
+  const { detail, statusBar } = useGitDisplay();
+  if (!git?.directory || !statusBar) return null;
   const { view, error, refresh } = git;
   const item =
     view && 'repo' in view ? (
@@ -22,7 +24,7 @@ export function GitStatusItem({ session }: { session: TerminalSession }) {
         aria-label={`${gitSentence(view.repo)}. 새로 고침`}
         onClick={refresh}
       >
-        {gitStatusText(view.repo)}
+        {gitStatusText(view.repo, detail)}
       </button>
     ) : view ? (
       <button

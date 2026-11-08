@@ -1,20 +1,23 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Dialog } from '../components/Dialog';
 import { Icon, type IconName } from '../components/Icon';
 import { AgentPresetSettings } from '../features/agents/AgentPresetSettings';
 import { LocalAgentSettings } from '../features/agents/LocalAgentSettings';
-import { GitCredentialSettings } from '../features/agents/GitCredentialSettings';
 import { MaintenancePanel } from '../features/settings/MaintenancePanel';
 import { SessionManager } from '../features/sessions/SessionManager';
 import { SessionTransfer } from '../features/sessions/SessionTransfer';
 import { VaultPanel, vaultSummary } from '../features/sessions/VaultDialog';
+import type { TerminalSession } from '../features/terminal/session';
 import { TerminalSettingsPanel } from '../features/terminal/TerminalSettings';
 import type { Snapshot } from '../lib/ipc';
+import {
+  onSettingsRequest,
+  type SettingsRequest,
+  type SettingsSection,
+} from '../lib/settingsRequest';
 import { ThemePicker } from '../themes/ThemePicker';
+import { GitSettingsSection } from './GitSettingsSection';
 import './settingsDialog.css';
-
-export type SettingsSection =
-  'appearance' | 'terminal' | 'agents' | 'vault' | 'sessions' | 'transfer' | 'recovery';
 
 type Entry = { id: SettingsSection; label: string; icon: IconName; summary: string };
 const entries: Entry[] = [
@@ -31,11 +34,17 @@ const entries: Entry[] = [
     summary: '모든 터미널과 새 창에 바로 적용됩니다. 서버별 설정은 세션 편집에 있습니다.',
   },
   {
+    id: 'git',
+    label: 'Git',
+    icon: 'branch',
+    summary:
+      '이 PC의 Git 위치, 앱 안의 Git 표시, 각 대상의 git config, HTTPS 자격 증명을 정합니다.',
+  },
+  {
     id: 'agents',
     label: '에이전트',
     icon: 'snippet',
-    summary:
-      'CLI 에이전트의 시작 명령, 로컬 탭에서 쓸 SSH 키, 서버에서 git push에 쓸 저장한 자격 증명을 정합니다.',
+    summary: 'CLI 에이전트의 시작 명령과 로컬 탭에서 쓸 SSH 키를 정합니다.',
   },
   { id: 'vault', label: '암호 보관함', icon: 'lock', summary: vaultSummary },
   {
@@ -80,17 +89,21 @@ function writeSection(section: SettingsSection) {
  * App settings in one window: categories at the left, the chosen one at the right. Nothing in
  * here opens another dialog; each category edits in place and saves as it changes.
  */
-export function SettingsDialog({
+function SettingsWindow({
   snapshot,
+  session,
+  request,
   changed,
   close,
 }: {
   snapshot: Snapshot;
+  session: TerminalSession | undefined;
+  request: SettingsRequest | null;
   /** Saved sessions changed (batch edit, import or restore). */
   changed: () => void;
   close: () => void;
 }) {
-  const [section, setSection] = useState<SettingsSection>(readSection);
+  const [section, setSection] = useState<SettingsSection>(() => request?.section ?? readSection());
   const choose = (next: SettingsSection) => {
     setSection(next);
     writeSection(next);
@@ -98,12 +111,19 @@ export function SettingsDialog({
   const entry = entries.find((e) => e.id === section)!;
   const content: Record<SettingsSection, ReactNode> = {
     appearance: <ThemePicker />,
-    terminal: <TerminalSettingsPanel />,
+    terminal: <TerminalSettingsPanel openGit={() => choose('git')} />,
+    git: <GitSettingsSection session={session} repo={request?.repo} />,
     agents: (
       <>
         <AgentPresetSettings />
         <LocalAgentSettings />
-        <GitCredentialSettings />
+        <p className="field-help">
+          HTTPS Git 자격 증명은{' '}
+          <button type="button" className="link-button" onClick={() => choose('git')}>
+            설정 → Git
+          </button>
+          에서 관리합니다.
+        </p>
       </>
     ),
     vault: <VaultPanel />,
@@ -163,5 +183,44 @@ export function SettingsDialog({
         <div key={section}>{content[section]}</div>
       </section>
     </Dialog>
+  );
+}
+
+/** Always mounted in the main window, so a link anywhere in the app can open a category. */
+export function SettingsDialog({
+  open,
+  setOpen,
+  snapshot,
+  session,
+  changed,
+}: {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  snapshot: Snapshot;
+  /** The selected tab, whose SSH server can be a Git settings target. */
+  session: TerminalSession | undefined;
+  changed: () => void;
+}) {
+  const [request, setRequest] = useState<SettingsRequest | null>(null);
+  useEffect(
+    () =>
+      onSettingsRequest((next) => {
+        setRequest(next);
+        setOpen(true);
+      }),
+    [setOpen],
+  );
+  if (!open) return null;
+  return (
+    <SettingsWindow
+      snapshot={snapshot}
+      session={session}
+      request={request}
+      changed={changed}
+      close={() => {
+        setOpen(false);
+        setRequest(null);
+      }}
+    />
   );
 }

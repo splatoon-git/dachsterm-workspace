@@ -363,6 +363,7 @@ test('a stopped graph can be asked again', async ({ page }) => {
 
 test('a stopped or missing Git can be asked again', async ({ page }) => {
   await open(page, { result: { kind: 'noGit', detail: '서버에 git이 없습니다.' } });
+  await expect(page.getByRole('button', { name: '설정 → Git', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '다시 조회' }).click();
   await expect
     .poll(async () => (await state(page)).calls.filter((c) => c.command === 'git_view').length)

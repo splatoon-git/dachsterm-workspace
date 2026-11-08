@@ -1,4 +1,5 @@
 import { Dialog } from '../../components/Dialog';
+import { SettingGroup as Group, SettingRow as Row } from '../../components/SettingRows';
 import { AgentHookGuide } from './AgentHookGuide';
 import {
   fontSizeChoices,
@@ -10,32 +11,12 @@ import {
   useTerminalPreferences,
   type TerminalPreferences,
 } from './preferences';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import './terminalSettings.css';
 
 type Toggle = keyof {
   [K in keyof TerminalPreferences as TerminalPreferences[K] extends boolean ? K : never]: true;
 };
-
-function Group({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
-  return (
-    <section className="dialog-section terminal-settings-group" aria-label={title}>
-      <h3>{title}</h3>
-      {note && <p>{note}</p>}
-      <div className="setting-rows">{children}</div>
-    </section>
-  );
-}
-
-/** One setting: its name at the left and the control at the right. */
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="setting-row">
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
 
 /** Terminal settings on their own, for a detached window that has no app settings. */
 export function TerminalSettings({ close }: { close: () => void }) {
@@ -54,9 +35,10 @@ export function TerminalSettings({ close }: { close: () => void }) {
 /**
  * Settings shared by every terminal, grouped by what they act on. Settings that belong to one
  * connection stay in its session form, and the session log and a pinned guide stay in the tab menu.
- * Problems show inside the dialog, which has no pane.
+ * Problems show inside the dialog, which has no pane. `openGit` is absent in a detached window,
+ * which has no app settings to go to.
  */
-export function TerminalSettingsPanel() {
+export function TerminalSettingsPanel({ openGit }: { openGit?: () => void }) {
   const { fontSize, scrollback } = useTerminalDisplay();
   const preferences = useTerminalPreferences();
   const [message, setMessage] = useState('');
@@ -141,16 +123,26 @@ export function TerminalSettingsPanel() {
       </Group>
       <Group
         title="프로그램 연동"
-        note="경로 따라가기와 조작표 자동 표시는 Bash·Zsh에 지금 세션에만 함수를 더합니다. 이 함수는 명령 경계(프롬프트 이동, 실패한 명령 표시)와 종료 코드도 알립니다. 셸 설정 파일은 바꾸지 않고 입력한 키, 명령 인자, 이력은 수집하지 않습니다. 둘 다 끄면 아무것도 넣지 않으며, 켜면 새로 여는 셸부터 적용됩니다. Git 자동 조회는 탭의 폴더가 바뀌거나 명령이 끝날 때 읽기 전용 git status를 실행합니다. SSH 탭은 서버의 git, 로컬 탭은 이 PC의 git, WSL 탭은 배포판 안의 git을 씁니다. 끄면 상태바의 Git 버튼으로만 조회합니다."
+        note="경로 따라가기와 조작표 자동 표시는 Bash·Zsh에 지금 세션에만 함수를 더합니다. 이 함수는 명령 경계(프롬프트 이동, 실패한 명령 표시)와 종료 코드도 알립니다. 셸 설정 파일은 바꾸지 않고 입력한 키, 명령 인자, 이력은 수집하지 않습니다. 둘 다 끄면 아무것도 넣지 않으며, 켜면 새로 여는 셸부터 적용됩니다."
       >
         {toggles([
           ['programGuide', 'vi·vim·less·tail 실행 중 조작표 자동 표시'],
           ['followDirectory', '새 파일 패널에서 터미널 경로 따라가기'],
           ['programStatus', '실행 중인 프로그램 상태를 탭에 표시'],
           ['clipboardWrite', '프로그램의 클립보드 복사 허용'],
-          ['gitStatus', 'Git 상태 자동 조회'],
         ])}
       </Group>
+      <p className="field-help">
+        Git 자동 조회와 표시 방식은{' '}
+        {openGit ? (
+          <button type="button" className="link-button" onClick={openGit}>
+            설정 → Git
+          </button>
+        ) : (
+          '메인 창의 설정 → Git'
+        )}
+        에서 정합니다.
+      </p>
       <Group title="알림">
         {toggles([
           ['osNotifications', '다른 작업 중일 때 프로그램 상태를 OS 알림으로 표시'],

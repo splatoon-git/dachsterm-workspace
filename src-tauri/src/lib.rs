@@ -16,6 +16,7 @@ mod editor_location;
 pub mod encoding;
 pub mod file_ops;
 pub mod ftp;
+pub mod git_config;
 pub mod git_credential;
 pub mod git_diff;
 pub mod git_graph;
@@ -124,6 +125,7 @@ pub fn run() {
                 storage::Store::open(&directory.join("sessions.sqlite3"))
                     .map_err(std::io::Error::other)?,
             );
+            git_config::program::load(&store);
             let transfers = Arc::new(sftp::Transfers::default());
             transfers
                 .recover(store.clone())
@@ -224,6 +226,12 @@ pub fn run() {
             git_status::git_status,
             git_status::local::local_git_status,
             git_status::view::git_view,
+            git_config::git_config_read,
+            git_config::git_config_preview,
+            git_config::git_config_write,
+            git_config::program::git_program_info,
+            git_config::program::git_program_pick,
+            git_config::program::git_program_set,
             git_graph::git_graph,
             git_graph::git_commit_detail,
             git_diff::git_refs,

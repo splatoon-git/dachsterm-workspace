@@ -41,9 +41,10 @@ pub async fn local_git_status(
     state: tauri::State<'_, AppState>,
     target_id: String,
     folder: String,
+    untracked_files: bool,
 ) -> Result<GitStatus> {
     let target = state.locals.target(&target_id)?;
-    super::query(&GitHost::local(target).await?, &folder).await
+    super::query(&GitHost::local(target).await?, &folder, untracked_files).await
 }
 
 #[cfg(test)]
@@ -56,7 +57,7 @@ mod tests {
     };
 
     async fn query(target: &Target, folder: &str) -> Result<GitStatus, String> {
-        git_status::query(&GitHost::local(target.clone()).await?, folder).await
+        git_status::query(&GitHost::local(target.clone()).await?, folder, false).await
     }
 
     #[test]

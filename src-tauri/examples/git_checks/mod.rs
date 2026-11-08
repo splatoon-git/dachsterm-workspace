@@ -47,7 +47,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
             entries,
             truncated,
             ..
-        } = git_status::query(&host, &root).await?
+        } = git_status::query(&host, &root, false).await?
         else {
             panic!("the fixture repository was not read");
         };
@@ -93,7 +93,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
         for folder in ["/tmp", &format!("/tmp/dachsterm-git-{token}-missing")] {
             assert!(
                 matches!(
-                    git_status::query(&host, folder).await?,
+                    git_status::query(&host, folder, false).await?,
                     GitStatus::NotRepo { .. }
                 ),
                 "{folder}"

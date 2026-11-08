@@ -8,6 +8,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { chooseTabMenu, openNewConnectionForm, openSettings } from './native-workspace.mjs';
 import { checkServerDragFetch } from './native-drag-fetch.mjs';
+import { checkGitConfigTarget } from './verify-git-settings.mjs';
 
 const promptFolder = '/home/probe/.cache/dachsterm/prompt';
 const tmuxName = 'dachs-native';
@@ -697,14 +698,14 @@ export async function verifyAgentTerminal({
   await pane().locator('.xterm-helper-textarea').press('Control+C');
   console.log('PASS native refusal leaves git to ask in the terminal');
 
-  const settings = await openSettings(page, '에이전트');
+  const settings = await openSettings(page, 'Git');
   const savedList = settings.getByRole('region', { name: '저장한 Git 자격 증명', exact: true });
   await expect(savedList).toContainText('https://git.test:3000');
   await savedList.getByRole('button', { name: 'git.test:3000 probe 삭제', exact: true }).click();
   await expect(savedList).toContainText('저장한 자격 증명이 없습니다.');
   assert.deepEqual(await invoke('git_credentials_saved'), []);
   await settings.getByRole('button', { name: '대화상자 닫기' }).click();
-  console.log('PASS native Settings › Agents lists the saved credential and removes it');
+  console.log('PASS native Settings › Git lists the saved credential and removes it');
 
   await writeFile(localStore, `https://probe:${probe('GIT_PASSWORD')}@git.test:3000\n`);
   try {
@@ -732,4 +733,9 @@ export async function verifyAgentTerminal({
   await invoke('delete_session', { id: credentialProfile.id });
   assert.equal((await invoke('sessions')).credentialWarning ?? null, null);
   await page.locator('.tab-strip').getByRole('tab').first().click();
+  await checkGitConfigTarget(page, {
+    match: /^서버 · /,
+    read: (key) => shell(`git config --global --get ${key} || true`),
+    marker: 'GE10 서버',
+  });
 }

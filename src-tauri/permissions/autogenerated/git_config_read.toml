@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-git-config-read"
+description = "Enables the git_config_read command without any pre-configured scope."
+commands.allow = ["git_config_read"]
+
+[[permission]]
+identifier = "deny-git-config-read"
+description = "Denies the git_config_read command without any pre-configured scope."
+commands.deny = ["git_config_read"]

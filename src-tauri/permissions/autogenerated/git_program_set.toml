@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-git-program-set"
+description = "Enables the git_program_set command without any pre-configured scope."
+commands.allow = ["git_program_set"]
+
+[[permission]]
+identifier = "deny-git-program-set"
+description = "Denies the git_program_set command without any pre-configured scope."
+commands.deny = ["git_program_set"]
