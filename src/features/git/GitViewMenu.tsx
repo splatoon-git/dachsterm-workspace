@@ -24,6 +24,7 @@ export function useGitViewMenu({
   setTree,
   refresh,
   review,
+  configure,
   notice,
   write,
   ask,
@@ -35,6 +36,8 @@ export function useGitViewMenu({
   refresh: () => void;
   /** Absent where the tab cannot open a change review. */
   review?: () => void;
+  /** Opens this repository's own `git config`. Absent outside a repository. */
+  configure?: () => void;
   notice: (text: string) => void;
   write: GitWrite;
   ask: (request: GitDialogRequest) => void;
@@ -105,6 +108,7 @@ export function useGitViewMenu({
           run: () => setTree(!tree),
           separated: true,
         },
+        ...(configure ? [{ label: '이 저장소의 Git 설정…', run: configure }] : []),
       ],
     });
   const commitMore = (anchor: HTMLElement) =>

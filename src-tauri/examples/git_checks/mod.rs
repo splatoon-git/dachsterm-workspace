@@ -8,6 +8,7 @@ use dachsterm::{
 };
 use russh::ChannelMsg;
 mod diff;
+mod graph;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Fixture setup and checks the app itself never runs, on a channel of their own.
@@ -46,7 +47,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
             entries,
             truncated,
             ..
-        } = git_status::query(&host, &root).await?
+        } = git_status::query(&host, &root, false).await?
         else {
             panic!("the fixture repository was not read");
         };
@@ -92,7 +93,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
         for folder in ["/tmp", &format!("/tmp/dachsterm-git-{token}-missing")] {
             assert!(
                 matches!(
-                    git_status::query(&host, folder).await?,
+                    git_status::query(&host, folder, false).await?,
                     GitStatus::NotRepo { .. }
                 ),
                 "{folder}"
@@ -105,5 +106,6 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
     shell(manager, id, &cleanup).await?;
     result?;
     println!("PASS product Git status: repository read, fsmonitor not run, non-repository quiet");
-    diff::run(manager, id).await
+    diff::run(manager, id).await?;
+    graph::run(manager, id).await
 }

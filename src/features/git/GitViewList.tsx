@@ -12,7 +12,7 @@ import {
 } from './gitViewModel';
 
 /** Arrow keys move between the visible rows, so a long list is one tab stop. */
-function moveFocus(event: KeyboardEvent<HTMLElement>) {
+export function moveFocus(event: KeyboardEvent<HTMLElement>) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
   const rows = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-git-row]')];
   const at = rows.indexOf(document.activeElement as HTMLElement);

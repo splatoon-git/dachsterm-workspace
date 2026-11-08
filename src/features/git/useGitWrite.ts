@@ -81,6 +81,8 @@ export function useGitWrite({
   const store = session ? storeOf(session) : null;
   useSyncExternalStore((store ?? noStore).subscribe, (store ?? noStore).snapshot);
   const [busy, setBusy] = useState(false);
+  /** The last commit failed for want of an author, which the Git settings can give. */
+  const [identityMissing, setIdentityMissing] = useState(false);
   const running = useRef(false);
   const source = session ? sessionSource(session) : null;
 
@@ -89,6 +91,7 @@ export function useGitWrite({
     running.current = true;
     setBusy(true);
     notice('');
+    setIdentityMissing(false);
     const id = session.connectionId;
     try {
       const result = await call<GitApplyResult>('git_apply', { source, root: repo.root, action });
@@ -96,6 +99,7 @@ export function useGitWrite({
       store.add(logEntries(result));
       if (result.kind === 'done') return true;
       notice(failureText(result));
+      setIdentityMissing(result.reason === 'identity');
       return false;
     } catch (e) {
       notice(errorText(e));
@@ -111,12 +115,14 @@ export function useGitWrite({
   const typeCommand = (command: string) => {
     if (!session || !store) return;
     notice('');
+    setIdentityMissing(false);
     store.add([{ command, where: 'terminal', result: 'typed', detail: '' }]);
     typeInTerminal(session, command);
   };
 
   const runInTerminal = async (command: string) => {
     if (!session || !repo) return;
+    setIdentityMissing(false);
     const readiness = await readinessOf(session, repo.root);
     if (readiness.state === 'blocked') notice(readiness.text);
     else if (readiness.state === 'ask') ask({ kind: 'terminal', command });
@@ -125,6 +131,7 @@ export function useGitWrite({
 
   return {
     busy,
+    identityMissing,
     source,
     draft: store?.draft ?? '',
     setDraft: store?.setDraft ?? (() => {}),

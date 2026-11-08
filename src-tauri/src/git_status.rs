@@ -233,12 +233,18 @@ fn parse(stdout: &[u8], spelled: Option<&str>) -> Option<GitStatus> {
     })
 }
 
-pub async fn query(host: &GitHost, folder: &str) -> Result<GitStatus> {
+/// `untracked_files` lists new files one by one rather than as their folders (Settings → Git).
+pub async fn query(host: &GitHost, folder: &str, untracked_files: bool) -> Result<GitStatus> {
     let limits = Limits {
         timeout: TIMEOUT,
         max_output: MAX_OUTPUT,
     };
-    let output = match git_run(host, folder, &status_commands(&[]), limits).await {
+    let extra: &[&str] = if untracked_files {
+        &["--untracked-files=all"]
+    } else {
+        &[]
+    };
+    let output = match git_run(host, folder, &status_commands(extra), limits).await {
         Ok(output) => output,
         Err(Failure::TimedOut) => {
             return Ok(GitStatus::Stopped {
@@ -270,8 +276,14 @@ pub async fn git_status(
     state: tauri::State<'_, AppState>,
     id: String,
     folder: String,
+    untracked_files: bool,
 ) -> Result<GitStatus> {
-    query(&GitHost::ssh(&state.connections, &id)?, &folder).await
+    query(
+        &GitHost::ssh(&state.connections, &id)?,
+        &folder,
+        untracked_files,
+    )
+    .await
 }
 
 #[cfg(test)]

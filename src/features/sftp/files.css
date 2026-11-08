@@ -154,7 +154,7 @@
   font-size: 10px;
   color: var(--color-text-secondary);
 }
-/* Git status of a row (DX.5). A letter, so the state never depends on color alone. */
+/* Git status of a row (DX.5). The letter is the default, so the state need not depend on color. */
 .file-git-mark {
   flex: none;
   min-width: 1.2em;
@@ -163,17 +163,23 @@
   font-weight: 600;
 }
 .file-git-mark[data-mark='M'],
-.file-git-mark[data-mark='folder'] {
+.file-git-mark[data-mark='folder'],
+[data-git-name='M'],
+[data-git-name='folder'] {
   color: var(--color-status-warning);
 }
-.file-git-mark[data-mark='A'] {
+.file-git-mark[data-mark='A'],
+[data-git-name='A'] {
   color: var(--color-status-success);
 }
 .file-git-mark[data-mark='D'],
-.file-git-mark[data-mark='U'] {
+.file-git-mark[data-mark='U'],
+[data-git-name='D'],
+[data-git-name='U'] {
   color: var(--color-status-error);
 }
-.file-git-mark[data-mark='?'] {
+.file-git-mark[data-mark='?'],
+[data-git-name='?'] {
   color: var(--color-status-info);
 }
 /* Files dragged from the OS over a panel that takes them. */

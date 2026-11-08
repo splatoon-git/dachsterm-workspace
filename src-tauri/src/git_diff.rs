@@ -14,8 +14,8 @@ use crate::{
     source::Source,
     storage::Result,
 };
-pub(crate) use parse::change;
-use parse::{parse_file, parse_list, parse_refs};
+pub(crate) use parse::{change, parse_list};
+use parse::{parse_file, parse_refs};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -257,7 +257,7 @@ fn untracked_commands(path: &str) -> Vec<Vec<String>> {
 }
 
 /// A failed step is an error the review shows: the folder or Git itself.
-fn checked(output: Output, what: &str) -> Result<Vec<u8>> {
+pub(crate) fn checked(output: Output, what: &str) -> Result<Vec<u8>> {
     if output.exit == Some(0) {
         return Ok(output.stdout);
     }

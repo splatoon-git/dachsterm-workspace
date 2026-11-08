@@ -23,6 +23,7 @@ Invoke-Check 'node' @('scripts/generate-notices.mjs')
 if ($Native) {
   Invoke-Check 'npm.cmd' @('run', 'test:native')
   Invoke-Check 'npm.cmd' @('run', 'test:native:edit')
+  Invoke-Check 'npm.cmd' @('run', 'test:git-settings')
   Invoke-Check 'node' @('scripts/test-workspace-native.mjs')
   Invoke-Check 'node' @('scripts/test-maintenance-native.mjs')
   Invoke-Check 'node' @('scripts/run-ftp.mjs', '--native')

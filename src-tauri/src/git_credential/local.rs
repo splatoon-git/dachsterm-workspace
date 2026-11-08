@@ -172,9 +172,14 @@ fn on_path(name: &str, skip: &[&str]) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+/// The git this PC's tabs run: the user's pick from Settings, or else the automatic search.
+pub fn git_program() -> Option<PathBuf> {
+    crate::git_config::program::current()
+}
+
 /// This PC's git, never by bare name (engineering-rules §11).
 #[cfg(windows)]
-pub fn git_program() -> Option<PathBuf> {
+pub fn find_git_program() -> Option<PathBuf> {
     on_path("git.exe", &[]).or_else(|| {
         let installed = PathBuf::from(std::env::var_os("ProgramFiles")?)
             .join("Git")
@@ -187,7 +192,7 @@ pub fn git_program() -> Option<PathBuf> {
 /// `login_path` already put the user's terminal PATH and the Homebrew folders in front.
 /// `/usr/bin/git` is only a stub that opens an installer while the Command Line Tools are missing.
 #[cfg(target_os = "macos")]
-pub fn git_program() -> Option<PathBuf> {
+pub fn find_git_program() -> Option<PathBuf> {
     on_path("git", &["/usr/bin"])
         .or_else(|| {
             ["/opt/homebrew/bin/git", "/usr/local/bin/git"]
@@ -195,20 +200,22 @@ pub fn git_program() -> Option<PathBuf> {
                 .into_iter()
                 .find(|p| p.is_file())
         })
-        .or_else(|| {
-            let tools = Command::new("/usr/bin/xcode-select")
-                .arg("-p")
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .is_ok_and(|s| s.success());
-            tools.then(|| PathBuf::from("/usr/bin/git"))
-        })
+        .or_else(|| command_line_tools().then(|| PathBuf::from("/usr/bin/git")))
+}
+
+#[cfg(target_os = "macos")]
+pub fn command_line_tools() -> bool {
+    Command::new("/usr/bin/xcode-select")
+        .arg("-p")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn git_program() -> Option<PathBuf> {
+pub fn find_git_program() -> Option<PathBuf> {
     on_path("git", &[])
 }
 

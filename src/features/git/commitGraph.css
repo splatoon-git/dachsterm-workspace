@@ -1,0 +1,136 @@
+/* The Git view's history section. The lanes share the series colors of the theme contract. */
+.git-graph {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+}
+.git-graph[data-open] {
+  flex: 1 1 0;
+}
+.git-graph-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.git-graph-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 22px;
+  padding-right: var(--space-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.git-graph-row:hover {
+  background: var(--color-surface-subtle);
+}
+.git-graph-row:focus-visible {
+  outline: var(--border-width-focus) solid var(--color-focus-ring);
+  outline-offset: calc(-1 * var(--border-width-focus));
+}
+.git-graph-title {
+  margin-right: auto;
+}
+.git-graph-lanes {
+  flex: none;
+  margin-left: var(--space-xs);
+  fill: none;
+  stroke-width: 1.5;
+}
+.git-graph-dot {
+  fill: var(--git-lane);
+  stroke: var(--git-lane);
+}
+/* A merge and HEAD read by shape as well as color: a hollow node and a filled, ringed one. */
+.git-graph-dot[data-merge] {
+  fill: var(--color-surface-panel);
+}
+.git-graph-dot[data-current] {
+  stroke: var(--color-text-primary);
+  stroke-width: 2;
+}
+.git-graph-subject {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.git-graph-refs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  max-width: 50%;
+  overflow: hidden;
+}
+.git-graph-ref {
+  overflow: hidden;
+  max-width: 96px;
+  padding: 0 var(--space-xs);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  line-height: 14px;
+  text-overflow: ellipsis;
+}
+.git-graph-ref[data-current] {
+  border-color: var(--color-focus-ring);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+.git-graph-ref[data-kind='tag'] {
+  border-style: dashed;
+}
+.git-graph-more {
+  display: block;
+  width: calc(100% - 2 * var(--space-sm));
+  height: 22px;
+  min-height: 0;
+  margin: var(--space-xs) var(--space-sm);
+  padding: 0;
+}
+.git-view-note > .git-graph-more {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+  padding: 0 var(--space-xs);
+}
+/* The rail keeps the lanes running past the opened commit. */
+.git-graph-detail {
+  position: relative;
+  margin-left: var(--space-xs);
+  padding-right: var(--space-sm);
+  padding-bottom: var(--space-xs);
+}
+.git-graph-rail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  fill: none;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.git-graph-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 var(--space-sm);
+  margin: var(--space-xs) 0;
+}
+.git-graph-meta dt {
+  color: var(--color-text-secondary);
+}
+.git-graph-meta dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.git-graph-hash {
+  font-family: var(--font-mono);
+}
+.git-graph-message {
+  margin: var(--space-xs) 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

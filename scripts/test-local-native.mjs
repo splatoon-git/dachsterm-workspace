@@ -27,17 +27,26 @@ import {
   screenPoint,
   selectedInFolder,
 } from './native-mouse.mjs';
+import {
+  checkDisplaySettings,
+  checkGitConfigTarget,
+  checkGitProgram,
+  checkMovedSettings,
+  checkRepositorySettings,
+} from './verify-git-settings.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 // `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab,
 // `--credentials-only` only the DX.14 WSL HTTPS credential steps, and `--git-only` only the
 // DX.15 Git status steps, `--drop-only` only the GE.2 file drop steps, `--drag-only` only the GE.3
-// drag out to the file manager, which moves the real pointer for a few seconds.
+// drag out to the file manager, which moves the real pointer for a few seconds, and
+// `--git-settings-only` only the GE.10 Settings → Git steps.
 const agentOnly = process.argv.includes('--agent-only');
 const dropOnly = process.argv.includes('--drop-only');
 const dragOnly = process.argv.includes('--drag-only');
 const credentialsOnly = process.argv.includes('--credentials-only');
 const gitOnly = process.argv.includes('--git-only');
+const gitSettingsOnly = process.argv.includes('--git-settings-only');
 const finished = Symbol('agent-only');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-local-'));
 // The app's own git (DX.14 "this PC's credentials") reads only this file: no system or user
@@ -67,6 +76,8 @@ async function launch() {
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
       GIT_CONFIG_NOSYSTEM: '1',
       GIT_CONFIG_GLOBAL: path.join(directory, 'gitconfig'),
+      // Only these steps need it: WSL's git then writes to the scratch file as well.
+      ...(gitSettingsOnly ? { WSLENV: 'GIT_CONFIG_GLOBAL/p' } : {}),
     },
   });
   let endpoint;
@@ -223,6 +234,41 @@ async function checkLocalGit(page, command, pane) {
   await page.keyboard.press('Enter');
   await expect(ask).toHaveCount(0);
   console.log('PASS PowerShell tab: stage and unstage, and a typed command is asked about first');
+  // GE.14: the commit graph, before and after there is a history, and a commit's detail.
+  const graph = page.locator('#git-sidebar .git-graph');
+  await expect(graph).toContainText('아직 커밋이 없습니다.', { timeout: 15000 });
+  for (const subject of ['첫 커밋', '둘째 커밋']) {
+    const made = spawnSync(
+      'git',
+      [
+        '-C',
+        repo,
+        '-c',
+        'user.name=probe',
+        '-c',
+        'user.email=probe@example.invalid',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '--no-gpg-sign',
+        '-m',
+        subject,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(made.status, 0, made.stderr);
+  }
+  await page.locator('#git-sidebar').getByRole('button', { name: 'Git 새로 고침' }).click();
+  await expect(graph.locator('.git-graph-subject')).toHaveText(['둘째 커밋', '첫 커밋'], {
+    timeout: 15000,
+  });
+  await expect(graph.locator('.git-graph-ref')).toHaveText(['dx15']);
+  await graph.locator('.git-graph-row').first().click();
+  await expect(graph.locator('.git-graph-hash').first()).toHaveText(/^[0-9a-f]{40}$/, {
+    timeout: 15000,
+  });
+  await graph.locator('.git-graph-row').first().click();
+  console.log('PASS PowerShell tab: the commit graph and a commit detail from the real history');
   await showSidebarView(page, '연결');
   await command(pane, `Set-Location '${directory}'; Write-Output ('GIT' + '_OUT')`, 'GIT_OUT');
   await expect(status).toHaveCount(0, { timeout: 15000 });
@@ -243,7 +289,10 @@ async function checkLocalGit(page, command, pane) {
   });
   await command(
     linux,
-    `cd "$(mktemp -d)" && git init -q -b dx15-wsl && touch a b && printf 'GIT%s\\n' _WSL`,
+    `cd "$(mktemp -d)" && git init -q -b dx15-wsl && touch a b && ` +
+      `git -c user.name=p -c user.email=p@example.invalid commit -q --allow-empty --no-gpg-sign -m wsl-one && ` +
+      `git -c user.name=p -c user.email=p@example.invalid commit -q --allow-empty --no-gpg-sign -m wsl-two && ` +
+      `printf 'GIT%s\\n' _WSL`,
     'GIT_WSL',
   );
   await expect(status).toHaveText('dx15-wsl ●2', { timeout: 15000 });
@@ -262,6 +311,10 @@ async function checkLocalGit(page, command, pane) {
   await page.getByRole('menuitem', { name: '스테이지 취소', exact: true }).click();
   await expect(gitRows()).toHaveText(['a', 'b'], { timeout: 15000 });
   console.log('PASS WSL tab: stage and unstage through the distribution');
+  await expect(page.locator('#git-sidebar .git-graph-subject')).toHaveText(['wsl-two', 'wsl-one'], {
+    timeout: 15000,
+  });
+  console.log('PASS WSL tab: the commit graph reads through the distribution');
   await showSidebarView(page, '연결');
   // GE.11: ConPTY repaints the screen, so the badge must still land on the line being typed on.
   const badge = linux.locator('.prompt-branch');
@@ -401,6 +454,69 @@ async function checkDragOut(page, command, pane) {
     releaseWindow(manager);
     closeFolder(into);
   }
+}
+async function checkGitSettings(page, command, pane) {
+  const invoke = (cmd, args) =>
+    page.evaluate(({ cmd, args }) => window.__TAURI_INTERNALS__.invoke(cmd, args), { cmd, args });
+  const scratch = path.join(directory, 'gitconfig');
+  const gitConfig = (key, ...where) => {
+    const done = spawnSync('git', [...where, 'config', '--get', key], {
+      encoding: 'utf8',
+      env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: scratch },
+    });
+    return done.stdout.trim();
+  };
+  await checkMovedSettings(page);
+  await checkGitProgram(page, invoke);
+  await checkGitConfigTarget(page, {
+    match: /^이 PC$/,
+    read: (key) => gitConfig(key, '--no-pager'),
+    marker: 'GE10 이 PC',
+  });
+
+  const distributions = spawnSync('wsl.exe', ['--list', '--quiet'], { windowsHide: true })
+    .stdout.toString('utf16le')
+    .split(/\s+/)
+    .filter((name) => name && !name.startsWith('docker-desktop'));
+  const [distribution] = distributions;
+  if (distribution) {
+    // Reading through the same variable proves that a write cannot reach the real file.
+    const inWsl = (...args) => {
+      const done = spawnSync(
+        'wsl.exe',
+        ['--distribution', distribution, '--cd', '/', '--exec', ...args],
+        {
+          encoding: 'utf8',
+          windowsHide: true,
+          env: { ...process.env, GIT_CONFIG_GLOBAL: scratch, WSLENV: 'GIT_CONFIG_GLOBAL/p' },
+        },
+      );
+      // Git's 1 means the setting is not there; anything else would read as an empty value.
+      if (done.status > 1) throw new Error(`WSL ${args[0]} ${done.status}: ${done.stderr}`);
+      return done.stdout.trim();
+    };
+    assert.match(inWsl('sh', '-c', 'printf %s "$GIT_CONFIG_GLOBAL"'), /^\/mnt\//);
+    await checkGitConfigTarget(page, {
+      match: /^WSL · /,
+      read: (key) => inWsl('git', 'config', '--global', '--get', key),
+      marker: 'GE10 WSL',
+      // The same scratch file as this PC's, where the other value is already set.
+      style: 'diff3',
+    });
+  } else console.log('WSL user distribution absent: WSL Git settings pending.');
+
+  const repo = path.join(await realpath(directory), 'ge10 repo');
+  await mkdir(path.join(repo, 'new'), { recursive: true });
+  const init = spawnSync('git', ['-C', repo, 'init', '-q', '-b', 'ge10'], { encoding: 'utf8' });
+  assert.equal(init.status, 0, init.stderr);
+  await writeFile(path.join(repo, 'new', 'one.txt'), '1');
+  await writeFile(path.join(repo, 'new', 'two.txt'), '2');
+  await command(pane, `Set-Location '${repo}'; Write-Output ('GE' + '10_IN')`, 'GE10_IN');
+  await checkRepositorySettings(page, {
+    read: (key) => gitConfig(key, '-C', repo, '--no-pager'),
+    marker: 'GE10 저장소',
+  });
+  await checkDisplaySettings(page);
 }
 async function checkLocalDrop(page, command, pane) {
   const invoke = (cmd, args) =>
@@ -776,7 +892,7 @@ async function checkWslCredentials(page, command) {
   const settingsSection = async () => {
     await page.getByRole('button', { name: '설정', exact: true }).click();
     const settings = page.getByRole('dialog', { name: '설정' });
-    await settings.getByRole('tab', { name: '에이전트', exact: true }).click();
+    await settings.getByRole('tab', { name: 'Git', exact: true }).click();
     return settings.getByRole('region', { name: 'WSL 탭의 HTTPS Git 자격 증명' });
   };
   const closeSettings = async () => {
@@ -909,10 +1025,11 @@ try {
   await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
-  if (agentOnly || credentialsOnly || gitOnly || dropOnly || dragOnly) {
+  if (agentOnly || credentialsOnly || gitOnly || gitSettingsOnly || dropOnly || dragOnly) {
     if (agentOnly) await checkLocalAgent(page, command, pane);
     if (credentialsOnly) await checkWslCredentials(page, command);
     if (gitOnly) await checkLocalGit(page, command, pane);
+    if (gitSettingsOnly) await checkGitSettings(page, command, pane);
     if (dropOnly) await checkLocalDrop(page, command, pane);
     if (dragOnly) await checkDragOut(page, command, pane);
     throw finished;
