@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
+import { KubeDashboard } from './KubeDashboard';
 import { KubeSetup } from './KubeSetup';
 import { KubeTree } from './KubeTree';
 import { freshness } from './polling';
 import { readLastScreen, writeLastScreen } from './screenPref';
 import { initialTreeView } from './tree';
+import type { TreeTarget } from './treeReveal';
 import { useKubeSnapshots } from './useKubeSnapshots';
 import {
   finishesAfterRecheck,
@@ -127,6 +129,23 @@ export function KubeWorkspace({
     run(request, null, true);
   };
 
+  const openScreen = useCallback(
+    (id: KubeScreen) => {
+      setScreen(id);
+      writeLastScreen(session, id);
+      showWorkspace();
+    },
+    [session, showWorkspace],
+  );
+
+  const reveal = useCallback(
+    (target: TreeTarget) => {
+      setTreeView((now) => ({ ...now, reveal: target }));
+      openScreen('tree');
+    },
+    [openScreen],
+  );
+
   const copyToTerminal = (command: string) => {
     const result = copy(command);
     if ('blocked' in result) setNote(result.blocked);
@@ -140,7 +159,7 @@ export function KubeWorkspace({
 
   const detection = phase.name === 'setup' ? phase.detection : null;
   const settingUp = phase.name !== 'open';
-  const { store, now } = useKubeSnapshots(
+  const { store, history, now } = useKubeSnapshots(
     connectionId,
     phase.name === 'open' ? phase.settings : null,
     visible && display === 'workspace',
@@ -156,11 +175,7 @@ export function KubeWorkspace({
             key={id}
             role="tab"
             aria-selected={display === 'workspace' && screen === id}
-            onClick={() => {
-              setScreen(id);
-              writeLastScreen(session, id);
-              showWorkspace();
-            }}
+            onClick={() => openScreen(id)}
           >
             {label}
           </button>
@@ -226,7 +241,15 @@ export function KubeWorkspace({
               setView={setTreeView}
             />
           )}
-          {phase.name === 'open' && screen !== 'tree' && (
+          {phase.name === 'open' && screen === 'dashboard' && (
+            <KubeDashboard
+              store={store}
+              history={history}
+              namespace={phase.settings.namespace}
+              reveal={reveal}
+            />
+          )}
+          {phase.name === 'open' && screen !== 'tree' && screen !== 'dashboard' && (
             <div className="kube-empty" role="tabpanel">
               <h2>{kubeScreens.find((item) => item.id === screen)?.label}</h2>
               <p>이 화면은 아직 준비 중입니다.</p>

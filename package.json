@@ -34,6 +34,7 @@
     "probe:prompt-branch": "node scripts/probe-prompt-branch.mjs",
     "kube:fixture": "wsl -d Ubuntu-24.04 -- bash scripts/kube-fixture.sh",
     "test:kube-detect": "node scripts/verify-kube-detect.mjs",
+    "test:kube-dashboard": "node scripts/verify-kube-tree.mjs --dashboard",
     "test:kube-tree": "node scripts/verify-kube-tree.mjs"
   },
   "dependencies": {

@@ -239,3 +239,38 @@ KV.1 검사도 공용 헬퍼로 옮기고 첫 화면 기대값을 바꿔 다시 
 - 권한 없는 항목(`Forbidden`), `MaxSessions` 거부로 조회를 미루는 동작, 출력 상한과 시간 상한은 단위·UI 테스트로만 확인했다.
 - 한글 입력 상태의 키는 `code`가 있는 합성 키 이벤트로 확인했고 실제 IME는 눌러 보지 않았다.
 - 실제 RKE2, Mac 실기기, CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.
+
+## KV.3 앱 검증 (2026-11-08)
+
+### 환경
+
+- KV.2와 같은 kind 클러스터(노드 1개)와 OpenSSH 서버(`npm run kube:fixture -- dachsterm-kv3 up`, 끝난 뒤 `down`). 확인용으로 항상 실패하는 `broken`과 메모리 제한 16Mi를 넘겨 죽는 `oom` Deployment를 올린다.
+- 검사: `npm run test:kube-dashboard -- --cluster=dachsterm-kv3 --keep`(`verify-kube-tree.mjs --dashboard`), 커밋 전 트리. 서버의 `kubectl`을 호출 기록용 스크립트로 감싸 조회를 서버 쪽에서 쟀다.
+
+### 합격 기준
+
+종료 0, PASS 5줄.
+
+| 항목 | 결과 |
+|---|---|
+| metrics-server 없음 | "metrics-server가 없어…" 안내, 요청량과 할당량 표시, 사용량 없음, 자원 상위는 "요청량 기준입니다." |
+| metrics-server 켠 뒤 | 사용량, 추세 그래프, 사용량 기준 자원 상위로 바뀜 |
+| 재시작·에러 | `broken`의 `Error (종료 코드 1)`, `oom`의 `OOMKilled (종료 코드 137)`, 탭을 연 뒤 증가 수 `+N` |
+| 미달 워크로드, 최근 경고 | `Deployment/broken` `0/1 준비`, `BackOff` 경고 |
+| 트리로 이동 | 파드, 워크로드, 노드 항목을 눌러 트리의 해당 행이 선택됨 |
+| 조회가 늘지 않음 | 대시보드를 17초 연 동안 서버에서 실행된 `kubectl`은 트리가 조회하는 7종뿐이고 파드 간격 4.5초 이상 |
+| 인그레스·워커 | 자리만 표시 |
+
+### 단위·UI
+
+커밋 전 트리. `cargo test -p dachsterm --lib --locked kube::snapshot` 16건, `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings`, `vitest run src/features/kube` 138건(뒤에 더한 1건 포함 `dashboard.test.ts` 33건), Playwright `kube-dashboard` 20건·`kube-tree` 28건·`kube-workspace` 12건, typecheck, 바꾼 파일 eslint·prettier 통과.
+
+`cargo test`의 첫 실행은 `rustc`가 `tokio`, `windows`를 컴파일하다 `STATUS_STACK_BUFFER_OVERRUN`으로 종료했다. 코드를 바꾸지 않고 다시 실행해 통과했으며 원인은 조사하지 않았다.
+
+실제 앱 검사 뒤 화면 캡처에서 `OOMKilled · OOMKilled (종료 코드 137)`처럼 상태와 사유가 겹쳐 종료 코드가 잘리는 것을 찾아 고쳤다. 이 수정은 단위 테스트와 해당 Playwright 1건으로 확인했고 실제 앱을 다시 실행하지 않았다.
+
+### 미확인
+
+- 권한 없는 항목, namespace를 정한 세션, API 서버 중지 중의 대시보드, 목록 상한은 Playwright의 합성 데이터로만 확인했다.
+- 스크립트의 전체 경로(`npm run test:kube-tree`, 대시보드 단계 뒤 `metrics-off`로 돌아가 KV.2 단계를 계속)는 실행하지 않았다. KV.2 단계의 코드는 바꾸지 않았다.
+- Mac 실기기(WKWebView 표시), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.
