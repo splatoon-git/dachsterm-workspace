@@ -3,6 +3,7 @@ import { call, errorText, type ForwardKey } from '../lib/ipc';
 import { ContextMenu, anchorBelow, isMenuKey, type MenuPoint } from './ContextMenu';
 import { Icon } from './Icon';
 import { addProblem, fileName, keyDetail, MAX_FORWARD_KEYS, type KeyInfo } from './keyFiles';
+import { NewSshKeyButton } from './NewSshKey';
 import './keyFileList.css';
 
 /** The public part of a key file, or why it could not be read. */
@@ -112,6 +113,14 @@ export function KeyFileList({
         >
           추가
         </button>
+        <NewSshKeyButton
+          disabled={keys.length >= MAX_FORWARD_KEYS}
+          created={(key) => {
+            const blocked = addProblem(keys, key.path);
+            if (blocked) setProblem(blocked);
+            else change([...keys, { path: key.path }]);
+          }}
+        />
       </div>
       {problem && <p role="alert">{problem}</p>}
       {menu && (

@@ -4,6 +4,7 @@ import { Dialog } from '../../components/Dialog';
 import { JumpEditor } from './JumpEditor';
 import { TmuxField } from './TmuxField';
 import { AgentForwardField } from './AgentForwardField';
+import { LoginKeyField } from './LoginKeyField';
 import { groupPath, hasConnectionOverrides } from './model';
 import type { SessionTemplate } from './SessionManager';
 import { call, errorText, type Group, type Profile } from '../../lib/ipc';
@@ -206,15 +207,7 @@ export function SessionForm({
             </select>
           </label>
           {profile.auth === 'key' && (
-            <label className="wide">
-              개인키 파일 경로
-              <input
-                required
-                placeholder="C:\Users\…\.ssh\id_ed25519"
-                value={profile.keyPath}
-                onChange={(e) => field('keyPath', e.target.value)}
-              />
-            </label>
+            <LoginKeyField value={profile.keyPath} change={(path) => field('keyPath', path)} />
           )}
           {['agent', 'interactive'].includes(profile.auth) && (
             <p className="muted wide">

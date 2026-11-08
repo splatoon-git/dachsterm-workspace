@@ -105,6 +105,16 @@
 - 세션 폼의 키 파일 목록에 만든 키를 넣는 동작까지 포함한다. 서버 `authorized_keys`에 자동 등록은 §8.
 - 합격: 생성한 키를 `ssh-keygen -y -f`가 읽고(Passphrase 있음·없음), 앱의 `ssh_keys::info`가 같은 지문을 내고, Docker OpenSSH에 실제 로그인된다.
 
+구현 결과(2026-11-08, [검증 기록](../verification/ssh-key.md)). 위와 달라졌거나 정한 부분:
+
+- 사용자 지시로 TL.2를 기다리지 않고 메뉴 항목을 `HeaderTools.tsx`에 직접 넣었다. TL.2가 `catalog.ts`를 만들 때 이 항목을 옮긴다.
+- 대화상자가 `components/SshKeyDialog.tsx`에 있다. 세션 폼과 로컬 에이전트 설정의 키 목록(`components/KeyFileList`)이 함께 열어야 해서 `features` 아래에 둘 수 없다. lazy 로드는 그대로다.
+- "키 파일 목록에 넣는 동작"은 키 목록과 로그인 키 경로 옆의 **새 키…**로 구현했다. 만든 키가 그 칸에 바로 들어간다. 메뉴에서 만든 키는 완료 화면의 경로를 쓴다.
+- 기본 폴더와 주석을 화면에 미리 보여야 해서 `ssh_key_defaults`를 추가했다(§5).
+- 저장 폴더는 OS 폴더 창 외에 직접 입력도 된다. 없는 폴더는 거부하고, 기본 `~/.ssh`만 만든다.
+- Windows는 파일을 공유 없이 연 채로 ACL부터 바꾼 뒤 내용을 쓴다. 비밀이 상속 권한 파일에 닿는 순간이 없다.
+- 파일 이름은 설계의 문자 제한에 더해 점으로 시작·끝나는 이름, `.pub`로 끝나는 이름, Windows 예약 이름을 거부한다.
+
 ### TL.4 — 문서 편집기
 
 - 메뉴를 누르면 **빈 새 문서 탭**이 열린다. 편집기에 포커스가 있을 때 `Ctrl/Cmd+O`로 파일을 열고, 첫 `Ctrl/Cmd+S`는 OS 저장 창을 띄운다. 탭 우클릭 메뉴에도 같은 동작을 둔다.
@@ -207,6 +217,7 @@ WAS01  →  api.example.com:443    연결됨 · HTTPS 200 · 42ms
 |---|---|---|---|
 | `ssh_key_generate` | 이름, 주석, Passphrase, 폴더 | 경로, 공개키, 지문 | TL.3 |
 | `ssh_key_pick_folder` | 없음 | 폴더 | TL.3 |
+| `ssh_key_defaults` | 없음 | 기본 폴더, 기본 주석 | TL.3 |
 | `local_file_pick`, `local_file_pick_save` | 제안 이름 | 경로 | TL.4 |
 | `net_connect` | 연결 ID, 프로필 ID, 이벤트 채널 | 없음(상태·인증은 이벤트) | TL.5 |
 | `net_disconnect` | 연결 ID | 없음 | TL.5 |
@@ -247,7 +258,7 @@ WAS01  →  api.example.com:443    연결됨 · HTTPS 200 · 42ms
 | 1 | TL.1 | 메뉴에 터널 | — | 구현 완료 |
 | 2 | TL.0 | 실측 | — | 기록 작성. Mac 항목은 대기 가능 |
 | 3 | TL.2 | 메뉴·도구 탭 틀 | — | 단위 테스트, Playwright |
-| 4 | TL.3 | SSH 키 만들기 | — | §4 TL.3 합격 기준 |
+| 4 | TL.3 | SSH 키 만들기 | — | §4 TL.3 합격 기준. Windows 구현 완료, Mac 실기기 대기 |
 | 5 | TL.4 | 문서 편집기 | TL.2 | §4 TL.4 합격 기준 |
 | 6 | TL.5 | 셸 없는 연결 | TL.0 | Docker SSH로 경유·인증·호스트 키, 재사용, 탭 닫으면 종료, 터미널 연결 회귀 |
 | 7 | TL.6 | 포트 개통 | TL.2, TL.5 | Docker로 §4 결과 5종(로컬·리모트), 상한, 취소 |

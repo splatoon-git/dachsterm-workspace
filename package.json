@@ -23,6 +23,7 @@
     "test:git-settings": "node scripts/test-local-native.mjs --git-settings-only",
     "test:git-diff": "node scripts/test-local-native.mjs --git-diff-only",
     "test:native:edit": "node scripts/run-phase1.mjs --native --edit-only --reuse-build",
+    "test:ssh-key": "node scripts/test-ssh-key-native.mjs",
     "test:ui": "playwright test",
     "test:editor-trial": "node scripts/test-editor-native.mjs",
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
