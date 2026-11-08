@@ -143,7 +143,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
     (folder: string) => call<Listing>('sftp_list', { id, path: folder }),
     [id],
   );
-  const { rows: visible, toggle, folderMenu } = useFileTree(listing, view, listFolder);
+  const { rows: visible, toggle, folderMenu, fileMenu } = useFileTree(listing, view, listFolder);
   const base = listing.path.replace(/\/$/, '');
   const selectedPaths = withoutNested(selection).map((name) => `${base}/${name}`);
   const drag = useFileDragOut(sessionSource(session), (n) => `${base}/${n}`, selection, setError);
@@ -596,11 +596,10 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                       conflict,
                     })),
             },
-            {
-              label: '외부 편집기로 열기',
-              disabled: isFtp || selection.length !== 1 || !!selected?.directory,
-              run: () => setOperation('edit'),
-            },
+            ...fileMenu(
+              selection.length === 1 && !selected?.directory ? target : undefined,
+              isFtp ? undefined : () => setOperation('edit'),
+            ),
             {
               label: '이름 바꾸기',
               shortcut: 'F2',

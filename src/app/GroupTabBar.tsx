@@ -18,9 +18,17 @@ export function PlainTab({
   close,
   id,
   controls,
+  hint,
+  italic,
+  onDoubleClick,
 }: {
   tabKey?: string;
   title: string;
+  /** The tooltip, when the title alone is ambiguous. */
+  hint?: string;
+  /** A preview: the next file opened replaces it. */
+  italic?: boolean;
+  onDoubleClick?: () => void;
   active: boolean;
   select: () => void;
   close?: () => void;
@@ -28,8 +36,19 @@ export function PlainTab({
   controls?: string;
 }) {
   return (
-    <div className={`session-tab ${active ? 'selected' : ''}`} data-tab-key={key}>
-      <button role="tab" id={id} aria-controls={controls} aria-selected={active} onClick={select}>
+    <div
+      className={`session-tab ${active ? 'selected' : ''} ${italic ? 'preview-tab' : ''}`}
+      data-tab-key={key}
+    >
+      <button
+        role="tab"
+        id={id}
+        aria-controls={controls}
+        aria-selected={active}
+        title={hint}
+        onClick={select}
+        onDoubleClick={onDoubleClick}
+      >
         {title}
       </button>
       {close && (

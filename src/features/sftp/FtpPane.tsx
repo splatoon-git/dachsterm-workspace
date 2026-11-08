@@ -1,14 +1,17 @@
 import { useSyncExternalStore } from 'react';
 import { EndedCard } from '../../components/EndedCard';
+import { FileOpenContext, type FileOpener } from '../../components/fileOpen';
 import { FilePanel } from './FilePanel';
 import { TerminalSession } from '../terminal/session';
 /** An FTP or FTPS tab: the file panel alone. Its target and state are in the status bar. */
 export function FtpPane({
   session,
+  open,
   reconnect,
   close,
 }: {
   session: TerminalSession;
+  open?: FileOpener;
   reconnect: () => void;
   close?: () => void;
 }) {
@@ -24,7 +27,9 @@ export function FtpPane({
         {state.message}
       </div>
       {ended && <EndedCard message={state.message} reconnect={reconnect} close={close} />}
-      <FilePanel session={session} />
+      <FileOpenContext.Provider value={open ?? null}>
+        <FilePanel session={session} />
+      </FileOpenContext.Provider>
     </section>
   );
 }

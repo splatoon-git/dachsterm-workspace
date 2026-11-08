@@ -483,7 +483,6 @@ try {
   stage = 'file permissions archive and editor';
   const files = page.locator('.files');
   const uploadedRow = () => files.locator('.file-row').filter({ hasText: '한글 upload.txt' });
-  await uploadedRow().click();
   await uploadedRow().click({ button: 'right' });
   await page.getByRole('menuitem', { name: '권한…' }).click();
   stage = 'file permission form';
@@ -496,13 +495,11 @@ try {
     ).permissions & 0o777,
     0o640,
   );
-  await uploadedRow().click();
   await uploadedRow().click({ button: 'right' });
   await page.getByRole('menuitem', { name: '압축하기…' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '압축', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(files.locator('.file-row').filter({ hasText: 'archive.zip' })).toBeVisible();
-  await files.locator('.file-row').filter({ hasText: 'archive.zip' }).click();
   await files.locator('.file-row').filter({ hasText: 'archive.zip' }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: '압축 해제…' }).click();
   await page.getByRole('dialog').getByLabel('ZIP 파일명 인코딩').selectOption('auto');
@@ -515,7 +512,8 @@ try {
     "require('fs').writeFileSync(process.argv[2], 'external executable saved revision', 'utf8');",
   );
   stage = 'external editor form';
-  await uploadedRow().dblclick();
+  await uploadedRow().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '외부 편집기로 열기' }).click();
   const editorForm = page.getByRole('dialog');
   await editorForm.locator('summary', { hasText: '경로 직접 입력' }).click();
   await editorForm.getByLabel('프로그램 경로', { exact: true }).fill(process.execPath);

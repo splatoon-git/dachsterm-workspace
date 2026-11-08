@@ -47,6 +47,7 @@ import { CommandPanel } from '../features/terminal/CommandPanel';
 import { SessionTerminal } from './SessionTerminal';
 import { GroupDialog } from './GroupDialog';
 import { useReviewTabs } from './useReviewTabs';
+import { useFileTabs } from './useFileTabs';
 import { tmuxCloseNotice } from './tmuxNotice';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
@@ -54,6 +55,7 @@ import { SessionTab } from './SessionTab';
 import { capabilities } from '../features/terminal/sessionKind';
 import type { CSSProperties } from 'react';
 import { SidebarViews } from './SidebarViews';
+import { TerminalPreviewCell } from './TerminalPreviewCell';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
 import { TitleBar } from './TitleBar';
@@ -61,9 +63,6 @@ import { SidebarTabs, type SidebarView } from './SidebarTabs';
 import { ConnectionTree, useFolded } from './ConnectionTree';
 import { HeaderActions, HeaderMenus } from './HeaderTools';
 import { modKey } from '../lib/platform';
-const TerminalPreview = lazy(() =>
-  import('../features/terminal/TerminalPreview').then((m) => ({ default: m.TerminalPreview })),
-);
 const GamePane = lazy(() => import('../features/games/GamePane'));
 import { games, type GameId } from '../features/games/catalog';
 const sessionRef = (session: TerminalSession): TabRef => ({
@@ -355,13 +354,14 @@ export function App() {
     const game = games.find((g) => tabKey({ kind: 'game', id: g.id }) === key);
     if (session) closeTab(session);
     else if (game) closeGame(game.id);
-    else if (!reviews.close(key)) workspace.close(key);
+    else if (!reviews.close(key) && !files.close(key)) workspace.close(key);
   };
   const splitTab = (t: TerminalSession, beside: Beside) =>
     t.localTarget
       ? openLocal(t.localTarget, beside)
       : requestConnect(savedProfile(t), undefined, { beside });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
+  const files = useFileTabs({ workspace, sessions: tabs, narrow });
   const tabMenu = useTabMenu({
     workspace,
     narrow,
@@ -380,6 +380,7 @@ export function App() {
   const activeGame = focusedTab?.kind === 'game' ? focusedTab.id : null;
   const hasPreview = allTabs(workspace.layout.root).some((tab) => tab.kind === 'preview');
   const selected = tabs.find((t) => sessionKey(t) === focusedKey);
+  const owner = selected ?? files.owner(focusedKey);
   const agents = useAgentBoard({ tabs, selected, open: workspace.open, fail: setError });
   const activeSession = (group: GroupNode) => tabs.find((t) => sessionKey(t) === group.active);
   // Only panes on screen take part: zoom and a narrow window leave one group in view.
@@ -406,6 +407,7 @@ export function App() {
       );
     }
     if (tab.kind === 'review') return reviews.renderTab(tab, active, select);
+    if (tab.kind === 'file') return files.renderTab(tab, active, select);
     if (tab.kind === 'preview')
       return (
         <PlainTab
@@ -430,15 +432,8 @@ export function App() {
   };
   const renderCell = (tab: TabRef, { visible, focused }: CellState) => {
     if (tab.kind === 'review') return reviews.renderCell(tab);
-    if (tab.kind === 'preview')
-      return (
-        <div className="preview-wrap">
-          <div className="preview-notice">색상과 한글 렌더링 미리보기 · SSH 연결 없음</div>
-          <Suspense fallback={<p>터미널 준비 중…</p>}>
-            <TerminalPreview theme={theme} />
-          </Suspense>
-        </div>
-      );
+    if (tab.kind === 'file') return files.renderCell(tab);
+    if (tab.kind === 'preview') return <TerminalPreviewCell theme={theme} />;
     if (tab.kind === 'game')
       return (
         <Suspense fallback={visible ? <p>준비 중…</p> : null}>
@@ -465,6 +460,7 @@ export function App() {
     ) : (
       <FtpPane
         session={session}
+        open={(path, pinned) => files.open(session, path, pinned)}
         reconnect={() => reconnectTab(session)}
         close={() => closeTab(session)}
       />
@@ -591,10 +587,11 @@ export function App() {
           </aside>
           <SidebarViews
             view={sidebarView}
-            session={selected}
+            session={owner}
             showConnections={() => setSidebarView('connections')}
-            startAgent={(folder) => selected && agent.ask(savedProfile(selected), folder)}
-            openReview={() => selected && reviews.open(selected)}
+            startAgent={(folder) => owner && agent.ask(savedProfile(owner), folder)}
+            openReview={() => owner && reviews.open(owner)}
+            openFile={files.open}
           />
         </div>
         {sidebarOpen && (
@@ -615,6 +612,7 @@ export function App() {
               ...(hasPreview ? [{ kind: 'preview' } as const] : []),
               ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
               ...reviews.order,
+              ...files.order,
             ]}
             renderTab={renderTab}
             renderCell={renderCell}
@@ -661,7 +659,8 @@ export function App() {
         </main>
       </div>
       <StatusBar
-        session={activeGame ? undefined : selected}
+        session={activeGame ? undefined : owner}
+        file={files.status(focusedTab)}
         game={games.find((game) => game.id === activeGame)?.title}
         sending={input.sending}
         input={tabs.length > 0 && <InputScopeControl input={input} />}

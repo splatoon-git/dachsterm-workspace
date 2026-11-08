@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ButtonHTMLAttributes } from 'react';
 import { Icon, type IconName } from '../../components/Icon';
 import type { MenuItem } from '../../components/ContextMenu';
 import { fileMarkLabels, useFileDecorations } from '../../components/fileDecorations';
+import { useFileOpener } from '../../components/fileOpen';
 import { useGitDisplay } from '../../lib/gitDisplay';
 import {
   childPath,
@@ -31,6 +32,7 @@ export function useFileTree<T extends FileEntry>(
   list: (path: string) => Promise<{ entries: T[] }>,
 ) {
   const decorations = useFileDecorations();
+  const open = useFileOpener();
   // Each listing, the first one and every refresh, may bring new marks.
   useEffect(() => {
     // Absolute folders only: POSIX, and a local Windows drive.
@@ -88,6 +90,11 @@ export function useFileTree<T extends FileEntry>(
     rows,
     /** The app's own menu items for one selected folder; none for anything else. */
     folderMenu: (path?: string): MenuItem[] => (path && decorations?.folderActions?.(path)) || [],
+    /** Opening one selected file: in a tab where this window has them, and in an external editor. */
+    fileMenu: (path: string | undefined, external?: () => void): MenuItem[] => [
+      ...(open ? [{ label: '열기', disabled: !path, run: () => path && open(path, true) }] : []),
+      { label: '외부 편집기로 열기', disabled: !path || !external, run: () => external?.() },
+    ],
     toggle(folder: string) {
       const expanded = new Set(tree.expanded);
       if (!expanded.delete(folder)) expanded.add(folder);
@@ -100,6 +107,8 @@ export function FileTreeRow<T extends FileEntry>({
   row,
   selected,
   toggle,
+  onClick,
+  onDoubleClick,
   ...button
 }: {
   row: TreeRow<T> & { path?: string };
@@ -107,8 +116,11 @@ export function FileTreeRow<T extends FileEntry>({
   toggle: () => void;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const decorations = useFileDecorations();
+  const open = useFileOpener();
   const { treeMarks } = useGitDisplay();
   const mark = row.path ? decorations?.mark(row.path) : undefined;
+  // A link may lead to a folder, so a click only previews a plain file.
+  const file = open && row.path && !row.directory && !row.symlink ? row.path : null;
   return (
     <div className="file-tree-row" style={{ '--file-depth': row.depth } as React.CSSProperties}>
       {row.directory ? (
@@ -126,6 +138,14 @@ export function FileTreeRow<T extends FileEntry>({
       )}
       <button
         {...button}
+        onClick={(event) => {
+          onClick?.(event);
+          if (file && !(event.ctrlKey || event.metaKey || event.shiftKey)) open?.(file, false);
+        }}
+        onDoubleClick={(event) => {
+          if (file) open?.(file, true);
+          else onDoubleClick?.(event);
+        }}
         data-file-name={row.name}
         className={`file-row ${selected ? 'selected' : ''}`}
         aria-pressed={selected}

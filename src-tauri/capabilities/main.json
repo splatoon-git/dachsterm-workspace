@@ -87,6 +87,7 @@
     "allow-files-drag-prepare",
     "allow-files-drag-out",
     "allow-files-reveal",
+    "allow-file-read",
     "allow-terminal-supports-directory-hook",
     "allow-clipboard-write-text",
     "allow-url-open",
