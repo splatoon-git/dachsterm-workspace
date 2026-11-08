@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TerminalSession } from '../terminal/session';
 import { call, errorText } from '../../lib/ipc';
 import { Icon } from '../../components/Icon';
+import { MetricChart } from '../../components/MetricChart';
 type Sample = {
   at: number;
   cpu: number | null;
@@ -25,65 +26,6 @@ type Monitor = {
 const rate = (n: number | null | undefined) =>
   n == null ? '측정 중' : `${(n / 1024).toFixed(1)} KB/s`;
 const percent = (n: number | null | undefined) => (n == null ? '측정 중' : `${n.toFixed(1)}%`);
-function Chart({
-  values,
-  label,
-  unit,
-  max,
-  color,
-}: {
-  values: (number | null)[];
-  label: string;
-  unit: string;
-  max: number;
-  color: number;
-}) {
-  const points = values.map((n, i) =>
-    n === null
-      ? null
-      : `${(i * 300) / Math.max(1, values.length - 1)},${68 - Math.min(1, n / Math.max(1, max)) * 60}`,
-  );
-  const segments: string[] = [];
-  let current: string[] = [];
-  for (const p of points) {
-    if (p === null) {
-      if (current.length) segments.push(current.join(' '));
-      current = [];
-    } else current.push(p);
-  }
-  if (current.length) segments.push(current.join(' '));
-  return (
-    <div className="metric-chart">
-      <div>
-        <span>{label}</span>
-        <strong>{values.at(-1) == null ? '측정 중' : `${values.at(-1)!.toFixed(1)}${unit}`}</strong>
-      </div>
-      <svg
-        viewBox="0 0 300 80"
-        role="img"
-        aria-label={`${label} 최근 ${values.length}개 샘플`}
-        preserveAspectRatio="none"
-      >
-        <path
-          d="M0 8H300 M0 38H300 M0 68H300"
-          stroke="var(--chart-grid)"
-          fill="none"
-          strokeWidth=".5"
-        />
-        {segments.map((p, i) => (
-          <polyline
-            key={i}
-            points={p}
-            fill="none"
-            stroke={`var(--chart-series-${color})`}
-            strokeWidth="2"
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-      </svg>
-    </div>
-  );
-}
 export function MonitorBar({ session }: { session: TerminalSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const id = session.connectionId;
@@ -219,21 +161,21 @@ export function MonitorBar({ session }: { session: TerminalSession }) {
             </p>
           )}
           <div className="monitor-charts">
-            <Chart
+            <MetricChart
               label="CPU"
               values={view?.history.map((s) => s.cpu) ?? []}
               unit="%"
               max={100}
               color={0}
             />
-            <Chart
+            <MetricChart
               label="RAM"
               values={view?.history.map((s) => (s.memoryUsed / s.memoryTotal) * 100) ?? []}
               unit="%"
               max={100}
               color={1}
             />
-            <Chart
+            <MetricChart
               label="NET ↓"
               values={view?.history.map((s) => (s.rx === null ? null : s.rx / 1024)) ?? []}
               unit=" KB/s"

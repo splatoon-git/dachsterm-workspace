@@ -50,6 +50,7 @@ pub struct ContainerState {
     terminated: String,
     last_reason: String,
     last_finished: String,
+    last_exit_code: Option<i32>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -386,6 +387,7 @@ fn container_states(value: &str) -> Option<Vec<ContainerState>> {
                 terminated,
                 last_reason,
                 last_finished,
+                last_exit_code,
             ] = entry.split(';').collect::<Vec<_>>().try_into().ok()?;
             Some(ContainerState {
                 name: text(name),
@@ -395,6 +397,7 @@ fn container_states(value: &str) -> Option<Vec<ContainerState>> {
                 terminated: text(&decode(terminated)),
                 last_reason: text(&decode(last_reason)),
                 last_finished: text(last_finished),
+                last_exit_code: last_exit_code.parse().ok(),
             })
         })
         .collect()

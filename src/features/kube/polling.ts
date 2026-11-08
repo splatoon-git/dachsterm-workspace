@@ -139,7 +139,7 @@ export function stateNote(state: KubeState): string {
   }
 }
 
-const ageAgo = (ms: number) => {
+export const ageAgo = (ms: number) => {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   if (seconds < 60) return `${seconds}초 전`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;

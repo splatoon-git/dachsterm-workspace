@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
+import { advanceHistory, emptyHistory } from './dashboardHistory';
 import {
   applySnapshot,
   dueKinds,
@@ -26,7 +27,10 @@ const documentVisible = () => document.visibilityState !== 'hidden';
  * kept, but nothing new starts.
  */
 export function useKubeSnapshots(id: string, settings: KubeSettings | null, shown: boolean) {
-  const [store, setStore] = useState(emptySnapshots);
+  const [{ store, history }, setData] = useState(() => ({
+    store: emptySnapshots(),
+    history: emptyHistory(),
+  }));
   const [now, setNow] = useState(() => Date.now());
   const visible = useSyncExternalStore(subscribeVisibility, documentVisible);
   const schedule = useRef<Schedule | null>(null);
@@ -49,7 +53,10 @@ export function useKubeSnapshots(id: string, settings: KubeSettings | null, show
           .catch((error: unknown) => failedSnapshot(errorText(error)))
           .then((snapshot) => {
             schedule.current = finished(schedule.current ?? current, kind, Date.now(), snapshot);
-            setStore((store) => applySnapshot(store, kind, snapshot));
+            setData((now) => {
+              const next = applySnapshot(now.store, kind, snapshot);
+              return { store: next, history: advanceHistory(now.history, next) };
+            });
             pump.current?.();
           });
       }
@@ -70,5 +77,5 @@ export function useKubeSnapshots(id: string, settings: KubeSettings | null, show
     return () => window.clearInterval(clock);
   }, [polling]);
 
-  return { store, now };
+  return { store, history, now };
 }

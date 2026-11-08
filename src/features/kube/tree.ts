@@ -1,5 +1,6 @@
 import type { KubeNode, KubeNodeUsage, KubePod, KubeWorkload } from './snapshotTypes';
 import { severity, totalsOf, worse, type Health, type PodView, type Totals } from './treePods';
+import type { TreeTarget } from './treeReveal';
 
 export type Grouping = 'workload' | 'service' | 'node';
 export const groupings: { id: Grouping; label: string }[] = [
@@ -23,6 +24,8 @@ export type TreeView = {
   /** Where the selection was, for when its row disappears: a pod that was replaced. */
   activeIndex: number;
   sort: TreeSort;
+  /** Asked for by another screen; the tree moves there once and clears it. */
+  reveal: TreeTarget | null;
 };
 export const initialTreeView = (): TreeView => ({
   query: '',
@@ -30,6 +33,7 @@ export const initialTreeView = (): TreeView => ({
   activeId: '',
   activeIndex: 0,
   sort: defaultSort,
+  reveal: null,
 });
 
 /** Measures read worst or largest first on the first click; names read A to Z. */
@@ -64,6 +68,13 @@ type Level = {
   health?: Health;
 };
 type Building = Level & { children: Map<string, Building>; pods: PodView[] };
+
+const workloadLevelId = (kind: string, name: string) => `wl:${kind}/${name}`;
+export const workloadGroupId = (namespace: string, kind: string, name: string) =>
+  `ns:${namespace}/${workloadLevelId(kind, name)}`;
+export const nodeGroupId = (name: string) => `node:${name}`;
+export const podRowId = (groupId: string, name: string) => `${groupId}/pod:${name}`;
+export const nodeRowId = (name: string) => `nodes/${name}`;
 
 const namespaceLevel = (namespace: string): Level => ({
   id: `ns:${namespace}`,
@@ -100,7 +111,7 @@ function workloadLevel(view: PodView, known: Map<string, KubeWorkload>): Level {
   if (!owner) return { id: 'no-workload', label: '단독 파드', type: '', last: true };
   const found = known.get(`${owner.kind}/${view.pod.namespace}/${owner.name}`);
   return {
-    id: `wl:${owner.kind}/${owner.name}`,
+    id: workloadLevelId(owner.kind, owner.name),
     label: `${owner.kind}/${owner.name}`,
     type: '',
     note: found ? `준비 ${found.ready}/${found.desired}` : undefined,
@@ -120,7 +131,7 @@ function nodeLevel(view: PodView, nodes: Map<string, KubeNode>): Level {
   const node = nodes.get(name);
   const state = node && nodeState(node);
   return {
-    id: `node:${name}`,
+    id: nodeGroupId(name),
     label: name,
     type: 'Node',
     note: state?.text,
@@ -347,6 +358,14 @@ function nodesRow(section: NodeSection, folds: ReadonlySet<string>): NodeSection
   };
 }
 
+/** Folds with the node list open, whichever of its two remembered cases applies now. */
+export function unfoldNodes(section: NodeSection, folds: ReadonlySet<string>) {
+  const next = new Set(folds);
+  if (section.ready < section.total) next.delete(NODES_CLOSED);
+  else next.add(NODES_OPENED);
+  return next;
+}
+
 /** `showAll` is for a filter: what matched must be visible even inside a folded group. */
 export function treeRows(
   section: NodeSection | null,
@@ -360,7 +379,7 @@ export function treeRows(
     rows.push(row);
     if (row.expanded)
       for (const view of section.nodes)
-        rows.push({ type: 'node', id: `nodes/${view.node.name}`, depth: 1, view });
+        rows.push({ type: 'node', id: nodeRowId(view.node.name), depth: 1, view });
   }
   const visit = (group: TreeGroup, depth: number) => {
     const expanded = showAll || !folds.has(group.id);
@@ -368,7 +387,7 @@ export function treeRows(
     if (!expanded) return;
     group.groups.forEach((child) => visit(child, depth + 1));
     for (const view of group.pods)
-      rows.push({ type: 'pod', id: `${group.id}/pod:${view.pod.name}`, depth: depth + 1, view });
+      rows.push({ type: 'pod', id: podRowId(group.id, view.pod.name), depth: depth + 1, view });
   };
   forest.forEach((group) => visit(group, 0));
   return rows;

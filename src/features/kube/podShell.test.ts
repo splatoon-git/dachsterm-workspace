@@ -133,6 +133,7 @@ describe('finding the replacement pod', () => {
         terminated: '',
         lastReason: '',
         lastFinished: '',
+        lastExitCode: null,
       },
     ],
     ...patch,

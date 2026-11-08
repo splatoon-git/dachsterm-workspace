@@ -3,7 +3,7 @@
 //! fields. Free text the API server does not restrict (reasons, messages) goes through `urlquery`
 //! so it cannot break a line; `snapshot::decode` reverses it.
 
-/// `name;ready;restarts;waiting;terminated;lastReason;lastFinished|`
+/// `name;ready;restarts;waiting;terminated;lastReason;lastFinished;lastExitCode|`
 macro_rules! container_status {
     () => {
         concat!(
@@ -11,8 +11,8 @@ macro_rules! container_status {
             "{{with .state}}{{with .waiting}}{{with .reason}}{{urlquery .}}{{end}}{{end}}{{end}};",
             "{{with .state}}{{with .terminated}}{{with .reason}}{{urlquery .}}{{end}}{{end}}{{end}};",
             "{{with .lastState}}{{with .terminated}}",
-            "{{with .reason}}{{urlquery .}}{{end}};{{.finishedAt}}",
-            "{{else}};{{end}}{{else}};{{end}}|",
+            "{{with .reason}}{{urlquery .}}{{end}};{{.finishedAt}};{{.exitCode}}",
+            "{{else}};;{{end}}{{else}};;{{end}}|",
         )
     };
 }

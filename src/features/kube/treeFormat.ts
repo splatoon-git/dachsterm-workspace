@@ -1,3 +1,7 @@
+import type { Health } from './treePods';
+
+export const statusMark: Record<Health, string> = { ok: '●', warn: '▲', error: '✕' };
+
 /** The first and one-past-last row to render, with a margin so fast scrolling shows no gap. */
 export function visibleRange(
   scrollTop: number,

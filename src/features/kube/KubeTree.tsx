@@ -32,6 +32,7 @@ import { visibleRange } from './treeFormat';
 import { leavesFilter, treeKeyAction } from './treeKeys';
 import { filterActive, matches, parseFilter, podViews, type PodView } from './treePods';
 import { readTreePrefs, writeTreePrefs } from './treePrefs';
+import { planReveal } from './treeReveal';
 
 const ROW_HEIGHT = 26;
 
@@ -81,6 +82,7 @@ export const KubeTree = memo(function KubeTree({
   const body = useRef<HTMLDivElement>(null);
   const filterBox = useRef<HTMLInputElement>(null);
   const domId = useId();
+  const scrollToActive = useRef(false);
   const { query, problemsOnly, sort } = view;
 
   useEffect(() => {
@@ -134,6 +136,48 @@ export const KubeTree = memo(function KubeTree({
     [shownSection, forest, collapsed, showAll],
   );
   const found = rows.findIndex((row) => row.id === view.activeId);
+
+  // Another screen sent the user to a row: open what hides it, select it, then bring it into view.
+  useLayoutEffect(() => {
+    if (!view.reveal) return;
+    const plan = planReveal(view.reveal, {
+      views,
+      workloads: workloads.data ?? [],
+      nodes: nodes.data ?? [],
+      section,
+      grouping,
+      collapsed,
+      filter,
+    });
+    if (plan) {
+      setPrefs({ grouping: plan.grouping, collapsed: plan.collapsed });
+      scrollToActive.current = true;
+    }
+    setView((now) => ({
+      ...now,
+      reveal: null,
+      ...(plan && { activeId: plan.rowId }),
+      ...(plan?.clearFilter && { query: '', problemsOnly: false }),
+    }));
+  }, [
+    view.reveal,
+    views,
+    workloads.data,
+    nodes.data,
+    section,
+    grouping,
+    collapsed,
+    filter,
+    setView,
+  ]);
+
+  useLayoutEffect(() => {
+    const element = body.current;
+    if (!scrollToActive.current || found < 0 || !element) return;
+    scrollToActive.current = false;
+    element.scrollTop = Math.max(0, (found + 2) * ROW_HEIGHT - element.clientHeight / 2);
+  }, [found, rows]);
+
   const activeIndex = Math.max(0, found >= 0 ? found : Math.min(view.activeIndex, rows.length - 1));
   const active = rows[activeIndex];
   const range = visibleRange(scroll.top, scroll.height, ROW_HEIGHT, rows.length);

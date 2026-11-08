@@ -1,64 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Detection, KubeState } from '../../src/features/kube/kubeModel';
-import type { KubePod, Snapshot, SnapshotData } from '../../src/features/kube/snapshotTypes';
 import type {} from './fixtures/kube-workspace';
-
-const NOW = Date.parse('2026-11-08T12:00:00Z');
-const saved = { context: 'prod', namespace: '', kubectl: '/k', kubeconfig: '/c', operate: false };
-const detection: Detection = {
-  state: { kind: 'ready' },
-  kubectl: '/k',
-  kubeconfig: '/c',
-  context: 'prod',
-  contexts: ['prod'],
-  namespaces: ['web'],
-  namespacesForbidden: false,
-  saved,
-};
-
-const pod = (name: string, patch: Partial<KubePod> = {}): KubePod => ({
-  namespace: 'web',
-  name,
-  node: 'n1',
-  phase: 'Running',
-  reason: '',
-  created: '2026-11-08T11:00:00Z',
-  deleting: false,
-  ownerKind: 'ReplicaSet',
-  ownerName: 'api-7f9c',
-  labels: { app: 'api', 'pod-template-hash': '7f9c' },
-  containerCount: 1,
-  cpuRequest: 100,
-  memoryRequest: 2 ** 20,
-  cpuLimit: 200,
-  memoryLimit: 2 ** 21,
-  initContainers: [],
-  containers: [
-    {
-      name: 'app',
-      ready: true,
-      restarts: 0,
-      waiting: '',
-      terminated: '',
-      lastReason: '',
-      lastFinished: '',
-    },
-  ],
-  ...patch,
-});
-
-const ok = (data: SnapshotData, collectedAt = NOW): Snapshot => ({
-  state: { kind: 'ready' },
-  data,
-  collectedAt,
-  elapsedMs: 5,
-});
-const failed = (state: KubeState): Snapshot => ({
-  state,
-  data: null,
-  collectedAt: NOW,
-  elapsedMs: 5,
-});
+import { NOW, detection, failed, ok, pod, saved } from './fixtures/kube-data';
 
 const crash = pod('crash-1', {
   labels: { app: 'lonely' },
@@ -73,6 +15,7 @@ const crash = pod('crash-1', {
       terminated: '',
       lastReason: 'Error',
       lastFinished: '2026-11-08T11:59:00Z',
+      lastExitCode: 1,
     },
   ],
 });

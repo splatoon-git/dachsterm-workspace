@@ -239,3 +239,92 @@ KV.1 검사도 공용 헬퍼로 옮기고 첫 화면 기대값을 바꿔 다시 
 - 권한 없는 항목(`Forbidden`), `MaxSessions` 거부로 조회를 미루는 동작, 출력 상한과 시간 상한은 단위·UI 테스트로만 확인했다.
 - 한글 입력 상태의 키는 `code`가 있는 합성 키 이벤트로 확인했고 실제 IME는 눌러 보지 않았다.
 - 실제 RKE2, Mac 실기기, CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.
+
+## KV.3 앱 검증 (2026-11-08)
+
+### 환경
+
+- KV.2와 같은 kind 클러스터(노드 1개)와 OpenSSH 서버(`npm run kube:fixture -- dachsterm-kv3 up`, 끝난 뒤 `down`). 확인용으로 항상 실패하는 `broken`과 메모리 제한 16Mi를 넘겨 죽는 `oom` Deployment를 올린다.
+- 검사: `npm run test:kube-dashboard -- --cluster=dachsterm-kv3 --keep`(`verify-kube-tree.mjs --dashboard`), 커밋 전 트리. 서버의 `kubectl`을 호출 기록용 스크립트로 감싸 조회를 서버 쪽에서 쟀다.
+
+### 합격 기준
+
+종료 0, PASS 5줄.
+
+| 항목 | 결과 |
+|---|---|
+| metrics-server 없음 | "metrics-server가 없어…" 안내, 요청량과 할당량 표시, 사용량 없음, 자원 상위는 "요청량 기준입니다." |
+| metrics-server 켠 뒤 | 사용량, 추세 그래프, 사용량 기준 자원 상위로 바뀜 |
+| 재시작·에러 | `broken`의 `Error (종료 코드 1)`, `oom`의 `OOMKilled (종료 코드 137)`, 탭을 연 뒤 증가 수 `+N` |
+| 미달 워크로드, 최근 경고 | `Deployment/broken` `0/1 준비`, `BackOff` 경고 |
+| 트리로 이동 | 파드, 워크로드, 노드 항목을 눌러 트리의 해당 행이 선택됨 |
+| 조회가 늘지 않음 | 대시보드를 17초 연 동안 서버에서 실행된 `kubectl`은 트리가 조회하는 7종뿐이고 파드 간격 4.5초 이상 |
+| 인그레스·워커 | 자리만 표시 |
+
+### 단위·UI
+
+커밋 전 트리. `cargo test -p dachsterm --lib --locked kube::snapshot` 16건, `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings`, `vitest run src/features/kube` 138건(뒤에 더한 1건 포함 `dashboard.test.ts` 33건), Playwright `kube-dashboard` 20건·`kube-tree` 28건·`kube-workspace` 12건, typecheck, 바꾼 파일 eslint·prettier 통과.
+
+`cargo test`의 첫 실행은 `rustc`가 `tokio`, `windows`를 컴파일하다 `STATUS_STACK_BUFFER_OVERRUN`으로 종료했다. 코드를 바꾸지 않고 다시 실행해 통과했으며 원인은 조사하지 않았다.
+
+실제 앱 검사 뒤 화면 캡처에서 `OOMKilled · OOMKilled (종료 코드 137)`처럼 상태와 사유가 겹쳐 종료 코드가 잘리는 것을 찾아 고쳤다. 이 수정은 단위 테스트와 해당 Playwright 1건으로 확인했고 실제 앱을 다시 실행하지 않았다.
+
+### 미확인
+
+- 권한 없는 항목, namespace를 정한 세션, API 서버 중지 중의 대시보드, 목록 상한은 Playwright의 합성 데이터로만 확인했다.
+- 스크립트의 전체 경로(`npm run test:kube-tree`, 대시보드 단계 뒤 `metrics-off`로 돌아가 KV.2 단계를 계속)는 실행하지 않았다. KV.2 단계의 코드는 바꾸지 않았다.
+- Mac 실기기(WKWebView 표시), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.
+
+## KV.4 앱 검증 (2026-11-08)
+
+### 환경
+
+- KV.2와 같은 kind 클러스터(노드 1개)와 OpenSSH 서버(`npm run kube:fixture -- dachsterm-kv4 up`, 끝난 뒤 `down`). 이미지는 `busybox:1.36`, 셸이 없는 쪽은 `registry.k8s.io/pause:3.10`.
+- 검사: `node scripts/verify-kube-detail.mjs --cluster=dachsterm-kv4 --keep`(`npm run test:kube-detail`). 실패 원인이 모두 스크립트 쪽이었고 통과한 단계를 반복하지 않으려고 3번에 나눠 실행했다. 처음부터 끝까지 한 번에 통과시킨 실행은 없다. 뒤의 두 번은 `--from-follow`, `--from-parent`로 시작 지점을 옮겼다.
+- 실행 파일은 세 번 모두 같은 빌드다. 그 뒤에 바꾼 코드는 `useKubeTabs.ts`의 닫힌 탭 기록 정리, 주석 1줄, KV.3 병합이고 실제 앱으로 다시 실행하지 않았다.
+
+### 실측
+
+| 동작 | 결과 |
+|---|---|
+| 셸 없는 이미지에서 `exec -- sh -c` | 종료 1, `... exec: "sh": executable file not found in $PATH` |
+| 정지한 컨테이너에 `exec` | 종료 1, `error: unable to upgrade connection: container not found ("c")` |
+| 재시작한 적 없는 컨테이너의 `logs --previous` | 종료 1, `Error from server (BadRequest): previous terminated container "main" in pod "..." not found` |
+| 재시작 대기 중(현재 `terminated`)인 컨테이너의 `logs --previous` | **종료 0, stdout에 `unable to retrieve container logs for containerd://...`** |
+| 없는 파드의 `logs` / `get` | `error: error from server (NotFound): ...` / `Error from server (NotFound): ...` |
+| `exec` 중 파드 삭제 | 종료 137, `command terminated with exit code 137` |
+
+### 합격 기준
+
+PASS 13줄과 측정 1줄.
+
+| 항목 | 결과 |
+|---|---|
+| 로그 패널 | `Enter`와 더블클릭으로 열림, annotation의 컨테이너 선택, 키워드 필터, `Esc`로 닫으면 같은 파드에 커서와 포커스 |
+| 우클릭 메뉴와 상세 | 로그·셸·이벤트·상세 4개, 이벤트·YAML·관계(`web · 로테이션 포함`)·개요에 실제 데이터 |
+| 재시작한 파드 | 상세가 장애 원인으로 열림, `Error`와 종료 코드 9, 직전 인스턴스 로그, 패널 체크박스로도 직전 로그 |
+| 직전 인스턴스 없음 | 안내와 함께 현재 로그 |
+| 셸 탭 | 조회 모드에서 열림, 탭 제목 `kind-… · 파드`, 명령 실행 |
+| 복귀 | `exit 3`으로 탭이 닫히고 트리의 같은 파드에 포커스 |
+| 여러 컨테이너 | annotation이 없으면 한 번 묻고 다음부터 묻지 않음 |
+| 셸 없는 이미지 | 트리 옆 안내, 탭이 열리지 않음 |
+| 로그 따라가기 | 터미널 탭에 실시간 출력, 탭 닫기 |
+| 파드 삭제 | 끝난 카드에서 물음, 재접속하면 새 파드(`hostname`으로 확인), 이전 명령이 다시 실행되지 않음 |
+| 채널 거부 | 셸 탭 9개 뒤 `kube_terminal_probe`가 거부되어 동시 세션 한도 안내 |
+| 부모 연결 종료 | 셸 탭과 로그 탭이 모두 닫힘 |
+
+첫 실행의 실패 2건은 모두 스크립트 문제였다. 탭 머리글을 클릭하면 포커스가 그곳에 남아 `Esc`가 트리로 가지 않았고, 세션 한도에 닿은 채로 패널을 열어 조회 채널이 없었다.
+
+### 단위·UI
+
+KV.3을 합친 커밋 전 트리. `cargo test -p dachsterm --lib --locked -- kube podtree` 71건, `vitest run src/features/kube` 169건, Playwright `kube-tree`·`kube-dashboard`·`kube-workspace` 67건, typecheck, 바꾼 파일 eslint·prettier, `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings`(`-j 2`) 통과.
+
+첫 `cargo clippy`는 메모리 할당 실패(`STATUS_STACK_BUFFER_OVERRUN`)로 끝났다. `-j 2`로 줄여 통과했다.
+
+### 미확인
+
+- PTY를 여는 순간의 채널 거부(`ChannelOpenFailure` → 세션 한도 문구): 실측한 거부는 그 앞 `kube_terminal_probe`에서 났다. 이 분기는 실행되지 않았다.
+- 컨테이너만 재시작해 끊긴 셸의 재접속, StatefulSet의 같은 이름 새 파드, 2초 안에 실패한 셸의 안내 유지는 단위 테스트까지다.
+- 개요의 사용량과 추세: 이번 환경에 metrics-server가 없어 실제 값으로 그려 보지 않았다.
+- 패널 경계선 끌기, 실제 IME, 권한 없는 계정(`pods/exec`, Ingress·NetworkPolicy 조회 거부)은 실행하지 않았다.
+- Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다. `test-phase63-67-native.mjs`는 명령 이름만 고쳤고 원래 실행할 수 없는 상태다.
