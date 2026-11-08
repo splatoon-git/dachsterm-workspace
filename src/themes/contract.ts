@@ -11,7 +11,7 @@ export type Foundations = {
   font: { ui: string; mono: string; small: string; body: string; title: string };
   radius: { small: string; medium: string; large: string };
   borderWidth: { default: string; focus: string };
-  shadow: { panel: string };
+  shadow: { panel: string; popup: string };
   motion: { fast: string };
 };
 export type ThemeDefinition = {

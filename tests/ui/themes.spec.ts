@@ -32,6 +32,10 @@ test('every theme applies to the existing terminal and persists across reload', 
         .join(', ')})`;
     expect(values.terminal).toBe(rgb(theme.terminal.background));
     expect(values.panel).toBe(rgb(theme.color.surface.panel));
+    const selectedView = page.locator('.sidebar-tabs [aria-selected="true"]');
+    await selectedView.hover();
+    await expect(selectedView).toHaveCSS('background-color', rgb(theme.color.action.accent));
+    await expect(selectedView).toHaveCSS('color', rgb(theme.color.action.onAccent));
     await expect(page.locator('.xterm-screen')).toHaveAttribute('data-lifetime', 'original');
     await page.screenshot({ path: `test-results/theme-${theme.id}.png` });
   }
