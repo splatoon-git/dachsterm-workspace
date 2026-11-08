@@ -39,6 +39,7 @@ fn main() {
             "remote_ports",
             "tmux_current_path",
             "git_status",
+            "local_git_status",
             "git_refs",
             "git_diff_files",
             "git_diff_file",

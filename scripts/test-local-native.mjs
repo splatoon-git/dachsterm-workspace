@@ -18,10 +18,12 @@ import {
 } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
-// `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab, and
-// `--credentials-only` only the DX.14 WSL HTTPS credential steps.
+// `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab,
+// `--credentials-only` only the DX.14 WSL HTTPS credential steps, and `--git-only` only the
+// DX.15 Git status steps.
 const agentOnly = process.argv.includes('--agent-only');
 const credentialsOnly = process.argv.includes('--credentials-only');
+const gitOnly = process.argv.includes('--git-only');
 const finished = Symbol('agent-only');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-local-'));
 // The app's own git (DX.14 "this PC's credentials") reads only this file: no system or user
@@ -160,6 +162,56 @@ const pipeOpen = (name) =>
     });
     socket.once('error', () => resolve(false));
   });
+
+/** DX.15: a local or WSL tab in a repository folder shows its branch, changes and file marks. */
+async function checkLocalGit(page, command, pane) {
+  const repo = path.join(await realpath(directory), 'git repo');
+  await mkdir(path.join(repo, 'src'), { recursive: true });
+  const init = spawnSync('git', ['-C', repo, 'init', '-q', '-b', 'dx15'], { encoding: 'utf8' });
+  assert.equal(init.status, 0, init.stderr);
+  await writeFile(path.join(repo, 'src', 'new.txt'), 'x');
+  const status = page.locator('.status-bar .status-git');
+  const inner = path.join(repo, 'src');
+  await command(pane, `Set-Location '${inner}'; Write-Output ('GIT' + '_IN')`, 'GIT_IN');
+  await expect(status).toHaveText('dx15 ●1', { timeout: 15000 });
+  await showSidebarView(page, '파일');
+  const files = page.getByRole('complementary', { name: '로컬 파일 탐색' });
+  await expect(files.getByLabel('로컬 경로', { exact: true })).toHaveValue(inner);
+  // Git reports a new folder as one untracked entry, so the mark is on the folder's row.
+  await command(pane, `Set-Location ..; Write-Output ('GIT' + '_ROOT')`, 'GIT_ROOT');
+  await expect(files.getByLabel('로컬 경로', { exact: true })).toHaveValue(repo);
+  await expect(
+    files.getByRole('button', { name: /^src/ }).locator('.file-git-mark'),
+  ).toHaveAttribute('data-mark', '?', { timeout: 15000 });
+  await showSidebarView(page, '연결');
+  await command(pane, `Set-Location '${directory}'; Write-Output ('GIT' + '_OUT')`, 'GIT_OUT');
+  await expect(status).toHaveCount(0, { timeout: 15000 });
+  console.log('PASS PowerShell tab: Git branch, change count and file mark; none outside');
+  const wsl = page
+    .locator('.local-targets .local-target')
+    .filter({ hasText: 'WSL' })
+    .filter({ hasNotText: 'docker-desktop' });
+  if (!(await wsl.count())) {
+    console.log('WSL user distribution absent: WSL Git status pending.');
+    return;
+  }
+  const title = await wsl.first().locator('span').textContent();
+  await wsl.first().click();
+  const linux = page.getByRole('region', { name: `${title} 터미널`, exact: true });
+  await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
+    timeout: 15000,
+  });
+  await command(
+    linux,
+    `cd "$(mktemp -d)" && git init -q -b dx15-wsl && touch a b && printf 'GIT%s\\n' _WSL`,
+    'GIT_WSL',
+  );
+  await expect(status).toHaveText('dx15-wsl ●2', { timeout: 15000 });
+  await command(linux, "cd / && printf 'GIT%s\\n' _ROOT", 'GIT_ROOT');
+  await expect(status).toHaveCount(0, { timeout: 15000 });
+  console.log("PASS WSL tab: the distribution's git status; none outside");
+  await command(linux, 'exit', '');
+}
 
 async function checkLocalAgent(page, command, oldShell) {
   const service = spawnSync(
@@ -612,9 +664,10 @@ try {
   await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
-  if (agentOnly || credentialsOnly) {
+  if (agentOnly || credentialsOnly || gitOnly) {
     if (agentOnly) await checkLocalAgent(page, command, pane);
     if (credentialsOnly) await checkWslCredentials(page, command);
+    if (gitOnly) await checkLocalGit(page, command, pane);
     throw finished;
   }
   await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');

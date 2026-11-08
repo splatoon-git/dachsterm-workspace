@@ -16,7 +16,7 @@ export type TerminalPreferences = {
   bellNotifications: boolean;
   /** Shows the keys of vi, vim, less and tail in the status bar while they run. */
   programGuide: boolean;
-  /** Queries Git status of SSH folders when something happens. Off leaves the manual refresh. */
+  /** Queries Git status of a tab's folder when something happens. Off leaves the manual refresh. */
   gitStatus: boolean;
   /** Seconds a command must run before its end is notified. 0 turns this off. */
   longCommandNotify: number;

@@ -63,9 +63,10 @@ export class TerminalSession {
   }
   /** The connection's HTTPS Git helper line (DX.12), typed with the hook. */
   private gitHook?: string;
-  /** One hook carries folder reports, program notices and the Git helper: any of them installs it. */
+  /** One hook carries folder reports (also used by Git status), program notices and the Git helper. */
   private wantsShellHook() {
-    return !!this.gitHook || this.wantsDirectoryFollow() || terminalPreferences().programGuide;
+    const { programGuide, gitStatus } = terminalPreferences();
+    return !!this.gitHook || this.wantsDirectoryFollow() || programGuide || gitStatus;
   }
   /** tmux gets the helper from its start command instead, since nothing is typed there. */
   private async loadGitHook(id: string) {

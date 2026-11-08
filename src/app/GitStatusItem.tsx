@@ -5,7 +5,7 @@ import type { TerminalSession } from '../features/terminal/session';
 const stopReasons = { timeout: '시간 초과', tooLarge: '출력이 너무 큼' };
 
 /**
- * The branch and change count of the folder the focused SSH tab's shell is in. Shown only when
+ * The branch and change count of the folder the focused tab's shell is in (SSH, local, WSL). Shown only when
  * there is something to show: a repository, a stopped query, or a manual query's failure. With
  * automatic queries off, a small button asks once.
  */
