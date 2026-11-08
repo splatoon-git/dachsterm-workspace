@@ -95,9 +95,17 @@
 
 - `--shadow-popup`을 `foundations.shadow.popup`으로 정의했다. 정의가 없어 팝업 8곳의 `box-shadow`가 무효였다.
 - `paste.css`의 `--color-text-muted`를 `--color-text-secondary`로 바꿨다. 계약에 없는 토큰이었다.
-- 사이드바 보기 탭의 선택 상태를 `action.accent` 채움과 `action.onAccent` 글자로 바꿨다. 포인트색을 밑줄로 쓰지 않은 이유는 일부 테마의 값이 표면 대비를 위한 색이 아니기 때문이다(GitHub White 1.14:1, Solarized Light 1.5:1). 계약이 검사하는 것은 `onAccent`와의 4.5:1이다. 선택 탭 hover에서 배경이 투명해지던 규칙도 선택 탭을 제외했다.
+- (T.4에서 주요 액션색으로 변경) 사이드바 보기 탭의 선택 상태를 `action.accent` 채움과 `action.onAccent` 글자로 바꿨다. 포인트색을 밑줄로 쓰지 않은 이유는 일부 테마의 값이 표면 대비를 위한 색이 아니기 때문이다(GitHub White 1.14:1, Solarized Light 1.5:1). 계약이 검사하는 것은 `onAccent`와의 4.5:1이다. 선택 탭 hover에서 배경이 투명해지던 규칙도 선택 탭을 제외했다.
 - 재발 방지: `src/themes/tokens.test.mjs`가 CSS·TSX의 테마 토큰 참조가 정의된 값인지 검사한다. 수정 전 9건(`--shadow-popup` 8, `--color-text-muted` 1)으로 실패함을 확인했다. Vitest가 CSS를 빈 모듈로 바꾸고 프로젝트에 Node 타입이 없어 디스크에서 읽는 `.mjs`로 두었고, `vite.config.ts`의 테스트 대상에 `.mjs`를 추가했다.
 
 실행 결과(커밋 전 트리, Windows): `npx vitest run src/themes` 52/52, `npm run typecheck`, 바꾼 파일 eslint·Prettier, `npx playwright test tests/ui/themes.spec.ts` 6/6(16개 테마의 선택 탭 색과 hover 유지 포함).
 
 미실행: 실제 앱 재검사(CSS와 토큰 값만 바꿨고 Playwright와 같은 Chromium 렌더링), 팝업 그림자의 픽셀 비교, 전체 스위트, Mac 실기기, CI.
+
+## T.4 사이드바 선택 탭 색 (2026-11-08)
+
+사용자가 Classic의 선택 탭이 머스터드로 보여 포인트인 레트로 블루와 다르다고 지적했다. roadmap §2.2는 선택·버튼·포커스를 주요 액션색으로, 머스터드(`action.accent`)를 배지·장식 강조로 정한다. T.3의 연결이 이 기준과 달랐으므로 Classic 색상값은 그대로 두고 탭을 `action.primary` 채움과 `text.onAction` 글자로 바꿨다. 탭 밑줄과 같은 색이 되며 16개 테마 모두에 적용된다.
+
+그 결과 `--color-action-accent`, `--color-action-on-accent`를 쓰는 CSS는 다시 없다. 포인트색은 Retro Dark·Retro Blue Dark의 경고색과 ANSI yellow로만 화면에 나타난다. 배지 같은 소비처를 만들지는 사용자 결정 전까지 보류한다.
+
+실행 결과(커밋 전 트리, Windows): `npm run typecheck`, 바꾼 파일 eslint·Prettier, `npx vitest run src/themes/tokens.test.mjs` 1/1, `npx playwright test tests/ui/themes.spec.ts -g "every theme"` 1/1(16개 테마의 선택 탭 색과 hover 유지 포함). Classic 스크린샷 시각 확인. 미실행: 전체 스위트, 실제 앱 재검사, Mac 실기기, CI.
