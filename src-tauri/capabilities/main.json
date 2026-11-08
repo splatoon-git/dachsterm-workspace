@@ -43,6 +43,7 @@
     "allow-edit-start",
     "allow-edit-list",
     "allow-edit-resolve",
+    "allow-edit-session-auto",
     "allow-detach-terminal",
     "allow-detached-info",
     "allow-attach-terminal",

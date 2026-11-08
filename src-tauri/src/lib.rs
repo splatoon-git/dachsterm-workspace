@@ -40,6 +40,7 @@ mod settings;
 pub mod sftp;
 mod shell_probe;
 pub mod snippets;
+pub mod source;
 pub mod ssh;
 mod ssh_auth;
 pub mod ssh_keys;
@@ -276,6 +277,7 @@ pub fn run() {
             workspace::editor_pick,
             workspace::edit_list,
             workspace::edit_resolve,
+            workspace::edit_session_auto,
             snippets::snippet_list,
             snippets::snippet_save,
             snippets::snippet_send,

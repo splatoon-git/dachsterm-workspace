@@ -227,8 +227,8 @@ pub async fn edit_start(
         .ok_or("편집 작업 없음".into())
 }
 #[tauri::command]
-pub fn edit_list(state: State<'_, AppState>) -> Vec<Edit> {
-    state.editors.list()
+pub fn edit_list(state: State<'_, AppState>) -> Vec<crate::editor::Listed> {
+    state.editors.listed(&state.connections)
 }
 #[tauri::command]
 pub async fn edit_resolve(
@@ -245,22 +245,27 @@ pub async fn edit_resolve(
     if choice == "pause" {
         return state.editors.pause(&id);
     }
-    {
-        let _guard = state.editors.busy.lock().await;
-        let actual = state.connections.control(&connection_id)?.profile.clone();
-        let mut entries = state.editors.entries.lock().unwrap();
-        let edit = entries.get_mut(&id).ok_or("편집 작업 없음")?;
-        if edit.profile_id != profile_id
-            || actual.id != profile_id
-            || edit.destination != crate::editor::destination(&actual)
-        {
-            return Err("편집을 시작한 서버 세션으로 연결하세요.".into());
-        }
-        edit.connection_id = connection_id;
-    }
+    state
+        .editors
+        .rebind(&state.connections, &id, &connection_id, &profile_id)
+        .await?;
     state
         .editors
         .sync(&state.connections, &id, &choice, path.as_deref())
+        .await
+}
+
+/// "Upload automatically during this connection" on the save card. Not stored; see the module.
+#[tauri::command]
+pub async fn edit_session_auto(
+    state: State<'_, AppState>,
+    id: String,
+    connection_id: String,
+    profile_id: String,
+) -> Result<()> {
+    state
+        .editors
+        .connection_auto(&state.connections, &id, &connection_id, &profile_id)
         .await
 }
 

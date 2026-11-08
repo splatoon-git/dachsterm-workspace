@@ -18,6 +18,7 @@
     "probe": "node scripts/run-probe.mjs",
     "probe:phase1": "node scripts/run-phase1.mjs",
     "test:native": "node scripts/run-phase1.mjs --native",
+    "test:native:edit": "node scripts/run-phase1.mjs --native --edit-only --reuse-build",
     "test:ui": "playwright test",
     "test:editor-trial": "node scripts/test-editor-native.mjs",
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",

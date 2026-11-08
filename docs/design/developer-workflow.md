@@ -768,11 +768,15 @@ exec tmux attach -t '=<이름>'
 
 - 프리셋 편집을 선택형으로 바꾼다. **프로그램**: `claude` / `codex` / 직접 입력. 고른 프로그램에 맞는 **모드**와 **시작 방식**을 고르면 명령이 만들어지고, 최종 명령 칸은 그대로 보여 주며 고칠 수 있다(직접 입력 유지).
   - `claude`: 모드 기본 / 편집 자동 승인(`--permission-mode acceptEdits`) / 계획(`--permission-mode plan`) / **권한 확인 생략**(`--dangerously-skip-permissions`). 시작 방식 새로 / 이어서(`--continue`) / 세션 선택(`--resume`) / 새 worktree(`--worktree {name}`).
-  - `codex`: 모드 기본 / 자동(`--full-auto`) / **승인·샌드박스 생략**(`--dangerously-bypass-approvals-and-sandbox`, 별칭 `--yolo`). 시작 방식 새로 / 이어서(`codex resume`).
+  - `codex`: 모드 기본 / 자동(`--approve-for-me`) / **승인·샌드박스 생략**(`--dangerously-bypass-approvals-and-sandbox`). 시작 방식 새로 / 이어서(`codex resume --last`) / 세션 선택(`codex resume`). `resume`은 하위 명령이라 앞에 오고 모드 옵션은 그 뒤에 붙는다.
 - 위험 모드는 프리셋 목록과 시작 확인창(`AgentLaunchDialog`)에 빨간 표시와 한 줄 경고를 둔다. 기본 프리셋에는 넣지 않는다. 권한 생략 모드에서도 SSH 키 서명(DX.2·DX.11)과 Git 자격 증명(DX.12·DX.14)은 앱 승인 카드를 거친다는 점을 경고에 적는다.
 - 화면에는 외부 제품명을 쓰지 않고 명령 이름(`claude`, `codex`)으로 표시한다(engineering-rules §3).
 - 저장 형식은 지금 `{ name, command }`를 유지하고 선택 상태는 명령에서 다시 읽는다(알아볼 수 없는 명령은 직접 입력으로 연다). 기존 저장값과 호환된다.
 - **실측(DX.16.0):** 구현 전 설치된 두 도구의 `--help`로 옵션 이름을 확인해 표를 고친다. 옵션은 도구 버전마다 바뀌므로 표는 `features/agents/agentOptions.ts` 한 곳에 두고 단위 테스트한다.
+  - 2026-11-08, 이 PC의 `claude` 2.1.114와 `codex-cli` 0.155.1에서 `--help`, `codex resume --help`로 확인했다. 프로그램은 실행하지 않았고 옵션 이름만 확인했다. 원격 서버의 도구는 버전이 다를 수 있다.
+  - `claude`: 설계 표의 옵션이 모두 있다. `--permission-mode`의 값은 `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`이다.
+  - `codex`: 표를 고쳤다. `--full-auto`는 없어져 `--no-such-flag`와 같은 오류로 거부되므로 도움말의 `--approve-for-me`(자동 검토, `workspace-write` 샌드박스)로 바꿨다. `--yolo`는 도움말에 없지만 받아들이는 숨은 별칭이라 선택지에 넣지 않고 위험 판정에만 쓴다. `codex resume`만 쓰면 선택 화면이 열리고 가장 최근 세션은 `--last`로 이어 가므로 시작 방식을 둘로 나눴다.
+- **구현에서 정한 것:** 위험 판정은 선택지가 아니라 명령 글자로 하므로 직접 입력한 명령도 잡는다. `--dangerously-*`와 `--allow-dangerously-*` 전체, `--yolo`, `bypassPermissions`, `danger-full-access`가 대상이다. 경고용이며 실행을 막지 않는다. "직접 입력"을 고른 상태는 저장하지 않으므로 다시 열면 명령에서 읽은 선택으로 돌아온다. 도움말에 있지만 표에 넣지 않은 것: `claude --permission-mode auto`, `codex --worktree`(이름을 받지 않음). 필요하면 표에 한 줄씩 더한다.
 
 ## 5. IPC
 
