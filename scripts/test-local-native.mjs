@@ -69,7 +69,8 @@ async function launch() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   await new Promise((resolve) => server.close(resolve));
-  app = spawn(path.resolve('target/debug/dachsterm.exe'), [], {
+  // DACHSTERM_EXE points at a build kept apart from a running `tauri dev`, which locks target/.
+  app = spawn(path.resolve(process.env.DACHSTERM_EXE ?? 'target/debug/dachsterm.exe'), [], {
     stdio: 'ignore',
     // The real pointer can only reach a window that is on screen.
     windowsHide: !dragOnly,

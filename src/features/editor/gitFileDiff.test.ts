@@ -97,3 +97,18 @@ describe('the remembered layout', () => {
     expect(readDiffLayout()).toBe('inline');
   });
 });
+
+describe('a commit diff', () => {
+  const compare = { kind: 'commit', hash: 'a'.repeat(40), parent: 'b'.repeat(40) } as const;
+  it('names both sides by short hash, and a root commit has nothing on the left', () => {
+    expect(sideLabels(compare)).toEqual(['bbbbbbb', 'aaaaaaa']);
+    expect(sideLabels({ ...compare, parent: null })).toEqual(['없음', 'aaaaaaa']);
+    expect(diffTabTitle('a.txt', compare)).toBe('a.txt (aaaaaaa)');
+  });
+  it('cannot be edited, since neither side is the working tree', () => {
+    expect(editsWorktree(compare)).toBe(false);
+    expect(editsWorktree({ kind: 'headIndex' })).toBe(false);
+    expect(editsWorktree({ kind: 'indexWorktree', deleted: false })).toBe(true);
+    expect(editsWorktree({ kind: 'untracked' })).toBe(true);
+  });
+});

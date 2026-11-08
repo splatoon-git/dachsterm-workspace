@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { terminalReadiness, type TerminalFacts } from './gitTerminal';
-import { branchChoices, failureText, safeTerminalWord, trackCommand } from './gitWrite';
+import {
+  branchChoices,
+  branchPicks,
+  failureText,
+  safeTerminalWord,
+  trackCommand,
+} from './gitWrite';
 import { groupItems, rowItems, type FileActions } from './gitWriteMenu';
 import type { GitGroup, GitRow } from './gitViewModel';
 
@@ -188,5 +194,27 @@ describe('menus', () => {
   it('has nothing to do to a whole conflict group', () => {
     const group: GitGroup = { id: 'conflict', label: '충돌', rows: [row({ group: 'conflict' })] };
     expect(groupItems(group, actions())).toEqual([]);
+  });
+});
+
+describe('branchPicks', () => {
+  const choices = { local: ['feat/a', 'main'], remote: ['origin/Feat-b'] };
+  it('offers creating a branch first, then local, then remote', () => {
+    expect(branchPicks(choices, '')).toEqual([
+      { kind: 'create', name: '' },
+      { kind: 'local', name: 'feat/a' },
+      { kind: 'local', name: 'main' },
+      { kind: 'remote', name: 'origin/Feat-b' },
+    ]);
+  });
+  it('narrows either kind, ignoring case and spaces around', () => {
+    expect(branchPicks(choices, ' FEAT ').map((pick) => pick.name)).toEqual([
+      '',
+      'feat/a',
+      'origin/Feat-b',
+    ]);
+  });
+  it('still offers creating when nothing matches', () => {
+    expect(branchPicks(choices, 'zzz').map((pick) => pick.kind)).toEqual(['create']);
   });
 });

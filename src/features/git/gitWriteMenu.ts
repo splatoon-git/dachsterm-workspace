@@ -1,6 +1,10 @@
 import type { MenuItem } from '../../components/ContextMenu';
+import type { IconName } from '../../components/Icon';
 import type { DiscardTarget } from './gitWrite';
 import type { GitGroup, GitRow } from './gitViewModel';
+
+/** A menu item that can also be a button on its row. */
+export type GitActionItem = MenuItem & { icon: IconName };
 
 /** What the Git view's menus can do to files. */
 export type FileActions = {
@@ -14,18 +18,38 @@ export type FileActions = {
 const unstagePaths = (row: GitRow) => (row.oldPath ? [row.path, row.oldPath] : [row.path]);
 
 /** A file's own actions. A name that is not UTF-8 is not the real one, so it can only be read. */
-export function rowItems(row: GitRow, actions: FileActions): MenuItem[] {
+export function rowItems(row: GitRow, actions: FileActions): GitActionItem[] {
   const disabled = actions.busy || !row.readable;
   if (row.group === 'staged')
-    return [{ label: '스테이지 취소', disabled, run: () => actions.unstage(unstagePaths(row)) }];
+    return [
+      {
+        label: '스테이지 취소',
+        icon: 'minus',
+        disabled,
+        run: () => actions.unstage(unstagePaths(row)),
+      },
+    ];
   if (row.group === 'conflict')
-    return [{ label: '해결됨으로 스테이지', disabled, run: () => actions.stage([row.path]) }];
-  const stage = { label: '스테이지', disabled, run: () => actions.stage([row.path]) };
+    return [
+      {
+        label: '해결됨으로 스테이지',
+        icon: 'plus',
+        disabled,
+        run: () => actions.stage([row.path]),
+      },
+    ];
+  const stage: GitActionItem = {
+    label: '스테이지',
+    icon: 'plus',
+    disabled,
+    run: () => actions.stage([row.path]),
+  };
   return row.group === 'untracked'
     ? [
         stage,
         {
           label: '파일 삭제…',
+          icon: 'trash',
           danger: true,
           disabled,
           run: () => actions.discard({ paths: [], untracked: [row.path] }),
@@ -35,6 +59,7 @@ export function rowItems(row: GitRow, actions: FileActions): MenuItem[] {
         stage,
         {
           label: '변경 버리기…',
+          icon: 'undo',
           danger: true,
           disabled,
           run: () => actions.discard({ paths: [row.path], untracked: [] }),
@@ -43,21 +68,32 @@ export function rowItems(row: GitRow, actions: FileActions): MenuItem[] {
 }
 
 /** A group's actions, on exactly the files it lists. Only unstaging all has no list to get wrong. */
-export function groupItems(group: GitGroup, actions: FileActions): MenuItem[] {
+export function groupItems(group: GitGroup, actions: FileActions): GitActionItem[] {
   const paths = group.rows.filter((row) => row.readable).map((row) => row.path);
   const omitted = group.rows.length - paths.length;
   const disabled = actions.busy || !paths.length;
   if (group.id === 'staged')
     return [
-      { label: '모두 스테이지 취소', disabled: actions.busy, run: () => actions.unstage(null) },
+      {
+        label: '모두 스테이지 취소',
+        icon: 'minus',
+        disabled: actions.busy,
+        run: () => actions.unstage(null),
+      },
     ];
   if (group.id === 'conflict') return [];
-  const stage = { label: '모두 스테이지', disabled, run: () => actions.stage(paths) };
+  const stage: GitActionItem = {
+    label: '모두 스테이지',
+    icon: 'plus',
+    disabled,
+    run: () => actions.stage(paths),
+  };
   return group.id === 'untracked'
     ? [
         stage,
         {
           label: '추적 안 함 파일 모두 삭제…',
+          icon: 'trash',
           danger: true,
           disabled,
           run: () => actions.discard({ paths: [], untracked: paths, omitted }),
@@ -67,6 +103,7 @@ export function groupItems(group: GitGroup, actions: FileActions): MenuItem[] {
         stage,
         {
           label: '변경 모두 버리기…',
+          icon: 'undo',
           danger: true,
           disabled,
           run: () => actions.discard({ paths, untracked: [], omitted }),

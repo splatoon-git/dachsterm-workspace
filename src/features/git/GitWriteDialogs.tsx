@@ -1,15 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { defaultChoice, Dialog } from '../../components/Dialog';
-import { call, errorText } from '../../lib/ipc';
-import type { GitRefs } from './gitDiff';
+import { GitBranchPicker } from './GitBranchPicker';
 import type { GitViewRepo } from './gitViewModel';
-import {
-  branchChoices,
-  networkCommands,
-  trackCommand,
-  type DiscardTarget,
-  type GitDialogRequest,
-} from './gitWrite';
+import { networkCommands, type DiscardTarget, type GitDialogRequest } from './gitWrite';
 import type { GitWrite } from './useGitWrite';
 
 const maxListed = 200;
@@ -93,92 +86,6 @@ function DiscardDialog({
   );
 }
 
-function CheckoutDialog({
-  repo,
-  close,
-  write,
-}: {
-  repo: GitViewRepo;
-  close: () => void;
-  write: GitWrite;
-}) {
-  const [refs, setRefs] = useState<GitRefs | null>(null);
-  const [error, setError] = useState('');
-  const [filter, setFilter] = useState('');
-  const { source } = write;
-  useEffect(() => {
-    let live = true;
-    void call<GitRefs>('git_refs', { source, folder: repo.root })
-      .then((value) => {
-        if (live) setRefs(value);
-      })
-      .catch((e) => {
-        if (live) setError(errorText(e));
-      });
-    return () => {
-      live = false;
-    };
-    // Asked once for the dialog: `source` is a new object on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo.root]);
-  const choices = useMemo(() => branchChoices(refs?.refs ?? [], repo.branch), [refs, repo.branch]);
-  const matches = (name: string) => name.toLowerCase().includes(filter.toLowerCase());
-  const local = choices.local.filter(matches);
-  const remote = choices.remote.filter(matches);
-  const pickRemote = (name: string) => {
-    const command = trackCommand(name);
-    close();
-    if (command) void write.runInTerminal(command);
-    else write.note('이 브랜치 이름은 터미널에 안전하게 입력할 수 없습니다. 직접 입력하세요.');
-  };
-  const row = (name: string, choose: () => void) => (
-    <li key={name}>
-      <button type="button" onClick={choose}>
-        {name}
-      </button>
-    </li>
-  );
-  return (
-    <Dialog title="브랜치 전환" size="small" close={close}>
-      {error && <p role="alert">{error}</p>}
-      <input
-        aria-label="브랜치 찾기"
-        placeholder="브랜치 찾기"
-        value={filter}
-        onChange={(event) => setFilter(event.target.value)}
-      />
-      {!refs && !error && <p>불러오는 중…</p>}
-      {refs && !local.length && !remote.length && <p>전환할 브랜치가 없습니다.</p>}
-      {!!local.length && (
-        <section aria-label="로컬 브랜치">
-          <h3 className="git-dialog-heading">로컬</h3>
-          <ul className="git-branch-list">
-            {local.map((name) =>
-              row(name, () => {
-                close();
-                void write.apply({ kind: 'checkout', branch: name });
-              }),
-            )}
-          </ul>
-        </section>
-      )}
-      {!!remote.length && (
-        <section aria-label="원격 브랜치">
-          <h3 className="git-dialog-heading">원격 (터미널에서 추적 브랜치 만들기)</h3>
-          <ul className="git-branch-list">
-            {remote.map((name) => row(name, () => pickRemote(name)))}
-          </ul>
-        </section>
-      )}
-      <div className="form-actions">
-        <button type="button" onClick={close}>
-          닫기
-        </button>
-      </div>
-    </Dialog>
-  );
-}
-
 /** A form that closes itself and reports through the view, where the next action starts clean. */
 function FormDialog({
   title,
@@ -224,11 +131,13 @@ export function GitWriteDialog({
   repo,
   close,
   write,
+  ask,
 }: {
   request: GitDialogRequest;
   repo: GitViewRepo;
   close: () => void;
   write: GitWrite;
+  ask: (request: GitDialogRequest) => void;
 }) {
   switch (request.kind) {
     case 'discard':
@@ -271,7 +180,7 @@ export function GitWriteDialog({
         </Confirm>
       );
     case 'checkout':
-      return <CheckoutDialog repo={repo} close={close} write={write} />;
+      return <GitBranchPicker repo={repo} close={close} write={write} ask={ask} />;
     case 'branchCreate':
       return (
         <FormDialog
@@ -282,7 +191,13 @@ export function GitWriteDialog({
         >
           <label>
             이름
-            <input name="name" required maxLength={255} spellCheck={false} />
+            <input
+              name="name"
+              required
+              maxLength={255}
+              spellCheck={false}
+              defaultValue={request.name}
+            />
           </label>
         </FormDialog>
       );

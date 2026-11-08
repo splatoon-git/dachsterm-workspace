@@ -2,7 +2,7 @@
 //! tests reads as the same graph, and a long history stops at the limit.
 use super::{Result, shell};
 use dachsterm::{
-    git_graph::{self, GitGraphResult, GraphCommit, MAX_COMMITS, RefKind},
+    git_graph::{self, GitGraphResult, GraphCommit, GraphScope, MAX_COMMITS, RefKind},
     git_run::GitHost,
     ssh::Connections,
 };
@@ -22,7 +22,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
             "fixture history"
         );
         let GitGraphResult::Graph { commits, has_more } =
-            git_graph::query(&host, &folder, 100).await?
+            git_graph::query(&host, &folder, 100, GraphScope::Auto).await?
         else {
             panic!("the fixture history was not read");
         };
@@ -43,7 +43,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
             "long history"
         );
         let GitGraphResult::Graph { commits, has_more } =
-            git_graph::query(&host, &big, MAX_COMMITS).await?
+            git_graph::query(&host, &big, MAX_COMMITS, GraphScope::Auto).await?
         else {
             panic!("the long history was not read");
         };

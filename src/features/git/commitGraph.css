@@ -14,6 +14,36 @@
   min-height: 0;
   overflow-y: auto;
 }
+.git-graph-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+.git-graph-head .git-group-head {
+  flex: 1;
+  min-width: 0;
+}
+.git-graph-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  padding-right: var(--space-xs);
+}
+.git-graph-scope {
+  flex: none;
+  gap: 3px;
+  height: 22px;
+  min-height: 0;
+  padding: 0 var(--space-xs);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.git-graph-scope[aria-pressed='true'] {
+  color: var(--color-action-primary);
+}
 .git-graph-row {
   display: flex;
   align-items: center;
@@ -25,7 +55,10 @@
   white-space: nowrap;
 }
 .git-graph-row:hover {
-  background: var(--color-surface-subtle);
+  background: var(--color-action-hover);
+}
+.git-graph-row[aria-expanded='true'] {
+  background: var(--color-action-selected);
 }
 .git-graph-row:focus-visible {
   outline: var(--border-width-focus) solid var(--color-focus-ring);
@@ -61,28 +94,40 @@
 .git-graph-refs {
   display: flex;
   flex: none;
-  gap: 2px;
-  max-width: 50%;
+  align-items: center;
+  gap: 3px;
+  max-width: 55%;
   overflow: hidden;
 }
 .git-graph-ref {
-  overflow: hidden;
-  max-width: 96px;
-  padding: 0 var(--space-xs);
-  border: var(--border-width-default) solid var(--color-border-subtle);
-  border-radius: var(--radius-small);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-surface-subtle);
   color: var(--color-text-secondary);
-  font-size: var(--font-small);
-  line-height: 14px;
-  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 16px;
 }
-.git-graph-ref[data-current] {
-  border-color: var(--color-focus-ring);
-  color: var(--color-text-primary);
-  font-weight: 600;
+.git-graph-ref[data-kind='remote'] {
+  color: var(--color-status-info);
 }
 .git-graph-ref[data-kind='tag'] {
-  border-style: dashed;
+  color: var(--color-status-warning);
+}
+.git-graph-ref[data-current] {
+  background: var(--color-action-primary);
+  color: var(--color-text-on-action);
+  font-weight: 600;
+}
+.git-graph-ref-name {
+  overflow: hidden;
+  max-width: 110px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .git-graph-more {
   display: block;
@@ -113,24 +158,69 @@
   stroke-width: 1.5;
   pointer-events: none;
 }
-.git-graph-meta {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0 var(--space-sm);
-  margin: var(--space-xs) 0;
+.git-graph-detail .git-row {
+  padding-left: var(--space-sm);
+  cursor: pointer;
 }
-.git-graph-meta dt {
-  color: var(--color-text-secondary);
+/* The hover card: the whole commit, beside the row instead of inside the tree. */
+.git-commit-card {
+  position: fixed;
+  z-index: 90;
+  top: 0;
+  left: 0;
+  width: max-content;
+  min-width: 240px;
+  max-width: min(420px, calc(100vw - 8px));
+  max-height: min(420px, calc(100vh - 8px));
+  padding: var(--space-sm) var(--space-md);
+  overflow-y: auto;
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface-panel);
+  box-shadow: var(--shadow-popup);
+  font-size: var(--font-small);
 }
-.git-graph-meta dd {
-  overflow-wrap: anywhere;
+.git-commit-card p {
   margin: 0;
 }
-.git-graph-hash {
-  font-family: var(--font-mono);
+.git-commit-card-who span,
+.git-commit-card-co span {
+  margin-left: var(--space-xs);
+  color: var(--color-text-secondary);
 }
-.git-graph-message {
-  margin: var(--space-xs) 0;
+.git-commit-card-co {
+  margin-top: 2px !important;
+}
+.git-commit-card-message {
+  margin-top: var(--space-sm) !important;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+.git-commit-card-stat {
+  margin-top: var(--space-sm) !important;
+  color: var(--color-text-secondary);
+}
+.git-commit-card-stat [data-change='added'] {
+  color: var(--color-status-success);
+}
+.git-commit-card-stat [data-change='deleted'] {
+  color: var(--color-status-error);
+}
+.git-commit-card-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: var(--space-sm);
+}
+.git-commit-card-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-xs);
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+.git-commit-card-foot code {
+  font-family: var(--font-mono);
 }

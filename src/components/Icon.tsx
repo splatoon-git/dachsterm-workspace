@@ -37,7 +37,16 @@ export type IconName =
   | 'clock'
   | 'more'
   | 'palette'
-  | 'branch';
+  | 'branch'
+  | 'gitFetch'
+  | 'gitPull'
+  | 'gitPush'
+  | 'target'
+  | 'minus'
+  | 'undo'
+  | 'check'
+  | 'cloud'
+  | 'tag';
 const paths: Record<IconName, string> = {
   game: 'M7 7h10c3 0 4 3 4 7s-2 5-4 3l-2-2H9l-2 2c-2 2-4 1-4-3s1-7 4-7z M8 10v5 M5.5 12.5h5 M16 11h.01 M18 14h.01',
   server: 'M4 3h16v7H4z M4 14h16v7H4z M7 6.5h.01 M7 17.5h.01 M11 6.5h6 M11 17.5h6',
@@ -82,6 +91,15 @@ const paths: Record<IconName, string> = {
   more: 'M5 12h.01 M12 12h.01 M19 12h.01',
   branch:
     'M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M18 9a9 9 0 0 1-9 9',
+  gitFetch: 'M12 3v11 M7 9l5 5 5-5 M4 20h3 M10.5 20h3 M17 20h3',
+  gitPull: 'M12 3v11 M7 9l5 5 5-5 M5 20h14',
+  gitPush: 'M12 21V10 M7 15l5-5 5 5 M5 4h14',
+  target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  minus: 'M5 12h14',
+  undo: 'M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3',
+  check: 'M5 12.5l4.5 4.5L19 7',
+  cloud: 'M7 18a4 4 0 0 1-.6-8A6 6 0 0 1 18 9.5a4.2 4.2 0 0 1-.5 8.5z',
+  tag: 'M3 12V4h8l10 10-8 8z M7.5 8.5h.01',
 };
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return (

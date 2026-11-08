@@ -72,6 +72,19 @@ export function branchChoices(refs: string[], current: string | null): BranchCho
   return { local: heads.filter((name) => name !== current), remote };
 }
 
+export type BranchPick = { kind: 'create' | 'local' | 'remote'; name: string };
+
+/** The rows of the branch picker, narrowed by what was typed. Creating one is always offered. */
+export function branchPicks(choices: BranchChoices, filter: string): BranchPick[] {
+  const wanted = filter.trim().toLowerCase();
+  const matches = (name: string) => name.toLowerCase().includes(wanted);
+  return [
+    { kind: 'create', name: '' },
+    ...choices.local.filter(matches).map((name): BranchPick => ({ kind: 'local', name })),
+    ...choices.remote.filter(matches).map((name): BranchPick => ({ kind: 'remote', name })),
+  ];
+}
+
 export type DiscardTarget = {
   paths: string[];
   untracked: string[];
@@ -83,7 +96,8 @@ export type GitDialogRequest =
   | { kind: 'discard'; target: DiscardTarget }
   | { kind: 'forcePush' }
   | { kind: 'terminal'; command: string }
-  | { kind: 'branchCreate' }
+  /** `name` starts the field, as what was typed while looking for a branch. */
+  | { kind: 'branchCreate'; name?: string }
   | { kind: 'checkout' }
   | { kind: 'tag' }
   | { kind: 'stash' };

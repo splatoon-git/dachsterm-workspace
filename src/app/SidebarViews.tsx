@@ -51,6 +51,9 @@ export function SidebarViews({
             review={reviewable(session) ? openReview : undefined}
             openFile={(path, pinned) => session && files.open(session, path, pinned)}
             openDiff={(row, root, pinned) => session && files.openDiff(session, row, root, pinned)}
+            openCommitFile={(file, origin, root, pinned) =>
+              session && files.openCommitFile(session, file, origin, root, pinned)
+            }
           />
         )}
       </div>

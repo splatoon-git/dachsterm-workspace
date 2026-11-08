@@ -1,10 +1,14 @@
-import { changeLabel, changeMark } from './gitDiff';
+import type { MouseEvent } from 'react';
+import { isMenuKey, type MenuPoint } from '../../components/ContextMenu';
+import { Icon, type IconName } from '../../components/Icon';
+import { changeLabel, changeMark, type DiffFile } from './gitDiff';
 import {
   graphRowHeight,
   graphX,
   laneColor,
   openLanes,
   rowPaths,
+  type GraphRef,
   type GraphRow,
 } from './commitGraphModel';
 import { splitPath } from './gitViewModel';
@@ -51,6 +55,36 @@ export function CommitGraphLanes({
   );
 }
 
+const refLabel: Record<GraphRef['kind'], string> = {
+  head: '분리된 HEAD',
+  branch: '브랜치',
+  remote: '원격 브랜치',
+  tag: '태그',
+};
+const refIcon: Record<GraphRef['kind'], IconName> = {
+  head: 'target',
+  branch: 'branch',
+  remote: 'cloud',
+  tag: 'tag',
+};
+
+/** A reference as a pill. In a narrow row only the current one spends room on its name. */
+export function CommitRefPill({ item, named }: { item: GraphRef; named: boolean }) {
+  const label = `${refLabel[item.kind]} ${item.name}`;
+  return (
+    <span
+      className="git-graph-ref"
+      data-kind={item.kind}
+      data-current={item.current || undefined}
+      title={label}
+      aria-label={label}
+    >
+      <Icon name={item.current ? 'target' : refIcon[item.kind]} size={11} />
+      {named && <span className="git-graph-ref-name">{item.name}</span>}
+    </span>
+  );
+}
+
 /** The lanes that continue past an opened commit, so the graph is not cut there. */
 function Rail({ row, columns, step }: { row: GraphRow; columns: number; step: number }) {
   return (
@@ -69,48 +103,72 @@ function Rail({ row, columns, step }: { row: GraphRow; columns: number; step: nu
   );
 }
 
-function DetailBody({ state }: { state: DetailState | undefined }) {
+function CommitFile({
+  file,
+  open,
+  menu,
+}: {
+  file: DiffFile;
+  open: (file: DiffFile, pinned: boolean) => void;
+  menu: (file: DiffFile, at: MenuPoint | HTMLElement) => void;
+}) {
+  const { name, folder } = splitPath(file.path);
+  const openIt = (pinned: boolean) => {
+    if (file.readable) open(file, pinned);
+  };
+  return (
+    <li
+      className="git-row"
+      data-git-row=""
+      tabIndex={-1}
+      title={`${file.oldPath ? `${file.oldPath} → ` : ''}${file.path} · ${changeLabel[file.change]}`}
+      onClick={() => openIt(false)}
+      onDoubleClick={() => openIt(true)}
+      onContextMenu={(event: MouseEvent) => {
+        event.preventDefault();
+        menu(file, { x: event.clientX, y: event.clientY });
+      }}
+      onKeyDown={(event) => {
+        if (isMenuKey(event)) {
+          event.preventDefault();
+          menu(file, event.currentTarget);
+        } else if (event.key === 'Enter') {
+          event.preventDefault();
+          openIt(false);
+        }
+      }}
+    >
+      <span className="git-row-name">{name}</span>
+      {folder && <span className="git-row-folder">{folder}</span>}
+      <span className="git-row-mark" data-change={file.change}>
+        {changeMark[file.change]}
+      </span>
+    </li>
+  );
+}
+
+function DetailBody({
+  state,
+  open,
+  menu,
+}: {
+  state: DetailState | undefined;
+  open: (file: DiffFile, pinned: boolean) => void;
+  menu: (file: DiffFile, at: MenuPoint | HTMLElement) => void;
+}) {
   if (!state || state.kind === 'loading') return <p className="git-view-note">조회 중…</p>;
   if (state.kind === 'failed') return <p className="git-view-note git-view-error">{state.error}</p>;
   const { detail } = state;
   return (
     <>
-      <dl className="git-graph-meta">
-        <dt>커밋</dt>
-        <dd className="git-graph-hash">{detail.hash}</dd>
-        <dt>작성자</dt>
-        <dd>{detail.author}</dd>
-        <dt>시각</dt>
-        <dd>{new Date(detail.time * 1000).toLocaleString()}</dd>
-        {detail.parents.length > 0 && (
-          <>
-            <dt>부모</dt>
-            <dd className="git-graph-hash">
-              {detail.parents.map((parent) => parent.slice(0, 7)).join(' ')}
-            </dd>
-          </>
-        )}
-      </dl>
-      <p className="git-graph-message">{detail.message}</p>
-      {detail.files.length > 0 && (
+      {detail.files.length > 0 ? (
         <ul className="git-list">
-          {detail.files.map((file) => {
-            const { name, folder } = splitPath(file.path);
-            return (
-              <li
-                key={file.path}
-                className="git-row"
-                title={`${file.oldPath ? `${file.oldPath} → ` : ''}${file.path} · ${changeLabel[file.change]}`}
-              >
-                <span className="git-row-name">{name}</span>
-                {folder && <span className="git-row-folder">{folder}</span>}
-                <span className="git-row-mark" data-change={file.change}>
-                  {changeMark[file.change]}
-                </span>
-              </li>
-            );
-          })}
+          {detail.files.map((file) => (
+            <CommitFile key={file.path} file={file} open={open} menu={menu} />
+          ))}
         </ul>
+      ) : (
+        !detail.truncated && <p className="git-view-note">바뀐 파일이 없습니다.</p>
       )}
       {detail.truncated && <p className="git-view-note">변경 파일이 많아 목록이 잘렸습니다.</p>}
     </>
@@ -122,16 +180,20 @@ export function CommitGraphDetail({
   columns,
   step,
   state,
+  open,
+  menu,
 }: {
   row: GraphRow;
   columns: number;
   step: number;
   state: DetailState | undefined;
+  open: (file: DiffFile, pinned: boolean) => void;
+  menu: (file: DiffFile, at: MenuPoint | HTMLElement) => void;
 }) {
   return (
     <div className="git-graph-detail" style={{ paddingLeft: columns * step }}>
       <Rail row={row} columns={columns} step={step} />
-      <DetailBody state={state} />
+      <DetailBody state={state} open={open} menu={menu} />
     </div>
   );
 }

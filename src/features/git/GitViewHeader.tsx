@@ -7,20 +7,35 @@ export function GitViewHeader({
   repo,
   refresh,
   more,
+  switchBranch,
+  busy,
 }: {
   repo: GitViewRepo | null;
   refresh: () => void;
   more: (anchor: HTMLElement) => void;
+  switchBranch: () => void;
+  busy: boolean;
 }) {
   const upstream =
     repo?.upstream && `${repo.upstream} 대비 앞섬 ${repo.ahead} · 뒤처짐 ${repo.behind}`;
   return (
     <div className="git-view-head">
-      <span className="git-view-branch" title={repo?.root}>
+      <span className="git-view-branch-area">
         {repo && (
           <>
-            <Icon name="branch" size={14} />
-            <span className="git-view-branch-name">{branchLabel({ ...repo, entries: [] })}</span>
+            <button
+              type="button"
+              className="git-view-branch"
+              title={`${repo.root}\n누르면 브랜치를 전환합니다`}
+              disabled={busy}
+              onClick={switchBranch}
+            >
+              <Icon name="branch" size={14} />
+              <span className="git-view-branch-name">{branchLabel({ ...repo, entries: [] })}</span>
+              <span className="git-view-branch-chevron">
+                <Icon name="chevron" size={10} />
+              </span>
+            </button>
             {repo.upstream && (
               <span className="git-view-sync" title={upstream ?? undefined}>
                 ↑{repo.ahead} ↓{repo.behind}

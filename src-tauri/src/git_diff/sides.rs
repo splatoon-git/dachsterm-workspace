@@ -5,6 +5,7 @@ use super::{DiffBase, MAX_FILE, base_object, check_path, checked, limits};
 use crate::{
     AppState,
     file_read::{self, Content, ReadOptions},
+    git_graph::check_hash,
     git_run::{GitHost, args, git_run},
     remote_exec::Failure,
     source::Source,
@@ -16,7 +17,7 @@ const SUBMODULE: &str = "160000";
 const MAX_LOOKUP_OUTPUT: usize = 64 * 1024;
 
 /// What the two sides of the tab are.
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
@@ -29,6 +30,11 @@ pub enum Compare {
         deleted: bool,
     },
     Untracked,
+    /// A commit against its first parent, or against nothing for a root commit.
+    Commit {
+        hash: String,
+        parent: Option<String>,
+    },
 }
 
 #[derive(Serialize, Debug, PartialEq, Eq)]
@@ -157,7 +163,7 @@ async fn git_sides(
     root: &str,
     path: &str,
     old_path: Option<&str>,
-    compare: Compare,
+    compare: &Compare,
 ) -> Result<(Side, Option<Side>)> {
     let left = old_path.unwrap_or(path);
     let name = file_read::file_name(path, false);
@@ -174,6 +180,19 @@ async fn git_sides(
                 .map_err(failure_text)?;
             let old = lookup(host, root, tree_lookup(&tree, left)).await?;
             let new = lookup(host, root, index_lookup(path)).await?;
+            let original = blob_side(host, root, name, old).await?;
+            Ok((original, Some(blob_side(host, root, name, new).await?)))
+        }
+        Compare::Commit { hash, parent } => {
+            check_hash(hash)?;
+            let old = match parent {
+                Some(parent) => {
+                    check_hash(parent)?;
+                    lookup(host, root, tree_lookup(parent, left)).await?
+                }
+                None => None,
+            };
+            let new = lookup(host, root, tree_lookup(hash, path)).await?;
             let original = blob_side(host, root, name, old).await?;
             Ok((original, Some(blob_side(host, root, name, new).await?)))
         }
@@ -194,7 +213,7 @@ pub async fn git_file_diff(
         check_path(old)?;
     }
     let host = GitHost::resolve(&state.connections, &state.locals, &source).await?;
-    let (original, held) = git_sides(&host, &folder, &path, old_path.as_deref(), compare).await?;
+    let (original, held) = git_sides(&host, &folder, &path, old_path.as_deref(), &compare).await?;
     let modified = match (held, compare) {
         (Some(side), _) => side,
         (None, Compare::IndexWorktree { deleted: true }) => Side::Absent,
@@ -254,6 +273,15 @@ mod tests {
         let parsed: Compare = serde_json::from_str(r#"{"kind":"headIndex"}"#).unwrap();
         assert_eq!(parsed, Compare::HeadIndex);
         assert!(serde_json::from_str::<Compare>(r#"{"kind":"branch"}"#).is_err());
+        let parsed: Compare =
+            serde_json::from_str(r#"{"kind":"commit","hash":"h","parent":null}"#).unwrap();
+        assert_eq!(
+            parsed,
+            Compare::Commit {
+                hash: "h".into(),
+                parent: None
+            }
+        );
     }
 
     #[test]
@@ -294,7 +322,7 @@ mod tests {
         // Before the first commit, a staged file is new.
         std::fs::write(repo.join("첫 파일.txt"), "first\n").unwrap();
         git(&repo, &["add", "."]);
-        let (left, right) = git_sides(&host, &root, "첫 파일.txt", None, Compare::HeadIndex)
+        let (left, right) = git_sides(&host, &root, "첫 파일.txt", None, &Compare::HeadIndex)
             .await
             .unwrap();
         assert_eq!(left, Side::Absent);
@@ -305,20 +333,20 @@ mod tests {
         std::fs::write(repo.join("첫 파일.txt"), "staged\n").unwrap();
         git(&repo, &["add", "."]);
         std::fs::write(repo.join("첫 파일.txt"), "working\n").unwrap();
-        let (left, right) = git_sides(&host, &root, "첫 파일.txt", None, Compare::HeadIndex)
+        let (left, right) = git_sides(&host, &root, "첫 파일.txt", None, &Compare::HeadIndex)
             .await
             .unwrap();
         assert_eq!(text(&left), "first\n");
         assert_eq!(text(&right.unwrap()), "staged\n");
         let compare = Compare::IndexWorktree { deleted: false };
-        let (left, right) = git_sides(&host, &root, "첫 파일.txt", None, compare)
+        let (left, right) = git_sides(&host, &root, "첫 파일.txt", None, &compare)
             .await
             .unwrap();
         assert_eq!(text(&left), "staged\n");
         assert_eq!(right, None);
 
         // An untracked file has nothing on the left, and Git is not asked.
-        let (left, right) = git_sides(&host, &root, "없는 파일", None, Compare::Untracked)
+        let (left, right) = git_sides(&host, &root, "없는 파일", None, &Compare::Untracked)
             .await
             .unwrap();
         assert_eq!((left, right), (Side::Absent, None));
@@ -332,7 +360,7 @@ mod tests {
             &root,
             "새 이름.txt",
             Some("첫 파일.txt"),
-            Compare::HeadIndex,
+            &Compare::HeadIndex,
         )
         .await
         .unwrap();
@@ -344,11 +372,86 @@ mod tests {
         std::fs::write(repo.join("big"), vec![b'a'; MAX_FILE as usize + 1]).unwrap();
         git(&repo, &["add", "bin", "big"]);
         let compare = Compare::IndexWorktree { deleted: false };
-        let (left, _) = git_sides(&host, &root, "bin", None, compare).await.unwrap();
+        let (left, _) = git_sides(&host, &root, "bin", None, &compare)
+            .await
+            .unwrap();
         assert!(matches!(left, Side::Binary { .. }), "{left:?}");
-        let (left, _) = git_sides(&host, &root, "big", None, compare).await.unwrap();
+        let (left, _) = git_sides(&host, &root, "big", None, &compare)
+            .await
+            .unwrap();
         assert_eq!(left, Side::TooLarge);
 
+        std::fs::remove_dir_all(&repo).unwrap();
+    }
+
+    /// Both sides of a commit come from Git, whatever the working tree holds now.
+    #[tokio::test]
+    async fn a_commit_is_read_from_its_own_trees() {
+        let Some(program) = crate::git_credential::git_program() else {
+            return;
+        };
+        let repo = std::env::temp_dir().join(format!(
+            "dachsterm-commit-sides-{} 한글",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&repo);
+        std::fs::create_dir_all(&repo).unwrap();
+        let root = repo.to_str().unwrap().replace('\\', "/");
+        let host = GitHost::Native(Some(program.clone()));
+        let head = || {
+            let out = std::process::Command::new(&program)
+                .current_dir(&repo)
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .unwrap();
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        git(&repo, &["init", "-q", "-b", "main"]);
+        std::fs::write(repo.join("old.txt"), "first\n").unwrap();
+        std::fs::write(repo.join("gone.txt"), "gone\n").unwrap();
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-q", "-m", "one"]);
+        let one = head();
+        git(&repo, &["mv", "old.txt", "new.txt"]);
+        git(&repo, &["rm", "-q", "gone.txt"]);
+        git(&repo, &["commit", "-q", "-m", "two"]);
+        let two = head();
+        std::fs::write(repo.join("new.txt"), "working tree\n").unwrap();
+
+        let compare = Compare::Commit {
+            hash: two,
+            parent: Some(one.clone()),
+        };
+        let (left, right) = git_sides(&host, &root, "new.txt", Some("old.txt"), &compare)
+            .await
+            .unwrap();
+        assert_eq!(text(&left), "first\n");
+        assert_eq!(text(&right.unwrap()), "first\n");
+        let (left, right) = git_sides(&host, &root, "gone.txt", None, &compare)
+            .await
+            .unwrap();
+        assert_eq!(text(&left), "gone\n");
+        assert_eq!(right, Some(Side::Absent));
+
+        let first = Compare::Commit {
+            hash: one,
+            parent: None,
+        };
+        let (left, right) = git_sides(&host, &root, "old.txt", None, &first)
+            .await
+            .unwrap();
+        assert_eq!(left, Side::Absent);
+        assert_eq!(text(&right.unwrap()), "first\n");
+
+        let bad = Compare::Commit {
+            hash: "--all".into(),
+            parent: None,
+        };
+        assert!(
+            git_sides(&host, &root, "old.txt", None, &bad)
+                .await
+                .is_err()
+        );
         std::fs::remove_dir_all(&repo).unwrap();
     }
 }

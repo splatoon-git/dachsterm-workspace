@@ -3,6 +3,8 @@ import { UnsavedDialog } from '../features/editor/FileDialogs';
 import { FilePane } from '../features/editor/FilePane';
 import { GitDiffPane } from '../features/editor/GitDiffPane';
 import { diffTabTitle, type GitDiffTarget } from '../features/editor/gitFileDiff';
+import type { CommitFileOrigin } from '../features/git/commitGraphModel';
+import type { DiffFile } from '../features/git/gitDiff';
 import { repoFilePath, type GitRow } from '../features/git/gitViewModel';
 import { FileStatusItems } from '../features/editor/FileStatusItems';
 import { fileDocument, unsavedFileIds, useFileDirty } from '../features/editor/fileDocuments';
@@ -10,7 +12,7 @@ import type { TerminalSession } from '../features/terminal/session';
 import { sessionKind, sessionSource } from '../features/terminal/sessionKind';
 import { sameSource, type Source } from '../lib/source';
 import type { AppShortcut } from './appShortcuts';
-import { diffTargetOf, sameDiffTarget } from './gitDiffTabs';
+import { commitDiffTarget, diffTargetOf, sameDiffTarget } from './gitDiffTabs';
 import { PlainTab } from './GroupTabBar';
 import type { Workspace } from './useWorkspaceLayout';
 import { tabKey, type TabRef } from './workspaceLayout';
@@ -123,7 +125,10 @@ function FileTabHeader({
 }
 
 /** File tabs (GE.5), and where the file panels meet the workspace. */
-export type FileTabOpeners = Pick<ReturnType<typeof useFileTabs>, 'open' | 'openDiff'>;
+export type FileTabOpeners = Pick<
+  ReturnType<typeof useFileTabs>,
+  'open' | 'openDiff' | 'openCommitFile'
+>;
 
 export function useFileTabs({
   workspace,
@@ -193,10 +198,8 @@ export function useFileTabs({
       connectionId: session.connectionId,
     });
   };
-  /** Opens what a Git view row compares. A row with no diff, such as a conflict, opens nothing. */
-  const openDiff = (session: TerminalSession, row: GitRow, root: string, pinned: boolean) => {
+  const showDiff = (session: TerminalSession, diff: GitDiffTarget | null, pinned: boolean) => {
     const source = sessionSource(session);
-    const diff = diffTargetOf(row, root);
     if (!source || !diff) return;
     const existing = files.find(
       (file) => file.diff && sameSource(file.source, source) && sameDiffTarget(file.diff, diff),
@@ -209,14 +212,24 @@ export function useFileTabs({
       {
         id,
         source,
-        path: repoFilePath(root, row.path),
-        name: nameOf(row.path),
+        path: repoFilePath(diff.folder, diff.path),
+        name: nameOf(diff.path),
         sessionTabId: session.tabId,
         connectionId: session.connectionId,
         diff,
       },
     );
   };
+  /** Opens what a Git view row compares. A row with no diff, such as a conflict, opens nothing. */
+  const openDiff = (session: TerminalSession, row: GitRow, root: string, pinned: boolean) =>
+    showDiff(session, diffTargetOf(row, root), pinned);
+  const openCommitFile = (
+    session: TerminalSession,
+    file: DiffFile,
+    origin: CommitFileOrigin,
+    root: string,
+    pinned: boolean,
+  ) => showDiff(session, commitDiffTarget(file, origin, root), pinned);
   const closeTabs = (ids: string[]) => {
     const closed = files.filter((item) => ids.includes(item.id));
     setFiles((old) => old.filter((item) => !ids.includes(item.id)));
@@ -269,6 +282,7 @@ export function useFileTabs({
   return {
     open,
     openDiff,
+    openCommitFile,
     close,
     dialog,
     /** Asks about unsaved files before the window closes. */

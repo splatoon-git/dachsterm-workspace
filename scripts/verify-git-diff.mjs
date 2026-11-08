@@ -110,6 +110,55 @@ async function checkThisPc(page, command, pane, directory) {
   await expect(page.locator(`${cell}.monaco-diff-editor.side-by-side`)).toHaveCount(1);
   console.log('PASS this PC: side by side and one column');
   await page.getByRole('button', { name: `${title} 탭 닫기` }).click();
+  await checkCommitFile(page, git);
+}
+
+/** GE.15: a commit opens to its files, and a file opens the commit's own two sides. */
+async function checkCommitFile(page, git) {
+  git('commit', '-q', '--no-gpg-sign', '-m', 'two');
+  const view = page.locator('#git-sidebar');
+  await view.getByRole('button', { name: 'Git 새로 고침' }).click();
+  const { tab, left, right, labels } = helpers(page);
+  const commit = view.locator('.git-graph-row', { hasText: 'two' });
+  await expect(commit).toBeVisible({ timeout: 15000 });
+
+  await commit.hover();
+  const card = page.getByRole('group', { name: '커밋 정보' });
+  await expect(card.locator('.git-commit-card-stat')).toContainText('파일 1개', { timeout: 15000 });
+  await expect(card.locator('.git-commit-card-message')).toHaveText('two');
+  console.log('PASS this PC: hovering a commit shows its card with the changed line counts');
+
+  await commit.click();
+  const file = view.locator('.git-graph-detail .git-row');
+  await expect(file.locator('.git-row-name')).toHaveText('a.txt', { timeout: 15000 });
+  await file.click();
+  const title = /^a\.txt \([0-9a-f]{7}\)$/;
+  await expect(page.getByRole('tab', { name: title })).toHaveCSS('font-style', 'italic');
+  await expect(labels).toHaveText([/^[0-9a-f]{7}$/, /^[0-9a-f]{7}$/]);
+  await expect(left).toContainText('base', { timeout: 30000 });
+  await expect(right).toContainText('EDIT');
+  console.log('PASS this PC: a file in the graph previews the commit against its parent');
+
+  await view.getByRole('button', { name: '표시 범위 자동' }).click();
+  await expect(view.getByRole('button', { name: '표시 범위 모두' })).toBeVisible();
+  await expect(commit).toBeVisible({ timeout: 15000 });
+  await view.getByRole('button', { name: '표시 범위 모두' }).click();
+  console.log('PASS this PC: the graph can show every branch');
+
+  const handle = view.getByRole('separator', { name: '변경 목록과 그래프 크기' });
+  const box = await handle.boundingBox();
+  const changes = view.locator('.git-view-body');
+  const before = (await changes.boundingBox()).height;
+  await page.mouse.move(box.x + 40, box.y + 1);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 40, box.y - 30, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await changes.boundingBox()).height).toBeLessThan(before - 20);
+  await handle.dblclick();
+  console.log('PASS this PC: the handle resizes the files and the graph');
+
+  await page.getByRole('button', { name: /a\.txt \([0-9a-f]{7}\) 탭 닫기/ }).click();
+  await expect(tab('a.txt ↔ 인덱스')).toHaveCount(0);
 }
 
 async function checkWsl(page, command, { linux }) {
