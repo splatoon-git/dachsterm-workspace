@@ -120,7 +120,10 @@ try {
     await page.getByRole('menuitem', { name: /^복사/ }).click();
     await pane.getByRole('button', { name: '붙여넣기', exact: true }).click();
     await expect(pane.locator('.file-row').filter({ hasText: '복사 1' })).toBeVisible();
-    await pane.locator('.file-row').first().click();
+    await pane
+      .locator('.file-row')
+      .first()
+      .click({ modifiers: ['Control'] });
     stage = `${protocol} multi delete`;
     await page.keyboard.press('Control+a');
     await page.keyboard.press('Delete');

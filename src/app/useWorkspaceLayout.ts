@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { applyDrop, type DropTarget } from './workspaceDrop';
 import { adjacentGroup, equalize, resize, type Divider } from './workspaceGeometry';
 import {
+  openDocument,
+  pinDocument,
+  type DocumentPlacement,
+  type DocumentRef,
+} from './workspaceTabs';
+import {
   applyPreset,
   closeEmptyGroup,
   closeTab,
@@ -57,6 +63,12 @@ export function useWorkspaceLayout() {
         setZoomRequested(false);
         setLayout((l) => openBeside(l, tab, beside.groupId, beside.side));
       },
+      /** A file opened by a click: a preview unless pinned, in the group `placement` allows. */
+      openDocument: (tab: DocumentRef, placement?: DocumentPlacement) => {
+        if (placement?.keepVisible) setZoomRequested(false);
+        setLayout((l) => openDocument(l, tab, placement));
+      },
+      pinDocument: (key: string) => setLayout((l) => pinDocument(l, key)),
       close: (key: string) => setLayout((l) => closeTab(l, key)),
       select: (groupId: string, key: string) => setLayout((l) => selectTab(l, groupId, key)),
       focus: (groupId: string) => setLayout((l) => focusGroup(l, groupId)),

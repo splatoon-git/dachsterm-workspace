@@ -73,12 +73,15 @@ function Recording({ session }: { session: TerminalSession }) {
  */
 export function StatusBar({
   session,
+  file,
   game,
   input,
   sending,
   agents,
 }: {
   session?: TerminalSession;
+  /** The focused file tab's encoding, line ending, indentation and language. */
+  file?: ReactNode;
   /** The title of the focused game, when a game has the focus. */
   game?: string;
   /** Input scope controls, shown only while several panes are on screen. */
@@ -110,6 +113,7 @@ export function StatusBar({
         {session && can?.guide && <ProgramGuide key={session.tabId} session={session} />}
       </div>
       <div className="status-right">
+        {file}
         {agents && <AgentBoard board={agents} />}
         {session && can?.log && <Recording key={session.connectionId} session={session} />}
         {input}

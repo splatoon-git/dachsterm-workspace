@@ -32,10 +32,12 @@ if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.
 // `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab,
 // `--credentials-only` only the DX.14 WSL HTTPS credential steps, and `--git-only` only the
 // DX.15 Git status steps, `--drop-only` only the GE.2 file drop steps, `--drag-only` only the GE.3
-// drag out to the file manager, which moves the real pointer for a few seconds.
+// drag out to the file manager, which moves the real pointer for a few seconds, and
+// `--file-tab-only` only the GE.5 file tab steps.
 const agentOnly = process.argv.includes('--agent-only');
 const dropOnly = process.argv.includes('--drop-only');
 const dragOnly = process.argv.includes('--drag-only');
+const fileTabOnly = process.argv.includes('--file-tab-only');
 const credentialsOnly = process.argv.includes('--credentials-only');
 const gitOnly = process.argv.includes('--git-only');
 const finished = Symbol('agent-only');
@@ -374,6 +376,120 @@ async function checkDragOut(page, command, pane) {
     closeFolder(into);
   }
 }
+/** GE.5: real `file_read` and the real CSP, which the browser fixtures cannot show. */
+async function checkFileTab(page, command, pane) {
+  const folder = path.join(await realpath(directory), 'file tab');
+  await mkdir(folder, { recursive: true });
+  await writeFile(path.join(folder, 'note.txt'), '첫 줄\r\n  한글 둘째 줄\r\n');
+  await writeFile(
+    path.join(folder, 'README.md'),
+    '# 안내 제목\n\n<script>window.__pwned=true</script>\n\n![원격](https://images.example/a.png)\n',
+  );
+  await writeFile(
+    path.join(folder, 'pic.svg'),
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" onload="window.__pwned=true">' +
+      '<script>window.__pwned=true</script><rect width="20" height="20"/></svg>',
+  );
+  await writeFile(path.join(folder, 'data.bin'), Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 1, 2]));
+  await writeFile(path.join(folder, 'big.log'), 'x'.repeat(3 * 1024 * 1024));
+  // CP949 for "한글", which is not valid UTF-8.
+  await writeFile(path.join(folder, 'legacy.txt'), Buffer.from([0xc7, 0xd1, 0xb1, 0xdb]));
+
+  const files = page.getByRole('complementary', { name: '로컬 파일 탐색' });
+  await showSidebarView(page, '파일');
+  await command(pane, `Set-Location '${folder}'; Write-Output ('TAB' + '_HERE')`, 'TAB_HERE');
+  await expect(files.getByLabel('로컬 경로', { exact: true })).toHaveValue(folder);
+  const row = (name) => files.locator(`[data-file-name="${name}"]`);
+  const tab = (name) => page.getByRole('tab', { name, exact: true });
+  const editor = page.locator('.pane-cell:not([hidden]) .file-tab .view-lines').first();
+  const shown = page.locator('.pane-cell:not([hidden]) .file-tab');
+
+  await row('note.txt').click();
+  await expect(tab('note.txt')).toHaveCSS('font-style', 'italic');
+  await expect(editor).toContainText('한글', { timeout: 30000 });
+  await expect(page.getByLabel('파일 정보')).toContainText('CRLF');
+  // The sidebar must stay on the connection while its file has the focus.
+  await expect(files.getByLabel('로컬 경로', { exact: true })).toHaveValue(folder);
+  console.log('PASS a click previews a real file in the editor, and the sidebar stays');
+
+  await row('README.md').click();
+  await expect(shown.getByRole('heading', { name: '안내 제목' })).toBeVisible();
+  await expect(tab('note.txt')).toHaveCount(0);
+  await expect(shown.getByRole('link', { name: /원격 이미지/ })).toBeVisible();
+  console.log('PASS the next click replaces the preview, and Markdown renders under the real CSP');
+
+  await row('pic.svg').click();
+  const image = shown.getByRole('img', { name: 'pic.svg' });
+  await expect(image).toBeVisible();
+  await expect
+    .poll(() => image.evaluate((node) => node.naturalWidth), { timeout: 15000 })
+    .toBeGreaterThan(0);
+  assert.equal(await page.evaluate(() => window.__pwned), undefined);
+  console.log('PASS an SVG shows as an image and its script does not run');
+
+  await row('data.bin').click();
+  await expect(shown.getByText('바이너리 파일이라 열지 않았습니다')).toBeVisible();
+  await expect(shown.getByText(/ELF 실행 파일/)).toBeVisible();
+  console.log('PASS a binary file shows its format and is not opened');
+
+  await row('big.log').click();
+  await expect(shown.getByText('크기가 커서 바로 열지 않았습니다')).toBeVisible();
+  await shown.getByRole('button', { name: '크게 열기' }).click();
+  await expect(shown.getByText('큰 파일이라 읽기 전용으로 열고')).toBeVisible({ timeout: 30000 });
+  await expect(editor).toContainText('xxx', { timeout: 30000 });
+  console.log('PASS a file over 2MiB asks first, then opens read-only');
+
+  await row('legacy.txt').click();
+  await expect(shown.locator('.file-tab-banner[role="alert"]')).toContainText('편집을 막습니다');
+  await page.getByLabel('파일 정보').getByRole('button', { name: 'UTF-8' }).click();
+  await page.getByRole('menuitem', { name: 'CP949 / EUC-KR' }).click();
+  await expect(editor).toContainText('한글', { timeout: 30000 });
+  await expect(shown.locator('.file-tab-banner[role="alert"]')).toHaveCount(0);
+  console.log('PASS broken bytes are reported, and another encoding reads them');
+
+  await row('note.txt').dblclick();
+  await expect(tab('note.txt')).toHaveCSS('font-style', 'normal');
+  await row('README.md').click();
+  await expect(tab('note.txt')).toBeVisible();
+  await expect(tab('README.md')).toHaveCSS('font-style', 'italic');
+  console.log('PASS a double click pins, so the next file opens beside it');
+
+  await page.getByRole('button', { name: 'README.md 탭 닫기' }).click();
+  await page.getByRole('button', { name: 'note.txt 탭 닫기' }).click();
+  await expect(pane.locator('.xterm-accessibility-tree')).toBeVisible();
+  await command(pane, "Write-Output ('STILL' + '_LIVE')", 'STILL_LIVE');
+  console.log('PASS closing the file tabs returns to the live terminal');
+
+  const wsl = page
+    .locator('.local-targets .local-target')
+    .filter({ hasText: 'WSL' })
+    .filter({ hasNotText: 'docker-desktop' });
+  if (!(await wsl.count())) {
+    console.log('WSL user distribution absent: WSL file tab pending.');
+    return;
+  }
+  await showSidebarView(page, '연결');
+  const title = await wsl.first().locator('span').textContent();
+  await wsl.first().click();
+  const linux = page.getByRole('region', { name: `${title} 터미널`, exact: true });
+  await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
+    timeout: 15000,
+  });
+  await command(
+    linux,
+    `cd "$(mktemp -d)" && printf '리눅스 내용\\n' > wsl.txt && printf 'TAB%s\\n' _WSL`,
+    'TAB_WSL',
+  );
+  await showSidebarView(page, '파일');
+  await expect(files.getByLabel('로컬 경로', { exact: true })).toHaveValue(/^\/tmp\//);
+  await row('wsl.txt').click();
+  await expect(editor).toContainText('리눅스 내용', { timeout: 30000 });
+  await expect(page.getByLabel('파일 정보')).toContainText('LF');
+  console.log('PASS a file inside WSL opens in a tab');
+  await page.getByRole('button', { name: 'wsl.txt 탭 닫기' }).click();
+  await command(linux, 'exit', '');
+}
+
 async function checkLocalDrop(page, command, pane) {
   const invoke = (cmd, args) =>
     page.evaluate(({ cmd, args }) => window.__TAURI_INTERNALS__.invoke(cmd, args), { cmd, args });
@@ -881,12 +997,13 @@ try {
   await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
-  if (agentOnly || credentialsOnly || gitOnly || dropOnly || dragOnly) {
+  if (agentOnly || credentialsOnly || gitOnly || dropOnly || dragOnly || fileTabOnly) {
     if (agentOnly) await checkLocalAgent(page, command, pane);
     if (credentialsOnly) await checkWslCredentials(page, command);
     if (gitOnly) await checkLocalGit(page, command, pane);
     if (dropOnly) await checkLocalDrop(page, command, pane);
     if (dragOnly) await checkDragOut(page, command, pane);
+    if (fileTabOnly) await checkFileTab(page, command, pane);
     throw finished;
   }
   await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');
@@ -936,7 +1053,6 @@ try {
   await localFiles.getByRole('button', { name: '새 파일', exact: true }).click();
   await answer('created.txt');
   await expect(localFiles.getByRole('button', { name: /created\.txt/ })).toBeVisible();
-  await localFiles.getByRole('button', { name: /seen\.txt/ }).click();
   // Item actions are in the row's right-click menu and on keys; rename uses the menu here.
   await localFiles.getByRole('button', { name: /seen\.txt/ }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: /^이름 바꾸기/ }).click();
@@ -951,7 +1067,8 @@ try {
   const nested = localFiles.locator('.file-tree-row').filter({ hasText: 'nested.txt' });
   await expect(nested).toBeVisible();
   await expect(localPath).toHaveValue(scratch);
-  await nested.locator('.file-row').click();
+  // Ctrl selects without opening a preview tab over the terminal.
+  await nested.locator('.file-row').click({ modifiers: ['Control'] });
   await page.screenshot({ path: path.resolve('test-results-native/local-files.png') });
   await page.keyboard.press('Delete');
   await expect(fileDialog).toContainText('nested.txt');
@@ -962,7 +1079,7 @@ try {
     .poll(() => readFile(path.join(scratch, 'inner', 'nested.txt')).catch((e) => e.code))
     .toBe('ENOENT');
   await localFiles.getByRole('button', { name: '접기: inner', exact: true }).click();
-  await localFiles.getByRole('button', { name: /renamed\.txt/ }).click();
+  await localFiles.getByRole('button', { name: /renamed\.txt/ }).click({ modifiers: ['Control'] });
   await page.keyboard.press('Control+c');
   await localFiles.getByRole('button', { name: /^inner/ }).dblclick();
   await expect(localPath).toHaveValue(path.join(scratch, 'inner'));
@@ -974,7 +1091,7 @@ try {
   await localFiles.getByRole('button', { name: '붙여넣기', exact: true }).click();
   await expect(localFiles.getByRole('alert')).toContainText('이미 있습니다');
   expect(await readFile(path.join(scratch, 'inner', 'renamed.txt'), 'utf8')).toBe('changed');
-  await localFiles.getByRole('button', { name: /renamed\.txt/ }).click();
+  await localFiles.getByRole('button', { name: /renamed\.txt/ }).click({ modifiers: ['Control'] });
   await page.keyboard.press('Delete');
   await fileDialog.getByRole('button', { name: '삭제', exact: true }).click();
   await expect(fileDialog).toHaveCount(0);

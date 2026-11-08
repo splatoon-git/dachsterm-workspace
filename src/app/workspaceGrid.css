@@ -173,3 +173,7 @@ body.tab-dragging * {
 .resize-handle.pane-divider:focus-visible {
   background: var(--color-action-primary);
 }
+
+.session-tab.preview-tab [role='tab'] {
+  font-style: italic;
+}

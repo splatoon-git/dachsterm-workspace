@@ -11,12 +11,14 @@ export function SidebarViews({
   showConnections,
   startAgent,
   openReview,
+  openFile,
 }: {
   view: SidebarView;
   session: TerminalSession | undefined;
   showConnections: () => void;
   startAgent: (folder: string) => void;
   openReview: () => void;
+  openFile: (session: TerminalSession, path: string, pinned: boolean) => void;
 }) {
   return (
     <>
@@ -27,7 +29,12 @@ export function SidebarViews({
         aria-labelledby="sidebar-tab-files"
         hidden={view !== 'files'}
       >
-        <SidebarFiles session={session} showConnections={showConnections} startAgent={startAgent} />
+        <SidebarFiles
+          session={session}
+          showConnections={showConnections}
+          startAgent={startAgent}
+          openFile={openFile}
+        />
       </div>
       <div
         id="git-sidebar"

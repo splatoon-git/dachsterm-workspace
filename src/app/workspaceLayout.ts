@@ -8,7 +8,8 @@ export type TabRef =
   | { kind: 'session'; tabId: string }
   | { kind: 'game'; id: GameId }
   | { kind: 'preview' }
-  | { kind: 'review'; id: string };
+  | { kind: 'review'; id: string }
+  | { kind: 'file'; id: string; preview?: boolean };
 export type GroupNode = {
   type: 'group';
   id: string;
@@ -68,7 +69,7 @@ export function displayRoot(
   return layout.root;
 }
 
-function replaceGroup(
+export function replaceGroup(
   node: LayoutNode,
   id: string,
   update: (group: GroupNode) => LayoutNode,
@@ -83,7 +84,7 @@ function replaceGroup(
   return changed ? { ...node, children } : node;
 }
 
-const withActive = (group: GroupNode, key: string): GroupNode =>
+export const withActive = (group: GroupNode, key: string): GroupNode =>
   group.active === key ? group : { ...group, active: key, previous: group.active || undefined };
 
 /** Drops a group, closes the splits left with one child and merges same-direction nesting. */

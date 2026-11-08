@@ -88,7 +88,7 @@ export function LocalFilePanel({
     (folder: string) => call<Listing>('local_files_list', { targetId, path: folder }),
     [targetId],
   );
-  const { rows, toggle } = useFileTree(listing, view, listFolder);
+  const { rows, toggle, fileMenu } = useFileTree(listing, view, listFolder);
   const selectedPaths = withoutNested(selection).map((name) => childPath(listing.path, name));
   const selected = selection.length === 1 ? rows.find((e) => e.name === selection[0]) : undefined;
   const source = { kind: 'local', targetId } as const;
@@ -342,11 +342,9 @@ export function LocalFilePanel({
             ...(target.kind === 'wsl'
               ? [{ label: '다운로드…', disabled: !selection.length, run: () => void download() }]
               : []),
-            {
-              label: '외부 편집기로 열기',
-              disabled: !editable,
-              run: () => ask({ kind: 'edit', program: savedEditor() }),
-            },
+            ...fileMenu(editable ? selectedPaths[0] : undefined, () =>
+              ask({ kind: 'edit', program: savedEditor() }),
+            ),
             revealItem(source, selection.length === 1 ? selectedPaths[0] : undefined, setError),
             {
               label: '이름 바꾸기',
