@@ -221,6 +221,17 @@ async function checkLocalGit(page, command, pane) {
   await expect(gitRows()).toHaveText(['a', 'b'], { timeout: 15000 });
   console.log('PASS WSL tab: the Git view lists the files through the distribution');
   await showSidebarView(page, '연결');
+  // GE.11: ConPTY repaints the screen, so the badge must still land on the line being typed on.
+  const badge = linux.locator('.prompt-branch');
+  await expect(badge).toHaveText('⎇ dx15-wsl ●2', { timeout: 15000 });
+  await command(linux, "git checkout -q -b ge11-wsl; printf 'GIT%s\\n' _CHECKOUT", 'GIT_CHECKOUT');
+  await expect(badge).toContainText('⎇ ge11-wsl', { timeout: 3000 });
+  const [mark, cursor] = await Promise.all([
+    badge.boundingBox(),
+    linux.locator('.xterm-rows .xterm-cursor').first().boundingBox(),
+  ]);
+  assert(mark && cursor && Math.abs(mark.y - cursor.y) < 3, 'WSL badge is on the cursor line');
+  console.log('PASS WSL tab: prompt branch badge on the cursor line, first prompt after checkout');
   await command(linux, "cd / && printf 'GIT%s\\n' _ROOT", 'GIT_ROOT');
   await expect(status).toHaveCount(0, { timeout: 15000 });
   console.log("PASS WSL tab: the distribution's git status; none outside");

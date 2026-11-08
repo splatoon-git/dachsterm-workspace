@@ -3523,6 +3523,14 @@
     },
     {
       "ecosystem": "npm",
+      "name": "@types/trusted-types",
+      "version": "2.0.7",
+      "license": "MIT",
+      "repository": null,
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "npm",
       "name": "@xterm/addon-fit",
       "version": "0.11.0",
       "license": "MIT",
@@ -3541,6 +3549,30 @@
       "ecosystem": "npm",
       "name": "@xterm/xterm",
       "version": "6.0.0",
+      "license": "MIT",
+      "repository": null,
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "npm",
+      "name": "dompurify",
+      "version": "3.4.17",
+      "license": "(MPL-2.0 OR Apache-2.0)",
+      "repository": null,
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "npm",
+      "name": "marked",
+      "version": "14.0.0",
+      "license": "MIT",
+      "repository": null,
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "npm",
+      "name": "monaco-editor",
+      "version": "0.57.0",
       "license": "MIT",
       "repository": null,
       "licenseTextsFound": 1

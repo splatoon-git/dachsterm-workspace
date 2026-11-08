@@ -154,6 +154,7 @@ export async function verifyTerminalBasics({
     bellNotifications: true,
     programGuide: true,
     gitStatus: true,
+    promptBranch: 'right',
     longCommandNotify: 30,
   });
   await openTerminalSettings(page);

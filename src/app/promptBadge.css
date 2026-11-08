@@ -1,0 +1,23 @@
+/* A zero-size anchor at the pane's top left. The badge is placed from it in pixels. */
+.prompt-branch-anchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.prompt-branch {
+  position: absolute;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+.prompt-branch-stale {
+  opacity: 0.55;
+}

@@ -1,0 +1,6 @@
+{
+  "build": {
+    "beforeBuildCommand": "npx vite build -c tests/editor-trial/vite.config.ts",
+    "frontendDist": "../test-results-native/editor-trial-dist"
+  }
+}

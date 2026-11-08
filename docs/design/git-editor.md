@@ -1,7 +1,7 @@
 # Git·파일 편집 작업 화면 — 설계안
 
 - 작업 ID: **GE.1~GE.13**, 설계일: **2026-11-08**. 관련 작업 DX.16(에이전트 시작 옵션)은 [developer-workflow DX.16](developer-workflow.md#dx16--에이전트-시작-옵션-2026-11-08-추가)에 있다.
-- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2 구현 완료, 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
+- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.11 구현 완료, GE.4 Windows 시험 완료(Mac 실기기 대기), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
 - 선행: DX.15(로컬·WSL 탭 Git 상태, `dev` `d6d2ec4`).
 - 기준 자료: `dev` `57e32bb`의 코드, 2026-11-08 사용자 대화와 스크린샷(VS Code 소스 제어 화면, 앱의 WSL 파일 패널·우클릭 메뉴). 내용은 코드를 읽어 확인했고, 이 설계를 위한 실행 검증은 GE.2 말고는 없다.
 
@@ -102,6 +102,8 @@
 
 합격 기준(둘 다 같은 기준): WebView2와 WKWebView에서 한글 조합(받침, 조합 중 커서 이동, 조합 중 저장 단축키), 일본어·중국어 IME 한 번씩, 10만 줄 파일 스크롤, 앱 테마 전환, diff 좌우·한 줄 보기, 웹 워커 로딩(Vite). Monaco가 Mac 한글 조합에서 글자를 잃거나 중복하면 CodeMirror 6로 간다. 편집기 코드는 게임처럼 lazy 로드한다.
 
+시험 결과(2026-11-08, [기록](../verification/editor-trial.md)): Windows 자동 측정 통과, **잠정 Monaco**. 입력은 `editContext: false`로 두 OS 모두 textarea 경로를 쓴다. 뒤 작업은 `src/features/editor/CodeEditor.tsx`만 쓰고, 부품 import는 `MonacoEditors.tsx` 한 파일로 eslint가 제한한다. 실제 IME 입력과 Mac 한글 조합([M.16](../verification/macos-readiness.md))을 본 뒤 확정한다.
+
 ### GE.5 — 파일 탭(보기)
 
 - **연다:** 파일 보기·Git 보기에서 한 번 클릭은 **미리보기 탭**(제목 기울임, 같은 칸에 하나, 다음 클릭이 바꿈), 더블클릭·편집 시작·탭 더블클릭은 **고정 탭**. 같은 파일이 이미 열려 있으면 그 탭으로 간다. 우클릭 메뉴는 지금 항목 그대로에 **열기**, **외부 편집기로 열기**를 둔다.
@@ -194,6 +196,16 @@ __dachsterm_head() {
 - `aria-hidden`, 터미널 버퍼에 글자를 쓰지 않는다(복사·검색·세션 기록·화면 읽기 무변경). 누르면 Git 조회 새로 고침, 툴팁은 `gitTooltip`.
 
 **적용 탭:** SSH Bash·Zsh(훅 있음) 표시 / tmux 제외(화면을 tmux가 그림) / 훅 없는 셸 제외 / WSL Bash 표시(`WSL_FOLLOW`에 같은 함수, ConPTY 커서 줄은 GE.0 실측) / Mac 로컬 Bash·Zsh 표시 / PowerShell 후속 / cmd 제외.
+
+구현에서 정한 것(2026-11-08, GE.0 실측은 [검증 기록](../verification/prompt-branch.md)):
+
+- 보고 값에 인쇄할 수 없는 문자가 있으면 셸에서 빈 값으로 보낸다. `.git/HEAD`는 폴더 안의 파일이라, 개념 코드대로면 그 안의 이스케이프 시퀀스가 터미널에 그대로 전달된다. 앱의 제어 문자 제거는 OSC가 끝난 뒤의 일이라 이를 막지 못한다.
+- `HEAD`를 읽지 못하면 이전 값을 남기지 않고 빈 값을 보낸다. reftable 저장소의 `ref: refs/heads/.invalid`도 빈 값이다. Git 기본값이 reftable로 바뀔 수 있어 처리했다.
+- 빈 값이어도 Git 조회가 저장소를 알면 그 브랜치를 그린다(`LANG=C`의 한글 브랜치, reftable).
+- 같은 보고가 Git과 계속 다르면 `branch` 사건은 폴더·값 조합당 한 번만 보낸다. 프롬프트마다 조회가 도는 것을 막는다.
+- WSL은 프롬프트 대기를 알아야 하므로 `WSL_FOLLOW`에 `133;A`를 더했다(`C`, `D`는 넣지 않음). 그 결과 WSL 탭에서도 프롬프트 이동과 프롬프트 기준 Git 조회가 동작하고, 실패 표시는 지금처럼 없다.
+- 기능 간 직접 import를 늘리지 않기 위해 오버레이는 `src/app/PromptBranch.tsx`에 두고 `TerminalPane`의 `children`으로 넣는다. `GitScheduler`에는 `branch` 사건만 더했고, 조회 시각은 `useGitStatus.ts`의 저장소 객체가 기록한다.
+- 프롬프트 테마의 브랜치 판단은 앞 글자가 `/`, `\`, `~`면 폴더 이름으로 본다. 입력 중인 명령에 같은 이름이 있으면 그동안 숨는다.
 
 ### GE.12 — 상태바
 
