@@ -75,6 +75,68 @@ test('saved presets are offered, and a damaged list falls back to the defaults',
   await expect(dialog.getByLabel('실행할 명령')).toHaveText('cli --review');
 });
 
+test('a dangerous preset is marked in the list and warned about before it starts', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'dachsterm.agentPresets',
+      JSON.stringify([
+        { name: '보통', command: 'codex --approve-for-me' },
+        { name: '생략', command: 'codex --yolo' },
+      ]),
+    ),
+  );
+  const dialog = await open(page, 'work');
+  const preset = dialog.getByLabel('프리셋');
+  await expect(preset.locator('option')).toHaveText(['보통', '생략 (위험)']);
+  const warning = dialog.getByRole('alert');
+  await expect(warning).toHaveCount(0);
+  await preset.selectOption({ label: '생략 (위험)' });
+  await expect(warning).toContainText('SSH 키 서명과 Git 자격 증명은');
+  await expect(dialog).not.toContainText(/Claude|Codex/);
+});
+
+test('choosing a program, mode and start writes the command, which stays editable', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '설정', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  await settings.getByRole('tab', { name: '에이전트', exact: true }).click();
+  const command = settings.getByRole('textbox', { name: '프리셋 1 명령' });
+  const program = settings.getByRole('combobox', { name: '프리셋 1 프로그램' });
+  const mode = settings.getByRole('combobox', { name: '프리셋 1 모드' });
+  const start = settings.getByRole('combobox', { name: '프리셋 1 시작 방식' });
+  await expect(program).toHaveValue('claude');
+  await mode.selectOption({ label: '계획' });
+  await start.selectOption({ label: '이어서' });
+  await expect(command).toHaveValue('claude --continue --permission-mode plan');
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('dachsterm.agentPresets')))
+    .toContain('claude --continue --permission-mode plan');
+
+  await program.selectOption('codex');
+  await expect(command).toHaveValue('codex');
+  await mode.selectOption({ label: '승인·샌드박스 생략 (위험)' });
+  await expect(command).toHaveValue('codex --dangerously-bypass-approvals-and-sandbox');
+  await expect(settings).toContainText('권한 확인을 건너뛰어');
+
+  // Text the table cannot show opens as free text; picking free text keeps the command.
+  await command.fill('codex --model fast');
+  await expect(program).toHaveValue('');
+  await expect(mode).toHaveCount(0);
+  await expect(settings).not.toContainText('권한 확인을 건너뛰어');
+  await command.fill('codex --approve-for-me');
+  await expect(mode).toHaveValue('auto');
+  await program.selectOption({ label: '직접 입력' });
+  await expect(program).toHaveValue('');
+  await expect(command).toHaveValue('codex --approve-for-me');
+  expect(await page.evaluate(() => localStorage.getItem('dachsterm.agentPresets'))).not.toContain(
+    'typed',
+  );
+});
+
 test('a narrow window keeps the dialog and a long command inside the screen', async ({ page }) => {
   await page.setViewportSize({ width: 380, height: 640 });
   const dialog = await open(page, '', `/srv/${'very-long-folder-name/'.repeat(8)}`);

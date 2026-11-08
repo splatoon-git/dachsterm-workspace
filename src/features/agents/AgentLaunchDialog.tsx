@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import type { Profile, TerminalLaunch } from '../../lib/ipc';
 import { startLine } from '../../lib/shell';
+import { dangerWarning, isDangerousCommand } from './agentOptions';
 import { folderProblem, nameProblem, needsName, presetCommand, readAgentPresets } from './presets';
 import './agents.css';
 
@@ -31,6 +32,7 @@ export function AgentLaunchDialog({
   const folderError = fixedFolder === undefined ? folderProblem(folder) : null;
   const launch = command && !folderError ? { folder, command } : null;
   const tmux = profile.tmuxSession;
+  const danger = isDangerousCommand(preset.command);
   return (
     <Dialog
       title="에이전트 시작"
@@ -68,7 +70,7 @@ export function AgentLaunchDialog({
           <select value={index} onChange={(e) => setIndex(Number(e.target.value))}>
             {presets.map((p, i) => (
               <option key={i} value={i}>
-                {p.name}
+                {isDangerousCommand(p.command) ? `${p.name} (위험)` : p.name}
               </option>
             ))}
           </select>
@@ -90,11 +92,16 @@ export function AgentLaunchDialog({
             </span>
           </label>
         )}
-        <div className="agent-launch-command">
+        <div className={`agent-launch-command${danger ? ' danger' : ''}`}>
           <span id="agent-launch-command">{tmux ? '실행할 명령' : '입력할 줄'}</span>
           <pre aria-labelledby="agent-launch-command">
             {launch ? (tmux ? launch.command : startLine(launch)) : preset.command}
           </pre>
+          {danger && (
+            <span role="alert" className="field-help agent-launch-error">
+              {dangerWarning}
+            </span>
+          )}
         </div>
         <p className="field-help">
           {tmux

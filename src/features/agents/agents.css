@@ -31,6 +31,9 @@
 .agent-launch-error.field-help {
   color: var(--color-status-error);
 }
+.agent-launch-command.danger pre {
+  border-color: var(--color-status-error);
+}
 
 .agent-presets {
   display: flex;
@@ -39,11 +42,17 @@
 }
 .agent-preset-row {
   display: grid;
-  grid-template-columns: minmax(96px, 1fr) minmax(0, 2.4fr) auto;
+  /* The mode column fits its longest label, so "(위험)" is never cut off. */
+  grid-template-columns: minmax(96px, 1fr) minmax(0, 0.8fr) minmax(0, 1.6fr) minmax(0, 0.9fr) auto;
   align-items: end;
   gap: var(--space-sm);
 }
-.agent-preset-row input {
+.agent-preset-row + .agent-preset-row {
+  padding-top: var(--space-sm);
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+}
+.agent-preset-row input,
+.agent-preset-row select {
   min-height: var(--control-height);
   padding: 5px 8px;
   font-size: var(--font-small);
@@ -51,7 +60,16 @@
 .agent-preset-row input.command {
   font-family: var(--font-mono);
 }
+.agent-preset-command,
+.agent-preset-danger {
+  grid-column: 1 / -1;
+}
+.agent-preset-danger {
+  margin: 0;
+}
 .agent-preset-row > button {
+  grid-column: -2;
+  grid-row: 1;
   min-height: var(--control-height);
 }
 .agent-preset-actions {
@@ -62,11 +80,10 @@
 }
 @media (max-width: 700px) {
   .agent-preset-row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr) minmax(0, 0.9fr) auto;
   }
-  .agent-preset-row label:nth-child(2) {
-    grid-column: 1 / -1;
-    grid-row: 2;
+  .agent-preset-row label:first-child {
+    grid-column: 1 / -2;
   }
 }
 
