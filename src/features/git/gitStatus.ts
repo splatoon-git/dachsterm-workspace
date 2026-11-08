@@ -60,7 +60,7 @@ export function gitPath(path: string) {
   return path.replace(/\\/g, '/').replace(/^[a-z]:/, (drive) => drive.toUpperCase());
 }
 
-const inside = (path: string, root: string) =>
+export const inside = (path: string, root: string) =>
   path === root || path.startsWith(root.endsWith('/') ? root : `${root}/`);
 
 /**

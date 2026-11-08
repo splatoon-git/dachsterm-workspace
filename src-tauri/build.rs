@@ -45,6 +45,7 @@ fn main() {
             "git_status",
             "local_git_status",
             "git_view",
+            "git_apply",
             "git_config_read",
             "git_config_preview",
             "git_config_write",

@@ -2,6 +2,7 @@
 import { createRoot } from 'react-dom/client';
 import type { CommitDetail, GitGraphResult } from '../../../src/features/git/commitGraphModel';
 import type { GitViewResult } from '../../../src/features/git/gitViewModel';
+import type { GitApplyResult } from '../../../src/features/git/gitWrite';
 import type { TerminalSession } from '../../../src/features/terminal/session';
 import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
@@ -21,6 +22,12 @@ declare global {
       reviewable: boolean;
       reviewed: number;
       calls: { command: string; args: Record<string, unknown> }[];
+      /** What `git_apply` answers, when it is not simply done. */
+      applyResult?: GitApplyResult;
+      /** The terminal's screen: `alternate` while a full-screen program runs. */
+      buffer: 'normal' | 'alternate';
+      /** What the view typed in the terminal. */
+      sent: string[];
     };
     /** The tab drops its connection and comes back with a new connection ID. */
     __gitReconnect: () => void;
@@ -30,6 +37,7 @@ declare global {
 const state = window.__gitView;
 state.calls = [];
 state.reviewed = 0;
+state.sent = [];
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
@@ -43,6 +51,15 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         return structuredClone(state.detail);
       }
       if (command === 'clipboard_write_text') return null;
+      if (command === 'git_apply')
+        return state.applyResult ?? { kind: 'done', commands: ['git add -A'] };
+      if (command === 'git_refs')
+        return {
+          root: '/srv/app',
+          worktrees: [],
+          refs: ['refs/heads/main', 'refs/heads/feat', 'refs/remotes/origin/only-remote'],
+          truncated: false,
+        };
       throw `unexpected ${command}`;
     },
   },
@@ -56,7 +73,8 @@ const session = {
   connectionId: 'c1',
   profile: { protocol: state.tab === 'ftp' ? 'ftp' : 'ssh', name: '서버' },
   localTarget: state.tab === 'local' ? { id: 'wsl:U', kind: 'wsl' } : undefined,
-  terminal: {},
+  terminal: { focus: () => {}, buffer: { active: { type: state.buffer } } },
+  send: (data: string) => state.sent.push(data),
   subscribe: (listener: () => void) => {
     listeners.add(listener);
     return () => {

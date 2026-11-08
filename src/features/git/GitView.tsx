@@ -3,11 +3,16 @@ import { requestSettings } from '../../lib/settingsRequest';
 import type { TerminalSession } from '../terminal/session';
 import { sessionSource } from '../terminal/sessionKind';
 import { CommitGraph } from './CommitGraph';
+import { GitCommitBox } from './GitCommitBox';
+import { GitOutput } from './GitOutput';
 import { GitViewHeader } from './GitViewHeader';
 import { GitViewList } from './GitViewList';
 import { useGitViewMenu } from './GitViewMenu';
+import { GitWriteDialog } from './GitWriteDialogs';
 import { groupEntries, stoppedReason, type GitViewRepo, type GitViewResult } from './gitViewModel';
+import type { GitDialogRequest } from './gitWrite';
 import { useGitView } from './useGitView';
+import { useGitWrite } from './useGitWrite';
 import './gitView.css';
 
 const treeKey = 'dachsterm.gitView.tree';
@@ -107,8 +112,17 @@ export function GitView({
     ready?.refresh();
     setGraphRefresh((n) => n + 1);
   };
+  const [dialog, setDialog] = useState<GitDialogRequest | null>(null);
+  const write = useGitWrite({
+    session,
+    repo,
+    refresh,
+    notice: setNotice,
+    ask: setDialog,
+  });
   const menu = useGitViewMenu({
     repo,
+    groups,
     tree,
     setTree: (next) => {
       setTree(next);
@@ -121,6 +135,8 @@ export function GitView({
         ? () => requestSettings({ section: 'git', repo: { source, folder: repo.root } })
         : undefined,
     notice: setNotice,
+    write,
+    ask: setDialog,
   });
   if (model.state === 'noTab')
     return (
@@ -159,14 +175,43 @@ export function GitView({
     );
   // The scheduler also reports "not a repository", which the body already says.
   const error = notice || (!model.result || repo ? model.error : '');
+  const stagedCount = groups.find((group) => group.id === 'staged')?.rows.length ?? 0;
+  const commit = async () => {
+    if (await write.apply({ kind: 'commit', message: write.draft, amend: false }))
+      write.setDraft('');
+  };
   return (
     <div className="git-view">
       <GitViewHeader repo={repo} refresh={refresh} more={menu.more} />
+      {repo && (
+        <GitCommitBox
+          draft={write.draft}
+          setDraft={write.setDraft}
+          stagedCount={stagedCount}
+          busy={write.busy}
+          commit={() => void commit()}
+          more={menu.commitMore}
+        />
+      )}
+      {error && (
+        <p className="git-view-note git-view-error" role="status">
+          {error}
+          {write.identityMissing && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => requestSettings({ section: 'git' })}
+            >
+              설정 → Git
+            </button>
+          )}
+        </p>
+      )}
       <div className="git-view-body">
         {model.result ? (
           <ResultBody result={model.result} remote={model.remote} retry={model.refresh}>
             {groups.length ? (
-              <GitViewList groups={groups} tree={tree} menu={menu.row} />
+              <GitViewList groups={groups} tree={tree} menu={menu.row} groupMenu={menu.group} />
             ) : (
               <Empty title="변경 사항이 없습니다" />
             )}
@@ -176,11 +221,6 @@ export function GitView({
           </ResultBody>
         ) : (
           !error && <Empty title="조회 중…" />
-        )}
-        {error && (
-          <p className="git-view-note git-view-error" role="status">
-            {error}
-          </p>
         )}
       </div>
       {repo && session && (
@@ -192,7 +232,11 @@ export function GitView({
           notice={setNotice}
         />
       )}
+      <GitOutput log={write.log} />
       {menu.menu}
+      {dialog && repo && (
+        <GitWriteDialog request={dialog} repo={repo} close={() => setDialog(null)} write={write} />
+      )}
     </div>
   );
 }

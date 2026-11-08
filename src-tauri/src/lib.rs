@@ -16,6 +16,7 @@ mod editor_location;
 pub mod encoding;
 pub mod file_ops;
 pub mod ftp;
+pub mod git_apply;
 pub mod git_config;
 pub mod git_credential;
 pub mod git_diff;
@@ -226,6 +227,7 @@ pub fn run() {
             git_status::git_status,
             git_status::local::local_git_status,
             git_status::view::git_view,
+            git_apply::git_apply,
             git_config::git_config_read,
             git_config::git_config_preview,
             git_config::git_config_write,

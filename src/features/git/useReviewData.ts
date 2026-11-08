@@ -31,7 +31,10 @@ export function useReviewData(connectionId: string, folder: string) {
 
   useEffect(() => {
     const ticket = ++latestRefs.current;
-    void call<GitRefs>('git_refs', { id: connectionId, folder: root || folder })
+    void call<GitRefs>('git_refs', {
+      source: { kind: 'ssh', connectionId },
+      folder: root || folder,
+    })
       .then((value) => {
         if (ticket !== latestRefs.current) return;
         setRefs({ state: 'ready', value });

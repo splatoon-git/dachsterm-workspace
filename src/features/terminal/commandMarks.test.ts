@@ -123,6 +123,47 @@ describe('waiting prompt', () => {
     expect(changed).toHaveBeenCalledTimes(2);
   });
 
+  it('knows whether the shell reports prompts at all', () => {
+    const { marks } = setup();
+    expect(marks.reportsPrompts).toBe(false);
+    marks.handle('A');
+    expect(marks.reportsPrompts).toBe(true);
+  });
+
+  it('sees text left on the prompt line, also where the shell reports command starts', () => {
+    const { marks, lines, at } = setup();
+    marks.handle('A');
+    marks.handle('C');
+    marks.handle('D;0');
+    marks.handle('A');
+    at(0, 2);
+    lines.set(0, '$ ');
+    expect(marks.promptHasText).toBe(false);
+    marks.input('g');
+    lines.set(0, '$ g');
+    at(0, 3);
+    expect(marks.promptHasText).toBe(true);
+    // Erased again, the line is free, however it was typed.
+    lines.set(0, '$ ');
+    at(0, 2);
+    expect(marks.promptHasText).toBe(false);
+  });
+
+  it('counts a command the app typed as started, once', () => {
+    const { marks, at } = setup();
+    at(3);
+    marks.handle('A');
+    marks.typedCommand();
+    expect(marks.promptWaiting).toBe(false);
+    // The shell's own report of the same command changes nothing.
+    marks.handle('C');
+    expect(marks.promptWaiting).toBe(false);
+    marks.handle('D;2');
+    expect(marks.failedLines()).toEqual([{ line: 3, exit: 2 }]);
+    marks.handle('A');
+    expect(marks.promptWaiting).toBe(true);
+  });
+
   it('ends at Enter where the shell reports no command start, not at an empty line', () => {
     const { marks, lines, at } = setup();
     marks.handle('A');

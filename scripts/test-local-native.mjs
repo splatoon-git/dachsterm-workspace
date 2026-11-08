@@ -218,6 +218,22 @@ async function checkLocalGit(page, command, pane) {
   await showSidebarView(page, 'Git');
   await expect(gitRows()).toHaveText(['new.txt'], { timeout: 15000 });
   console.log('PASS PowerShell tab: the Git view lists the untracked file');
+  // GE.9: this PC's git, without a shell. PowerShell reports no prompts, so a typed command asks.
+  const gitView = page.locator('#git-sidebar');
+  await gitRows().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '스테이지', exact: true }).click();
+  const staged = gitView.getByRole('region', { name: '스테이지됨', exact: true });
+  await expect(staged.locator('.git-row-name')).toHaveText(['new.txt'], { timeout: 15000 });
+  await staged.locator('.git-row').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '스테이지 취소', exact: true }).click();
+  await expect(gitRows()).toHaveText(['new.txt'], { timeout: 15000 });
+  await gitView.getByRole('button', { name: 'Git 더 보기' }).click();
+  await page.getByRole('menuitem', { name: 'fetch', exact: true }).click();
+  const ask = page.getByRole('dialog', { name: '터미널에 입력', exact: true });
+  await expect(ask.getByRole('button', { name: '취소', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(ask).toHaveCount(0);
+  console.log('PASS PowerShell tab: stage and unstage, and a typed command is asked about first');
   // GE.14: the commit graph, before and after there is a history, and a commit's detail.
   const graph = page.locator('#git-sidebar .git-graph');
   await expect(graph).toContainText('아직 커밋이 없습니다.', { timeout: 15000 });
@@ -283,6 +299,18 @@ async function checkLocalGit(page, command, pane) {
   await showSidebarView(page, 'Git');
   await expect(gitRows()).toHaveText(['a', 'b'], { timeout: 15000 });
   console.log('PASS WSL tab: the Git view lists the files through the distribution');
+  // GE.9: staged through the distribution's git, with the same menus.
+  const wslStaged = page
+    .locator('#git-sidebar')
+    .getByRole('region', { name: '스테이지됨', exact: true })
+    .locator('.git-row-name');
+  await gitRows().first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '스테이지', exact: true }).click();
+  await expect(wslStaged).toHaveText(['a'], { timeout: 15000 });
+  await wslStaged.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '스테이지 취소', exact: true }).click();
+  await expect(gitRows()).toHaveText(['a', 'b'], { timeout: 15000 });
+  console.log('PASS WSL tab: stage and unstage through the distribution');
   await expect(page.locator('#git-sidebar .git-graph-subject')).toHaveText(['wsl-two', 'wsl-one'], {
     timeout: 15000,
   });

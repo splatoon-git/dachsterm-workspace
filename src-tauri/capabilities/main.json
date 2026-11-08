@@ -99,6 +99,7 @@
     "allow-git-status",
     "allow-local-git-status",
     "allow-git-view",
+    "allow-git-apply",
     "allow-git-config-read",
     "allow-git-config-preview",
     "allow-git-config-write",
