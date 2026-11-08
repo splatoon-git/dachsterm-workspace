@@ -160,6 +160,15 @@
   gap: var(--space-xs);
 }
 
+/* A button that must look like the labels beside it, so the bar's button size does not apply. */
 .status-file button.status-tag {
+  min-height: 0;
+  padding: 0 var(--space-xs);
+  background: none;
+  color: inherit;
+  font-size: 10px;
   cursor: pointer;
+}
+.status-file button.status-tag:hover {
+  background: var(--color-action-hover);
 }
