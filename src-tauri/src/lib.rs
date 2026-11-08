@@ -19,6 +19,7 @@ pub mod ftp;
 pub mod git_config;
 pub mod git_credential;
 pub mod git_diff;
+pub mod git_graph;
 pub mod git_run;
 pub mod git_status;
 pub mod hostkeys;
@@ -231,6 +232,8 @@ pub fn run() {
             git_config::program::git_program_info,
             git_config::program::git_program_pick,
             git_config::program::git_program_set,
+            git_graph::git_graph,
+            git_graph::git_commit_detail,
             git_diff::git_refs,
             git_diff::git_diff_files,
             git_diff::git_diff_file,

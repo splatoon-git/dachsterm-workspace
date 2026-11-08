@@ -51,6 +51,8 @@ fn main() {
             "git_program_info",
             "git_program_pick",
             "git_program_set",
+            "git_graph",
+            "git_commit_detail",
             "git_refs",
             "git_diff_files",
             "git_diff_file",

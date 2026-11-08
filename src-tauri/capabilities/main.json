@@ -105,6 +105,8 @@
     "allow-git-program-info",
     "allow-git-program-pick",
     "allow-git-program-set",
+    "allow-git-graph",
+    "allow-git-commit-detail",
     "allow-git-refs",
     "allow-git-diff-files",
     "allow-git-diff-file",
