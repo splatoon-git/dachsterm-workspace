@@ -3,7 +3,10 @@
 mod detect;
 mod runner;
 mod settings;
+mod slots;
+mod snapshot;
 mod state;
+mod templates;
 use crate::{
     AppState,
     storage::{Result, Store},
@@ -13,6 +16,8 @@ use runner::Runner;
 use serde::Deserialize;
 pub use settings::{KubeSettings, Workspace};
 use settings::{check_context, check_kubeconfig, check_kubectl};
+pub use slots::Slots;
+use snapshot::{Kind, Snapshot, collect};
 use tauri::{AppHandle, Manager, State};
 
 #[derive(Deserialize)]
@@ -96,6 +101,26 @@ pub async fn kube_save(app: AppHandle, id: String, kube: KubeSettings) -> Result
     })
     .await
     .map_err(|_| "세션을 저장하지 못했습니다.".to_string())?
+}
+
+/// Settings come with the call because a terminal session showing the workspace from its tab menu
+/// keeps its choice only while the tab is open (design §3.1).
+#[tauri::command]
+pub async fn kube_snapshot(
+    state: State<'_, AppState>,
+    slots: State<'_, Slots>,
+    id: String,
+    kube: KubeSettings,
+    kind: Kind,
+) -> Result<Snapshot> {
+    kube.validate()?;
+    let handle = state.connections.handle(&id)?;
+    let slot = slots.for_connection(&id);
+    let _turn = slot
+        .acquire_owned()
+        .await
+        .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
+    Ok(collect(&Runner::Ssh(&handle), &kube, kind).await)
 }
 
 #[cfg(test)]

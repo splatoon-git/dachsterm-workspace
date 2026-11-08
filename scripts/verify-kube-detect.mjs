@@ -2,12 +2,12 @@
 // Never print Playwright errors or the fixture's passwords. Windows only, like every native check.
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { launchNativeApp } from './lib/native-app.mjs';
-import { chooseTabMenu, openNewConnectionForm, showSidebarView } from './native-workspace.mjs';
+import { docker, kubeFixture, kubeScreen } from './lib/kube-native.mjs';
+import { chooseTabMenu, openNewConnectionForm } from './native-workspace.mjs';
 
 const clusterArg = process.argv.find((arg) => arg.startsWith('--cluster='));
 const cluster = clusterArg ? clusterArg.slice('--cluster='.length) : 'dachsterm-kv1';
@@ -15,26 +15,7 @@ const keep = process.argv.includes('--keep');
 const executable = process.env.DACHSTERM_TEST_BINARY ?? 'target/debug/dachsterm.exe';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function fixture(action) {
-  const result = spawnSync(
-    'wsl',
-    ['-d', 'Ubuntu-24.04', '--', 'bash', 'scripts/kube-fixture.sh', cluster, action],
-    { encoding: 'utf8', timeout: 600_000 },
-  );
-  if (result.status !== 0)
-    throw new Error(`kube-fixture ${action} failed: ${result.stderr.slice(-400)}`);
-  return Object.fromEntries(
-    result.stdout
-      .split('\n')
-      .map((line) => line.trim().split('='))
-      .filter((pair) => pair.length === 2),
-  );
-}
-function docker(args) {
-  const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 60_000 });
-  if (result.status !== 0) throw new Error(`docker ${args[0]} failed`);
-  return result.stdout.trim();
-}
+const fixture = (action) => kubeFixture(cluster, action);
 
 let stage = 'fixture';
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-kube-'));
@@ -52,70 +33,18 @@ try {
   const { page } = app;
   page.setDefaultTimeout(20_000);
   await expect(page.getByRole('heading', { name: '서버 작업의 편안한 시작' })).toBeVisible();
-  const invoke = (command, args = {}) =>
-    page.evaluate(({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args), {
-      command,
-      args,
-    });
-  const pane = () => page.locator('.pane-cell.focused');
-  const terminal = () => pane().locator('.terminal-pane');
-  const terminalText = () => terminal().locator('.xterm-accessibility-tree').innerText();
-  const header = () => pane().getByRole('tablist', { name: '쿠버네티스 화면' });
-  const savedProfile = async (name) =>
-    (await invoke('sessions')).profiles.find((profile) => profile.name === name);
-  const connectionId = () => terminal().getAttribute('data-connection-id');
-
-  /** The form's own field is covered by the Playwright spec; this keeps the password out of it. */
-  async function addSession(name, username, workspace) {
-    await invoke('save_session', {
-      profile: {
-        id: '',
-        name,
-        host: '127.0.0.1',
-        port: sshPort,
-        username,
-        auth: 'password',
-        protocol: 'ssh',
-        tlsCaPath: '',
-        encoding: 'utf-8',
-        keyPath: '',
-        groupId: null,
-        favorite: false,
-        timeout: 15,
-        keepalive: 15,
-        workspace,
-        lastConnected: null,
-        hasSecret: false,
-      },
-      secretAction: 'keep',
-      secret: null,
-    });
-    await page.reload();
-    await expect(page.getByRole('heading', { name: '서버 작업의 편안한 시작' })).toBeVisible();
-  }
-
-  let trusted = false;
-  async function connect(name, password) {
-    await showSidebarView(page, '연결');
-    await page
-      .locator('.profile-card')
-      .filter({ hasText: name })
-      .locator('.profile-target')
-      .dblclick();
-    await answerLogin(password);
-  }
-  async function answerLogin(password) {
-    const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('비밀번호', { exact: true }).fill(password);
-    await dialog.getByRole('button', { name: '연결', exact: true }).click();
-    if (!trusted) {
-      await page.getByRole('button', { name: '지문 확인 · 신뢰하고 연결', exact: true }).click();
-      trusted = true;
-    }
-    await expect
-      .poll(() => terminal().locator('.connection-message').innerText(), { timeout: 20_000 })
-      .toContain('연결됨');
-  }
+  const {
+    invoke,
+    pane,
+    terminal,
+    terminalText,
+    header,
+    savedProfile,
+    connectionId,
+    addSession,
+    connect,
+    answerLogin,
+  } = kubeScreen(page, sshPort);
   /** Through the real form, once, so its field is exercised with the backend behind it. */
   async function addSessionByForm(name, username) {
     await openNewConnectionForm(page);
@@ -151,7 +80,7 @@ try {
   ]);
   await pane().getByLabel('namespace', { exact: true }).selectOption('kube-system');
   await pane().getByRole('button', { name: '시작', exact: true }).click();
-  await expect(pane().locator('.kube-empty')).toContainText('대시보드');
+  await expect(pane().getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   await expect(header()).toContainText('second');
   await expect(header()).toContainText('kube-system');
   const saved = await savedProfile('kube-bashrc');
@@ -173,11 +102,11 @@ try {
   await page.keyboard.press('Enter');
   await expect.poll(terminalText).toContain('KV1_SHELL_alive');
   assert(!(await terminalText()).includes('__dachsterm_'), 'no directory hook was typed');
-  await header().getByRole('tab', { name: '대시보드', exact: true }).click();
-  await expect(pane().locator('.kube-empty')).toBeVisible();
+  await header().getByRole('tab', { name: '트리', exact: true }).click();
+  await expect(pane().getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   await header().getByRole('tab', { name: '서버 터미널', exact: true }).click();
   await expect.poll(terminalText).toContain('KV1_SHELL_alive');
-  await header().getByRole('tab', { name: '대시보드', exact: true }).click();
+  await header().getByRole('tab', { name: '트리', exact: true }).click();
   pass('the server terminal keeps its shell while the workspace is shown');
 
   stage = 'next connection opens directly';
@@ -185,7 +114,7 @@ try {
   await expect(pane().locator('.ended-card')).toBeVisible();
   await chooseTabMenu(page, '재접속');
   await answerLogin(probePassword);
-  await expect(pane().locator('.kube-empty')).toContainText('대시보드');
+  await expect(pane().getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   await expect(pane().getByLabel('context', { exact: true })).toHaveCount(0);
   pass('a configured session opens its workspace on the next connection');
 
@@ -256,7 +185,7 @@ try {
     )
     .toBe('600 rkeuser');
   await header().getByRole('button', { name: '다시 확인', exact: true }).click();
-  await expect(pane().locator('.kube-empty')).toContainText('대시보드');
+  await expect(pane().getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   await expect(header()).toContainText(`kind-${cluster}`);
   assert.equal(
     (await savedProfile('kube-rke')).kube.kubeconfig,
@@ -268,7 +197,7 @@ try {
   await chooseTabMenu(page, '연결 종료');
   await chooseTabMenu(page, '재접속');
   await answerLogin(rkePassword);
-  await expect(pane().locator('.kube-empty')).toContainText('대시보드');
+  await expect(pane().getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   pass('the copied config opens directly on the next connection');
 
   stage = 'stale copy';
@@ -295,7 +224,7 @@ try {
   await expect(pane().getByLabel('context', { exact: true })).toBeVisible();
   assert.equal(await connectionId(), idBefore, 'the connection stays the same');
   await pane().getByRole('button', { name: '시작', exact: true }).click();
-  await expect(pane().locator('.kube-empty')).toBeVisible();
+  await expect(pane().getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   const untouched = await savedProfile('kube-terminal');
   assert.equal(untouched.workspace, undefined);
   assert.equal(untouched.kube, undefined);
@@ -320,7 +249,7 @@ try {
     .poll(() => inServer('stat -c "%a" /home/rkeuser/.kube/dachsterm.config 2>/dev/null || true'))
     .toBe('600');
   await header().getByRole('button', { name: '다시 확인', exact: true }).click();
-  await expect(pane().locator('.kube-empty')).toBeVisible();
+  await expect(pane().getByRole('tree', { name: '클러스터 트리' })).toBeVisible();
   assert.equal((await savedProfile('kube-rke-terminal')).kube, undefined);
   inServer('rm -f /home/rkeuser/.kube/dachsterm.config');
   pass('the copy is typed and run at a shell that reports its prompt');

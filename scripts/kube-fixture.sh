@@ -12,7 +12,7 @@ set -euo pipefail
 cluster=${1:-}
 action=${2:-up}
 if [[ ! $cluster =~ ^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$ ]]; then
-  echo "usage: kube-fixture.sh <cluster-name> [up|down|status]" >&2
+  echo "usage: kube-fixture.sh <cluster-name> [up|down|status|metrics-on|metrics-off]" >&2
   exit 2
 fi
 
@@ -113,10 +113,29 @@ DOCKERFILE
   status
 }
 
+metrics_url=https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.7.2/components.yaml
+kubectl_in_ssh() { in_ssh "/opt/kube/bin/kubectl --kubeconfig /opt/kube/config $1"; }
+
+# kind's kubelets have self-signed certificates, so metrics-server needs the insecure flag here.
+metrics_on() {
+  curl -fsSL "$metrics_url" | in_ssh '/opt/kube/bin/kubectl --kubeconfig /opt/kube/config apply -f -' >/dev/null
+  kubectl_in_ssh "-n kube-system patch deployment metrics-server --type=json \
+    -p='[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--kubelet-insecure-tls\"}]'" >/dev/null
+  kubectl_in_ssh '-n kube-system rollout status deployment/metrics-server --timeout=180s' >/dev/null
+  status
+}
+
+metrics_off() {
+  curl -fsSL "$metrics_url" | in_ssh '/opt/kube/bin/kubectl --kubeconfig /opt/kube/config delete --ignore-not-found -f -' >/dev/null
+  status
+}
+
 case $action in
   up) up ;;
   down) down ;;
   status) status ;;
+  metrics-on) metrics_on ;;
+  metrics-off) metrics_off ;;
   *)
     echo "unknown action: $action" >&2
     exit 2

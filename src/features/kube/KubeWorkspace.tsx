@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
 import { KubeSetup } from './KubeSetup';
+import { KubeTree } from './KubeTree';
+import { freshness } from './polling';
+import { readLastScreen, writeLastScreen } from './screenPref';
+import { initialTreeView } from './tree';
+import { useKubeSnapshots } from './useKubeSnapshots';
 import {
   finishesAfterRecheck,
   kubeScreens,
@@ -29,6 +34,9 @@ type Phase =
 export function KubeWorkspace({
   connectionId,
   persist,
+  session,
+  visible,
+  focused,
   display,
   showTerminal,
   showWorkspace,
@@ -37,13 +45,19 @@ export function KubeWorkspace({
   connectionId: string;
   /** Saved only for a session opened as a Kubernetes session. */
   persist: boolean;
+  /** The profile this tab belongs to, for the tree's saved folding. */
+  session: string;
+  /** The tab is on screen; a split pane in a background tab is not. */
+  visible: boolean;
+  focused: boolean;
   display: Exclude<KubeDisplay, 'off'>;
   showTerminal: () => void;
   showWorkspace: () => void;
   copy: (command: string) => KubeCopyResult;
 }) {
   const [phase, setPhase] = useState<Phase>({ name: 'detecting' });
-  const [screen, setScreen] = useState<KubeScreen>('dashboard');
+  const [screen, setScreen] = useState<KubeScreen>(() => readLastScreen(session));
+  const [treeView, setTreeView] = useState(initialTreeView);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
@@ -126,6 +140,14 @@ export function KubeWorkspace({
 
   const detection = phase.name === 'setup' ? phase.detection : null;
   const settingUp = phase.name !== 'open';
+  const { store, now } = useKubeSnapshots(
+    connectionId,
+    phase.name === 'open' ? phase.settings : null,
+    visible && display === 'workspace',
+  );
+  const fresh = freshness(store, now);
+  const warning =
+    fresh.warning ?? (phase.name === 'open' && phase.offline ? '클러스터 연결 불가' : null);
   return (
     <div className={`kube-workspace ${display === 'terminal' ? 'on-terminal' : ''}`}>
       <div className="kube-header" role="tablist" aria-label="쿠버네티스 화면">
@@ -136,6 +158,7 @@ export function KubeWorkspace({
             aria-selected={display === 'workspace' && screen === id}
             onClick={() => {
               setScreen(id);
+              writeLastScreen(session, id);
               showWorkspace();
             }}
           >
@@ -150,7 +173,8 @@ export function KubeWorkspace({
             <>
               <strong>{phase.settings.context}</strong> · {phase.settings.namespace || '전체'} ·
               조회 모드
-              {phase.offline && <em> · 클러스터 연결 불가</em>}
+              {fresh.age && ` · ${fresh.age}`}
+              {warning && <em> · {warning}</em>}
             </>
           )}
           {display === 'terminal' && settingUp && (
@@ -193,7 +217,16 @@ export function KubeWorkspace({
               copy={copyToTerminal}
             />
           )}
-          {phase.name === 'open' && (
+          {phase.name === 'open' && screen === 'tree' && (
+            <KubeTree
+              store={store}
+              session={session}
+              focused={focused}
+              view={treeView}
+              setView={setTreeView}
+            />
+          )}
+          {phase.name === 'open' && screen !== 'tree' && (
             <div className="kube-empty" role="tabpanel">
               <h2>{kubeScreens.find((item) => item.id === screen)?.label}</h2>
               <p>이 화면은 아직 준비 중입니다.</p>

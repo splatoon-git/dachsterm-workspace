@@ -55,6 +55,9 @@ function KubeOrTerminal(props: TerminalProps) {
           key={session.connectionId}
           connectionId={session.connectionId}
           persist={session.profile.workspace === 'kubernetes'}
+          session={session.profile.id}
+          visible={active}
+          focused={focused ?? false}
           display={display}
           showTerminal={() => session.view.set({ kubeTerminal: true })}
           showWorkspace={() => session.view.set({ kubeTerminal: false })}

@@ -202,3 +202,40 @@ kind의 `kindnet` 파드 하나(control-plane)가 파드 5,000개 생성 뒤 `Cr
 | 숨은 셸에 프로그램이 도는 동안 복사 버튼을 막는 것 | 실제 앱에서 재현하지 않았다. 판단은 Vitest, 표시는 Playwright까지 |
 | Mac 실기기, CI | Mac은 대기. CI는 `main`에 반영할 때 돈다 |
 | 분리 창 | 1차에서 끈다(`새 창으로 분리` 비활성) |
+
+## KV.2 앱 검증 (2026-11-08)
+
+### 환경
+
+- `scripts/kube-fixture.sh`의 kind 클러스터(노드 1개)와 OpenSSH 서버 컨테이너. `metrics-on`, `metrics-off`로 metrics-server를 켜고 끈다.
+- 검사: `node scripts/verify-kube-tree.mjs --cluster=dachsterm-kv2 --keep` (`npm run test:kube-tree`), 커밋 전 트리. 서버의 `kubectl`을 호출 기록용 스크립트로 감싸 실제 실행을 서버 쪽에서 쟀다.
+
+### 합격 기준
+
+종료 0, PASS 9줄.
+
+| 항목 | 결과 |
+|---|---|
+| 첫 화면이 트리이고 기본 묶기가 워크로드 | `Deployment/api`, 맨 위 `노드 1/1 준비` |
+| metrics-server 없음 | 파드·서비스가 `25m / 50m`, `16Mi / 32Mi`로 요청량·제한 표시, "파드 사용량: metrics-server 없음" |
+| metrics-server 켠 뒤 | CPU·메모리 사용량으로 바뀜 |
+| CrashLoopBackOff | 문제만 필터에 남고 정상 파드는 빠짐 |
+| 조회 주기와 동시 수 | 서버에서 동시 최대 3개, 파드 간격 5.4~5.6초(`kubectl` 감싸기의 지연 포함) |
+| 서버 터미널로 전환 | 11초 동안 `kubectl` 0회, 돌아오면 3초 안에 조회 |
+| 다른 탭으로 전환 | 11초 동안 `kubectl` 0회, 돌아오면 3초 안에 조회 |
+| API 서버 중지(`docker pause`) | "클러스터 연결 불가", 행 유지, 몇 초 전 숫자 증가, 복구 뒤 자동 갱신 |
+
+측정 중 고친 것: Docker VM의 벽시계가 약 30초마다 보정돼 `date` 기준 간격이 3초로 보였다. 앱의 호출 시각을 함께 기록해 정확히 5초 간격임을 확인하고 서버 쪽 시각을 `/proc/uptime`으로 바꿨다. 앱 결함으로는 이름이 긴 행의 열 어긋남과 묶기 선택 상자의 글자 잘림을 찾아 고쳤다.
+
+KV.1 검사도 공용 헬퍼로 옮기고 첫 화면 기대값을 바꿔 다시 실행했다. `node scripts/verify-kube-detect.mjs --cluster=dachsterm-kv2 --keep` 종료 0, PASS 10줄. 동시 14개 조회에서 6개 성공, 8개 거부.
+
+### 단위·UI
+
+커밋 전 트리. `cargo test -p dachsterm --lib --locked kube` 51건, `vitest run src/features/kube` 97건, Playwright `kube-tree` 28건, `kube-workspace` 12건, typecheck, 바꾼 파일 eslint·prettier, `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` 통과.
+
+### 미확인
+
+- 파드 5,000개 화면은 Playwright의 합성 데이터로만 확인했고 실제 대형 클러스터는 없다.
+- 권한 없는 항목(`Forbidden`), `MaxSessions` 거부로 조회를 미루는 동작, 출력 상한과 시간 상한은 단위·UI 테스트로만 확인했다.
+- 한글 입력 상태의 키는 `code`가 있는 합성 키 이벤트로 확인했고 실제 IME는 눌러 보지 않았다.
+- 실제 RKE2, Mac 실기기, CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.

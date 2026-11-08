@@ -51,6 +51,7 @@ fn main() {
             "git_apply",
             "kube_detect",
             "kube_save",
+            "kube_snapshot",
             "git_config_read",
             "git_config_preview",
             "git_config_write",
