@@ -1,11 +1,11 @@
 //! Builds kubectl command lines and runs scripts where the cluster's kubectl lives.
 use super::state::{KubeState, classify};
 use crate::{
-    remote_exec::{self, Limits, Output, Refusable, quote},
+    remote_exec::{self, Limits, Output, Refusable, Streamed, quote},
     ssh::Host,
 };
 use russh::client;
-use std::time::Duration;
+use std::{ops::ControlFlow, time::Duration};
 
 /// Longer than `--request-timeout`, which retries turn into about 36 seconds when an API server
 /// does not answer (KV.0). Closing the channel at this limit is what actually ends the wait.
@@ -75,6 +75,22 @@ impl Runner<'_> {
     pub async fn script(&self, script: &str, limits: Limits) -> Result<Output, Failed> {
         let Runner::Ssh(handle) = self;
         remote_exec::run_refusable(handle, script, limits)
+            .await
+            .map_err(|failure| match failure {
+                Refusable::ChannelRefused => Failed::ChannelLimit,
+                Refusable::Failure(failure) => Failed::Stopped(failure),
+            })
+    }
+
+    /// For output too long to hold, such as a log search: stdout reaches `on_stdout` as it arrives.
+    pub async fn stream(
+        &self,
+        script: &str,
+        limits: Limits,
+        on_stdout: impl FnMut(&[u8]) -> ControlFlow<()>,
+    ) -> Result<Streamed, Failed> {
+        let Runner::Ssh(handle) = self;
+        remote_exec::stream_refusable(handle, script, limits, on_stdout)
             .await
             .map_err(|failure| match failure {
                 Refusable::ChannelRefused => Failed::ChannelLimit,

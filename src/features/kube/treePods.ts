@@ -53,7 +53,7 @@ export type PodView = {
 
 const podKey = (namespace: string, name: string) => `${namespace}/${name}`;
 
-function selects(service: KubeService, pod: KubePod) {
+export function selects(service: KubeService, pod: KubePod) {
   const wanted = Object.entries(service.selector);
   return wanted.length > 0 && wanted.every(([key, value]) => pod.labels[key] === value);
 }

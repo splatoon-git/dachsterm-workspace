@@ -7,7 +7,7 @@ fn pods(text: &str) -> Vec<Pod> {
     }
 }
 
-const RUNNING: &str = "web\tapi-7f9c-abc\tworker-1\tRunning\t\t2026-11-08T01:00:00Z\t<no value>\tReplicaSet/api-7f9c,\tapp=api,tier=front,\t100m;64Mi;200m;128Mi|<no value>;1Gi;;|\t\tapp;true;3;;;OOMKilled;2026-11-08T02:00:00Z;137|side;false;0;CrashLoopBackOff;;;;|\n";
+const RUNNING: &str = "web\tapi-7f9c-abc\tworker-1\tRunning\t\t2026-11-08T01:00:00Z\t<no value>\tReplicaSet/api-7f9c,\tapp=api,tier=front,\t100m;64Mi;200m;128Mi|<no value>;1Gi;;|\t\tapp;true;3;;;OOMKilled;2026-11-08T02:00:00Z;137|side;false;0;CrashLoopBackOff;;;;|\t<no value>\tapp\n";
 
 #[test]
 fn a_pod_record_keeps_every_field() {
@@ -21,12 +21,19 @@ fn a_pod_record_keeps_every_field() {
     assert_eq!(pod.owner_name, "api-7f9c");
     assert_eq!(pod.labels["tier"], "front");
     assert_eq!(pod.container_count, 2);
+    assert_eq!(pod.default_container, "app");
     assert_eq!(pod.containers[0].restarts, 3);
     assert_eq!(pod.containers[0].last_reason, "OOMKilled");
     assert_eq!(pod.containers[0].last_exit_code, Some(137));
     assert_eq!(pod.containers[1].last_exit_code, None);
     assert_eq!(pod.containers[1].waiting, "CrashLoopBackOff");
     assert!(!pod.containers[1].ready);
+}
+
+#[test]
+fn the_default_container_annotation_wins_over_the_first_in_the_spec() {
+    let line = RUNNING.replace("\t<no value>\tapp\n", "\tmain\tapp\n");
+    assert_eq!(pods(&line)[0].default_container, "main");
 }
 
 #[test]
@@ -40,7 +47,7 @@ fn resources_are_summed_across_containers() {
 
 #[test]
 fn a_pod_without_any_resources_has_none_rather_than_zero() {
-    let line = "a\tb\t<no value>\tPending\t\t2026-11-08T01:00:00Z\t<no value>\t\t\t;;;|\t\t\n";
+    let line = "a\tb\t<no value>\tPending\t\t2026-11-08T01:00:00Z\t<no value>\t\t\t;;;|\t\t\t\t\n";
     let [pod] = <[Pod; 1]>::try_from(pods(line)).unwrap();
     assert_eq!(pod.cpu_request, None);
     assert_eq!(pod.memory_limit, None);
@@ -52,14 +59,13 @@ fn a_pod_without_any_resources_has_none_rather_than_zero() {
 
 #[test]
 fn a_deletion_time_means_the_pod_is_going_away() {
-    let line = "a\tb\tn\tRunning\t\t2026-11-08T01:00:00Z\t2026-11-08T03:00:00Z\t\t\t\t\t\n";
+    let line = "a\tb\tn\tRunning\t\t2026-11-08T01:00:00Z\t2026-11-08T03:00:00Z\t\t\t\t\t\t\t\n";
     assert!(pods(line)[0].deleting);
 }
 
 #[test]
 fn free_text_is_decoded_and_cannot_add_fields() {
-    let line =
-        "a\tb\tn\tFailed\tEvicted%09now+x\t2026\t<no value>\t\t\t\t\tc;false;0;bad%7Creason;;;;|\n";
+    let line = "a\tb\tn\tFailed\tEvicted%09now+x\t2026\t<no value>\t\t\t\t\tc;false;0;bad%7Creason;;;;|\t\t\n";
     let pod = &pods(line)[0];
     // The tab inside the reason came through url-encoded; control characters are not displayed.
     assert_eq!(pod.reason, "Evictednow x");

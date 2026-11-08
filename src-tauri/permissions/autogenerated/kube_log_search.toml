@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-log-search"
+description = "Enables the kube_log_search command without any pre-configured scope."
+commands.allow = ["kube_log_search"]
+
+[[permission]]
+identifier = "deny-kube-log-search"
+description = "Denies the kube_log_search command without any pre-configured scope."
+commands.deny = ["kube_log_search"]

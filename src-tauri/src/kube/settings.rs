@@ -84,6 +84,21 @@ pub fn check_container(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// What `kubectl logs --timestamps` prints before each line, and what `--since-time` takes:
+/// RFC 3339, with a `Z` or a numeric offset such as `+09:00`.
+pub fn is_log_time(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    (20..=40).contains(&bytes.len())
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes[10] == b'T'
+        && bytes[13] == b':'
+        && bytes[..4].iter().all(u8::is_ascii_digit)
+        && value
+            .chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, '-' | ':' | '.' | '+' | 'T' | 'Z'))
+}
+
 /// The word is written into a command line, so only characters that mean nothing to a shell pass.
 fn plain_word(word: &str) -> bool {
     !word.is_empty()
@@ -185,6 +200,26 @@ mod tests {
         }
         assert!(check_container("main").is_ok());
         assert!(check_container("a.b").is_err());
+    }
+
+    #[test]
+    fn log_times_are_rfc3339_and_nothing_else() {
+        for good in [
+            "2026-11-08T12:00:00.123456789Z",
+            "2026-11-08T21:00:00.123456789+09:00",
+            "2026-11-08T12:00:00Z",
+        ] {
+            assert!(is_log_time(good), "{good}");
+        }
+        for bad in [
+            "",
+            "yesterday",
+            "2026-11-08T12:00:00Z;reboot",
+            "$(reboot)",
+            "2026-11-08 12:00:00Z",
+        ] {
+            assert!(!is_log_time(bad), "{bad:?}");
+        }
     }
 
     #[test]

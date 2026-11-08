@@ -59,6 +59,8 @@ export type PodTerminalLaunch =
       pod: string;
       container: string;
       tail: number;
+      /** A log search's keywords; the followed log is filtered by them. */
+      keywords?: string;
     };
 /** A key file the built-in agent offers. Only the backend sets `secretRef`. */
 export type ForwardKey = { path: string; secretRef?: string | null };

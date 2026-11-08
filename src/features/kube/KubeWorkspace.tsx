@@ -4,12 +4,15 @@ import type { PodRef } from './detailTypes';
 import { KubeDashboard } from './KubeDashboard';
 import { KubeSetup } from './KubeSetup';
 import { KubeTreeScreen, type PanelState } from './KubeTreeScreen';
+import { LogSearch } from './LogSearch';
+import type { SearchScope } from './logSearchModel';
 import type { PodTerminalRequest } from './podShell';
 import { freshness } from './polling';
 import { readLastScreen, writeLastScreen } from './screenPref';
 import { initialTreeView } from './tree';
 import type { TreeTarget } from './treeReveal';
 import { useKubeSnapshots } from './useKubeSnapshots';
+import { useLogSearch } from './useLogSearch';
 import {
   finishesAfterRecheck,
   kubeScreens,
@@ -71,6 +74,8 @@ export function KubeWorkspace({
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const latest = useRef(0);
+  const logSearch = useLogSearch(connectionId);
+  const [searchFocus, setSearchFocus] = useState(0);
 
   const finish = useCallback(
     async (settings: KubeSettings) => {
@@ -151,6 +156,16 @@ export function KubeWorkspace({
       openScreen('tree');
     },
     [openScreen],
+  );
+
+  const setSearchForm = logSearch.setForm;
+  const searchLogs = useCallback(
+    (scope: SearchScope) => {
+      setSearchForm((now) => ({ ...now, scope }));
+      setSearchFocus((n) => n + 1);
+      openScreen('logs');
+    },
+    [setSearchForm, openScreen],
   );
 
   const copyToTerminal = (command: string) => {
@@ -252,6 +267,7 @@ export function KubeWorkspace({
               setPanel={setPanel}
               focusPod={focusPod}
               openTerminal={openTerminal}
+              searchLogs={searchLogs}
             />
           )}
           {phase.name === 'open' && screen === 'dashboard' && (
@@ -260,9 +276,21 @@ export function KubeWorkspace({
               history={history}
               namespace={phase.settings.namespace}
               reveal={reveal}
+              searchLogs={searchLogs}
             />
           )}
-          {phase.name === 'open' && screen !== 'tree' && screen !== 'dashboard' && (
+          {phase.name === 'open' && screen === 'logs' && (
+            <LogSearch
+              search={logSearch}
+              store={store}
+              connectionId={connectionId}
+              kube={phase.settings}
+              session={session}
+              focusRequest={searchFocus}
+              openTerminal={openTerminal}
+            />
+          )}
+          {phase.name === 'open' && screen === 'ingress' && (
             <div className="kube-empty" role="tabpanel">
               <h2>{kubeScreens.find((item) => item.id === screen)?.label}</h2>
               <p>이 화면은 아직 준비 중입니다.</p>

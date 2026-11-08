@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-log-cancel"
+description = "Enables the kube_log_cancel command without any pre-configured scope."
+commands.allow = ["kube_log_cancel"]
+
+[[permission]]
+identifier = "deny-kube-log-cancel"
+description = "Denies the kube_log_cancel command without any pre-configured scope."
+commands.deny = ["kube_log_cancel"]

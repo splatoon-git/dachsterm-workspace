@@ -37,7 +37,8 @@
     "test:kube-detect": "node scripts/verify-kube-detect.mjs",
     "test:kube-dashboard": "node scripts/verify-kube-tree.mjs --dashboard",
     "test:kube-tree": "node scripts/verify-kube-tree.mjs",
-    "test:kube-detail": "node scripts/verify-kube-detail.mjs"
+    "test:kube-detail": "node scripts/verify-kube-detail.mjs",
+    "test:kube-log-search": "node scripts/verify-kube-log-search.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

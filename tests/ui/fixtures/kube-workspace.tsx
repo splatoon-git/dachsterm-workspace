@@ -9,6 +9,7 @@ import type {
   ShellCheck,
 } from '../../../src/features/kube/detailTypes';
 import type { Detection, KubeDisplay } from '../../../src/features/kube/kubeModel';
+import type { SearchEvent } from '../../../src/features/kube/logSearchModel';
 import type { PodTerminalRequest } from '../../../src/features/kube/podShell';
 import type { Snapshot, SnapshotKind } from '../../../src/features/kube/snapshotTypes';
 import { applyTheme } from '../../../src/themes/adapters/css';
@@ -33,6 +34,10 @@ declare global {
         logs?: PodLogs;
         probe?: ShellCheck;
       };
+      /** Sent to the running search's channel, with Tauri's message numbering. */
+      emitSearch?: (event: SearchEvent) => void;
+      /** Ends the fake `kube_log_search` call, as the backend does when a search is over. */
+      endSearch?: () => void;
       calls: { command: string; args: Record<string, unknown> }[];
       copied: string[];
       terminals: PodTerminalRequest[];
@@ -41,14 +46,33 @@ declare global {
 }
 
 const state = window.__kube;
+const callbacks = new Map<number, (message: unknown) => void>();
+let nextCallback = 1;
+let searchChannel = 0;
+let searchSent = 0;
 state.calls = [];
 state.copied = [];
 state.terminals = [];
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
-    invoke: async (command: string, args: Record<string, unknown>) => {
+    transformCallback: (callback: (message: unknown) => void) => {
+      const id = nextCallback++;
+      callbacks.set(id, callback);
+      return id;
+    },
+    invoke: async (command: string, allArgs: Record<string, unknown>) => {
+      // A channel object cannot cross into the test, and only its ID matters here.
+      const { onEvent, ...args } = allArgs;
       state.calls.push({ command, args });
+      if (command === 'kube_log_search') {
+        searchChannel = (onEvent as { id: number }).id;
+        searchSent = 0;
+        return new Promise<void>((resolve) => {
+          state.endSearch = resolve;
+        });
+      }
+      if (command === 'kube_log_cancel') return null;
       if (command === 'kube_detect') {
         const detections = state.detections;
         return structuredClone(detections.length > 1 ? detections.shift() : detections[0]);
@@ -72,6 +96,10 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
     },
   },
 });
+
+state.emitSearch = (event) => {
+  callbacks.get(searchChannel)?.({ message: event, index: searchSent++ });
+};
 
 // `lib/ipc` reads `isTauri` once when it loads, so the app code comes after the stub above.
 const { KubeWorkspace } = await import('../../../src/features/kube/KubeWorkspace');

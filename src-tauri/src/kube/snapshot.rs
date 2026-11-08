@@ -66,6 +66,8 @@ pub struct Pod {
     owner_kind: String,
     owner_name: String,
     labels: BTreeMap<String, String>,
+    /// The container a plain `kubectl logs` reads: the annotation, then the first in the spec.
+    default_container: String,
     container_count: usize,
     cpu_request: Option<u64>,
     memory_request: Option<u64>,
@@ -417,7 +419,9 @@ fn pod(line: &str) -> Option<Pod> {
         resources,
         init_states,
         states,
-    ] = fields::<12>(line)?;
+        annotated_container,
+        first_container,
+    ] = fields::<14>(line)?;
     let (owner_kind, owner_name) = owners
         .split(',')
         .next()
@@ -446,6 +450,10 @@ fn pod(line: &str) -> Option<Pod> {
         owner_kind: text(owner_kind),
         owner_name: text(owner_name),
         labels: pairs(labels),
+        default_container: match text(annotated_container) {
+            annotated if annotated.is_empty() => text(first_container),
+            annotated => annotated,
+        },
         container_count,
         cpu_request,
         memory_request,
