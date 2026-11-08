@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FileOpenContext } from '../../../src/components/fileOpen';
 import type { FileRead } from '../../../src/features/editor/fileRead';
+import type { GitFileDiff } from '../../../src/features/editor/gitFileDiff';
+import type { GitRow } from '../../../src/features/git/gitViewModel';
+import { notifyGitChange } from '../../../src/lib/gitChanges';
 import type { TerminalSession } from '../../../src/features/terminal/session';
 import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
@@ -30,6 +33,12 @@ declare global {
       answers: WriteAnswer[];
       /** `confirmWindowClose`, what closing the window asks. */
       closeWindow?: () => Promise<boolean>;
+      /** By `<compare kind>:<path>`. */
+      diffs?: Record<string, GitFileDiff | { fail: string }>;
+      diffCalls?: Record<string, unknown>[];
+      openDiff?: (row: GitRow, pinned: boolean) => void;
+      /** What the Git view tells open tabs after it changed the repository. */
+      notifyIndex?: () => void;
     };
     __pwned?: boolean;
     __fileTabEnd?: () => void;
@@ -58,6 +67,13 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         };
         if ('fail' in answer) throw answer.fail;
         return answer;
+      }
+      if (command === 'git_file_diff') {
+        state.diffCalls?.push(args);
+        const answer = state.diffs?.[`${(args.compare as { kind: string }).kind}:${args.path}`];
+        if (!answer) throw `unexpected diff of ${args.path}`;
+        if ('fail' in answer) throw answer.fail;
+        return structuredClone(answer);
       }
       if (command !== 'file_read') throw `unexpected ${command}`;
       const path = args.path as string;
@@ -103,6 +119,13 @@ const [{ useWorkspaceLayout }, { useFileTabs }, { WorkspaceGrid }, { PlainTab },
   ]);
 const { tabKey } = await import('../../../src/app/workspaceLayout');
 
+state.notifyIndex = () =>
+  notifyGitChange({
+    kind: 'index',
+    source: { kind: 'ssh', connectionId: 'c1' },
+    root: '/srv/app',
+  });
+
 function Harness() {
   const workspace = useWorkspaceLayout();
   const { open: openTab } = workspace;
@@ -110,6 +133,7 @@ function Harness() {
   useEffect(() => openTab({ kind: 'session', tabId: 't1' }), [openTab]);
   useEffect(() => {
     state.closeWindow = files.confirmWindowClose;
+    state.openDiff = (row, pinned) => files.openDiff(session, row, '/srv/app', pinned);
   });
   const focusedKey = workspace.focusedGroup.active;
   const focusedTab = workspace.focusedGroup.tabs.find((tab) => tabKey(tab) === focusedKey);
@@ -152,13 +176,15 @@ function Harness() {
             const key = tabKey(tab);
             const active = group.active === key;
             const select = () => workspace.select(group.id, key);
-            return tab.kind === 'file' ? (
+            return tab.kind === 'file' || tab.kind === 'diff' ? (
               files.renderTab(tab, active, select)
             ) : (
               <PlainTab tabKey={key} title="터미널" active={active} select={select} />
             );
           }}
-          renderCell={(tab) => (tab.kind === 'file' ? files.renderCell(tab) : <p>터미널 화면</p>)}
+          renderCell={(tab) =>
+            tab.kind === 'file' || tab.kind === 'diff' ? files.renderCell(tab) : <p>터미널 화면</p>
+          }
         />
       </div>
       <footer aria-label="상태바" style={{ position: 'fixed', right: 0, bottom: 0, zIndex: 100 }}>

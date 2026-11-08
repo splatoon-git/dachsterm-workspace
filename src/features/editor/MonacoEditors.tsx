@@ -211,6 +211,7 @@ export function MonacoDiffEditor(props: DiffEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null);
   const modelsRef = useRef<monaco.editor.IDiffEditorModel | null>(null);
+  const resetClean = useRef<() => void>(() => {});
   const applyingValue = useRef(false);
   const theme = useEditorTheme();
   const initial = useRef({ original, modified, language, layout, readOnly, ariaLabel, theme });
@@ -239,16 +240,19 @@ export function MonacoDiffEditor(props: DiffEditorProps) {
     editor.setModel(models);
     editorRef.current = editor;
     modelsRef.current = models;
+    const document = documentHandle(editor.getModifiedEditor(), models.modified, (dirty) =>
+      latest.current.onDirtyChange?.(dirty),
+    );
+    resetClean.current = document.resetClean;
     const changes = models.modified.onDidChangeContent(() => {
-      if (!applyingValue.current) latest.current.onChange?.();
+      if (applyingValue.current) return;
+      latest.current.onChange?.();
+      document.update();
     });
     editor
       .getModifiedEditor()
       .addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => latest.current.onSave?.());
-    // A diff has no unsaved mark of its own yet, so nothing listens to this report (GE.8).
-    latest.current.onReady?.(
-      documentHandle(editor.getModifiedEditor(), models.modified, () => {}).handle,
-    );
+    latest.current.onReady?.(document.handle);
     return () => {
       changes.dispose();
       editorRef.current = null;
@@ -269,6 +273,7 @@ export function MonacoDiffEditor(props: DiffEditorProps) {
     applyingValue.current = true;
     model.setValue(modified);
     applyingValue.current = false;
+    resetClean.current();
   }, [modified]);
   useEffect(() => {
     const models = modelsRef.current;

@@ -387,7 +387,7 @@ export function App() {
       );
     }
     if (tab.kind === 'review') return reviews.renderTab(tab, active, select);
-    if (tab.kind === 'file') return files.renderTab(tab, active, select);
+    if (tab.kind === 'file' || tab.kind === 'diff') return files.renderTab(tab, active, select);
     if (tab.kind === 'preview')
       return (
         <PlainTab
@@ -412,7 +412,7 @@ export function App() {
   };
   const renderCell = (tab: TabRef, { visible, focused }: CellState) => {
     if (tab.kind === 'review') return reviews.renderCell(tab);
-    if (tab.kind === 'file') return files.renderCell(tab);
+    if (tab.kind === 'file' || tab.kind === 'diff') return files.renderCell(tab);
     if (tab.kind === 'preview') return <TerminalPreviewCell theme={theme} />;
     if (tab.kind === 'game')
       return (
@@ -571,7 +571,7 @@ export function App() {
             showConnections={() => setSidebarView('connections')}
             startAgent={(folder) => owner && agent.ask(savedProfile(owner), folder)}
             openReview={() => owner && reviews.open(owner)}
-            openFile={files.open}
+            files={files}
           />
         </div>
         {sidebarOpen && (

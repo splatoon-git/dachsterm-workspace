@@ -8,6 +8,7 @@ import { setFileDocument } from './fileDocuments';
 import { isJson, isMarkdown, languageOf } from './fileKinds';
 import type { FileRead } from './fileRead';
 import { readCurrentText, useFileSave, type ServerText } from './fileSave';
+import { SaveBanners } from './SaveBanners';
 import { setFileStatus } from './fileStatus';
 import { prettyJson, textFacts } from './fileText';
 
@@ -15,7 +16,7 @@ const MarkdownPreview = lazy(() => import('./MarkdownPreview'));
 
 export type TextFile = Extract<FileRead, { kind: 'text' }>;
 
-function ViewSwitch<T extends string>({
+export function ViewSwitch<T extends string>({
   label,
   value,
   options,
@@ -217,26 +218,7 @@ export function TextDocument({
           JSON 형식이 아니어서 정리할 수 없습니다. 원문을 표시합니다.
         </p>
       )}
-      {editable && facts.eol === '혼합' && (
-        <p className="file-tab-banner" role="status">
-          줄바꿈이 섞여 있습니다. 저장하면 한 가지로 통일됩니다.
-        </p>
-      )}
-      {saving.saving && (
-        <p className="file-tab-banner" role="status">
-          저장하는 중…
-        </p>
-      )}
-      {saving.error && (
-        <p className="file-tab-banner" role="alert">
-          저장하지 못했습니다. {saving.error}
-        </p>
-      )}
-      {saving.notice && (
-        <p className="file-tab-banner" role="status">
-          {saving.notice}
-        </p>
-      )}
+      <SaveBanners saving={saving} mixedLineBreaks={editable && facts.eol === '혼합'} />
       {conflict && (
         <ConflictCard
           key={conflict.path + conflict.hash}

@@ -71,7 +71,7 @@ const repo: GitViewResult = {
   ],
 };
 
-type Setup = Partial<Omit<Window['__gitView'], 'calls' | 'reviewed' | 'sent'>>;
+type Setup = Partial<Omit<Window['__gitView'], 'calls' | 'reviewed' | 'sent' | 'opens'>>;
 async function open(page: Page, setup: Setup = {}) {
   await page.addInitScript(
     (value) => {
@@ -89,6 +89,7 @@ async function open(page: Page, setup: Setup = {}) {
       calls: [],
       buffer: 'normal',
       sent: [],
+      opens: [],
       ...setup,
     } satisfies Window['__gitView'],
   );
@@ -179,6 +180,113 @@ test('a group folds and a row copies its full path from the right-click menu', a
       command: 'clipboard_write_text',
       args: { text: '/srv/app/notes/메모.txt' },
     });
+});
+
+test.describe('opening a changed file', () => {
+  const rowOf = (page: Page, groupName: string, name: string) =>
+    group(page, groupName).locator('.git-row', { hasText: name });
+  const menuItems = (page: Page) => page.getByRole('menuitem').allTextContents();
+  const opens = async (page: Page) => (await state(page)).opens;
+
+  test('a click previews the diff and a double click keeps it', async ({ page }) => {
+    await open(page);
+    await rowOf(page, '변경', 'both.ts').click();
+    expect(await opens(page)).toEqual([['diff:changes:src/both.ts', false]]);
+    await rowOf(page, '스테이지됨', 'both.ts').dblclick();
+    expect((await opens(page)).at(-1)).toEqual(['diff:staged:src/both.ts', true]);
+  });
+
+  test('Enter opens the focused row', async ({ page }) => {
+    await open(page);
+    await rowOf(page, '추적 안 함', '메모.txt').focus();
+    await page.keyboard.press('Enter');
+    expect(await opens(page)).toEqual([['diff:untracked:notes/메모.txt', false]]);
+  });
+
+  test('a conflict opens as a file, since it has no single other side', async ({ page }) => {
+    await open(page);
+    await rowOf(page, '충돌', 'merge.txt').click();
+    expect(await opens(page)).toEqual([['file:/srv/app/merge.txt', false]]);
+  });
+
+  test('a name that is not UTF-8 opens nothing', async ({ page }) => {
+    await open(page, {
+      result: {
+        ...repo,
+        entries: [entry('a\ufffd.txt', { worktree: 'modified', readable: false })],
+      },
+    } as Setup);
+    await page.locator('.git-row').click();
+    expect(await opens(page)).toEqual([]);
+  });
+
+  test('the menu of a changed file', async ({ page }) => {
+    await open(page);
+    await rowOf(page, '변경', 'both.ts').click({ button: 'right' });
+    expect(await menuItems(page)).toEqual([
+      '파일 열기',
+      'diff 열기',
+      '스테이지',
+      '변경 버리기…',
+      '경로 복사',
+      '외부 편집기로 열기',
+    ]);
+    await page.getByRole('menuitem', { name: '파일 열기' }).click();
+    expect(await opens(page)).toEqual([['file:/srv/app/src/both.ts', true]]);
+
+    await rowOf(page, '변경', 'both.ts').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'diff 열기' }).click();
+    expect((await opens(page)).at(-1)).toEqual(['diff:changes:src/both.ts', true]);
+  });
+
+  test('the menu of a staged file unstages, and a conflict has no diff', async ({ page }) => {
+    await open(page);
+    await rowOf(page, '스테이지됨', 'both.ts').click({ button: 'right' });
+    expect(await menuItems(page)).toContain('스테이지 취소');
+    await page.keyboard.press('Escape');
+    await rowOf(page, '충돌', 'merge.txt').click({ button: 'right' });
+    expect(await menuItems(page)).not.toContain('diff 열기');
+  });
+
+  test('a deleted file has nothing to open, but its diff still shows', async ({ page }) => {
+    await open(page);
+    await rowOf(page, '변경', 'README.md').click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: '파일 열기' })).toBeDisabled();
+    await expect(page.getByRole('menuitem', { name: '외부 편집기로 열기' })).toBeDisabled();
+    await expect(page.getByRole('menuitem', { name: 'diff 열기' })).toBeEnabled();
+  });
+
+  test('a server file opens in the external editor through an edit session', async ({ page }) => {
+    await open(page);
+    await rowOf(page, '변경', 'both.ts').click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: '탐색기에서 보기' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: '외부 편집기로 열기' }).click();
+    await expect
+      .poll(async () => (await state(page)).calls.find((c) => c.command === 'edit_start')?.args)
+      .toMatchObject({
+        id: 'c1',
+        path: '/srv/app/src/both.ts',
+        program: 'code',
+        uploadMode: 'ask',
+      });
+  });
+
+  test('a local file can be shown in the file manager and edited directly', async ({ page }) => {
+    await open(page, { tab: 'local' });
+    await rowOf(page, '변경', 'both.ts').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '외부 편집기로 열기' }).click();
+    await expect
+      .poll(
+        async () => (await state(page)).calls.find((c) => c.command === 'local_files_edit')?.args,
+      )
+      .toMatchObject({ targetId: 'wsl:U', path: '/srv/app/src/both.ts', program: 'code' });
+
+    await rowOf(page, '변경', 'both.ts').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /에서 보기/ }).click();
+    await expect
+      .poll(async () => (await state(page)).calls.find((c) => c.command === 'files_reveal')?.args)
+      .toMatchObject({ path: '/srv/app/src/both.ts' });
+  });
 });
 
 test('explains every state that has no list', async ({ page, browser }) => {

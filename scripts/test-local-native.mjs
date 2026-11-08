@@ -34,14 +34,15 @@ import {
   checkMovedSettings,
   checkRepositorySettings,
 } from './verify-git-settings.mjs';
+import { checkGitDiff } from './verify-git-diff.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 // `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab,
 // `--credentials-only` only the DX.14 WSL HTTPS credential steps, and `--git-only` only the
 // DX.15 Git status steps, `--drop-only` only the GE.2 file drop steps, `--drag-only` only the GE.3
 // drag out to the file manager, which moves the real pointer for a few seconds, and
-// `--file-tab-only` only the GE.5 file tab steps, and `--git-settings-only` only the GE.10
-// Settings → Git steps.
+// `--file-tab-only` only the GE.5 file tab steps, `--git-settings-only` only the GE.10
+// Settings → Git steps, and `--git-diff-only` only the GE.8 diff tab steps.
 const agentOnly = process.argv.includes('--agent-only');
 const dropOnly = process.argv.includes('--drop-only');
 const dragOnly = process.argv.includes('--drag-only');
@@ -49,6 +50,7 @@ const fileTabOnly = process.argv.includes('--file-tab-only');
 const credentialsOnly = process.argv.includes('--credentials-only');
 const gitOnly = process.argv.includes('--git-only');
 const gitSettingsOnly = process.argv.includes('--git-settings-only');
+const gitDiffOnly = process.argv.includes('--git-diff-only');
 const finished = Symbol('agent-only');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-local-'));
 // The app's own git (DX.14 "this PC's credentials") reads only this file: no system or user
@@ -191,6 +193,22 @@ const pipeOpen = (name) =>
     socket.once('error', () => resolve(false));
   });
 
+/** Opens a tab on the first WSL distribution and waits for its shell. Null without one. */
+async function openWslTab(page) {
+  const wsl = page
+    .locator('.local-targets .local-target')
+    .filter({ hasText: 'WSL' })
+    .filter({ hasNotText: 'docker-desktop' });
+  if (!(await wsl.count())) return null;
+  const title = await wsl.first().locator('span').textContent();
+  await wsl.first().click();
+  const linux = page.getByRole('region', { name: `${title} 터미널`, exact: true });
+  await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
+    timeout: 15000,
+  });
+  return { linux, title };
+}
+
 /** DX.15: a local or WSL tab in a repository folder shows its branch, changes and file marks. */
 async function checkLocalGit(page, command, pane) {
   const repo = path.join(await realpath(directory), 'git repo');
@@ -277,20 +295,12 @@ async function checkLocalGit(page, command, pane) {
   await command(pane, `Set-Location '${directory}'; Write-Output ('GIT' + '_OUT')`, 'GIT_OUT');
   await expect(status).toHaveCount(0, { timeout: 15000 });
   console.log('PASS PowerShell tab: Git branch, change count and file mark; none outside');
-  const wsl = page
-    .locator('.local-targets .local-target')
-    .filter({ hasText: 'WSL' })
-    .filter({ hasNotText: 'docker-desktop' });
-  if (!(await wsl.count())) {
+  const opened = await openWslTab(page);
+  if (!opened) {
     console.log('WSL user distribution absent: WSL Git status pending.');
     return;
   }
-  const title = await wsl.first().locator('span').textContent();
-  await wsl.first().click();
-  const linux = page.getByRole('region', { name: `${title} 터미널`, exact: true });
-  await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
-    timeout: 15000,
-  });
+  const { linux } = opened;
   await command(
     linux,
     `cd "$(mktemp -d)" && git init -q -b dx15-wsl && touch a b && ` +
@@ -413,21 +423,13 @@ async function checkDragOut(page, command, pane) {
     closeFolder(from);
     console.log('PASS file manager: "show" selects the item');
 
-    const wsl = page
-      .locator('.local-targets .local-target')
-      .filter({ hasText: 'WSL' })
-      .filter({ hasNotText: 'docker-desktop' });
     await showSidebarView(page, '연결');
-    if (!(await wsl.count())) {
+    const opened = await openWslTab(page);
+    if (!opened) {
       console.log('WSL user distribution absent: WSL drag pending.');
       return;
     }
-    const title = await wsl.first().locator('span').textContent();
-    await wsl.first().click();
-    const linux = page.getByRole('region', { name: `${title} 터미널`, exact: true });
-    await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
-      timeout: 15000,
-    });
+    const { linux, title } = opened;
     await command(
       linux,
       `cd "$(mktemp -d)" && printf wsl > 'from wsl.txt' && printf 'WSL%s\\n' _DRAG`,
@@ -1236,6 +1238,7 @@ try {
     credentialsOnly ||
     gitOnly ||
     gitSettingsOnly ||
+    gitDiffOnly ||
     dropOnly ||
     dragOnly ||
     fileTabOnly
@@ -1244,6 +1247,7 @@ try {
     if (credentialsOnly) await checkWslCredentials(page, command);
     if (gitOnly) await checkLocalGit(page, command, pane);
     if (gitSettingsOnly) await checkGitSettings(page, command, pane);
+    if (gitDiffOnly) await checkGitDiff(page, command, pane, directory, () => openWslTab(page));
     if (dropOnly) await checkLocalDrop(page, command, pane);
     if (dragOnly) await checkDragOut(page, command, pane);
     if (fileTabOnly) {

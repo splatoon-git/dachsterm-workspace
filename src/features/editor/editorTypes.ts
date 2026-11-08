@@ -44,6 +44,8 @@ export type DiffEditorProps = {
   readOnly?: boolean;
   ariaLabel?: string;
   onChange?: () => void;
+  /** Whether the modified side differs from the last `markClean`, each time that changes. */
+  onDirtyChange?: (dirty: boolean) => void;
   onSave?: () => void;
   onReady?: (handle: EditorHandle) => void;
 };

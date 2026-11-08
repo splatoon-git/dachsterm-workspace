@@ -1,4 +1,5 @@
 import { useRef, useState, useSyncExternalStore } from 'react';
+import { notifyGitChange } from '../../lib/gitChanges';
 import { call, errorText } from '../../lib/ipc';
 import type { TerminalSession } from '../terminal/session';
 import { sessionSource } from '../terminal/sessionKind';
@@ -108,6 +109,7 @@ export function useGitWrite({
       running.current = false;
       setBusy(false);
       refresh();
+      notifyGitChange({ kind: 'index', source, root: repo.root });
     }
   };
 

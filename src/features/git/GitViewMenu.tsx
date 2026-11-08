@@ -6,7 +6,10 @@ import {
   type MenuPoint,
 } from '../../components/ContextMenu';
 import { call, errorText } from '../../lib/ipc';
-import type { GitGroup, GitRow, GitViewRepo } from './gitViewModel';
+import { revealItem } from '../../lib/revealItem';
+import type { Source } from '../../lib/source';
+import { repoFilePath, type GitGroup, type GitRow, type GitViewRepo } from './gitViewModel';
+import { rowExists, rowOpenItems, type RowOpeners } from './gitRowMenu';
 import { groupItems, rowItems, type FileActions } from './gitWriteMenu';
 import { networkCommands, type GitDialogRequest } from './gitWrite';
 import type { GitWrite } from './useGitWrite';
@@ -28,6 +31,8 @@ export function useGitViewMenu({
   notice,
   write,
   ask,
+  source,
+  openers,
 }: {
   repo: GitViewRepo | null;
   groups: GitGroup[];
@@ -41,6 +46,8 @@ export function useGitViewMenu({
   notice: (text: string) => void;
   write: GitWrite;
   ask: (request: GitDialogRequest) => void;
+  source: Source | null | undefined;
+  openers: RowOpeners;
 }) {
   const [open, setOpen] = useState<Open | null>(null);
   const files: FileActions = {
@@ -130,12 +137,16 @@ export function useGitViewMenu({
     });
   const row = (file: GitRow, at: MenuPoint | HTMLElement) => {
     if (!repo) return;
-    const path = `${repo.root.replace(/\/+$/, '')}/${file.path}`;
+    const path = repoFilePath(repo.root, file.path);
+    const exists = rowExists(file);
     setOpen({
       at: point(at),
       label: `${file.path} 작업`,
       items: [
-        ...rowItems(file, files),
+        ...rowOpenItems(file, path, openers),
+        ...rowItems(file, files).map((item, index) =>
+          index ? item : { ...item, separated: true },
+        ),
         {
           label: '경로 복사',
           separated: true,
@@ -143,6 +154,10 @@ export function useGitViewMenu({
           run: () =>
             void call('clipboard_write_text', { text: path }).catch((e) => notice(errorText(e))),
         },
+        { label: '외부 편집기로 열기', disabled: !exists, run: () => openers.external(path) },
+        ...(source?.kind === 'local'
+          ? [revealItem(source, exists ? path : undefined, notice)]
+          : []),
       ],
     });
   };

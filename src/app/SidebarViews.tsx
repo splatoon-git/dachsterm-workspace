@@ -2,6 +2,7 @@ import { GitView } from '../features/git/GitView';
 import type { TerminalSession } from '../features/terminal/session';
 import { SidebarFiles } from './SidebarFiles';
 import type { SidebarView } from './SidebarTabs';
+import type { FileTabOpeners } from './useFileTabs';
 import { reviewable } from './useReviewTabs';
 
 /** The sidebar's file and Git views, the two that follow the selected tab. */
@@ -11,14 +12,14 @@ export function SidebarViews({
   showConnections,
   startAgent,
   openReview,
-  openFile,
+  files,
 }: {
   view: SidebarView;
   session: TerminalSession | undefined;
   showConnections: () => void;
   startAgent: (folder: string) => void;
   openReview: () => void;
-  openFile: (session: TerminalSession, path: string, pinned: boolean) => void;
+  files: FileTabOpeners;
 }) {
   return (
     <>
@@ -33,7 +34,7 @@ export function SidebarViews({
           session={session}
           showConnections={showConnections}
           startAgent={startAgent}
-          openFile={openFile}
+          openFile={files.open}
         />
       </div>
       <div
@@ -45,7 +46,12 @@ export function SidebarViews({
       >
         {/* Mounted only while open: its query lists every untracked file. */}
         {view === 'git' && (
-          <GitView session={session} review={reviewable(session) ? openReview : undefined} />
+          <GitView
+            session={session}
+            review={reviewable(session) ? openReview : undefined}
+            openFile={(path, pinned) => session && files.open(session, path, pinned)}
+            openDiff={(row, root, pinned) => session && files.openDiff(session, row, root, pinned)}
+          />
         )}
       </div>
     </>

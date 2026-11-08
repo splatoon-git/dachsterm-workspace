@@ -15,10 +15,8 @@ import {
  * Tab operations for documents: a tab opened by a single click is a preview, which the next click
  * replaces, until something pins it. The flag travels on the tab, so moving a tab between groups
  * needs no extra handling. (`{ kind: 'preview' }` is the unrelated terminal colour preview.)
- *
- * GE.8's diff tabs join by adding their kind to `DocumentRef`.
  */
-export type DocumentRef = Extract<TabRef, { kind: 'file' }>;
+export type DocumentRef = Extract<TabRef, { kind: 'file' | 'diff' }>;
 
 export type DocumentPlacement = {
   /** Key of a tab that must stay on screen, such as the FTP list the file was clicked in. */
@@ -26,9 +24,10 @@ export type DocumentPlacement = {
   makeId?: MakeId;
 };
 
-const isPreview = (tab: TabRef) => tab.kind === 'file' && !!tab.preview;
+const isDocument = (tab: TabRef): tab is DocumentRef => tab.kind === 'file' || tab.kind === 'diff';
+const isPreview = (tab: TabRef) => isDocument(tab) && !!tab.preview;
 const pinned = (tab: TabRef): TabRef =>
-  tab.kind === 'file' && tab.preview ? { ...tab, preview: false } : tab;
+  isDocument(tab) && tab.preview ? { ...tab, preview: false } : tab;
 
 /** The group a new document goes to, or null when only a new group would keep `keepVisible` shown. */
 function documentGroup(layout: Layout, keepVisible?: string): GroupNode | null {

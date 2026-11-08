@@ -19,7 +19,7 @@ export type FilePaneProps = {
   renamed: (path: string) => void;
 };
 
-function Notice({ title, children }: { title: string; children: ReactNode }) {
+export function Notice({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="file-tab-notice">
       <Icon name="file" size={32} />
