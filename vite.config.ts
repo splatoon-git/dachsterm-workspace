@@ -18,6 +18,6 @@ export default defineConfig({
   clearScreen: false,
   test: {
     // A path filter alone also matches source copies elsewhere, such as under target/.
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx,mjs}'],
   },
 });

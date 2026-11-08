@@ -27,13 +27,13 @@
   color: var(--color-text-secondary);
   font-size: var(--font-small);
 }
-.sidebar-tabs [role='tab']:hover:enabled {
+.sidebar-tabs [role='tab']:hover:enabled:not([aria-selected='true']) {
   background: transparent;
   color: var(--color-text-primary);
 }
 .sidebar-tabs [role='tab'][aria-selected='true'] {
-  background: var(--color-surface-panel);
-  color: var(--color-text-primary);
+  background: var(--color-action-accent);
+  color: var(--color-action-on-accent);
   font-weight: 600;
   box-shadow: 0 1px 2px var(--color-overlay-backdrop);
 }

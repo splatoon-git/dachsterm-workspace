@@ -83,7 +83,6 @@
 알려진 제한:
 
 - `action.primary`가 작은 글자색으로도 쓰이는 곳(`.link-button`, 전송 실행 중 표시, 마크다운 외부 링크, Git 범위 버튼, 명령 강조)은 Retro Light 3.54:1, Retro Blue Light 4.13:1이다. 계약 테스트는 이 조합을 검사하지 않는다.
-- `--color-action-accent`, `--color-action-on-accent`를 쓰는 CSS가 없어 포인트색이 앱 UI 강조로는 나타나지 않는다(기존 테마도 동일).
 
 실행 결과(커밋 전 트리, Windows):
 
@@ -91,3 +90,14 @@
 - `npx playwright test tests/ui/themes.spec.ts` 6/6. 16개 전환, 기존 xterm 유지, 재로드, 창 간 동기화, 1280·560·360px 배치.
 - `DACHSTERM_EXE=target/verification/debug/dachsterm.exe node scripts/test-themes-native.mjs` 종료 0. 실제 WebView2에서 16개 전환, 터미널 배경 동기화, Escape 포커스, 앱 재시작 후 복원. `tauri dev` 실행 중이라 별도 target에 빌드했다.
 - 미실행: 전체 스위트, 실제 SSH 연결 중 새 테마 전환(테마 경로 변경 없음), Mac 실기기(WKWebView 표시는 대기), CI.
+
+## T.3 토큰 결함 수정 (2026-11-08)
+
+- `--shadow-popup`을 `foundations.shadow.popup`으로 정의했다. 정의가 없어 팝업 8곳의 `box-shadow`가 무효였다.
+- `paste.css`의 `--color-text-muted`를 `--color-text-secondary`로 바꿨다. 계약에 없는 토큰이었다.
+- 사이드바 보기 탭의 선택 상태를 `action.accent` 채움과 `action.onAccent` 글자로 바꿨다. 포인트색을 밑줄로 쓰지 않은 이유는 일부 테마의 값이 표면 대비를 위한 색이 아니기 때문이다(GitHub White 1.14:1, Solarized Light 1.5:1). 계약이 검사하는 것은 `onAccent`와의 4.5:1이다. 선택 탭 hover에서 배경이 투명해지던 규칙도 선택 탭을 제외했다.
+- 재발 방지: `src/themes/tokens.test.mjs`가 CSS·TSX의 테마 토큰 참조가 정의된 값인지 검사한다. 수정 전 9건(`--shadow-popup` 8, `--color-text-muted` 1)으로 실패함을 확인했다. Vitest가 CSS를 빈 모듈로 바꾸고 프로젝트에 Node 타입이 없어 디스크에서 읽는 `.mjs`로 두었고, `vite.config.ts`의 테스트 대상에 `.mjs`를 추가했다.
+
+실행 결과(커밋 전 트리, Windows): `npx vitest run src/themes` 52/52, `npm run typecheck`, 바꾼 파일 eslint·Prettier, `npx playwright test tests/ui/themes.spec.ts` 6/6(16개 테마의 선택 탭 색과 hover 유지 포함).
+
+미실행: 실제 앱 재검사(CSS와 토큰 값만 바꿨고 Playwright와 같은 Chromium 렌더링), 팝업 그림자의 픽셀 비교, 전체 스위트, Mac 실기기, CI.

@@ -42,7 +42,7 @@
   overflow-wrap: anywhere;
 }
 .attach-items small {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 .paste-confirm .paste-reach strong {
   color: var(--color-status-warning);

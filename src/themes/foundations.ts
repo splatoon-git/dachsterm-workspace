@@ -10,6 +10,9 @@ export const foundations: Foundations = {
   },
   radius: { small: '6px', medium: '10px', large: '16px' },
   borderWidth: { default: '1px', focus: '2px' },
-  shadow: { panel: '0 4px 20px var(--color-overlay-backdrop)' },
+  shadow: {
+    panel: '0 4px 20px var(--color-overlay-backdrop)',
+    popup: '0 6px 18px var(--color-overlay-backdrop)',
+  },
   motion: { fast: '140ms' },
 };
