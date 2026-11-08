@@ -144,7 +144,7 @@ WSL에서 직접 실행한 결과다. 시간은 20회 중앙값이다.
 | Finder로 실행한 Mac 앱의 로컬 셸 `SSH_AUTH_SOCK` | Mac 실기기 필요 | 대기(Mac), M.15 |
 | `wsl.conf` `root`를 바꾼 배포판의 `/p`·`wslpath` | 이 PC의 WSL 설정을 바꾸지 않음 | 사용자가 그런 배포판을 쓸 때 수동 확인 |
 | 실제 앱 탭에서 `GIT_SSH`만으로 SSH push | 사용자 `known_hosts`에 기록하지 않으려고 명령 옵션 경로로 대신함 | DX.13 `test-local-native`. 사용자 `known_hosts`를 바꾸지 않는 방법은 DX.13에서 정한다 |
-| 실제 앱 실행 파일의 helper 시작 시간 | 아직 helper 분기가 없음 | DX.14 구현 |
+| 실제 앱 실행 파일의 helper 시작 시간 | DX.14에서 측정 | [DX.14 구현 검증](#dx14-구현-검증) |
 | WSL tmux 안에서, 처음 연 탭을 닫은 뒤의 interop | 측정하지 않음. 처음 탭이 닫히면 그 탭의 pipe도 사라진다 | DX.13 구현 때 안내서 범위 결정 |
 
 ## DX.13 구현 검증
@@ -199,4 +199,65 @@ WSL에서 직접 실행한 결과다. 시간은 20회 중앙값이다.
 | 마스터 암호를 켠 상태에서 로컬 키 Passphrase 저장과 `Vault::configure` 재암호화 | 실행하지 않음(코드 경로만 추가). 암호화된 로컬 키의 카드 Passphrase 입력도 이번 네이티브 검사에 넣지 않았다(DX.11 원격 경로와 같은 코드) |
 | macOS 로컬 탭의 소켓, 시스템 agent 합치기, push | Mac 실기기 필요. [macos-readiness M.15 ⑧](macos-readiness.md) |
 | WSL tmux 안에서 처음 연 탭을 닫은 뒤의 interop | 측정하지 않음. 그 탭의 pipe가 사라지므로 tmux 서버가 상속한 값은 끊긴다. 안내서에 적을지 DX.12·DX.13 안내서 갱신 때 정한다 |
+| CI | 푸시하지 않았다 |
+
+## DX.14 구현 검증
+
+- 실행일: 2026-11-08. 브랜치 `feat/dx14-wsl-git-credentials`(main `83de58c` 위)의 미커밋 트리. 이 절과 같은 커밋으로 들어간다. 설계에서 정한 것은 [설계안 DX.14 "구현에서 정한 것"](../design/developer-workflow.md#dx14--wsl-탭의-https-git-자격-증명-2026-11-08-추가).
+- 이 PC의 상태는 바꾸지 않았다. 실행 뒤 다시 확인했다.
+  - `ssh-agent` 서비스: Stopped/Disabled 그대로
+  - Windows 전역 git `credential.helper`(`manager`)와 WSL 전역 git `credential.helper`(Windows 자격 증명 관리자 경로): 그대로
+  - 남은 `dachsterm-*` pipe 0개, 검사 컨테이너 0개
+- 이 PC의 자격 증명 관리자는 쓰지 않았다. 네이티브 검사는 앱 프로세스에 `GIT_CONFIG_NOSYSTEM=1`과 격리한 `GIT_CONFIG_GLOBAL`(`store --file <scratch>`)을 주고, WSL 쪽 git도 `GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null`로 실행했다. 이 PC의 WSL git은 원래 Windows 자격 증명 관리자를 helper로 쓰므로, 격리하지 않으면 그 관리자가 먼저 불린다.
+- 시험 서버 암호는 HTTPS Git fixture(`tests/git-https`) 안에서 만들어졌고, 카드 입력과 scratch `store` 파일에만 쓰였다. 출력하지 않았고 컨테이너와 함께 지웠다.
+
+### 자동 검사
+
+| 명령 | 결과 |
+|---|---|
+| `cargo test -p dachsterm --lib --locked -- git_credential credential_helper local_agent` | 첫 실행은 끝나지 않았다(검사 쪽 결함: 도우미가 `watch` 송신자를 바로 버려 요청이 즉시 취소되고 카드 대기 루프가 돌았다. 대기 루프에 10초 제한을 더하고 송신자를 유지하도록 고침). 다시 실행 42개 중 41 passed, 1 failed(`closing_the_tab_ends_a_waiting_request`: 탭을 닫을 때 빈 답이 먼저 나갈 수 있는데 "출력 없음"만 허용했다. 둘 다 "값 없음"이라 검사를 고침). 고친 1개 재실행 passed |
+| 새 단위 테스트 내용 | helper 문구와 `GIT_CONFIG_PARAMETERS` 인용(작은따옴표가 든 경로를 git의 `sq_dequote` 방식으로 되읽음), Windows·WSL 환경 변수(`WSLENV` 이어 붙이기, 이미 넘기는 값 뒤에 덧붙이기, 넘기지 않던 값은 보내지 않음), pipe 이름 검사, 탭 카드(`local: true`) 허용·"이번만 허용" 재사용·거부·http 거부·64KiB 초과·탭 닫기, 설정이 꺼졌거나 WSL이 아니면 pipe 없음, 탭 수명과 pipe 소멸, helper 인자 분기(`get` 외에는 0으로 끝남), 요청 읽기(빈 줄까지, `action=get` 추가, 64KiB), 길이 틀, 실제 pipe를 연 helper 왕복, `wslGitCredentials` 손상 오류 |
+| `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` | 통과(Windows). 처음 clippy는 Docker probe 예제가 이전 `commands::answer`를 써서 컴파일 실패 → 원격 진입점을 남겨 해결 |
+| `npm run typecheck`, 바꾼 파일 eslint·prettier | 통과 |
+| `npx vitest run src/features/terminal/agentSign.test.ts` | 13 passed |
+| `npx playwright test tests/ui/git-credential.spec.ts` | 9 passed, 새 WSL 카드 검사 1 failed("서버" 글자 부재를 확인했는데 항목명 "저장소 서버"가 있다. 검사를 "서버로 전달됩니다"·"서버의 관리자" 부재로 고침) → 그 검사만 재실행 passed |
+
+### helper 실행 파일
+
+| 항목 | 결과 |
+|---|---|
+| 시작 시간(WSL Ubuntu 24.04에서 21회, 파이프 없이 바로 끝나는 경로) | debug 앱(48MB, 콘솔 하위 시스템) 중앙값 32ms, release 앱(28MB, PE 하위 시스템 2) 중앙값 33ms. 같은 조건의 `cmd.exe /c exit` 31ms·28ms |
+| release 앱의 입출력 | 앱과 같은 방식(wsl.exe의 Windows 환경에 `DACHSTERM_CREDENTIAL_PIPE`)으로 대역 pipe 서버를 두고 실행했다. 대역이 `action=get`으로 시작하는 요청을 받았고, helper가 대역의 답(`username=…`, `password=…`)을 표준 출력으로 내고 종료 0. **콘솔용 실행 파일은 필요 없다** |
+| 참고 | Linux 쪽에서 `WSLENV=…/w`로 같은 변수를 넘긴 시도는 대역에 요청이 오지 않았다(원인 미확인). 앱은 이 방식을 쓰지 않는다 |
+
+### 네이티브 (`node scripts/test-local-native.mjs --credentials-only`, `npm run tauri -- build --debug --no-bundle`로 만든 앱)
+
+첫 실행 종료 0, PASS 4줄. WSL 배포판은 Ubuntu 24.04(git 2.43.0), HTTPS Git 서버는 Docker의 Gitea fixture(`127.0.0.1:<임의 포트>`, 자체 서명 인증서라 `GIT_SSL_NO_VERIFY=1`)다.
+
+| 단계 | 결과 |
+|---|---|
+| 설정 › 에이전트 › **WSL 탭의 HTTPS Git 자격 증명** 켜기 | "새로 여는 WSL 탭부터" 저장 안내 |
+| 새 WSL 탭 | Linux의 `DACHSTERM_CREDENTIAL_PIPE`는 비어 있음. interop `cmd.exe`는 `\.\pipe\dachsterm-credential-<32자리>`를 받음. Linux git의 `credential.helper`에 우리 helper 1개 |
+| push(이 PC 쪽 값: 격리 `store`에 값 있음) | 탭에 카드: 제목 "WSL의 git이 HTTPS 자격 증명을 요청합니다", "이 WSL 탭의 git으로 전달됩니다", 저장소 서버 주소, "이 탭에서 10분 허용" 버튼. "서버로 전달됩니다" 없음. **이번만 허용** → push 종료 0, 서버에 `refs/heads/from-pc` |
+| 이 PC에 값 없음, 새 WSL 탭 | **거부** → push 실패(종료 코드 0 아님), ref 없음. 다시 push → **이번만 허용** → 카드가 "저장된 값이 없습니다" 입력 칸으로 바뀜 → 사용자 이름·암호 입력 → push 종료 0, `refs/heads/typed` |
+| 설정 끄기, 새 WSL 탭 | Linux `GIT_CONFIG_PARAMETERS` 비어 있음. push는 카드 없이 실패(원래 동작), ref 없음 |
+| 탭 세 개 닫기 | 자격 증명 pipe가 사라짐(연결 실패) |
+
+### 회귀
+
+| 명령 | 이유 | 결과 |
+|---|---|---|
+| `node scripts/test-local-native.mjs --agent-only` | agent pipe 수신 루프를 `pipe::serve`로 옮겼고, 검사 앱에 격리 git 설정을 더했다 | 종료 0, PASS 7줄(함수 안 PASS 출력 7개 모두). 이전 기록의 "8줄"은 함수의 PASS 출력 수와 다르다(집계 차이로 보이며 확인하지 않음) |
+| `node scripts/run-phase1.mjs --credentials-only` | 원격 자격 증명 처리(`respond`, `Notify`, `reply`)를 나눴다 | 종료 0, PASS 10줄: DX.12 자격 증명 8줄(직접 입력·데몬 미생성, LFS 카드 1번, 앱 저장 토큰과 삭제, 격리 `git credential fill`, 거부 후 터미널 질문, 10분 허용과 http·남의 소켓·64KiB·5번째 채널·반복 요청 거부·소켓 삭제, 서버 helper 경고, tmux 3.3 새 창·패널)과 제품 엔진·fixture 정리 |
+
+### 대기
+
+| 항목 | 이유 |
+|---|---|
+| 실제 Windows 자격 증명 관리자 값으로 WSL push | 이 PC의 관리자에 시험 값을 저장하지 않으려고 격리 `store` helper로 대신했다. 앱이 `git credential fill`을 부르는 경로는 같다(DX.12에서 GCM 2.6.1 창 없는 실행은 실측) |
+| 실제 Git 호스팅으로 WSL push | 외부 계정·토큰이 필요하다 |
+| `wsl.conf`의 `root`를 바꾼 배포판, 앱이 마운트되지 않은 드라이브·네트워크 경로에 있는 경우 | 이 PC의 WSL 설정을 바꾸지 않았다. helper가 조용히 빠지는 것은 문구로만 확인했다 |
+| WSL 안 tmux에서 처음 연 탭을 닫은 뒤 | 측정하지 않음. DX.13과 같이 tmux 서버가 상속한 pipe 값은 그 탭과 함께 끊길 것으로 본다(사실 아님) |
+| macOS 빌드와 clippy | 이 PC에서 macOS 대상 컴파일을 하지 않았다. macOS에서는 helper가 아무것도 하지 않고, 설정 절은 보이지 않는다. 푸시 후 macOS CI에서 확인 |
+| `verify-windows.ps1 -Native` 연결 | `test-local-native.mjs`는 원래 게이트에 연결되어 있지 않다(이번에 바꾸지 않음) |
 | CI | 푸시하지 않았다 |

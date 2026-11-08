@@ -45,6 +45,7 @@ const credential = (id: string, seconds = 60): GitCredentialRequest => ({
   path: null,
   username: null,
   serverHelpers: [],
+  local: false,
   seconds,
 });
 const sign = (item: PendingApproval) => item as PendingSign;

@@ -3,15 +3,17 @@
 //! installed or written on the server. Only `get` reaches the app, and every answer waits for the
 //! user's card. Unlike a signature, the value itself goes to the server, so each rule here leans
 //! towards refusing: https only, the connection's own path, bounded requests and channels.
+//! WSL tabs (DX.14) bring the same request through the app's own helper and a pipe (`wsl`).
 mod approval;
 pub mod commands;
 mod local;
 pub mod protocol;
+pub mod wsl;
 
 use crate::{
+    approval::Notify,
     remote_exec::{self, Limits, quote},
     ssh::{Connections, Event, Host},
-    windows::Broker,
 };
 use approval::{Forward, Slot};
 use russh::{Channel, ChannelMsg, client};
@@ -57,6 +59,8 @@ pub struct CredentialRequest {
     pub username: Option<String>,
     /// The server user's own helpers. git hands them the value after a push, and they may keep it.
     pub server_helpers: Vec<String>,
+    /// From git in a WSL tab of this PC (DX.14), not from a server.
+    pub local: bool,
     pub seconds: u64,
 }
 
@@ -155,7 +159,7 @@ pub async fn start(
         Err(_) => ("/tmp".into(), vec![]),
     };
     let path = format!("{folder}/dachsterm-git-{}", random_name()?);
-    let forward = Arc::new(Forward::new(path.clone(), helpers));
+    let forward = Arc::new(Forward::new(path.clone(), helpers, false));
     // Registered first: sshd may open a channel as soon as the forward exists.
     manager
         .git
@@ -243,7 +247,7 @@ pub fn open(
         let mut channel = channel;
         tokio::select! {
             _ = stop.wait_for(|stopped| *stopped) => {}
-            _ = serve(&forward, &broker, &session, &mut channel) => {}
+            _ = serve(&forward, &*broker, &session, &mut channel) => {}
         }
         let _ = channel.close().await;
     });
@@ -253,31 +257,40 @@ pub fn open(
 /// answer means "no value", and git goes on to its next helper or the terminal.
 async fn serve(
     forward: &Forward,
-    broker: &Broker,
+    broker: &dyn Notify,
     session: &str,
     channel: &mut Channel<client::Msg>,
 ) {
     let Ok(Some(bytes)) = timeout(READ_TIME, read_request(channel)).await else {
         return;
     };
-    let Ok(request) = protocol::parse(&bytes) else {
+    let Some(answer) = respond(forward, broker, session, &bytes).await else {
         return;
     };
-    if request.protocol != "https" {
-        forward.notice_once(&forward.http_notified, broker, HTTP_REFUSED);
-        return;
-    }
-    if forward.flooding(&request.host) {
-        forward.notice_once(&forward.burst_notified, broker, BURST_REFUSED);
-        return;
-    }
-    let Some(found) = forward.credential(broker, session, request).await else {
-        return;
-    };
-    let answer = protocol::answer(&found.username, &found.password);
     if channel.data(&answer[..]).await.is_ok() {
         let _ = channel.eof().await;
     }
+}
+
+/// One request, from a server's socket or a WSL tab's pipe, to the answer git reads. `None` is
+/// "no value": refused, unanswered or not found.
+async fn respond(
+    forward: &Forward,
+    cards: &dyn Notify,
+    session: &str,
+    bytes: &[u8],
+) -> Option<Zeroizing<Vec<u8>>> {
+    let request = protocol::parse(bytes).ok()?;
+    if request.protocol != "https" {
+        forward.notice_once(&forward.http_notified, cards, HTTP_REFUSED);
+        return None;
+    }
+    if forward.flooding(&request.host) {
+        forward.notice_once(&forward.burst_notified, cards, BURST_REFUSED);
+        return None;
+    }
+    let found = forward.credential(cards, session, request).await?;
+    Some(protocol::answer(&found.username, &found.password))
 }
 
 async fn read_request(channel: &mut Channel<client::Msg>) -> Option<Vec<u8>> {

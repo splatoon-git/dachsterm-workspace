@@ -1,7 +1,11 @@
-//! A local tab's named pipe on Windows. The default pipe security lets every account read it, so
-//! each instance gets a DACL naming only the current user, and remote clients are refused.
+//! A local tab's named pipe on Windows: the agent's (DX.13) and a WSL tab's Git credential pipe
+//! (DX.14). The default pipe security lets every account read it, so each instance gets a DACL
+//! naming only the current user, and remote clients are refused.
 use std::{ffi::c_void, io, ptr::null_mut};
-use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
+use tokio::{
+    net::windows::named_pipe::{NamedPipeServer, ServerOptions},
+    sync::watch,
+};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HANDLE, LocalFree},
     Security::{
@@ -87,6 +91,55 @@ pub fn create(name: &str, security: &[u16], first: bool) -> io::Result<NamedPipe
             );
         LocalFree(descriptor);
         server
+    }
+}
+
+/// A pipe with a new random name, `\\.\pipe\dachsterm-<kind>-<32 hex digits>`, and its first
+/// instance. The name is the only way in, and it is given to the tab's shell alone.
+pub struct Opened {
+    pub name: String,
+    security: Vec<u16>,
+    first: NamedPipeServer,
+}
+pub fn open(kind: &str) -> io::Result<Opened> {
+    let name = format!(
+        r"\\.\pipe\dachsterm-{kind}-{}",
+        uuid::Uuid::new_v4().simple()
+    );
+    let security = security()?;
+    let first = create(&name, &security, true)?;
+    Ok(Opened {
+        name,
+        security,
+        first,
+    })
+}
+
+/// Hands each connected client to `client` until `stop`. The next instance exists before one is
+/// handed over, so the name stays while the tab is open. Once every instance is closed, the pipe
+/// is gone.
+pub async fn serve(
+    opened: Opened,
+    mut stop: watch::Receiver<bool>,
+    mut client: impl FnMut(NamedPipeServer),
+) {
+    let Opened {
+        name,
+        security,
+        first: mut server,
+    } = opened;
+    loop {
+        let connected = tokio::select! {
+            _ = stop.wait_for(|stopped| *stopped) => return,
+            connected = server.connect() => connected,
+        };
+        let Ok(next) = create(&name, &security, false) else {
+            return;
+        };
+        let accepted = std::mem::replace(&mut server, next);
+        if connected.is_ok() {
+            client(accepted);
+        }
     }
 }
 

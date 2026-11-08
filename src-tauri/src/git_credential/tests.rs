@@ -1,5 +1,6 @@
 use super::approval::*;
 use super::*;
+use crate::windows::Broker;
 use std::sync::Mutex as StdMutex;
 use std::time::Instant;
 use tokio::sync::oneshot;
@@ -33,6 +34,7 @@ fn forward() -> Arc<Forward> {
     Arc::new(Forward::new(
         "/tmp/dachsterm-git-0a".into(),
         vec!["store".into()],
+        false,
     ))
 }
 async fn pending(forward: &Forward, count: usize) -> Vec<String> {
@@ -52,7 +54,7 @@ fn asking(
     let (forward, broker) = (forward.clone(), broker.clone());
     tokio::spawn(async move {
         forward
-            .credential(&broker, "s", request)
+            .credential(&*broker, "s", request)
             .await
             .map(|c| c.username.to_string())
     })
@@ -296,6 +298,7 @@ fn credential_requests_are_not_replayed_to_a_new_window() {
             path: None,
             username: None,
             server_helpers: vec![],
+            local: false,
             seconds: 60,
         }))
         .unwrap();

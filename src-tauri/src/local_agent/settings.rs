@@ -1,7 +1,8 @@
 //! The app-wide choice for local tabs (DX.13): whether they get the app's agent and which key
 //! files it offers. Local tabs have no session, so this is one setting for the whole app, edited in
 //! Settings › Agents. As with a session's keys (DX.11), a saved Passphrase is only a reference that
-//! the backend sets from the card; this module never receives one.
+//! the backend sets from the card; this module never receives one. WSL tabs' HTTPS Git credentials
+//! (DX.14) are one more choice here.
 use crate::{
     AppState,
     storage::{ForwardKey, Result, Store, check_forward_keys, db_error},
@@ -12,6 +13,7 @@ use tokio::task::spawn_blocking;
 
 const ENABLED: &str = "localAgent";
 pub(crate) const KEYS: &str = "localAgentKeys";
+const WSL_GIT_CREDENTIALS: &str = "wslGitCredentials";
 const CORRUPT: &str =
     "로컬 탭 키 제공 설정이 손상되었습니다. 설정 › 에이전트에서 키 목록을 다시 저장하세요.";
 const UPSERT: &str = "INSERT INTO settings(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value";
@@ -21,6 +23,8 @@ const UPSERT: &str = "INSERT INTO settings(key,value) VALUES(?1,?2) ON CONFLICT(
 pub struct LocalAgent {
     pub enabled: bool,
     pub keys: Vec<ForwardKey>,
+    /// WSL tabs ask this PC for HTTPS Git credentials (DX.14). Off until saved.
+    pub wsl_git_credentials: bool,
 }
 impl LocalAgent {
     pub fn refs(&self) -> impl Iterator<Item = &str> {
@@ -39,16 +43,24 @@ impl Store {
             serde_json::from_str(&self.setting(ENABLED)?).map_err(|_| CORRUPT)?;
         let keys: Option<Vec<ForwardKey>> =
             serde_json::from_str(&self.setting(KEYS)?).map_err(|_| CORRUPT)?;
+        let wsl: Option<bool> =
+            serde_json::from_str(&self.setting(WSL_GIT_CREDENTIALS)?).map_err(|_| CORRUPT)?;
         let keys = keys.unwrap_or_default();
         check_forward_keys(&keys).map_err(|_| CORRUPT)?;
         Ok(LocalAgent {
             enabled: enabled.unwrap_or(false),
             keys,
+            wsl_git_credentials: wsl.unwrap_or(false),
         })
     }
     /// A kept key file keeps its saved Passphrase; a removed one's reference goes to the cleanup
     /// journal. Callers hold `AppState.mutation`.
-    pub fn save_local_agent(&self, enabled: bool, paths: Vec<String>) -> Result<LocalAgent> {
+    pub fn save_local_agent(
+        &self,
+        enabled: bool,
+        paths: Vec<String>,
+        wsl_git_credentials: bool,
+    ) -> Result<LocalAgent> {
         let old = self.local_agent()?;
         let keys: Vec<ForwardKey> = paths
             .into_iter()
@@ -62,7 +74,11 @@ impl Store {
             })
             .collect();
         check_forward_keys(&keys)?;
-        let saved = LocalAgent { enabled, keys };
+        let saved = LocalAgent {
+            enabled,
+            keys,
+            wsl_git_credentials,
+        };
         let dropped: Vec<&str> = old
             .refs()
             .filter(|r| !saved.refs().any(|kept| kept == *r))
@@ -77,6 +93,11 @@ impl Store {
         tx.execute(UPSERT, params![ENABLED, enabled.to_string()])
             .map_err(db_error)?;
         tx.execute(UPSERT, params![KEYS, value]).map_err(db_error)?;
+        tx.execute(
+            UPSERT,
+            params![WSL_GIT_CREDENTIALS, wsl_git_credentials.to_string()],
+        )
+        .map_err(db_error)?;
         tx.commit().map_err(db_error)?;
         Ok(saved)
     }
@@ -120,18 +141,22 @@ pub async fn local_agent_settings(state: tauri::State<'_, AppState>) -> Result<L
         .map_err(|_| "설정을 읽지 못했습니다.")?
 }
 
-/// Applies to local tabs opened afterwards. A tab already open keeps the agent it started with.
+/// Applies to local tabs opened afterwards. A tab already open keeps the agent and the credential
+/// pipe it started with.
 #[tauri::command]
 pub async fn local_agent_save(
     app: tauri::AppHandle,
     enabled: bool,
     keys: Vec<String>,
+    wsl_git_credentials: bool,
 ) -> Result<LocalAgent> {
     spawn_blocking(move || {
         use tauri::Manager;
         let state = app.state::<AppState>();
         let _guard = state.mutation.lock().unwrap();
-        state.store.save_local_agent(enabled, keys)
+        state
+            .store
+            .save_local_agent(enabled, keys, wsl_git_credentials)
     })
     .await
     .map_err(|_| "설정을 저장하지 못했습니다.")?
@@ -165,6 +190,10 @@ mod tests {
     fn off_until_saved_and_damage_is_an_error() {
         let (store, _dir) = store();
         assert_eq!(store.local_agent().unwrap(), LocalAgent::default());
+        store.set_setting(WSL_GIT_CREDENTIALS, "yes").unwrap();
+        assert_eq!(store.local_agent(), Err(CORRUPT.to_string()));
+        store.set_setting(WSL_GIT_CREDENTIALS, "true").unwrap();
+        assert!(store.local_agent().unwrap().wsl_git_credentials);
         store.set_setting(KEYS, "{not json").unwrap();
         assert_eq!(store.local_agent(), Err(CORRUPT.to_string()));
         store
@@ -184,15 +213,15 @@ mod tests {
     fn keys_are_bounded_and_keep_only_backend_references() {
         let (store, _dir) = store();
         let saved = store
-            .save_local_agent(true, vec!["a".into(), "b".into()])
+            .save_local_agent(true, vec!["a".into(), "b".into()], true)
             .unwrap();
-        assert!(saved.enabled && saved.refs().next().is_none());
+        assert!(saved.enabled && saved.wsl_git_credentials && saved.refs().next().is_none());
         assert_eq!(store.local_agent().unwrap(), saved);
         let too_many = (0..9).map(|i| i.to_string()).collect();
-        assert!(store.save_local_agent(true, too_many).is_err());
+        assert!(store.save_local_agent(true, too_many, false).is_err());
         assert!(
             store
-                .save_local_agent(true, vec!["a".into(), "a".into()])
+                .save_local_agent(true, vec!["a".into(), "a".into()], false)
                 .is_err()
         );
 
@@ -210,7 +239,7 @@ mod tests {
         assert_eq!(journaled(&store), ["ref-cleaned"]);
 
         let kept = store
-            .save_local_agent(false, vec!["b".into(), "a".into()])
+            .save_local_agent(false, vec!["b".into(), "a".into()], false)
             .unwrap();
         assert_eq!(
             kept.refs().collect::<Vec<_>>(),
@@ -224,7 +253,9 @@ mod tests {
             ["ref-a", "ref-cleaned"],
             "the replaced one"
         );
-        store.save_local_agent(false, vec!["b".into()]).unwrap();
+        store
+            .save_local_agent(false, vec!["b".into()], false)
+            .unwrap();
         assert_eq!(
             journaled(&store),
             ["ref-a", "ref-a2", "ref-cleaned"],

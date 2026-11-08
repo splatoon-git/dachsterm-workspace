@@ -4,7 +4,7 @@
 //! and closes it with itself. Requests are answered like a forwarded server's (`agent_relay`), and
 //! signing with an app key asks on the tab's card.
 #[cfg(windows)]
-mod pipe;
+pub(crate) mod pipe;
 pub mod settings;
 
 pub(crate) use settings::{KEYS, keys_value};
@@ -82,15 +82,13 @@ pub async fn start(store: Arc<Store>, target: &Target, events: Sink) -> Result<O
     let agent = context.agent.clone();
     #[cfg(windows)]
     {
-        let name = format!(
-            r"\\.\pipe\dachsterm-agent-{}",
-            uuid::Uuid::new_v4().simple()
-        );
-        let security = pipe::security().map_err(|_| OPEN_FAILED)?;
-        let first = pipe::create(&name, &security, true).map_err(|_| OPEN_FAILED)?;
-        let env = shell_env(target, &name, &UserEnv::read());
+        let opened = pipe::open("agent").map_err(|_| OPEN_FAILED)?;
+        let env = shell_env(target, &opened.name, &UserEnv::read());
+        let clients = stopped.clone();
         // Owned by the tab: ends when the tab closes.
-        tokio::spawn(serve_pipe(name, security, first, context, stopped));
+        tokio::spawn(pipe::serve(opened, stopped, move |client| {
+            spawn_client(&context, client, clients.clone())
+        }));
         Ok(Some(Started {
             tab: Tab { agent, stop },
             env,
@@ -208,31 +206,6 @@ fn shell_env(target: &Target, pipe: &str, user: &UserEnv) -> Vec<(String, String
         },
     ));
     env
-}
-
-#[cfg(windows)]
-async fn serve_pipe(
-    name: String,
-    security: Vec<u16>,
-    mut server: tokio::net::windows::named_pipe::NamedPipeServer,
-    context: Context,
-    mut stop: watch::Receiver<bool>,
-) {
-    loop {
-        let connected = tokio::select! {
-            _ = stop.wait_for(|stopped| *stopped) => return,
-            connected = server.connect() => connected,
-        };
-        // The next instance exists before this one is handed over, so the name stays while the
-        // tab is open. Once every instance is closed, the pipe is gone.
-        let Ok(next) = pipe::create(&name, &security, false) else {
-            return;
-        };
-        let client = std::mem::replace(&mut server, next);
-        if connected.is_ok() {
-            spawn_client(&context, client, stop.clone());
-        }
-    }
 }
 
 #[cfg(unix)]

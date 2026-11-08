@@ -48,10 +48,15 @@ pub struct Control {
     ack: (Mutex<u64>, Condvar),
     /// The app's agent for this tab (DX.13), when the setting was on as it opened.
     agent: Option<crate::local_agent::Tab>,
+    /// A WSL tab's HTTPS Git credential pipe (DX.14), likewise.
+    credentials: Option<crate::git_credential::wsl::Tab>,
 }
 impl Control {
     pub(crate) fn agent(&self) -> Option<Arc<crate::agent_forward::Agent>> {
         self.agent.as_ref().map(|tab| tab.agent.clone())
+    }
+    pub(crate) fn credentials(&self) -> Option<&crate::git_credential::wsl::Tab> {
+        self.credentials.as_ref()
     }
     pub(crate) fn ready(&self) -> bool {
         !self.stopped.load(Ordering::SeqCst) && !self.exited.load(Ordering::SeqCst)
@@ -63,6 +68,9 @@ impl Control {
         self.ack.1.notify_all();
         if let Some(agent) = &self.agent {
             agent.close();
+        }
+        if let Some(credentials) = &self.credentials {
+            credentials.close();
         }
         if !self.exited.load(Ordering::SeqCst) {
             let _ = self.killer.lock().unwrap().kill();
@@ -278,12 +286,21 @@ pub async fn local_open(
         .cloned()
         .ok_or("로컬 목록을 새로고침한 뒤 다시 선택하세요.")?;
     let events = on_event.clone();
-    let agent = crate::local_agent::start(
-        store.clone(),
-        &target,
-        Arc::new(move |e| events.send(e).map_err(|_| "탭 구독 종료".into())),
-    )
-    .await?;
+    let sink: crate::ssh::Sink =
+        Arc::new(move |e| events.send(e).map_err(|_| "탭 구독 종료".into()));
+    let agent = crate::local_agent::start(store.clone(), &target, sink.clone()).await?;
+    let (agent_env, agent) = agent.map(|a| (a.env, a.tab)).unzip();
+    let mut env: Vec<_> = target
+        .env
+        .iter()
+        .cloned()
+        .chain(agent_env.into_iter().flatten())
+        .collect();
+    let credentials = crate::git_credential::wsl::start(store.clone(), &target, &env, sink).await?;
+    let credentials = credentials.map(|c| {
+        env.extend(c.env);
+        c.tab
+    });
     tauri::async_runtime::spawn_blocking(move || {
         // Serialize startup with insertion so duplicate IDs cannot orphan a process.
         let mut entries = locals.entries.lock().unwrap();
@@ -310,8 +327,7 @@ pub async fn local_open(
             command.cwd(home);
         }
         command.env("TERM", "xterm-256color");
-        let (agent_env, agent) = agent.map(|a| (a.env, a.tab)).unzip();
-        for (key, value) in target.env.iter().chain(agent_env.iter().flatten()) {
+        for (key, value) in &env {
             command.env(key, value);
         }
         let mut child = pair
@@ -328,6 +344,7 @@ pub async fn local_open(
             exited: AtomicBool::new(false),
             ack: (Mutex::new(0), Condvar::new()),
             agent,
+            credentials,
         });
         logs.register(&id, "utf-8")?;
         crate::session_log::auto_start(

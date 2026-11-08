@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.14**, 설계일: **2026-11-07**(DX.11~DX.14는 2026-11-08 추가).
-- 현재 상태: **DX.1~DX.11 구현. 실제 CLI 에이전트·외부 push 수동 확인과 Mac 실기기(M.15) 대기. DX.12.0 실측 완료, DX.13.0 Windows 실측 완료(Mac 항목 대기). DX.13 구현(Windows 네이티브 합격, Mac 대기). DX.12·DX.14 설계 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **DX.1~DX.14 구현. 실제 CLI 에이전트·외부 push 수동 확인과 Mac 실기기(M.15) 대기. DX.12.0 실측 완료, DX.13.0 Windows 실측 완료(Mac 항목 대기). DX.13·DX.14는 Windows 네이티브 합격, Mac 대기.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -70,6 +70,7 @@ AT의 원칙을 그대로 따른다: 전용 모드 없음, 화면 글자 해석 
 | `src-tauri/src/approval.rs` | 승인 카드의 소유자(원격 연결 / 로컬 탭)와 이벤트 대상. DX.12도 쓴다 | DX.13 |
 | `components/KeyFileList.tsx`, `components/keyFiles.ts`, `features/agents/LocalAgentSettings.tsx` | 키 파일 목록(세션 폼과 설정 창 공용, `features/sessions/forwardKeys.ts`에서 옮김), 설정 창 › 에이전트의 로컬 탭 절 | DX.13 |
 | `src-tauri/src/credential_helper.rs` | `dachsterm git-credential get` 실행 모드. 화면 없이 pipe로 중계 | DX.14 |
+| `src-tauri/src/git_credential/wsl.rs` | WSL 탭의 자격 증명 pipe, 셸 환경, 요청 처리(구현에서 추가) | DX.14 |
 
 기능 간 직접 import를 만들지 않는다(규칙 §7). `App`이 `features/git`의 값을 `components/fileDecorations.ts` 컨텍스트로 내려보내면 `FileTreeRow`가 표시한다. 이 방식이면 `FilePanel.tsx`를 수정하지 않는다.
 
@@ -720,6 +721,17 @@ exec tmux attach -t '=<이름>'
 - **처리:** 요청 파서, 승인 카드, 이 PC 쪽 출처(앱 저장 토큰, `git credential fill`, 직접 입력)는 DX.12의 `git_credential.rs`를 그대로 쓴다. 카드는 그 WSL 탭에 뜬다.
 - **합격:** WSL 탭에서 HTTPS 저장소 push가 Windows 자격 증명 관리자의 값으로 승인 후 성공한다. 관리자가 없으면 직접 입력으로 성공한다. 설정을 끄면 WSL의 git이 원래대로 동작한다.
 
+**구현에서 정한 것(2026-11-08, [검증 기록](../verification/local-agent.md#dx14-구현-검증)):**
+
+- **파일 배치.** `credential_helper.rs`는 helper 실행 모드만 맡는다. `main.rs`가 `dachsterm git-credential <동작>`이면 Tauri와 인스턴스 잠금 전에 이 모드로 끝낸다. 탭 쪽은 `git_credential/wsl.rs`(pipe 수명, 셸 환경, 요청 하나 처리)다. pipe 생성과 수신 루프는 DX.13의 `local_agent/pipe.rs`에 `open`·`serve`로 모아 agent pipe와 함께 쓴다(두 번째 복사를 만들지 않음).
+- **helper 경로는 실행 시 `wslpath -u`로 구한다.** 작업 지시의 "앱 실행 파일 경로를 WSL 경로로 바꾼 값"을 미리 넣는 방식은 DX.13.0 실측에서 버렸다(`/p`가 탭마다 경고를 출력). helper 값은 `!f() { [ "$1" = get ] || return 0; p=$(wslpath -u '<앱 경로>' 2>/dev/null) && [ -x "$p" ] || return 0; exec "$p" git-credential get; }; f`이다. 실행 파일이 없거나 변환에 실패하면 조용히 빠진다. 경로는 POSIX 작은따옴표로 인용하고, `GIT_CONFIG_PARAMETERS` 항목 전체를 다시 같은 방식으로 인용한다(git의 `sq_dequote`가 `'\''`를 읽는다).
+- **환경 변수.** `DACHSTERM_CREDENTIAL_PIPE`는 wsl.exe의 Windows 환경에만 둔다. `GIT_CONFIG_PARAMETERS`는 `WSLENV`에 `GIT_CONFIG_PARAMETERS/u`로 넘긴다(Windows → WSL만). 사용자가 이미 `WSLENV`로 `GIT_CONFIG_PARAMETERS`를 넘기고 있으면 그 값 뒤에 덧붙이고 `WSLENV`는 건드리지 않는다. 넘기지 않던 Windows 쪽 값은 Linux에 새로 보내지 않는다. 탭의 기존 `WSLENV`(`PROMPT_COMMAND/u`, DX.13의 `GIT_SSH/up`)는 유지한다. 그래서 `local.rs`가 agent 환경을 먼저 합친 뒤 이 값을 계산한다.
+- **pipe와 helper 사이 형식.** named pipe에는 반쪽 닫기가 없어 요청과 답 모두 `u32` 길이(빅엔디언)를 앞에 붙인다. helper는 git의 요청 앞에 `action=get`을 붙여 DX.12 파서를 그대로 쓴다. 요청은 64KiB, 답은 64KiB까지다. 탭은 답을 쓴 뒤 helper가 읽고 닫을 때까지(최대 5초) 기다렸다 닫는다. 이름은 `\\.\pipe\dachsterm-credential-<UUID 32자리>`이고 DACL·원격 거부는 DX.13과 같다. helper는 이 형식의 이름만 열고, 서버가 helper를 가장하지 못하게 `SECURITY_IDENTIFICATION`으로 연다. 모든 인스턴스가 바쁘면 5초까지 다시 시도한다. 동시 요청은 원격과 같은 4개, 요청 읽기 제한은 15초다.
+- **승인 일반화(DX.12 메모의 남은 일).** `git_credential::approval::Forward`가 `Broker` 대신 `approval::Notify`로 카드를 보낸다. `git_credential_reply`는 `Owner::find`로 원격 연결이나 로컬 탭을 찾아 그 탭의 요청에 답한다(이름·인자 그대로). Docker probe는 창이 없으므로 원격 전용 진입점 `commands::answer(connections, …)`를 남겼다.
+- **카드.** `CredentialRequest.local`로 문구를 바꾼다: 제목 "WSL의 git이 HTTPS 자격 증명을 요청합니다", "이 WSL 탭의 git으로 전달됩니다", 항목 "탭", 버튼 "이 탭에서 10분 허용". WSL 안의 git helper는 읽지 않으므로 서버 helper 경고 대신 "WSL에 설정한 Git helper가 있으면 그 helper도 이 값을 저장할 수 있습니다"를 늘 보인다.
+- **설정.** 앱 설정 키 `wslGitCredentials`(bool, 손상되면 오류)를 `local_agent_settings`·`local_agent_save`가 함께 읽고 쓴다(§5대로. `local_agent_save`에 인자 `wslGitCredentials` 추가). 설정 창 › 에이전트에 **WSL 탭의 HTTPS Git 자격 증명** 절을 따로 두고 Windows에서만 보인다. macOS에는 WSL 탭이 없고, helper 모드는 pipe가 없으므로 아무것도 하지 않고 끝난다.
+- **콘솔용 실행 파일은 두지 않는다.** DX.13.0 실측대로 GUI 하위 시스템 앱 실행 파일이 그대로 helper로 동작했다. NSIS·`.app` 패키지 구성은 바뀌지 않는다.
+
 #### DX.13.0 — 실측 (게이트)
 
 2026-11-08 Windows 11에서 실측했다. 상세는 [검증 기록](../verification/local-agent.md)에 있고, 설계에 반영한 내용은 DX.13·DX.14의 "DX.13.0 실측 반영"에 있다.
@@ -750,7 +762,7 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 | `git_credential_reply` | 연결 ID, 요청 ID, 판단(거부, 이번만, 10분, 직접 입력과 값·저장 여부) | 대기 중인 자격 증명 요청에 응답. 값은 첫 줄에서 `Zeroizing` | DX.12 |
 | `git_credentials_saved`, `git_credential_forget` | 없음 / 호스트·사용자 | 앱에 저장한 HTTPS 자격 증명 목록(값 제외)과 삭제 | DX.12 |
 | `git_credential_shell` | 연결 ID | 셸 훅에 덧붙일 helper 줄(소켓이 열린 연결만). 구현에서 추가 | DX.12 |
-| `local_agent_settings`, `local_agent_save` | 없음 / 설정과 키 목록 | 로컬·WSL 탭의 키 제공 설정 읽기와 저장. Passphrase는 첫 줄에서 `Zeroizing` | DX.13, DX.14 |
+| `local_agent_settings`, `local_agent_save` | 없음 / 설정, 키 목록, `wslGitCredentials` | 로컬·WSL 탭의 키 제공과 WSL 자격 증명 설정 읽기와 저장. Passphrase는 받지 않는다(DX.13 구현) | DX.13, DX.14 |
 
 `agent_sign_reply`와 `git_credential_reply`의 요청 ID는 원격 연결과 로컬 탭을 모두 가리킬 수 있게 한다(DX.13). 새 명령을 따로 만들지 않는다.
 

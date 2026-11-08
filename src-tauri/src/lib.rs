@@ -7,6 +7,7 @@ pub mod archive;
 pub mod broadcast;
 mod commands;
 mod config_includes;
+pub mod credential_helper;
 pub mod credentials;
 mod desktop_bridge;
 pub mod editor;

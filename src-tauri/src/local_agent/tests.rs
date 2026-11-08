@@ -182,7 +182,7 @@ async fn a_system_agent_key_passes_without_a_card() {
 
 fn enabled_store(dir: &std::path::Path) -> Arc<Store> {
     let store = Store::open(&dir.join("test.db")).unwrap();
-    store.save_local_agent(true, vec![]).unwrap();
+    store.save_local_agent(true, vec![], false).unwrap();
     Arc::new(store)
 }
 fn quiet() -> Sink {
