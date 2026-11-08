@@ -164,10 +164,10 @@ test('empty areas say there is no problem and stay on the screen', async ({ page
     await expect(region(page, name)).toContainText('문제 없음');
 });
 
-test('ingress and workers keep their place for later tasks', async ({ page }) => {
+test('ingress and workers say why they are empty', async ({ page }) => {
   await open(page);
   await expect(region(page, '인그레스')).toContainText('클러스터 연결 불가');
-  await expect(region(page, '워커')).toContainText('아직 준비 중입니다.');
+  await expect(region(page, '워커')).toContainText('감시 중인 워크로드가 없습니다.');
 });
 
 test('a kind the account may not read gives its reason, not "no problem"', async ({ page }) => {
@@ -231,7 +231,8 @@ test('the dashboard asks the cluster for nothing extra', async ({ page }) => {
   const commands = await page.evaluate(() =>
     window.__kube.calls.filter((c) => c.command !== 'kube_detect').map((c) => c.command),
   );
-  expect(new Set(commands)).toEqual(new Set(['kube_snapshot']));
+  // The ingress poll is this screen's own (design KV.8); no worker is watched, so nothing else.
+  expect(new Set(commands)).toEqual(new Set(['kube_snapshot', 'kube_ingress']));
 });
 
 test('a failed poll keeps the data and says it is old', async ({ page }) => {

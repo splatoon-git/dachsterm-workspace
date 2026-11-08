@@ -408,3 +408,38 @@ PASS 12줄, 종료 코드 0.
 - 컨트롤러 여러 개의 합산과 일부만 읽힌 표시, 컨트롤러 없음, 컨트롤러 파드 조회 거부, 일시적 읽기 실패 뒤 유지는 단위·Playwright까지다.
 - 전체 namespace 세션(`-A` 경로)과 실제 TLS Secret이 있는 경우의 앱 실행은 하지 않았다. namespace 세션으로만 실행했다.
 - 대형 클러스터의 메트릭 크기, 실제 운영 클러스터, Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.
+
+## KV.9 앱 검증 (2026-11-09)
+
+### 실제 앱·실제 SSH·kind
+
+`npm run test:kube-workers`(`scripts/verify-kube-workers.mjs`), 클러스터 `dachsterm-kv9`. 실행 파일은 `npm run tauri -- build --debug --no-bundle`로 빌드한 커밋 전 트리다. PASS 9줄, 실패 없음.
+
+| 항목 | 결과 |
+|---|---|
+| annotation 후보 | `prometheus.io/port` 파드에서 `:8080/metrics` 지표 4개, annotation 표시. 런타임 내부 지표 `go_goroutines`는 목록에서 빠짐 |
+| 트리 행 표시 | 우클릭으로 사용 중·전체·완료 수를 지정하고 감시를 켜면 워크로드 행에 `사용 8/8` |
+| 스레드 | kubelet `container_threads`에서 컨테이너 `app` 행 표시 |
+| **워커 미반환 재현** | 숫자가 움직이지 않는 파드(`worker_busy 8`, 완료 수 고정), 판정 기준 1분: 트리 행에 `의심`, 제목에 `반환 안 됨 의심`, 값 `사용 8/8` 유지 |
+| 정상 워크로드 | 완료 수가 계속 오르는 파드는 같은 시간에 `사용 2/8`만 표시 |
+| 대시보드 | `반환 안 됨 의심`, `워커 포화 의심`과 정상 워크로드의 `이상 없음` 표시. 판정 행을 누르면 해당 파드의 런타임 탭이 열림 |
+| 프로브 | 워크로드별 첫 수집만 확인 창 표시. `httpd` 프로세스, 8080 포트, ESTABLISHED 표시 |
+| 후보의 404·연결 거부 | `메트릭 없음 (404)`, `메트릭 없음 (연결 거부)`이고 오류 표시 없음 |
+| 포트 직접 입력 | 선언하지 않은 8082를 입력해 읽음 |
+| **셸 없는 이미지** | `registry.k8s.io/pause:3.10`: `이 컨테이너에서는 읽을 수 없음` |
+| **`pods/exec` 권한 없음** | `pods/exec`, `nodes/proxy`가 없는 ServiceAccount context: `pods/exec 권한이 없어 읽을 수 없음`, `nodes/proxy 권한이 없어` 안내 |
+
+위 실행 뒤 프로브 단독 감시의 오래된 값 표시와 트리 칸 제목을 고치고 다시 빌드했다. 그 빌드로는 새로 넣은 단계만 실행했다(`--only-probe-repeat`). 메트릭이 없는 워크로드를 프로브 반복만으로 감시해 트리 행에 `프로세스 N`이 표시됨, PASS 1줄, 종료 코드 0. 앞의 9단계는 재실행하지 않았다.
+
+첫 실행은 스크립트의 기대값 오류(지표 3개, 실제 4개)로 실패했고 기대값만 고쳤다.
+
+### 단위·UI
+
+KV.8과 합친 트리(`dev` 병합 전). `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings`, `npm run typecheck`, `eslint src/features/kube`와 바꾼 스펙 통과. `cargo test -p dachsterm --lib --locked -- kube::` 133건, `vitest run src/features/kube` 274건 통과. Playwright `kube-workers`·`kube-dashboard` 24건 통과, 1건은 KV.8이 더한 대시보드의 `kube_ingress` 조회를 기대값에 넣지 않은 탓에 실패해 기대값을 고치고 그 1건만 재실행했다. `kube-tree`는 병합 전 트리에서 통과했다.
+
+### 미확인
+
+- `CLOSE_WAIT`와 FD·스레드 증가 판정은 단위 테스트까지다. 실제 파드로 재현하지 않았다.
+- KV.8과 합친 뒤의 실제 앱 실행, 메트릭 HTTPS 후보(`prometheus.io/scheme: https`), 실제 운영 앱의 워커 메트릭, 파드 50개 상한, nginx master·worker 구분의 실제 파드 확인은 실행하지 않았다.
+- `verify-kube-detail.mjs`의 파드 메뉴 기대값을 고쳤으나 재실행하지 않았다.
+- Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.

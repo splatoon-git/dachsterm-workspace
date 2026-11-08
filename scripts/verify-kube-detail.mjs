@@ -192,7 +192,14 @@ try {
     stage = 'context menu, events and detail';
     await namedPod('web').click({ button: 'right' });
     const menu = page.getByRole('menu', { name: '파드 메뉴' });
-    await expect(menu.getByRole('menuitem')).toHaveText([/로그/, /셸/, /이벤트/, /상세/]);
+    await expect(menu.getByRole('menuitem')).toHaveText([
+      /로그/,
+      /셸/,
+      /이벤트/,
+      /상세/,
+      /런타임/,
+      /로그 검색/,
+    ]);
     await menu.getByRole('menuitem', { name: /이벤트/ }).click();
     await expect(panel().getByRole('tab', { name: '이벤트', exact: true })).toHaveAttribute(
       'aria-selected',

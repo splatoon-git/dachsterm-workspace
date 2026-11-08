@@ -9,6 +9,7 @@ import {
 } from './PodInfoViews';
 import { PodCauseView } from './PodCauseView';
 import { PodLogsView } from './PodLogsView';
+import { PodRuntimeView } from './PodRuntimeView';
 import { panelTabs, type PodPanelTab, type PodPanelTarget } from './podPanel';
 import type { PodTerminalRequest } from './podShell';
 import type { SnapshotStore } from './polling';
@@ -124,6 +125,17 @@ export function KubePodPanel({
         )}
         {target.tab === 'overview' && overview && (
           <OverviewView overview={overview} usage={usage} trend={trend.samples} />
+        )}
+        {target.tab === 'runtime' && overview && (
+          <PodRuntimeView
+            key={`${target.namespace}/${target.name}`}
+            connectionId={connectionId}
+            kube={kube}
+            target={pod}
+            overview={overview}
+            session={session}
+            tick={tick}
+          />
         )}
         {target.tab === 'events' && <EventsView {...reads} />}
         {target.tab === 'yaml' && <YamlView {...reads} />}

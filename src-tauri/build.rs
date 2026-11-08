@@ -58,6 +58,8 @@ fn main() {
             "kube_logs",
             "kube_log_search",
             "kube_log_cancel",
+            "kube_metrics",
+            "kube_probe",
             "git_config_read",
             "git_config_preview",
             "git_config_write",

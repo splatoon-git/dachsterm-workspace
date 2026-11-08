@@ -8,6 +8,8 @@ mod log_keywords;
 mod log_scheduler;
 mod log_search;
 mod logs;
+mod metrics;
+mod probe;
 mod runner;
 mod settings;
 mod shell;
@@ -25,6 +27,8 @@ pub use log_keywords::Keywords;
 pub use log_search::LogSearches;
 use log_search::SearchRequest;
 use logs::{LogRequest, Logs};
+use metrics::{MetricsRead, MetricsTarget};
+use probe::ProbeRead;
 use runner::Runner;
 use serde::Deserialize;
 pub use settings::{KubeSettings, Workspace};
@@ -32,7 +36,7 @@ use settings::{
     check_context, check_kubeconfig, check_kubectl, check_namespace, check_pod, is_log_time,
 };
 pub use shell::{check_target, logs_command, shell_command};
-pub use slots::Slots;
+pub use slots::{Slots, WatchSlots};
 use snapshot::{Kind, Snapshot, collect};
 use state::ShellCheck;
 use tauri::{AppHandle, Manager, State, ipc::Channel};
@@ -280,6 +284,53 @@ pub async fn kube_terminal_probe(
         .await
         .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
     Ok(shell::probe(
+        &Runner::Ssh(&handle),
+        &kube,
+        &target.namespace,
+        &target.pod,
+        &container,
+    )
+    .await)
+}
+
+/// A pod's `/metrics`, its candidates, or its node's thread counts. Reads only (design KV.9).
+#[tauri::command]
+pub async fn kube_metrics(
+    state: State<'_, AppState>,
+    slots: State<'_, WatchSlots>,
+    id: String,
+    kube: KubeSettings,
+    target: MetricsTarget,
+) -> Result<MetricsRead> {
+    kube.validate()?;
+    target.check()?;
+    let handle = state.connections.handle(&id)?;
+    let slot = slots.0.for_connection(&id);
+    let _turn = slot
+        .acquire_owned()
+        .await
+        .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
+    Ok(metrics::read(&Runner::Ssh(&handle), &kube, &target).await)
+}
+
+/// Runs the app's fixed read-only script in a container. There is no path for any other command.
+#[tauri::command]
+pub async fn kube_probe(
+    state: State<'_, AppState>,
+    slots: State<'_, WatchSlots>,
+    id: String,
+    kube: KubeSettings,
+    target: PodRef,
+    container: String,
+) -> Result<ProbeRead> {
+    check_target(&kube, &target.namespace, &target.pod, &container)?;
+    let handle = state.connections.handle(&id)?;
+    let slot = slots.0.for_connection(&id);
+    let _turn = slot
+        .acquire_owned()
+        .await
+        .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
+    Ok(probe::run(
         &Runner::Ssh(&handle),
         &kube,
         &target.namespace,

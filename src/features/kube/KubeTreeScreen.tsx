@@ -87,6 +87,7 @@ export function KubeTreeScreen({
             { label: '셸', shortcut: 's', run: () => handle('shell', item, at) },
             { label: '이벤트', shortcut: 'e', run: () => handle('events', item) },
             { label: '상세', run: () => handle('detail', item) },
+            { label: '런타임', run: () => showPanel(item, 'runtime') },
             {
               label: '로그 검색',
               separated: true,

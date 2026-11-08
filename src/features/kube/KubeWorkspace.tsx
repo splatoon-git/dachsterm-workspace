@@ -15,6 +15,8 @@ import type { TreeTarget } from './treeReveal';
 import { useKubeIngress } from './useKubeIngress';
 import { useKubeSnapshots } from './useKubeSnapshots';
 import { useLogSearch } from './useLogSearch';
+import { useWorkerWatch } from './useWorkerWatch';
+import { WorkersContext } from './workerContext';
 import {
   finishesAfterRecheck,
   kubeScreens,
@@ -171,6 +173,14 @@ export function KubeWorkspace({
     [setSearchForm, openScreen],
   );
 
+  const openRuntime = useCallback(
+    (pod: PodRef) => {
+      setPanel({ namespace: pod.namespace, name: pod.name, tab: 'runtime', problem: false });
+      openScreen('tree');
+    },
+    [openScreen],
+  );
+
   const searchController = useCallback(
     (keyword: string) => {
       setSearchForm((now) => ({
@@ -209,6 +219,13 @@ export function KubeWorkspace({
     connectionId,
     phase.name === 'open' ? phase.settings : null,
     visible && display === 'workspace',
+  );
+  const workers = useWorkerWatch(
+    connectionId,
+    phase.name === 'open' ? phase.settings : null,
+    visible && display === 'workspace',
+    store.pods.data,
+    session,
   );
   // These two screens are all that show it, and it is the costliest poll here (design KV.8).
   const ingress = useKubeIngress(
@@ -255,86 +272,91 @@ export function KubeWorkspace({
         </span>
       </div>
       {display === 'workspace' && (
-        <div className="kube-body">
-          {phase.name === 'detecting' && <p className="kube-detecting">클러스터를 확인하는 중…</p>}
-          {detection && (
-            <KubeSetup
-              detection={detection}
-              busy={busy}
-              error={error}
-              note={note}
-              recheck={recheck}
-              chooseContext={(context) =>
-                run(
-                  {
-                    mode: 'manual',
-                    kubectl: detection.kubectl,
-                    kubeconfig: detection.kubeconfig,
-                  },
-                  context,
-                  false,
-                )
-              }
-              start={(context, namespace) => {
-                setBusy(true);
-                finish(settingsFrom(detection, context, namespace))
-                  .catch((e: unknown) => setError(errorText(e)))
-                  .finally(() => setBusy(false));
-              }}
-              copy={copyToTerminal}
-            />
-          )}
-          {phase.name === 'open' && screen === 'tree' && (
-            <KubeTreeScreen
-              store={store}
-              session={session}
-              focused={focused}
-              view={treeView}
-              setView={setTreeView}
-              connectionId={connectionId}
-              kube={phase.settings}
-              panel={panel}
-              setPanel={setPanel}
-              focusPod={focusPod}
-              openTerminal={openTerminal}
-              searchLogs={searchLogs}
-            />
-          )}
-          {phase.name === 'open' && screen === 'dashboard' && (
-            <KubeDashboard
-              store={store}
-              history={history}
-              namespace={phase.settings.namespace}
-              reveal={reveal}
-              searchLogs={searchLogs}
-              ingress={ingress}
-              openIngress={openIngress}
-            />
-          )}
-          {phase.name === 'open' && screen === 'logs' && (
-            <LogSearch
-              search={logSearch}
-              store={store}
-              connectionId={connectionId}
-              kube={phase.settings}
-              session={session}
-              focusRequest={searchFocus}
-              openTerminal={openTerminal}
-              controllers={ingress.controllers}
-            />
-          )}
-          {phase.name === 'open' && screen === 'ingress' && (
-            <IngressView
-              data={ingress}
-              store={store}
-              filter={ingressFilter}
-              setFilter={setIngressFilter}
-              reveal={reveal}
-              searchController={searchController}
-            />
-          )}
-          {phase.name === 'detecting' && error && <p role="alert">{error}</p>}
-        </div>
+        <WorkersContext.Provider value={workers}>
+          <div className="kube-body">
+            {phase.name === 'detecting' && (
+              <p className="kube-detecting">클러스터를 확인하는 중…</p>
+            )}
+            {detection && (
+              <KubeSetup
+                detection={detection}
+                busy={busy}
+                error={error}
+                note={note}
+                recheck={recheck}
+                chooseContext={(context) =>
+                  run(
+                    {
+                      mode: 'manual',
+                      kubectl: detection.kubectl,
+                      kubeconfig: detection.kubeconfig,
+                    },
+                    context,
+                    false,
+                  )
+                }
+                start={(context, namespace) => {
+                  setBusy(true);
+                  finish(settingsFrom(detection, context, namespace))
+                    .catch((e: unknown) => setError(errorText(e)))
+                    .finally(() => setBusy(false));
+                }}
+                copy={copyToTerminal}
+              />
+            )}
+            {phase.name === 'open' && screen === 'tree' && (
+              <KubeTreeScreen
+                store={store}
+                session={session}
+                focused={focused}
+                view={treeView}
+                setView={setTreeView}
+                connectionId={connectionId}
+                kube={phase.settings}
+                panel={panel}
+                setPanel={setPanel}
+                focusPod={focusPod}
+                openTerminal={openTerminal}
+                searchLogs={searchLogs}
+              />
+            )}
+            {phase.name === 'open' && screen === 'dashboard' && (
+              <KubeDashboard
+                store={store}
+                history={history}
+                namespace={phase.settings.namespace}
+                reveal={reveal}
+                searchLogs={searchLogs}
+                openRuntime={openRuntime}
+                ingress={ingress}
+                openIngress={openIngress}
+              />
+            )}
+            {phase.name === 'open' && screen === 'logs' && (
+              <LogSearch
+                search={logSearch}
+                store={store}
+                connectionId={connectionId}
+                kube={phase.settings}
+                session={session}
+                focusRequest={searchFocus}
+                openTerminal={openTerminal}
+                controllers={ingress.controllers}
+              />
+            )}
+            {phase.name === 'open' && screen === 'ingress' && (
+              <IngressView
+                data={ingress}
+                store={store}
+                filter={ingressFilter}
+                setFilter={setIngressFilter}
+                reveal={reveal}
+                searchController={searchController}
+              />
+            )}
+            {phase.name === 'detecting' && error && <p role="alert">{error}</p>}
+          </div>
+        </WorkersContext.Provider>
       )}
     </div>
   );
