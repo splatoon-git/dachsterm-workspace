@@ -28,6 +28,8 @@ import { needsPasteConfirmation, useTerminalDisplay, useTerminalPreferences } fr
 import { AgentSignCard } from './AgentSignCard';
 import { GitCredentialCard } from './GitCredentialCard';
 import { currentSign } from './agentSign';
+import { EditSaveCard } from './EditSaveCard';
+import { editSaves, useEditSavePrompt } from './editSave';
 const FIT_INTERVAL_MS = 60;
 const hasImage = (data: DataTransfer | null) =>
   Array.from(data?.items ?? []).some((item) => item.type.startsWith('image/'));
@@ -62,6 +64,7 @@ export function TerminalPane({
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const view = usePaneView(session.view);
   const signs = useSyncExternalStore(session.agentSign.subscribe, session.agentSign.snapshot);
+  const editSave = useEditSavePrompt(session);
   const { fontSize, scrollback } = useTerminalDisplay();
   const [paste, setPaste] = useState<{ id: string; text: string } | null>(null);
   const preferences = useTerminalPreferences();
@@ -267,6 +270,14 @@ export function TerminalPane({
             answer={(answer) => session.agentSign.answer(sign, answer)}
           />
         )
+      )}
+      {/* A signature times out and a saved edit does not, so the saved edit waits its turn. */}
+      {editSave && state.status === 'connected' && !sign && (
+        <EditSaveCard
+          key={`${editSave.id}:${editSave.status}`}
+          edit={editSave}
+          answer={(answer) => editSaves.answer(editSave, answer, session)}
+        />
       )}
       {state.authPrompt && (
         <AuthenticationPrompt
