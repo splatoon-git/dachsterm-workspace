@@ -37,3 +37,18 @@
     margin-bottom: var(--space-xs);
   }
 }
+.agent-sign-unlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.agent-sign-unlock p {
+  margin: 0;
+  font-size: var(--font-small);
+}
+.agent-sign-unlock label:not(.checkbox) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-small);
+}

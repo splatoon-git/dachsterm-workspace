@@ -1,7 +1,7 @@
 use crate::storage::{Profile, Result, Store};
 use russh::{
     ChannelMsg, Disconnect, client,
-    keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate, decode_secret_key},
+    keys::{HashAlg, PublicKeyOrCertificate},
 };
 use serde::Serialize;
 use std::{
@@ -645,70 +645,11 @@ async fn authenticate_hop(
                 .await
                 .map_err(|_| "비밀번호 인증에 실패했습니다.".to_string())
         } else {
-            let metadata =
-                std::fs::metadata(&p.key_path).map_err(|_| "개인키 파일을 읽을 수 없습니다.")?;
-            if metadata.len() > 1024 * 1024 {
-                return Err("개인키 파일이 너무 큽니다.".into());
+            let key = crate::ssh_keys::load(&p.key_path, &secret)?;
+            if forward_agent {
+                crate::agent_keys::keep_login(manager, id, &key);
             }
-            use std::io::Read;
-            let mut encoded = Zeroizing::new(String::new());
-            std::fs::File::open(&p.key_path)
-                .map_err(|_| "개인키 파일을 읽을 수 없습니다.")?
-                .take(1024 * 1024 + 1)
-                .read_to_string(&mut encoded)
-                .map_err(|_| "개인키 파일을 읽을 수 없습니다.")?;
-            if encoded.len() > 1024 * 1024 {
-                return Err("개인키 파일이 너무 큽니다.".into());
-            }
-            let key = decode_secret_key(&encoded, (!secret.is_empty()).then_some(secret.as_str()))
-                .map_err(|_| ())
-                .or_else(|_| crate::rsa_auth::decode_pem(&encoded, &secret))
-                .map_err(|_| "개인키 또는 Passphrase를 확인하세요.")?;
-            if key.algorithm().is_rsa() {
-                let mut signer = crate::rsa_auth::RsaSigner::new(&key)?;
-                let hash = session
-                    .best_supported_rsa_hash()
-                    .await
-                    .map_err(|_| "RSA SHA-2 협상에 실패했습니다.")?
-                    .flatten()
-                    .unwrap_or(HashAlg::Sha512);
-                let result = session
-                    .authenticate_publickey_with(
-                        &p.username,
-                        key.public_key().clone(),
-                        Some(hash),
-                        &mut signer,
-                    )
-                    .await
-                    .map_err(|_| "RSA SHA-2 개인키 인증에 실패했습니다.".to_string())?;
-                if hash == HashAlg::Sha512
-                    && matches!(
-                        result,
-                        client::AuthResult::Failure {
-                            partial_success: false,
-                            ..
-                        }
-                    )
-                {
-                    return session
-                        .authenticate_publickey_with(
-                            &p.username,
-                            key.public_key().clone(),
-                            Some(HashAlg::Sha256),
-                            &mut signer,
-                        )
-                        .await
-                        .map_err(|_| "RSA SHA-2 개인키 인증에 실패했습니다.".into());
-                }
-                return Ok(result);
-            }
-            session
-                .authenticate_publickey(
-                    &p.username,
-                    PrivateKeyWithHashAlg::new(Arc::new(key), None),
-                )
-                .await
-                .map_err(|_| "개인키 인증에 실패했습니다.".into())
+            crate::ssh_auth::key(&mut session, &p.username, key).await
         }
     };
     let auth = timeout(Duration::from_secs(p.timeout), authentication)

@@ -39,6 +39,10 @@ export type AgentSignRequest = {
   loginUser: string | null;
   namespace: string | null;
   hostKey: string | null;
+  /** `app`: a key file the app signs with. `system`: this PC's SSH agent signs. */
+  source: 'app' | 'system';
+  /** The key file is encrypted: allowing asks for its Passphrase on the card. */
+  passphrase: boolean;
   seconds: number;
 };
 export type SessionEvent =

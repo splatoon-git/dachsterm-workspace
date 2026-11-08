@@ -499,3 +499,61 @@ tmux 재접속 뒤 `SSH_AUTH_SOCK` 안내를 쓰기 전에 픽스처 이미지(`
 - **CI:** 푸시하지 않아 실행하지 않았다.
 - DX.6·DX.7·DX.8 절의 다른 대기 항목(재접속·끊김 상태 전송, 프롬프트가 늦는 서버, 최소화된 독립 창 등)은 이번에 따로 실행하지 않았다.
 - 기본 명령에 `SSH_AUTH_SOCK` 갱신 줄 추가는 설계안 DX.10 메모대로 후속이다.
+
+## DX.11 앱 내장 agent
+
+- 실행일: 2026-11-08. 대상: `feat/dx11-builtin-agent` 브랜치(기준 `03a57fe`)의 **미커밋 트리**, Windows debug 앱과 예제, Docker OpenSSH fixture. CI, Mac, 전체 게이트는 실행하지 않았다.
+- 키는 fixture가 실행마다 만드는 키(`plain` Ed25519, Passphrase가 있는 `encrypted` Ed25519, `rsa` 3072비트)를 검사의 임시 폴더에 써서 쓴다. 이 PC의 키와 agent는 쓰지 않았다. 이 PC의 `ssh-agent` 서비스는 검사 전후 모두 **Stopped / Disabled**였고 바꾸지 않았다.
+
+### 실제 프로토콜(`npm run probe:phase1`, 종료 0, PASS 52줄)
+
+아래 "실제 앱"의 첫 실행 뒤 고친 두 가지(카드 응답이 저장 참조를 응답 시점에 읽음, 카드 응답 명령을 `agent_keys.rs`로 옮김)보다 **먼저** 실행했다. 이 검사는 카드 응답 명령을 거치지 않고 `Agent::answer`에 Passphrase를 직접 넘기며, 그 경로의 동작은 바뀌지 않았다(컴파일과 `cargo test`로 확인). 다시 실행하지 않았다.
+
+`src-tauri/examples/agent_checks/builtin.rs`가 제품 엔진(`Connections`)으로 연결한다. "시스템 agent 없음"은 이 프로세스의 agent 경로(Windows `DACHSTERM_TEST_AGENT_PIPE`, Unix `SSH_AUTH_SOCK`)를 없는 pipe·소켓으로 바꿔 만든다.
+
+| 확인 | 결과 |
+|---|---|
+| 시스템 agent 없음, 로그인 키(`plain`) + 추가 키(`encrypted`, `rsa`) | 서버 `ssh-add -l`이 세 지문을 보여 줌(종료 0), 안내 없음 |
+| 서버 `ssh-add -D` | 실패, 이후 목록 그대로 |
+| Git 전용 키(`IdentitiesOnly`, `-i ~/.ssh/dx11_git.pub`)로 push, 카드에서 허용 | 카드 요청의 지문 = Git 키, 출처 `app`, 대기 120초, 키 이름 = 파일 이름. Passphrase 없음 → `needed`, 틀림 → `wrong`, 맞음 → 서명. push 성공, 원격 일치 |
+| 같은 키로 거부 | 다시 Passphrase를 요구(이번만 허용으로 연 키는 버려짐), push 실패, 원격 그대로 |
+| **이 연결에서 10분 허용** 후 다시 push | 묻지 않고 성공(연 키를 허용 시간 동안 보관) |
+| RSA 키로 push(fixture의 OpenSSH는 SHA-1 `ssh-rsa`를 받지 않는다) | 성공 |
+| 서버에서 agent에 직접 서명 요청(플래그 0, 2, 4, 0) | `FAILURE rsa-sha2-256 rsa-sha2-512 FAILURE`, SHA-1 안내는 한 번 |
+| 로그인 키 끔, 추가 키 없음, 시스템 agent 없음 | `ssh-add -l` 실패, 안내 "전달할 키가 없습니다. …" 한 번 |
+| 시스템 agent(fixture agent, `rsa` 보유) + 추가 키 `rsa`·`encrypted` | `rsa` 지문 1번, 전체 2개. 그 키의 서명 요청 출처는 `app`, push 성공 |
+
+같은 실행에서 기존 단계(DX.2 agent 전달 6줄 포함)도 모두 PASS였다.
+
+### 실제 앱(`node scripts/run-phase1.mjs --native --agent-only --reuse-build`)
+
+`npm run tauri -- build --debug --no-bundle`로 만든 앱이다. 검사는 `scripts/verify-agent-terminal.mjs`의 DX.2 다음 단계다. `run-phase1.mjs`가 대역 agent를 파일 스위치(`DACHSTERM_AGENT_PAUSE`)로 끄고 켤 수 있게 했고, 이 단계는 대역을 끈 상태(이 PC의 꺼진 `ssh-agent`와 같은 조건)에서 실행한다.
+
+- 새 연결 폼: 인증 **개인키**(로그인 키 파일), 고급 옵션 **SSH 키 전달** → **전달할 키**에 로그인 키·시스템 agent 체크가 기본으로 켜짐, 경로 입력으로 `id_git` 추가 → 줄에 `ssh-ed25519 · <지문> · Passphrase 필요`.
+- 연결 후 `ssh-add -l`에 로그인 키와 Git 키 지문.
+- Git 키 push → 카드에 Git 키 지문과 **이 앱의 키 파일**, 그 순간 포커스는 터미널 입력에 그대로. **이번만 허용** → Passphrase 칸이 나타나 포커스를 받음 → 입력, **이 PC에 저장**, **확인** → push 성공, 세션의 `forwardKeys[0].secretRef`가 생김.
+- 다시 push → 카드에서 **이번만 허용**만 누르면 저장한 Passphrase로 성공. 세 번째 push 거부 → 실패, 원격 커밋 `c2` 그대로.
+- 세션 삭제 후 `sessions`의 `credentialWarning` 없음(저장한 Passphrase가 journal로 지워짐). 화면: `test-results-native/forward-keys.png`, `agent-sign-passphrase.png`(저장소에 넣지 않음).
+
+첫 실행은 두 번째 push에서 실패했다. 저장 참조를 연결할 때의 프로필 사본에서 읽어, 같은 연결에서 방금 저장한 Passphrase를 쓰지 못하고 다시 물었다. 응답 시점에 DB에서 읽도록 고친 뒤(설계안 DX.11 메모) 다시 실행해 종료 0(PASS 31줄)이었다. 그 뒤 크기 상한 때문에 카드 응답 명령을 `agent_keys.rs`로 옮기고 ⋯ 버튼 줄 배치를 고쳐 최종 코드로 한 번 더 실행했다: 종료 0, PASS 31줄(DX.11 3줄 포함).
+
+### 단위·UI
+
+| 명령 | 결과 |
+|---|---|
+| `cargo test --workspace --locked` | 126 + 1 통과(이전 116, 새 테스트 10개) |
+| `cargo test -p dachsterm --lib --locked -- ssh_keys agent_keys agent_forward storage:: settings:: vault:: rsa_auth` | 31/31. Ed25519·ECDSA P-256/384/521·RSA 서명을 공개키로 검증, RSA 플래그별 SHA-2와 SHA-1 거부, 잘린 서명 요청, 목록 합치기·중복·순서, 보관 만료, 잠긴 키를 허용 중에도 카드에서 열기(필요·틀림·맞음), 저장 참조를 폼이 못 정함·파일을 따라감·빠지면 journal·복제는 비움·삭제 journal, 8개·중복·SSH 전용 검증, 세션 JSON 내보내기에 새 필드 없음·가져오기는 기본값·병합은 저장값 |
+| `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과 |
+| `npx vitest run src/features/terminal/agentSign.test.ts src/features/sessions/forwardKeys.test.ts src/app/SessionTab.test.tsx src/features/sessions/model.test.ts` | 19/19 |
+| Playwright `agent-sign.spec.ts`, `forward-keys.spec.ts`, `session-form.spec.ts`의 키 전달 2건 | 7 + 2 + 2 통과. 출처 표시, 허용 전에는 Passphrase 칸 없음·포커스 안 가져감, 허용 뒤 칸에 포커스, 틀림 안내 후 값 비움, 저장 체크, 줄마다 ⋯ 메뉴가 오른쪽·빼기·우클릭, 360px 안, 로그인 키 체크는 개인키 인증에서만, Enter가 폼을 제출하지 않음 |
+| `npm run typecheck`, `npm run lint`, `prettier --check src tests scripts` | 통과 |
+
+`vault::configure`의 키 전달 참조 재암호화는 OS 저장소를 쓰므로 단위 테스트를 넣지 않았다. 실제 앱에서 마스터 암호를 켠 상태의 저장도 실행하지 않았다(대기).
+
+### 대기와 미실행
+
+- **마스터 암호(금고)를 켠 상태:** Passphrase 저장·읽기, 잠긴 금고에서 `stored` 안내, 마스터 암호 설정 때 재암호화.
+- **암호화된 PEM·PKCS#8 키와 `.pub`:** 단위 테스트로만 확인. 실제 앱의 줄 표시와 서명은 실행하지 않았다.
+- **실제 Git 호스팅(GitHub, GitLab, Bitbucket) push:** 푸시하지 않는 조건이고 등록한 키가 없다.
+- **Mac 실기기:** [macos-readiness](macos-readiness.md) M.15 ⑦. `/usr/bin/ssh-keygen`을 쓰는 단위 테스트도 macOS에서는 아직 실행하지 않았다.
+- **CI:** 푸시하지 않아 실행하지 않았다.

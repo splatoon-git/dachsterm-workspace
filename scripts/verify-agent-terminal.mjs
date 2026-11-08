@@ -3,7 +3,8 @@
 // opens one tab on 127.0.0.1, because a webview has no way to observe url_open otherwise.
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import net from 'node:net';
 import path from 'node:path';
 import { chooseTabMenu, openNewConnectionForm } from './native-workspace.mjs';
 
@@ -443,4 +444,139 @@ export async function verifyAgentTerminal({
   await invoke('delete_session', { id: forwardProfile.id });
   await page.locator('.tab-strip').getByRole('tab').first().click();
   console.log('PASS native refusal makes git push fail and leaves the remote unchanged');
+
+  // DX.11: with the stand-in agent switched off, as this PC's stopped ssh-agent service, the app's
+  // own keys are forwarded. The key files are the fixture's per-run keys in this test's folder.
+  setStage('DX.11 built-in agent');
+  const pipe = process.env.DACHSTERM_TEST_AGENT_PIPE ?? process.env.SSH_AUTH_SOCK;
+  const reachable = () =>
+    new Promise((resolve) => {
+      const socket = net.connect(pipe);
+      socket.once('connect', () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.once('error', () => resolve(false));
+    });
+  await writeFile(process.env.DACHSTERM_AGENT_PAUSE, '');
+  await expect.poll(reachable, { timeout: 10000 }).toBe(false);
+  try {
+    const keyDir = path.join(directory, 'dx11-keys');
+    await mkdir(keyDir, { recursive: true });
+    const loginKey = path.join(keyDir, 'login');
+    const gitKey = path.join(keyDir, 'id_git');
+    await writeFile(loginKey, probe('PLAIN_KEY'), { mode: 0o600 });
+    await writeFile(gitKey, probe('ENCRYPTED_KEY'), { mode: 0o600 });
+    const print = (file) =>
+      docker(['exec', container, 'ssh-keygen', '-lf', `/run/probe/${file}`]).split(' ')[1];
+    const [loginPrint, gitPrint] = [print('plain.pub'), print('encrypted.pub')];
+    docker([
+      'exec',
+      container,
+      'install',
+      '-o',
+      'probe',
+      '-g',
+      'probe',
+      '-m',
+      '600',
+      '/run/probe/encrypted.pub',
+      '/home/probe/.ssh/dx11_git.pub',
+    ]);
+    const gitWork = '/home/probe/dx11-native';
+    shell(
+      `rm -rf ${gitWork} ${gitWork}.git && git init -q --bare ${gitWork}.git && ` +
+        `git init -q ${gitWork} && git -C ${gitWork} config user.email p@example.invalid && ` +
+        `git -C ${gitWork} config user.name probe`,
+    );
+    const builtinName = '내장 agent 테스트';
+    await openNewConnectionForm(page);
+    const form = page.getByRole('dialog');
+    await form.getByLabel('이름', { exact: true }).fill(builtinName);
+    await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
+    await form.getByLabel('포트', { exact: true }).fill(probe('PORT'));
+    await form.getByLabel('사용자', { exact: true }).fill('probe');
+    await form.getByLabel('인증 방식', { exact: true }).selectOption('key');
+    await form.getByLabel('개인키 파일 경로', { exact: true }).fill(loginKey);
+    await form.locator('summary', { hasText: '고급 옵션' }).click();
+    await form.getByLabel('SSH 키 전달 (agent forwarding)', { exact: true }).check();
+    const keys = form.getByRole('group', { name: '전달할 키', exact: true });
+    await expect(keys.getByLabel('로그인 키 (위의 개인키 파일)', { exact: true })).toBeChecked();
+    await expect(keys.getByLabel('이 PC의 SSH agent 키도 사용', { exact: true })).toBeChecked();
+    await keys.getByLabel('추가할 키 파일 경로', { exact: true }).fill(gitKey);
+    await keys.getByRole('button', { name: '추가', exact: true }).click();
+    const row = keys.getByRole('listitem').filter({ hasText: 'id_git' });
+    await expect(row).toContainText(gitPrint);
+    await expect(row).toContainText('ssh-ed25519');
+    await expect(row).toContainText('Passphrase 필요');
+    await page.screenshot({ path: path.join(screenshots, 'forward-keys.png') });
+    await form.getByRole('button', { name: '저장 후 연결', exact: true }).click();
+    await expect(page.getByRole('tab', { name: new RegExp(`^${builtinName}`) })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await connected();
+    await command('ssh-add -l');
+    await output(loginPrint);
+    await output(gitPrint);
+    console.log('PASS native built-in agent: login key and Git-only key listed, system agent off');
+
+    const card = () => pane().getByRole('alertdialog', { name: '키 서명 요청', exact: true });
+    const push = (n, marker) =>
+      command(
+        `cd ${gitWork} && echo ${n} > f && git add f && git commit -qm c${n} && ` +
+          `GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ` +
+          `-o BatchMode=yes -o LogLevel=ERROR -o IdentitiesOnly=yes -i ~/.ssh/dx11_git.pub' ` +
+          `git push -q ssh://probe@127.0.0.1${gitWork}.git HEAD:refs/heads/main ` +
+          `&& printf '${marker}_%s\\n' OK || printf '${marker}_%s\\n' FAIL`,
+      );
+    await push(1, 'UNLOCKED');
+    await expect(card()).toContainText(gitPrint, { timeout: 15000 });
+    await expect(card()).toContainText('이 앱의 키 파일');
+    assert(
+      await page.evaluate(() =>
+        document.activeElement?.classList.contains('xterm-helper-textarea'),
+      ),
+      'the card must not take focus from the terminal',
+    );
+    await card().getByRole('button', { name: '이번만 허용', exact: true }).click();
+    const phrase = card().getByLabel('Passphrase', { exact: true });
+    await expect(phrase).toBeFocused();
+    await phrase.fill(probe('PASSPHRASE'));
+    await card().getByLabel('이 PC에 저장', { exact: true }).check();
+    await page.screenshot({ path: path.join(screenshots, 'agent-sign-passphrase.png') });
+    await card().getByRole('button', { name: '확인', exact: true }).click();
+    await output('UNLOCKED_OK');
+    await expect(card()).toHaveCount(0);
+    const saved = (await invoke('sessions')).profiles.find((p) => p.name === builtinName);
+    assert(saved.forwardKeys[0].secretRef, 'the Passphrase reference is saved');
+    console.log('PASS native Passphrase on the card after approval, saved, git push works');
+
+    await push(2, 'STORED');
+    await expect(card()).toBeVisible({ timeout: 15000 });
+    await card().getByRole('button', { name: '이번만 허용', exact: true }).click();
+    await output('STORED_OK');
+    await expect(card()).toHaveCount(0);
+    await push(3, 'REFUSED');
+    await expect
+      .poll(
+        async () => {
+          if (await card().count())
+            await card().getByRole('button', { name: '거부', exact: true }).click();
+          return pane().locator('.xterm-accessibility-tree').innerText();
+        },
+        { timeout: 20000 },
+      )
+      .toContain('REFUSED_FAIL');
+    assert.equal(shell(`git --git-dir ${gitWork}.git log -1 --format=%s main`), 'c2');
+    console.log('PASS native saved Passphrase signs without asking again, refusal fails the push');
+    await page.getByRole('button', { name: `${builtinName} 탭 닫기`, exact: true }).click();
+    await invoke('delete_session', { id: saved.id });
+    // Deleting the session removes its stored Passphrase from the OS store through the journal.
+    assert.equal((await invoke('sessions')).credentialWarning ?? null, null);
+    await page.locator('.tab-strip').getByRole('tab').first().click();
+  } finally {
+    await rm(process.env.DACHSTERM_AGENT_PAUSE, { force: true });
+    await expect.poll(reachable, { timeout: 10000 }).toBe(true);
+  }
 }

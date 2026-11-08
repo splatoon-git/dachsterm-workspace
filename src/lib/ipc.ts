@@ -19,9 +19,15 @@ export type Profile = {
   keepalive: number;
   tmuxSession?: string;
   forwardAgent?: boolean;
+  /** Built-in agent sources. Absent means the default: true, none, true. */
+  forwardLoginKey?: boolean;
+  forwardKeys?: ForwardKey[];
+  forwardSystemAgent?: boolean;
   lastConnected: number | null;
   hasSecret: boolean;
 };
+/** A key file the built-in agent offers. Only the backend sets `secretRef`. */
+export type ForwardKey = { path: string; secretRef?: string | null };
 /** A one-time start command for a new tab, given to `connect` and never saved. */
 export type TerminalLaunch = { folder: string; command: string };
 export type Group = { id: string; name: string; parentId?: string | null; sortOrder?: number };

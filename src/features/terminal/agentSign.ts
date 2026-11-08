@@ -7,6 +7,11 @@ import { programNotifier } from './terminalNotify';
 
 export type SignDecision = 'deny' | 'once' | 'connection';
 export type PendingSign = AgentSignRequest & { connectionId: string };
+export type SignAnswer = { decision: SignDecision; passphrase?: string; remember?: boolean };
+/** `agent_sign_reply`: done, or the card has to ask for the key's Passphrase. */
+export type SignReply =
+  | { kind: 'done'; notice: string | null }
+  | { kind: 'passphrase'; reason: 'needed' | 'wrong' | 'stored' };
 
 type Host = {
   readonly terminal: Terminal;
@@ -51,12 +56,27 @@ export class AgentSignQueue {
     if (this.items.some((item) => item.request === request))
       this.set(this.items.filter((item) => item.request !== request));
   }
-  async answer(item: PendingSign, decision: SignDecision) {
-    this.drop(item.request);
+  /**
+   * A plain answer leaves the list at once, so a second press cannot answer twice. A request for
+   * a locked key stays until the backend has its Passphrase.
+   */
+  async answer(item: PendingSign, answer: SignAnswer): Promise<SignReply | null> {
+    const waits = item.passphrase && answer.decision !== 'deny';
+    if (!waits) this.drop(item.request);
     try {
-      await call('agent_sign_reply', { id: item.connectionId, request: item.request, decision });
+      const reply = await call<SignReply | undefined>('agent_sign_reply', {
+        id: item.connectionId,
+        request: item.request,
+        ...answer,
+      });
+      if (reply?.kind === 'passphrase') return reply;
+      this.drop(item.request);
+      if (reply?.notice) this.host.notice(reply.notice);
+      return reply ?? null;
     } catch (error) {
+      this.drop(item.request);
       this.host.notice(errorText(error));
+      return null;
     }
   }
 }
@@ -76,6 +96,15 @@ export function useSignWaiting(queue: AgentSignQueue, connectionId: string) {
   const items = useSyncExternalStore(queue.subscribe, queue.snapshot);
   return signWaiting(items, connectionId);
 }
+
+export const signSource = (request: AgentSignRequest) =>
+  request.source === 'app' ? '이 앱의 키 파일' : '이 PC의 SSH agent';
+
+export const passphraseReason = {
+  needed: '암호화된 키 파일입니다. Passphrase를 입력하세요.',
+  wrong: 'Passphrase가 맞지 않습니다. 다시 입력하세요.',
+  stored: '저장된 Passphrase를 읽지 못했습니다(암호 보관함 잠김 등). 직접 입력하세요.',
+} as const;
 
 export function signPurpose(request: AgentSignRequest) {
   if (request.loginUser !== null) return `다른 SSH 서버 로그인 · 사용자 ${request.loginUser}`;

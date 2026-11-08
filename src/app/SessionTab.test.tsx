@@ -96,6 +96,8 @@ describe('session tab status', () => {
             loginUser: null,
             namespace: null,
             hostKey: null,
+            source: 'system',
+            passphrase: false,
             seconds: 60,
           },
           connectionId,
@@ -105,7 +107,7 @@ describe('session tab status', () => {
     expect(label()).toBe('연결됨');
     await request('now', 'c1');
     expect(label()).toBe('입력 대기');
-    await act(() => agentSign.answer(agentSign.snapshot()[1], 'deny'));
+    await act(() => agentSign.answer(agentSign.snapshot()[1], { decision: 'deny' }));
     expect(label()).toBe('연결됨');
   });
 });

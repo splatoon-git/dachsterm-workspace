@@ -134,6 +134,24 @@ fn string(out: &mut Vec<u8>, value: &[u8]) {
     out.extend_from_slice(&(value.len() as u32).to_be_bytes());
     out.extend_from_slice(value);
 }
+impl RsaSigner {
+    /// An SSH `rsa-sha2-256` or `rsa-sha2-512` signature blob. SHA-1 (`None`) is never signed.
+    pub fn sign(&self, hash: Option<HashAlg>, data: &[u8]) -> Result<Vec<u8>, SignError> {
+        let (encoding, name) = match hash {
+            Some(HashAlg::Sha256) => (&signature::RSA_PKCS1_SHA256, "rsa-sha2-256"),
+            Some(HashAlg::Sha512) => (&signature::RSA_PKCS1_SHA512, "rsa-sha2-512"),
+            _ => return Err(SignError),
+        };
+        let mut signature = vec![0; self.0.public().modulus_len()];
+        self.0
+            .sign(encoding, &SystemRandom::new(), data, &mut signature)
+            .map_err(|_| SignError)?;
+        let mut blob = Vec::new();
+        string(&mut blob, name.as_bytes());
+        string(&mut blob, &signature);
+        Ok(blob)
+    }
+}
 impl russh::Signer for RsaSigner {
     type Error = SignError;
     async fn auth_sign(
@@ -142,18 +160,7 @@ impl russh::Signer for RsaSigner {
         hash: Option<HashAlg>,
         mut data: Vec<u8>,
     ) -> Result<Vec<u8>, Self::Error> {
-        let (encoding, name) = match hash {
-            Some(HashAlg::Sha256) => (&signature::RSA_PKCS1_SHA256, "rsa-sha2-256"),
-            Some(HashAlg::Sha512) => (&signature::RSA_PKCS1_SHA512, "rsa-sha2-512"),
-            _ => return Err(SignError),
-        };
-        let mut signature = vec![0; self.0.public().modulus_len()];
-        self.0
-            .sign(encoding, &SystemRandom::new(), &data, &mut signature)
-            .map_err(|_| SignError)?;
-        let mut blob = Vec::new();
-        string(&mut blob, name.as_bytes());
-        string(&mut blob, &signature);
+        let blob = self.sign(hash, &data)?;
         string(&mut data, &blob);
         Ok(data)
     }

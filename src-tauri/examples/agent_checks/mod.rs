@@ -2,6 +2,7 @@
 //! `git push`, a jump route, and refusal on connections that did not ask. The local agent is the
 //! fixture's own agent behind an isolated pipe or socket, so no key on this PC is used.
 use super::*;
+pub mod builtin;
 use dachsterm::agent_forward::{Decision, SignRequest};
 use russh::{
     ChannelMsg,

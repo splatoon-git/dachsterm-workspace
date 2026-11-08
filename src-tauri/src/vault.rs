@@ -233,31 +233,57 @@ impl Vault {
         let wrapped = wrap(password, &key)?;
         let profiles = store.list()?.profiles;
         let mut changed = Vec::new();
+        let mut forwarded = Vec::new();
         // Copy-on-write OS entries. Old entries stay usable until the SQLite commit.
-        for profile in profiles {
+        let copy = |previous: &str| -> Result<String> {
+            let value = if let Some(old_key) = previous_key.as_ref() {
+                self.decrypt(previous, old_key)?
+            } else {
+                if previous.starts_with("vault-") {
+                    return Err("기존 암호 보관함 설정 복구가 필요합니다.".into());
+                }
+                credentials::get(previous)?
+            };
+            let next = format!("vault-{}", uuid::Uuid::new_v4());
+            store.stage_secret(&next)?;
+            credentials::set(&next, &seal(&key, value.as_bytes(), next.as_bytes())?)?;
+            Ok(next)
+        };
+        for mut profile in profiles {
             if let Some(previous) = store.secret_ref(&profile.id)? {
-                let value = if let Some(old_key) = previous_key.as_ref() {
-                    self.decrypt(&previous, old_key)?
-                } else {
-                    if previous.starts_with("vault-") {
-                        return Err("기존 암호 보관함 설정 복구가 필요합니다.".into());
-                    }
-                    credentials::get(&previous)?
-                };
-                let next = format!("vault-{}", uuid::Uuid::new_v4());
-                store.stage_secret(&next)?;
-                credentials::set(&next, &seal(&key, value.as_bytes(), next.as_bytes())?)?;
-                changed.push((profile.id, previous, next));
+                let next = copy(&previous)?;
+                changed.push((Some(profile.id.clone()), previous, next));
             }
+            // Passphrases of forwarded key files (DX.11) live in the profile data.
+            if profile.forward_refs().next().is_none() {
+                continue;
+            }
+            for forward in &mut profile.forward_keys {
+                if let Some(previous) = forward.secret_ref.take() {
+                    let next = copy(&previous)?;
+                    forward.secret_ref = Some(next.clone());
+                    changed.push((None, previous, next));
+                }
+            }
+            forwarded.push((crate::storage::profile_data(&profile)?, profile.id));
         }
         let mut db = store.0.lock().unwrap();
         let tx = db.transaction().map_err(db_error)?;
-        for (profile, previous, next) in changed {
+        for (data, profile) in forwarded {
             tx.execute(
-                "UPDATE profiles SET secret_ref=? WHERE id=?",
-                rusqlite::params![next, profile],
+                "UPDATE profiles SET data=? WHERE id=?",
+                rusqlite::params![data, profile],
             )
             .map_err(db_error)?;
+        }
+        for (profile, previous, next) in changed {
+            if let Some(profile) = profile {
+                tx.execute(
+                    "UPDATE profiles SET secret_ref=? WHERE id=?",
+                    rusqlite::params![next, profile],
+                )
+                .map_err(db_error)?;
+            }
             tx.execute("INSERT OR IGNORE INTO credential_gc VALUES(?)", [previous])
                 .map_err(db_error)?;
             tx.execute("DELETE FROM credential_gc WHERE id=?", [next])

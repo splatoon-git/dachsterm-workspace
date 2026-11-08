@@ -5,11 +5,11 @@ use crate::{
 use russh::{
     client::{self, KeyboardInteractiveAuthResponse as Response},
     keys::{
-        HashAlg,
+        HashAlg, PrivateKey, PrivateKeyWithHashAlg,
         agent::{AgentIdentity, client::AgentClient},
     },
 };
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio::{sync::mpsc, time::timeout};
 
 pub async fn hop_secret(
@@ -128,6 +128,52 @@ pub async fn agent(session: &mut client::Handle<Host>, user: &str) -> Result<cli
         }
     }
     last.ok_or("에이전트 인증에 실패했습니다.".into())
+}
+
+/// Public key login with a decoded key file. RSA signs through ring with SHA-2 only.
+pub async fn key(
+    session: &mut client::Handle<Host>,
+    user: &str,
+    key: PrivateKey,
+) -> Result<client::AuthResult> {
+    if !key.algorithm().is_rsa() {
+        return session
+            .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(key), None))
+            .await
+            .map_err(|_| "개인키 인증에 실패했습니다.".into());
+    }
+    let mut signer = crate::rsa_auth::RsaSigner::new(&key)?;
+    let hash = session
+        .best_supported_rsa_hash()
+        .await
+        .map_err(|_| "RSA SHA-2 협상에 실패했습니다.")?
+        .flatten()
+        .unwrap_or(HashAlg::Sha512);
+    let failed = |_| "RSA SHA-2 개인키 인증에 실패했습니다.".to_string();
+    let result = session
+        .authenticate_publickey_with(user, key.public_key().clone(), Some(hash), &mut signer)
+        .await
+        .map_err(failed)?;
+    if hash == HashAlg::Sha512
+        && matches!(
+            result,
+            client::AuthResult::Failure {
+                partial_success: false,
+                ..
+            }
+        )
+    {
+        return session
+            .authenticate_publickey_with(
+                user,
+                key.public_key().clone(),
+                Some(HashAlg::Sha256),
+                &mut signer,
+            )
+            .await
+            .map_err(failed);
+    }
+    Ok(result)
 }
 
 #[cfg(windows)]
