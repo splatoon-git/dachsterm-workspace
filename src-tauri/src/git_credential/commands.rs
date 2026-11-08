@@ -1,11 +1,12 @@
 //! The card's answers and the saved list in Settings › Agents.
 use super::{
     Credential, Decision,
-    approval::{Answer, ENDED, INPUT_TIME},
+    approval::{Answer, ENDED, Forward, INPUT_TIME},
     local, protocol,
 };
 use crate::{
     AppState,
+    approval::Owner,
     ssh::Connections,
     storage::{Result, Store},
     vault::Vault,
@@ -40,16 +41,14 @@ fn input(reason: InputReason) -> Reply {
 /// The card's answer. An allow looks for the value only now, so a credential manager's sign-in
 /// window never opens before the user agreed. A typed value is checked here and answered like
 /// "allow once" unless the card chose ten minutes.
-pub async fn answer(
-    connections: &Connections,
+async fn reply(
+    forward: &Forward,
     store: Arc<Store>,
     vault: Arc<Vault>,
-    id: &str,
     request: &str,
     decision: Decision,
     typed: Option<Credential>,
 ) -> Result<Reply> {
-    let forward = connections.git.get(id).ok_or(ENDED)?;
     if decision == Decision::Deny {
         forward.send(request, Answer::Deny)?;
         return Ok(Reply::Done { notice: None });
@@ -90,6 +89,30 @@ pub async fn answer(
     }
 }
 
+/// A connection's card answered by its ID, without a window: the Docker probe answers this way.
+pub async fn answer(
+    connections: &Connections,
+    store: Arc<Store>,
+    vault: Arc<Vault>,
+    id: &str,
+    request: &str,
+    decision: Decision,
+    typed: Option<Credential>,
+) -> Result<Reply> {
+    let forward = connections.git.get(id).ok_or(ENDED)?;
+    reply(&forward, store, vault, request, decision, typed).await
+}
+
+/// The requests of the tab `id`: a connection's forward, or a WSL tab's pipe (DX.14). The window
+/// must show that tab, as for a signature card.
+fn forward_of(state: &AppState, window: &str, id: &str) -> Result<Arc<Forward>> {
+    let forward = match Owner::find(state, window, id)? {
+        Owner::Remote(_) => state.connections.git.get(id),
+        Owner::Local(control) => control.credentials().map(|tab| tab.forward()),
+    };
+    forward.ok_or_else(|| ENDED.into())
+}
+
 // Tauri passes each IPC argument separately.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
@@ -105,37 +128,21 @@ pub async fn git_credential_reply(
     remember: Option<bool>,
 ) -> Result<Reply> {
     let password = password.map(Zeroizing::new);
-    state
-        .connections
-        .control(&id)?
-        .broker
-        .check(window.label())?;
+    let forward = forward_of(&state, window.label(), &id)?;
     let typed = password.map(|password| Credential {
         username: Zeroizing::new(username.unwrap_or_default()),
         password,
     });
     // Only a value typed on the card can be saved. The server never supplies one.
     let keep = match (&typed, remember) {
-        (Some(typed), Some(true)) => {
-            let forward = state.connections.git.get(&id).ok_or(ENDED)?;
-            Some((
-                forward.with(&request, |p| Ok(p.ask.clone()))?,
-                typed.clone(),
-            ))
-        }
+        (Some(typed), Some(true)) => Some((
+            forward.with(&request, |p| Ok(p.ask.clone()))?,
+            typed.clone(),
+        )),
         _ => None,
     };
     let (store, vault) = (state.store.clone(), state.vault.clone());
-    let reply = answer(
-        &state.connections,
-        store,
-        vault,
-        &id,
-        &request,
-        decision,
-        typed,
-    )
-    .await?;
+    let reply = reply(&forward, store, vault, &request, decision, typed).await?;
     let Some((ask, typed)) = keep else {
         return Ok(reply);
     };

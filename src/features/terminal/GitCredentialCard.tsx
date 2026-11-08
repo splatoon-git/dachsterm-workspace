@@ -22,7 +22,8 @@ const inputReason = {
  * In the pane like the signature card, and like it never takes focus by itself. Unlike a
  * signature, the value itself goes to the server, which the card says plainly. Allowing looks
  * for the value only then: the app's saved token, then this PC's Git credential helpers, which
- * may open their own sign-in window.
+ * may open their own sign-in window. A WSL tab's request (DX.14) names the tab instead, and the
+ * value goes to git in that tab.
  */
 export function GitCredentialCard({
   request,
@@ -58,17 +59,23 @@ export function GitCredentialCard({
     }
   }
   const problem = stage.kind === 'input' ? credentialProblem(username, password) : null;
+  const local = request.local;
   return (
     <div className="trust-card agent-sign-card" role="alertdialog" aria-label="Git 자격 증명 요청">
-      <h2>서버의 git이 HTTPS 자격 증명을 요청합니다</h2>
+      <h2>{local ? 'WSL' : '서버'}의 git이 HTTPS 자격 증명을 요청합니다</h2>
       <p>
-        허용하면 이 PC의 자격 증명이 <strong>서버로 전달됩니다</strong>.
+        허용하면 이 PC의 자격 증명이{' '}
+        <strong>{local ? '이 WSL 탭의 git으로 전달됩니다' : '서버로 전달됩니다'}</strong>.
       </p>
       {/* In a short pane this part scrolls, so the answers stay on screen. */}
       <div className="git-credential-details">
-        <p>서버의 관리자는 전달된 값을 볼 수 있습니다. 직접 실행한 git 작업인지 확인하세요.</p>
+        <p>
+          {local
+            ? '이 탭에서 직접 실행한 git 작업인지 확인하세요. WSL에 설정한 Git helper가 있으면 그 helper도 이 값을 저장할 수 있습니다.'
+            : '서버의 관리자는 전달된 값을 볼 수 있습니다. 직접 실행한 git 작업인지 확인하세요.'}
+        </p>
         <dl>
-          <dt>세션</dt>
+          <dt>{local ? '탭' : '세션'}</dt>
           <dd>{request.session}</dd>
           <dt>저장소 서버</dt>
           <dd>
@@ -155,7 +162,7 @@ export function GitCredentialCard({
               직접 입력
             </button>
             <button disabled={busy} onClick={() => void send({ decision: 'connection' })}>
-              이 연결에서 10분 허용
+              {local ? '이 탭에서 10분 허용' : '이 연결에서 10분 허용'}
             </button>
             <button
               className="primary"

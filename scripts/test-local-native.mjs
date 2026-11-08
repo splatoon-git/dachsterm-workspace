@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import https from 'node:https';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -17,10 +18,21 @@ import {
 } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
-// `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab.
+// `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab, and
+// `--credentials-only` only the DX.14 WSL HTTPS credential steps.
 const agentOnly = process.argv.includes('--agent-only');
+const credentialsOnly = process.argv.includes('--credentials-only');
 const finished = Symbol('agent-only');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-local-'));
+// The app's own git (DX.14 "this PC's credentials") reads only this file: no system or user
+// settings, and a `store` helper the checks fill and empty. The real credential manager is never
+// asked. Programs in the tabs inherit it; WSL's Linux git does not.
+const gitStore = path.join(directory, 'git-store');
+await writeFile(gitStore, '');
+await writeFile(
+  path.join(directory, 'gitconfig'),
+  `[credential]\n\thelper = "store --file '${gitStore.replaceAll('\\', '/')}'"\n`,
+);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let app, browser;
 async function launch() {
@@ -36,6 +48,8 @@ async function launch() {
       DACHSTERM_TEST_DATA_DIR: directory,
       DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: path.join(directory, 'gitconfig'),
     },
   });
   let endpoint;
@@ -359,6 +373,203 @@ async function checkLocalAgent(page, command, oldShell) {
   await expect.poll(() => pipeOpen(first), { timeout: 10000 }).toBe(false);
   console.log('PASS two WSL tabs keep separate pipes, and both close with their tabs');
 }
+
+// DX.14: WSL tabs' HTTPS Git credentials, against the HTTPS Git fixture used by run-phase1
+// (Gitea, Basic auth). Its password is made in the container and only typed or put in the
+// scratch store; it is never printed. WSL reaches the published port on 127.0.0.1.
+const httpsServer = `dachsterm-wsl-credential-${randomUUID()}`;
+let httpsServerUp = false;
+const httpsAnswers = (port) =>
+  new Promise((resolve) => {
+    const request = https.get(
+      { host: '127.0.0.1', port, path: '/', rejectUnauthorized: false, timeout: 2000 },
+      (response) => {
+        response.resume();
+        resolve(true);
+      },
+    );
+    request.once('error', () => resolve(false));
+    request.once('timeout', () => request.destroy());
+  });
+async function startHttpsServer() {
+  docker(['build', '-q', '-t', 'dachsterm-git-https', 'tests/git-https']);
+  docker([
+    'run',
+    '-d',
+    '--rm',
+    '--name',
+    httpsServer,
+    '--label',
+    'app.dachsterm.purpose=wsl-credential-native',
+    '-p',
+    '127.0.0.1::3000',
+    'dachsterm-git-https',
+  ]);
+  httpsServerUp = true;
+  const port = Number(docker(['port', httpsServer, '3000/tcp']).split(':').at(-1));
+  for (let i = 0; i < 120; i++) {
+    const made =
+      spawnSync('docker', ['exec', httpsServer, 'test', '-s', '/var/lib/gitea/probe/password'])
+        .status === 0;
+    if (made && (await httpsAnswers(port))) {
+      return {
+        port,
+        password: docker(['exec', httpsServer, 'cat', '/var/lib/gitea/probe/password']),
+      };
+    }
+    await sleep(500);
+  }
+  throw new Error('HTTPS Git fixture startup timeout');
+}
+
+async function checkWslCredentials(page, command) {
+  const wsl = page
+    .locator('.local-targets .local-target')
+    .filter({ hasText: 'WSL' })
+    .filter({ hasNotText: 'docker-desktop' });
+  if (!(await wsl.count())) {
+    console.log('WSL user distribution absent: WSL HTTPS credential checks pending.');
+    return;
+  }
+  if (spawnSync('docker', ['version'], { stdio: 'ignore' }).status !== 0) {
+    console.log('Docker unavailable: WSL HTTPS credential checks pending.');
+    return;
+  }
+  const { port, password } = await startHttpsServer();
+  const repository = `https://127.0.0.1:${port}/probe/wsl-credential.git`;
+  const visible = page.locator('.pane-cell:not([hidden]) .terminal-pane');
+  const openLinux = async () => {
+    await wsl.first().click();
+    await expect(visible).toHaveCount(1);
+    const id = await visible.getAttribute('data-connection-id');
+    const linux = page.locator(`.terminal-pane[data-connection-id="${id}"]`);
+    await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
+      timeout: 15000,
+    });
+    await command(
+      linux,
+      `cd "$(mktemp -d)" && git init -q && git -c user.email=t@example.invalid -c user.name=t commit -q --allow-empty -m wsl && printf 'REPO%s\\n' _READY`,
+      'REPO_READY',
+    );
+    return linux;
+  };
+  // No terminal question: a refusal or no helper ends the push at once. Linux git reads none of
+  // the user's settings either, so a credential manager set up in WSL is never asked.
+  const push = (linux, branch) =>
+    command(
+      linux,
+      `GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_SSL_NO_VERIFY=1 GIT_TERMINAL_PROMPT=0 git push -q ${repository} HEAD:refs/heads/${branch} 2>/dev/null; printf 'PUSH%s:%s\\n' _${branch} $?`,
+      '',
+    );
+  const pushed = (linux, branch, status) =>
+    expect(linux.locator('.xterm-accessibility-tree')).toContainText(
+      status === 0 ? `PUSH_${branch}:0` : new RegExp(`PUSH_${branch}:[1-9]`),
+      { timeout: 60000 },
+    );
+  const remoteBranches = () =>
+    docker([
+      'exec',
+      httpsServer,
+      'git',
+      '--git-dir',
+      '/var/lib/gitea/git/repositories/probe/wsl-credential.git',
+      'for-each-ref',
+      '--format=%(refname)',
+    ]);
+  const settingsSection = async () => {
+    await page.getByRole('button', { name: '설정', exact: true }).click();
+    const settings = page.getByRole('dialog', { name: '설정' });
+    await settings.getByRole('tab', { name: '에이전트', exact: true }).click();
+    return settings.getByRole('region', { name: 'WSL 탭의 HTTPS Git 자격 증명' });
+  };
+  const closeSettings = async () => {
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: '설정' })).toHaveCount(0);
+  };
+
+  let section = await settingsSection();
+  const option = section.getByLabel('WSL 탭에 이 PC의 HTTPS Git 자격 증명 제공', { exact: true });
+  await expect(option).not.toBeChecked();
+  await option.check();
+  await expect(section.getByRole('status')).toContainText('새로 여는 WSL 탭부터');
+  await closeSettings();
+
+  // This PC's value: the isolated `store` helper has it. The card names the tab, says the value
+  // goes to git in that tab, and nothing is fetched before it is allowed.
+  await writeFile(gitStore, `https://probe:${password}@127.0.0.1:${port}\n`);
+  const first = await openLinux();
+  await command(first, `printf 'LPIPE[%s]\\n' "\${DACHSTERM_CREDENTIAL_PIPE-}"`, 'LPIPE[]');
+  await command(
+    first,
+    "cmd.exe /c 'echo WPIPE:%DACHSTERM_CREDENTIAL_PIPE%' | tr -d '\\r'",
+    /WPIPE:\\\\\.\\pipe\\dachsterm-credential-[0-9a-f]{32}/,
+  );
+  const pipe = (await first.locator('.xterm-accessibility-tree').innerText())
+    .replaceAll('\n', '')
+    .match(/WPIPE:(\\\\\.\\pipe\\dachsterm-credential-[0-9a-f]{32})/)[1];
+  await command(
+    first,
+    "GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git config --get-all credential.helper | grep -c 'git-credential get' | sed 's/^/HELPERS:/'",
+    'HELPERS:1',
+  );
+  await push(first, 'from-pc');
+  const card = (linux) =>
+    linux.getByRole('alertdialog', { name: 'Git 자격 증명 요청', exact: true });
+  await expect(card(first)).toBeVisible({ timeout: 30000 });
+  await expect(card(first)).toContainText('WSL의 git이 HTTPS 자격 증명을 요청합니다');
+  await expect(card(first)).toContainText('이 WSL 탭의 git으로 전달됩니다');
+  await expect(card(first)).toContainText(`https://127.0.0.1:${port}`);
+  await expect(card(first)).not.toContainText('서버로 전달됩니다');
+  await expect(card(first).getByRole('button', { name: '이 탭에서 10분 허용' })).toBeVisible();
+  await mkdir('test-results-native', { recursive: true });
+  await page.screenshot({ path: 'test-results-native/wsl-credential.png' });
+  await card(first).getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await pushed(first, 'from-pc', 0);
+  expect(remoteBranches()).toContain('refs/heads/from-pc');
+  console.log("PASS WSL HTTPS push with this PC's credential after the tab's card");
+
+  // Nothing saved on this PC: a refusal fails the push, and allowing turns the card into fields.
+  await writeFile(gitStore, '');
+  const second = await openLinux();
+  await push(second, 'refused');
+  await expect(card(second)).toBeVisible({ timeout: 30000 });
+  await card(second).getByRole('button', { name: '거부', exact: true }).click();
+  await pushed(second, 'refused', 1);
+  await push(second, 'typed');
+  await expect(card(second)).toBeVisible({ timeout: 30000 });
+  await card(second).getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await expect(card(second).getByRole('status')).toContainText('저장된 값이 없습니다', {
+    timeout: 30000,
+  });
+  await card(second).getByLabel('사용자 이름', { exact: true }).fill('probe');
+  await card(second).getByLabel('토큰 또는 암호', { exact: true }).fill(password);
+  await card(second).getByRole('button', { name: '확인', exact: true }).click();
+  await pushed(second, 'typed', 0);
+  const branches = remoteBranches();
+  expect(branches).toContain('refs/heads/typed');
+  expect(branches).not.toContain('refs/heads/refused');
+  console.log('PASS WSL HTTPS push refused, then typed on the card when nothing is saved');
+
+  // Off again: a new WSL tab is as before, with no helper and no card.
+  section = await settingsSection();
+  await section.getByLabel('WSL 탭에 이 PC의 HTTPS Git 자격 증명 제공', { exact: true }).uncheck();
+  await expect(section.getByRole('status')).toContainText('저장했습니다');
+  await closeSettings();
+  const third = await openLinux();
+  await command(third, `printf 'GCP[%s]\\n' "\${GIT_CONFIG_PARAMETERS-}"`, 'GCP[]');
+  await push(third, 'off');
+  await pushed(third, 'off', 1);
+  await expect(card(third)).toHaveCount(0);
+  expect(remoteBranches()).not.toContain('refs/heads/off');
+  console.log('PASS with the setting off a new WSL tab gets no helper, and git fails as before');
+
+  for (const tab of [third, second, first]) {
+    await chooseTabMenu(page, '탭 닫기', tab);
+    await expect(tab).toHaveCount(0);
+  }
+  await expect.poll(() => pipeOpen(pipe), { timeout: 10000 }).toBe(false);
+  console.log('PASS closing the WSL tab removes its credential pipe');
+}
 try {
   const page = await launch();
   await expect(
@@ -401,8 +612,9 @@ try {
   await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
-  if (agentOnly) {
-    await checkLocalAgent(page, command, pane);
+  if (agentOnly || credentialsOnly) {
+    if (agentOnly) await checkLocalAgent(page, command, pane);
+    if (credentialsOnly) await checkWslCredentials(page, command);
     throw finished;
   }
   await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');
@@ -599,6 +811,7 @@ try {
     console.log('WSL interactive PTY passed.');
   } else console.log('WSL user distribution absent: real WSL execution pending.');
   await checkLocalAgent(page, command, pane);
+  await checkWslCredentials(page, command);
   // Return to PowerShell before checking shortcuts do not reach the PTY.
   await page.getByRole('tab', { name: /Windows PowerShell/ }).click();
   await page.keyboard.press('Control+Shift+B');
@@ -688,4 +901,5 @@ try {
 } finally {
   await shutdown();
   if (gitServerUp) spawnSync('docker', ['rm', '-f', gitServer], { stdio: 'ignore' });
+  if (httpsServerUp) spawnSync('docker', ['rm', '-f', httpsServer], { stdio: 'ignore' });
 }

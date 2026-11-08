@@ -59,6 +59,8 @@ export type GitCredentialRequest = {
   username: string | null;
   /** The server user's own Git helpers, which may keep the value after a push. */
   serverHelpers: string[];
+  /** git in a WSL tab of this PC asks, not a server (DX.14). */
+  local: boolean;
   seconds: number;
 };
 export type SessionEvent =

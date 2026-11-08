@@ -11,6 +11,7 @@ const base: PendingCredential = {
   path: null,
   username: null,
   serverHelpers: [],
+  local: false,
   seconds: 60,
 };
 
@@ -42,6 +43,20 @@ test('says the value goes to the server, names the server and counts down', asyn
   await expect(card.getByRole('timer')).toContainText('60초');
   await expect(card.getByRole('timer')).toContainText('59초', { timeout: 3000 });
   await expect(card).not.toBeFocused();
+});
+
+test('a WSL tab asks for git in that tab, not for a server', async ({ page }) => {
+  const card = await open(page, { local: true, session: 'Ubuntu-24.04' });
+  await expect(
+    card.getByRole('heading', { name: 'WSL의 git이 HTTPS 자격 증명을 요청합니다' }),
+  ).toBeVisible();
+  await expect(card.getByText('이 WSL 탭의 git으로 전달됩니다', { exact: true })).toBeVisible();
+  await expect(card).not.toContainText('서버로 전달됩니다');
+  await expect(card).not.toContainText('서버의 관리자');
+  await expect(card.getByRole('definition').first()).toHaveText('Ubuntu-24.04');
+  await expect(card.getByRole('term').first()).toHaveText('탭');
+  await card.getByRole('button', { name: '이 탭에서 10분 허용', exact: true }).click();
+  expect(await answers(page)).toEqual([{ decision: 'connection' }]);
 });
 
 test("warns when the server user's own helper may keep the value", async ({ page }) => {

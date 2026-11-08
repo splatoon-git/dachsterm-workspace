@@ -1,7 +1,7 @@
 //! Waiting for the card and what an answer allows: one card per host, the time limits, the
 //! reuse of an allowed value, and the cut-off for repeated requests.
 use super::{Credential, CredentialRequest, Decision, MAX_CHANNELS, protocol};
-use crate::{ssh::Event, storage::Result, windows::Broker};
+use crate::{approval::Notify as Cards, ssh::Event, storage::Result};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -28,10 +28,13 @@ pub(super) const ENDED: &str = "자격 증명 요청이 이미 끝났습니다."
 /// Typing a token on the card.
 pub(super) const INPUT_TIME: Duration = Duration::from_secs(120);
 
-/// One connection's forward, in memory only. Locks are never held across an await.
+/// One connection's forward, or one WSL tab's pipe (DX.14), in memory only. Locks are never held
+/// across an await.
 pub struct Forward {
     pub(super) path: Mutex<Option<String>>,
     pub(super) helpers: Vec<String>,
+    /// A WSL tab: the value goes to git in this PC's WSL, and the card says so.
+    pub(super) local: bool,
     pub(super) channels: AtomicUsize,
     pub(super) pending: Mutex<HashMap<String, Pending>>,
     pub(super) allowed: Mutex<Vec<Allowance>>,
@@ -63,10 +66,11 @@ pub(super) struct Allowance {
 }
 
 impl Forward {
-    pub(super) fn new(path: String, helpers: Vec<String>) -> Self {
+    pub(super) fn new(path: String, helpers: Vec<String>, local: bool) -> Self {
         Self {
             path: Mutex::new(Some(path)),
             helpers,
+            local,
             channels: AtomicUsize::new(0),
             pending: Mutex::default(),
             allowed: Mutex::default(),
@@ -87,9 +91,9 @@ impl Forward {
         self.pending.lock().unwrap().clear();
         self.allowed.lock().unwrap().clear();
     }
-    pub(super) fn notice_once(&self, flag: &AtomicBool, broker: &Broker, message: &str) {
+    pub(super) fn notice_once(&self, flag: &AtomicBool, cards: &dyn Cards, message: &str) {
         if !flag.swap(true, SeqCst) {
-            let _ = broker.send(Event::AgentNotice {
+            let _ = cards.notify(Event::AgentNotice {
                 message: message.into(),
             });
         }
@@ -143,7 +147,7 @@ impl Forward {
     /// One card per host at a time. A request that waited first looks at what the card allowed.
     pub(super) async fn credential(
         &self,
-        broker: &Broker,
+        cards: &dyn Cards,
         session: &str,
         request: protocol::Request,
     ) -> Option<Credential> {
@@ -161,7 +165,7 @@ impl Forward {
             turn.await;
         }
         let _asking = Asking(self, host);
-        match self.approve(broker, session, request.clone()).await? {
+        match self.approve(cards, session, request.clone()).await? {
             Answer::Allow(decision, credential) => {
                 self.allow(decision, &request.host, &credential);
                 Some(credential)
@@ -173,7 +177,7 @@ impl Forward {
     /// the terminal as it would without the app.
     pub(super) async fn approve(
         &self,
-        broker: &Broker,
+        cards: &dyn Cards,
         session: &str,
         ask: protocol::Request,
     ) -> Option<Answer> {
@@ -187,6 +191,7 @@ impl Forward {
             path: ask.path.as_deref().map(plain),
             username: ask.username.as_deref().map(plain),
             server_helpers: self.helpers.clone(),
+            local: self.local,
             seconds: ANSWER_TIME.as_secs(),
         };
         self.pending.lock().unwrap().insert(
@@ -198,7 +203,7 @@ impl Forward {
                 fetching: false,
             },
         );
-        let answer = if broker.send(Event::GitCredential(event)).is_ok() {
+        let answer = if cards.notify(Event::GitCredential(event)).is_ok() {
             self.wait(&id, &mut receiver).await
         } else {
             None
