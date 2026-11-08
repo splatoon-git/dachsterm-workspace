@@ -760,6 +760,20 @@ exec tmux attach -t '=<이름>'
 - 설정 이름을 "SSH 폴더의 Git 상태 자동 조회"에서 "Git 상태 자동 조회"로 바꿨다.
 - 범위 밖: 로컬 탭의 변경 검토(DX.6)는 SSH 전용 그대로다. 추적하지 않는 새 폴더는 Git이 폴더 한 항목으로 알리므로 그 안의 파일에는 표시가 없다(DX.5와 같음).
 
+### DX.16 — 에이전트 시작 옵션 (2026-11-08 추가)
+
+**필요한 이유(사용자 요청):** 설정 → 에이전트의 프리셋이 이름과 명령 글자뿐이고 기본값은 `claude` 4개다. 권한 확인 생략 같은 시작 모드와 `codex`가 선택지로 없다.
+
+**설계:**
+
+- 프리셋 편집을 선택형으로 바꾼다. **프로그램**: `claude` / `codex` / 직접 입력. 고른 프로그램에 맞는 **모드**와 **시작 방식**을 고르면 명령이 만들어지고, 최종 명령 칸은 그대로 보여 주며 고칠 수 있다(직접 입력 유지).
+  - `claude`: 모드 기본 / 편집 자동 승인(`--permission-mode acceptEdits`) / 계획(`--permission-mode plan`) / **권한 확인 생략**(`--dangerously-skip-permissions`). 시작 방식 새로 / 이어서(`--continue`) / 세션 선택(`--resume`) / 새 worktree(`--worktree {name}`).
+  - `codex`: 모드 기본 / 자동(`--full-auto`) / **승인·샌드박스 생략**(`--dangerously-bypass-approvals-and-sandbox`, 별칭 `--yolo`). 시작 방식 새로 / 이어서(`codex resume`).
+- 위험 모드는 프리셋 목록과 시작 확인창(`AgentLaunchDialog`)에 빨간 표시와 한 줄 경고를 둔다. 기본 프리셋에는 넣지 않는다. 권한 생략 모드에서도 SSH 키 서명(DX.2·DX.11)과 Git 자격 증명(DX.12·DX.14)은 앱 승인 카드를 거친다는 점을 경고에 적는다.
+- 화면에는 외부 제품명을 쓰지 않고 명령 이름(`claude`, `codex`)으로 표시한다(engineering-rules §3).
+- 저장 형식은 지금 `{ name, command }`를 유지하고 선택 상태는 명령에서 다시 읽는다(알아볼 수 없는 명령은 직접 입력으로 연다). 기존 저장값과 호환된다.
+- **실측(DX.16.0):** 구현 전 설치된 두 도구의 `--help`로 옵션 이름을 확인해 표를 고친다. 옵션은 도구 버전마다 바뀌므로 표는 `features/agents/agentOptions.ts` 한 곳에 두고 단위 테스트한다.
+
 ## 5. IPC
 
 engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 입력 검증과 위임만 한다. 터미널 소유권이 필요한 명령은 `broker.check(window.label())`로 확인한다.
