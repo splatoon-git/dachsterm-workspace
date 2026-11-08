@@ -245,7 +245,8 @@ test.describe('editing the working tree side', () => {
     await openRow(page, row({}));
     await expect(right(page)).toContainText('inworktree');
     await typeAtEnd(page, 'x', worktreeTitle);
-    await page.keyboard.press('Control+z');
+    // Undo is the editor's own binding, which takes only Cmd on macOS.
+    await page.keyboard.press('ControlOrMeta+z');
     await expect(dirtyTab(page, worktreeTitle)).toHaveCount(0);
   });
 
