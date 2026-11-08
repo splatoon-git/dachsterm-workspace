@@ -1,4 +1,5 @@
 import type { GameId } from '../features/games/catalog';
+import type { ToolId } from '../features/tools/catalog';
 
 /**
  * Pure layout operations for the workspace. Every function returns a new value and leaves its input
@@ -7,6 +8,7 @@ import type { GameId } from '../features/games/catalog';
 export type TabRef =
   | { kind: 'session'; tabId: string }
   | { kind: 'game'; id: GameId }
+  | { kind: 'tool'; id: ToolId }
   | { kind: 'preview' }
   | { kind: 'review'; id: string }
   | { kind: 'file'; id: string; preview?: boolean }

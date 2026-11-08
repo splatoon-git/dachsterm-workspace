@@ -529,3 +529,35 @@ describe('saved layouts', () => {
     expect(layout.focused).toBe(groups(layout.root)[0].id);
   });
 });
+
+describe('tool tabs', () => {
+  const portOpen: TabRef = { kind: 'tool', id: 'portOpen' };
+  const toolKey = tabKey(portOpen);
+
+  it('opens once, whichever group it is in', () => {
+    const opened = openTab(withTabs('a'), portOpen);
+    expect(shape(opened.root)).toEqual(['a', toolKey]);
+    const again = openTab(selectTab(opened, 'root', key('a')), portOpen);
+    expect(shape(again.root)).toEqual(['a', toolKey]);
+    expect(findGroup(again.root, 'root')!.active).toBe(toolKey);
+  });
+
+  it('moves to another group and splits like any tab', () => {
+    const split = splitWith(openTab(withTabs('a', 'b'), portOpen), toolKey, 'root', 'right', ids());
+    expect(shape(split.root)).toEqual({ row: [['a', 'b'], [toolKey]] });
+    const moved = moveTab(split, toolKey, 'root');
+    expect(shape(moved.root)).toEqual(['a', 'b', toolKey]);
+  });
+
+  it('closes back to the tab shown before it', () => {
+    const closed = closeTab(openTab(withTabs('a'), portOpen), toolKey);
+    expect(shape(closed.root)).toEqual(['a']);
+    expect(findGroup(closed.root, 'root')!.active).toBe(key('a'));
+  });
+
+  it('is not restored after a restart, like every other tab', () => {
+    const saved = serialize(openTab(withTabs('a'), portOpen).root);
+    const restored = parseSaved(saved, ids());
+    expect(allTabs(restored.root)).toEqual([]);
+  });
+});

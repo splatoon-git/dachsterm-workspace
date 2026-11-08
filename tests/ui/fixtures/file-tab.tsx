@@ -187,7 +187,8 @@ function Harness() {
           <HeaderMenus
             sidebarOpen={false}
             toggleSidebar={noop}
-            tools={{ tunnels: noop, editor: files.pickDocument }}
+            tools={{ tunnels: noop, editor: files.pickDocument, network: noop }}
+            activeTool={null}
             activeGame={null}
             openGame={noop}
             preview={noop}

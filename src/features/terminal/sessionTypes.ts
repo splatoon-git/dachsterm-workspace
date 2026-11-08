@@ -1,3 +1,4 @@
+import type { AuthPrompt, HostKeyRequest } from '../../components/ConnectionCards';
 import type { DirectoryHookStatus } from './directoryHook';
 import type { GuideProgram } from './guideData';
 
@@ -14,21 +15,6 @@ export type LocalTarget = {
   follow: 'launch' | 'typed' | 'none';
 };
 export type LocalCatalog = { targets: LocalTarget[]; warning: string | null };
-type HostKey = {
-  type: 'hostKey';
-  challenge: string;
-  host: string;
-  port: number;
-  algorithm: string;
-  fingerprint: string;
-};
-export type AuthPrompt = {
-  type: 'authPrompt';
-  challenge: string;
-  name: string;
-  instructions: string;
-  prompts: { prompt: string; echo: boolean }[];
-};
 /**
  * A server, or a program in a local tab (`local`, DX.13), asks the app's agent to sign. Every text
  * field is already plain and short.
@@ -69,13 +55,13 @@ export type SessionEvent =
   | AgentSignRequest
   | GitCredentialRequest
   | { type: 'agentNotice'; message: string }
-  | HostKey
+  | HostKeyRequest
   | { type: 'state'; status: string; message: string }
   | { type: 'data'; seq: number; bytes: number[] };
 export type SessionState = {
   status: string;
   message: string;
-  hostKey: HostKey | null;
+  hostKey: HostKeyRequest | null;
   authPrompt?: AuthPrompt | null;
   directory?: string | null;
   directoryHook?: DirectoryHookStatus;

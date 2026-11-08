@@ -27,7 +27,6 @@ import {
 } from './workspaceLayout';
 import { InputScopeControl, InputScopeMark } from '../features/terminal/InputScope';
 import { useInputScope } from '../features/terminal/useInputScope';
-import { VaultDialog, type VaultStatus } from '../features/sessions/VaultDialog';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '../themes/useTheme';
 import {
@@ -48,6 +47,8 @@ import { useInputPanes } from './inputPanes';
 import { GroupDialog } from './GroupDialog';
 import { useReviewTabs } from './useReviewTabs';
 import { useFileTabs } from './useFileTabs';
+import { useToolTabs } from './useToolTabs';
+import { useVaultGate } from './useVaultGate';
 import { tmuxCloseNotice } from './tmuxNotice';
 import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
@@ -123,9 +124,6 @@ export function App() {
   const workspace = useWorkspaceLayout();
   const { open: openWorkspaceTab } = workspace;
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
-  const [vaultOpen, setVaultOpen] = useState(false);
-  /** The connection that waits for the vault to unlock. */
-  const [pendingVault, setPendingVault] = useState<(() => void) | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [gameTabs, setGameTabs] = useState<GameId[]>([]);
   const survivorClose = useRef<(() => boolean) | null>(null);
@@ -156,6 +154,7 @@ export function App() {
   };
   const [error, setError] = useState('');
   const { fullscreen, toggleFullscreen } = useFullscreen(setError);
+  const vault = useVaultGate(setError);
   const [form, setForm] = useState<Profile | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
   const [remove, setRemove] = useState<Profile | null>(null);
@@ -205,19 +204,8 @@ export function App() {
     remember = false,
     opening: Opening = {},
   ) {
-    if (value === null && profile.hasSecret) {
-      try {
-        const status = await call<VaultStatus>('vault_status');
-        if (status.enabled && !status.unlocked) {
-          setPendingVault(() => () => void connect(profile, null, existing, false, opening));
-          setVaultOpen(true);
-          return;
-        }
-      } catch (e) {
-        setError(errorText(e));
-        return;
-      }
-    }
+    const retry = () => void connect(profile, null, existing, false, opening);
+    if (value === null && profile.hasSecret && !(await vault.ready(retry))) return;
     closeDrawer();
     if (existing) {
       void existing.reconnect(value, profile, remember);
@@ -328,7 +316,7 @@ export function App() {
     const game = games.find((g) => tabKey({ kind: 'game', id: g.id }) === key);
     if (session) closeTab(session);
     else if (game) closeGame(game.id);
-    else if (!reviews.close(key) && !files.close(key)) workspace.close(key);
+    else if (!reviews.close(key) && !files.close(key) && !tools.close(key)) workspace.close(key);
   };
   const splitTab = (t: TerminalSession, beside: Beside) =>
     t.localTarget
@@ -336,6 +324,12 @@ export function App() {
       : requestConnect(savedProfile(t), undefined, { beside });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
   const files = useFileTabs({ workspace, sessions: tabs, narrow, fail: setError });
+  const tools = useToolTabs({
+    workspace,
+    profiles: snapshot.profiles,
+    sessions: tabs,
+    vaultReady: vault.ready,
+  });
   useWindowClose({
     confirm: async () => settleSurvivorBeforeClose() && files.confirmWindowClose(),
     blocked: () => !settleSurvivorBeforeClose() || files.hasUnsaved(),
@@ -389,6 +383,7 @@ export function App() {
       );
     }
     if (tab.kind === 'review') return reviews.renderTab(tab, active, select);
+    if (tab.kind === 'tool') return tools.renderTab(tab, active, select);
     if (tab.kind === 'file' || tab.kind === 'diff') return files.renderTab(tab, active, select);
     if (tab.kind === 'preview')
       return (
@@ -414,6 +409,7 @@ export function App() {
   };
   const renderCell = (tab: TabRef, { visible, focused }: CellState) => {
     if (tab.kind === 'review') return reviews.renderCell(tab);
+    if (tab.kind === 'tool') return tools.renderCell(tab, visible);
     if (tab.kind === 'file' || tab.kind === 'diff') return files.renderCell(tab);
     if (tab.kind === 'preview') return <TerminalPreviewCell theme={theme} />;
     if (tab.kind === 'game')
@@ -458,7 +454,12 @@ export function App() {
           toggleSidebar={() =>
             fullscreen ? void showSidebar(sidebarView) : setSidebarOpen((v) => !v)
           }
-          tools={{ tunnels: () => runShortcut({ name: 'tunnels' }), editor: files.pickDocument }}
+          tools={{
+            tunnels: () => runShortcut({ name: 'tunnels' }),
+            editor: files.pickDocument,
+            network: tools.open,
+          }}
+          activeTool={focusedTab?.kind === 'tool' ? focusedTab.id : null}
           activeGame={activeGame}
           openGame={openGame}
           preview={() => workspace.open({ kind: 'preview' })}
@@ -580,6 +581,7 @@ export function App() {
               ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
               ...reviews.order,
               ...files.order,
+              ...tools.order,
             ]}
             renderTab={renderTab}
             renderCell={renderCell}
@@ -716,15 +718,7 @@ export function App() {
           close={() => setTunnelsOpen(false)}
         />
       )}
-      {vaultOpen && (
-        <VaultDialog
-          close={() => {
-            setVaultOpen(false);
-            setPendingVault(null);
-          }}
-          unlocked={pendingVault ?? undefined}
-        />
-      )}
+      {vault.dialog}
       {agent.dialogs}
       <SettingsDialog
         open={settingsOpen}

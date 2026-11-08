@@ -12,16 +12,28 @@ use russh::{
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::mpsc, time::timeout};
 
+/// Asks for a secret that is not saved. `last` is the session itself rather than a jump host.
 pub async fn hop_secret(
     p: &crate::storage::Profile,
+    last: bool,
     sink: &Sink,
     replies: &mut mpsc::Receiver<AuthReply>,
 ) -> Result<zeroize::Zeroizing<String>> {
     let challenge = uuid::Uuid::new_v4().to_string();
     sink(Event::AuthPrompt {
         challenge: challenge.clone(),
-        name: "경유지 인증".into(),
-        instructions: "이번 연결에만 사용합니다. 저장하려면 해당 경유 프로필을 편집하세요.".into(),
+        name: if last {
+            "세션 인증"
+        } else {
+            "경유지 인증"
+        }
+        .into(),
+        instructions: if last {
+            "이번 연결에만 사용합니다. 저장하려면 세션을 편집하세요."
+        } else {
+            "이번 연결에만 사용합니다. 저장하려면 해당 경유 프로필을 편집하세요."
+        }
+        .into(),
         prompts: vec![AuthPrompt {
             prompt: if p.auth == "key" {
                 "Passphrase (없으면 빈 값)"

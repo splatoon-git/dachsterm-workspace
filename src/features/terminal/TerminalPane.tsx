@@ -9,13 +9,13 @@ import {
 import '@xterm/xterm/css/xterm.css';
 import type { ThemeDefinition } from '../../themes/contract';
 import type { TerminalSession } from './session';
-import { errorText } from '../../lib/ipc';
+import { call, errorText } from '../../lib/ipc';
+import { AuthPromptCard, HostKeyCard } from '../../components/ConnectionCards';
 import { EndedCard } from '../../components/EndedCard';
 import { SessionLogDialog } from './SessionLog';
 import { TerminalSearch } from './TerminalSearch';
 import { usePaneView } from './paneView';
 import { capabilities } from './sessionKind';
-import { AuthenticationPrompt } from './AuthenticationPrompt';
 import { attachFontSizeWheel } from './fontWheel';
 import { afterRendererResumes, throttleTrailing } from './fitThrottle';
 import { PasteConfirm } from './PasteConfirm';
@@ -239,22 +239,7 @@ export function TerminalPane({
         <EndedCard message={state.message} reconnect={reconnect} close={close} />
       )}
       {state.hostKey && (
-        <div className="trust-card" role="alert" aria-label="최초 호스트키 확인">
-          <h2>이 서버를 신뢰하시겠습니까?</h2>
-          <p>
-            서버 관리자가 제공한 지문과 비교하세요. 신뢰하면 이 기기의 known_hosts에 저장됩니다.
-          </p>
-          <p>
-            {state.hostKey.host}:{state.hostKey.port} · {state.hostKey.algorithm}
-          </p>
-          <code>{state.hostKey.fingerprint}</code>
-          <div className="form-actions">
-            <button onClick={() => void session.trust(false)}>거부</button>
-            <button className="primary" onClick={() => void session.trust(true)}>
-              지문 확인 · 신뢰하고 연결
-            </button>
-          </div>
-        </div>
+        <HostKeyCard request={state.hostKey} answer={(accept) => void session.trust(accept)} />
       )}
       {sign?.type === 'gitCredential' ? (
         <GitCredentialCard
@@ -280,10 +265,18 @@ export function TerminalPane({
         />
       )}
       {state.authPrompt && (
-        <AuthenticationPrompt
+        <AuthPromptCard
           key={state.authPrompt.challenge}
-          session={session}
+          host={session.profile.host}
           prompt={state.authPrompt}
+          reply={(responses) =>
+            call('auth_reply', {
+              id: session.connectionId,
+              challenge: state.authPrompt?.challenge,
+              responses,
+            })
+          }
+          cancel={() => void session.disconnect()}
         />
       )}
       {paste !== null && paste.id === session.connectionId && state.status === 'connected' && (
