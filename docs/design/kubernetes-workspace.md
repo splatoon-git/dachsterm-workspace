@@ -1,9 +1,9 @@
 # 쿠버네티스 작업 화면 — 설계안
 
 - 작업 ID: **KV.0~KV.12**, 설계일: **2026-11-07**.
-- 현재 상태: **설계 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §20](../roadmap.md)이다.
+- 현재 상태: **설계 완료, KV.0 kind 실측 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §20](../roadmap.md)이다.
 - 관계: [roadmap §16 6.7](../roadmap.md)의 PodTree 내장 후속이다. **PodTree는 기능 레퍼런스로 삼고 앱 화면으로 새로 만든다.** 공용 원격 실행은 [DX.1](developer-workflow.md)을 쓴다.
-- 기준 자료: 저장소 코드 `a01efa6`, 내장 스크립트 `podtree.sh` 2.4.0, 사용자의 실사용 요구. 실제 클러스터 실행 결과는 아직 없다. 확정되지 않은 동작은 **KV.0 실측**으로 표시한다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
+- 기준 자료: 저장소 코드 `a01efa6`, 내장 스크립트 `podtree.sh` 2.4.0, 사용자의 실사용 요구. kind 클러스터 실측은 [검증 기록](../verification/kubernetes-workspace.md#kv0-실측-2026-11-08)에 있고, 실제 운영 클러스터 결과는 아직 없다. 확정되지 않은 동작은 **KV.0 실측**으로 표시한다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
 - 기능 이름은 미정이다. 이 문서는 "쿠버네티스 작업 화면"이라 부른다.
 
 ## 1. 목표와 경계
@@ -62,8 +62,8 @@
 
 ```ts
 workspace: 'terminal' | 'kubernetes'; // 기본 terminal
-kube?: {
-  context: string;     // 필수. 전역 current-context를 쓰거나 바꾸지 않는다
+kube?: {              // 첫 접속의 탐지가 채운다. 없으면 탭 안에서 KV.1 설정을 먼저 보여 준다
+  context: string;     // 전역 current-context를 쓰거나 바꾸지 않는다
   namespace: string;   // 빈 값은 전체
   kubectl: string;     // 탐지 또는 사용자 입력 명령
   kubeconfig: string;  // 서버의 경로. 내용은 읽거나 저장하지 않는다
@@ -71,10 +71,16 @@ kube?: {
 };
 ```
 
-- 세션 폼에 **접속 후 화면**(터미널 / 쿠버네티스)을 둔다. 쿠버네티스를 고르면 저장 전에 KV.1의 탐지를 거쳐 context를 고른다.
+- 세션 폼에 **접속 후 화면**(터미널 / 쿠버네티스)을 둔다. 저장할 때는 종류만 고른다. 서버가 꺼져 있어도 저장할 수 있게 탐지와 context 선택은 **첫 접속 때 탭 안에서** 한다(사용자 결정 2026-11-08).
 - 세션 JSON v3은 바꾸지 않는다. 내보내기와 가져오기에서 `workspace`, `kube`를 기본값으로 되돌린다. 가져온 파일이 운영 모드를 켜는 경로를 막기 위해서다. `tmuxSession`과 같은 규칙이다([DX §3.2](developer-workflow.md)).
 
 **접속 흐름:** 일반 SSH 연결과 같이 인증·호스트키를 거친 뒤 탭에 **대시보드**를 표시한다. 탭 안 메뉴로 화면을 전환한다. 셸 PTY는 숨겨져 살아 있으므로 전환해도 상태가 유지된다.
+
+**진입점:**
+
+- 연결 트리에서 쿠버네티스 세션을 연다. 트리에서는 아이콘으로만 구분한다.
+- 이미 터미널로 접속 중이면 **탭 헤더 우클릭 → 쿠버네티스 화면 열기**. 지금 연결을 그대로 쓰고 세션을 고치거나 다시 접속하지 않는다.
+- SSH 없이 쓰는 경우는 연결 트리의 **로컬 클러스터**(KV.11).
 
 - `app/SessionPane.tsx`가 `TerminalPane`과 `KubeWorkspace` 표시를 고른다. `Tab`을 옮겨 만든 `App.tsx` 예산 안에서 연결한다.
 - 분할 화면에서는 일반 패널처럼 동작한다. 1차에서 독립 창 분리는 끈다.
@@ -114,7 +120,7 @@ kube?: {
 | `kube/action.rs` | 쓰기 동작 enum과 운영 모드 재확인 |
 | `features/kube/KubeWorkspace.tsx`, `KubeDashboard.tsx`, `KubeTree.tsx`, `KubeDetail.tsx`, `KubeActions.tsx`, `IngressView.tsx`, `LogSearch.tsx`, `WorkerView.tsx` | 화면. 기능 CSS는 `kube.css` |
 | `features/kube/tree.ts`, `dashboard.ts`, `problems.ts`, `history.ts`, `workers.ts`, `polling.ts` | 묶기, 필터, 집계, 문제 판정, 변화 기록, 반환 판정, 조회 일정. 순수 로직 |
-| `features/sessions/KubeSetup.tsx` | 탐지와 context 선택 |
+| `features/kube/KubeSetup.tsx` | 첫 접속 때 탭 안에서 보여 주는 탐지, 권한 안내, context 선택 |
 
 ### 3.3 파드 셸과 로그 탭
 
@@ -143,13 +149,16 @@ kind 클러스터(기존 [검증 절차](../verification/phase63-67.md))와, 사
 | 질문 | 결과에 따른 처리 |
 |---|---|
 | `"$SHELL" -lic`로 `kubectl`과 `KUBECONFIG`를 찾을 수 있는가. 출력이 섞이는가 | KV.1 탐지 순서 확정 |
-| kubeconfig가 root 전용인 서버(RKE2 등)에서 어떤 오류가 나는가 | 안내 문구 결정. `sudo`는 1차에서 쓰지 않는다 |
+| kubeconfig가 root 전용인 서버(RKE2 등)에서 어떤 오류가 나는가. 인증서가 낡았을 때의 오류와 구분되는가 | KV.1 안내 문구와 판별 기준 확정 |
+| KV.1의 복사 명령이 일반 계정에서 동작하고 이후 `kubectl`이 같은 경로로 되는가 | KV.1 복사 절차 확정 |
 | 파드 5,000개 기준 go-template 출력 크기와 시간 | 상한과 주기 확정 |
 | `container_threads`를 kubelet 메트릭으로 읽을 수 있는가(`nodes/proxy` 권한) | KV.9의 스레드 경로 선택 |
 | 쉘 없는 이미지(distroless)에서 프로브가 어떻게 실패하는가 | KV.9 표시 확정 |
 | vLLM 메트릭 이름과 포트, 일반 파드의 `/metrics` 후보 탐지가 동작하는가 | KV.9 프리셋 확정 |
 | ingress-nginx 컨트롤러 메트릭 이름과 접근 권한 | KV.8 범위 확정 |
 | `MaxSessions` 기본값에서 조회, 로그 검색, 파드 탭이 함께 동작하는가 | 동시 실행 제한 확정 |
+
+**결과(2026-11-08, kind):** [검증 기록](../verification/kubernetes-workspace.md#kv0-실측-2026-11-08). 아래 각 작업에 반영했다. 실제 RKE2, 실제로 만료된 인증서, vLLM 메트릭, 실제 대형 클러스터는 환경이 없어 대기다.
 
 ### KV.1 — kubectl 찾기와 세션 연결
 
@@ -159,14 +168,45 @@ kind 클러스터(기존 [검증 절차](../verification/phase63-67.md))와, 사
 
 1. 현재 환경의 `command -v kubectl`.
 2. 없으면 `"$SHELL" -lic`로 사용자 환경에서 `command -v kubectl`과 `$KUBECONFIG`를 읽는다. rc 출력이 섞일 수 있으므로 표식 뒤만 파싱한다(DX.1).
-3. 찾은 **절대 경로**와 kubeconfig **경로**를 저장한다. 이후 호출은 rc 파일을 읽지 않아 빠르고 결과가 일정하다.
-4. 찾지 못하면 사용자가 입력한다. `microk8s kubectl` 같은 두 단어 명령을 허용하되, 셸 메타문자는 거부한다.
+3. 그래도 없으면 잘 알려진 위치를 확인한다. `kubectl`은 `/var/lib/rancher/rke2/bin/kubectl`, kubeconfig는 `~/.kube/dachsterm.config`, `~/.kube/config`, `/etc/rancher/rke2/rke2.yaml`, `/etc/rancher/k3s/k3s.yaml`, `/etc/kubernetes/admin.conf` 순서다.
+4. 찾은 **절대 경로**와 kubeconfig **경로**를 저장한다. 이후 호출은 rc 파일을 읽지 않아 빠르고 결과가 일정하다.
+5. 찾지 못하면 사용자가 입력한다. `microk8s kubectl` 같은 두 단어 명령을 허용하되, 셸 메타문자는 거부한다.
 
 호출은 항상 `KUBECONFIG=<경로> <kubectl> --context <이름> --request-timeout=8s ...` 형식이다. 전역 current-context를 쓰거나 바꾸지 않는다.
 
+**탐지 구현(KV.0 결과):** 2단계 명령에는 `</dev/null`을 붙인다. `remote_exec.rs`가 채널에 EOF를 보내지 않아 rc 안의 `read`가 그대로 멈추기 때문이다. 앞뒤 표식 사이만 읽고 stderr는 무시하며, 끝 표식이 없으면 실패로 보고 다음 단계로 넘어간다.
+
+**상태 판별(KV.0 결과):** `kubectl`은 대부분 종료 코드 1이므로, 먼저 kubeconfig에 `test -e`, `test -r`을 실행해 **없음**과 **읽을 수 없음**을 종료 코드로 가른다. 파일이 없을 때 `KUBECONFIG`를 그대로 넘기면 `localhost:8080` 연결 거부라는 엉뚱한 오류가 나오기 때문이다. 나머지는 klog 줄(`[EWIF]숫자4개 `로 시작)을 버린 stderr 마지막 줄로 판단한다.
+
+| 마지막 줄 | 상태 | 화면 |
+|---|---|---|
+| `You must be logged in to the server` | 인증 실패 | 복사본이 낡았을 수 있다는 안내와 복사 버튼 |
+| `Error from server (Forbidden)` | 권한 없음 | 그 항목만 비우고 이유 표시 |
+| `context was not found` | context 없음 | context 다시 선택 |
+| `was refused`, `Unable to connect to the server` | 클러스터 연결 불가 | 마지막 데이터 유지, 몇 초 전인지 표시 |
+
+이 분류는 외부 프로그램의 출력을 읽는 유일한 함수에 두고 enum으로 돌려준다(규칙 §6). 실측 문구를 단위 테스트 입력으로 쓴다.
+
+API 서버가 응답하지 않으면 `--request-timeout=8s`를 줘도 재시도 때문에 약 36초 걸린다. 이 인자에 의존하지 말고 앱 쪽 전체 시간 상한을 둔다(KV.2).
+
+**권한(사용자 결정 2026-11-08):** 앱의 조건은 **접속한 계정으로 `kubectl`이 실행되는 것** 하나다. root, `sudo` 계정, 일반 계정을 구분하지 않고 앱은 `sudo`를 실행하지 않으며 `sudo`·root 암호를 받거나 보관하지 않는다. 앱이 `sudo`를 직접 쓰면 NOPASSWD, 암호 입력, `requiretty`마다 경로가 갈리고 암호 보관과 틀린 암호의 계정 잠금 방지가 필요해지기 때문이다.
+
+kubeconfig를 읽을 수 없으면 탭에 안내를 보여 준다.
+
+1. "이 계정은 쿠버네티스 설정을 읽을 수 없습니다"와 **터미널에서 설정 복사** 버튼, root로 접속하는 다른 방법을 표시한다. 대부분의 `sudo` 계정은 root 암호를 모르고 OpenSSH 기본값도 root 암호 로그인을 막으므로 복사를 먼저 보여 준다.
+2. 버튼을 누르면 탭을 `서버 터미널`로 바꾸고 다음 명령을 입력한다. `sudo` 암호는 사용자가 터미널에 직접 입력한다. 셸이 프롬프트 상태가 아니면 버튼을 막는다(`gitTerminal.ts`와 같은 판단).
+
+   ```sh
+   mkdir -p ~/.kube && sudo install -m 600 -o "$(id -u)" -g "$(id -g)" <kubeconfig 경로> ~/.kube/dachsterm.config
+   ```
+
+3. **다시 확인**을 누르면 탐지를 다시 하고 `~/.kube/dachsterm.config`를 세션에 저장한다. 이후로는 일반 계정 경로와 같다.
+
+자동 실행하지 않고 버튼으로 두는 이유는 클러스터 관리자 인증 정보가 홈 폴더에 파일로 남기 때문이다. 기존 `~/.kube/config`를 덮어쓰지 않게 전용 파일을 쓴다. 서버와 계정 조합마다 한 번이면 되고, 인증서 갱신이나 클러스터 재설치로 복사본이 낡으면 인증 실패로 판별해 같은 안내를 다시 보여 준다.
+
 기존 터미널 UI에도 적용한다: `podtree/launch.rs`의 `KUBECTL=kubectl`과 `DEPS`의 `kubectl` 검사를 탐지 결과로 바꾼다. 함께 Windows에서 고를 수 없는 기본 셸을 실행 위치 목록(`PodTreeDialog.tsx:32`)에서 뺀다.
 
-**합격:** `.bashrc`에만 `PATH`, `KUBECONFIG`가 있는 서버에서 동작한다. 세션을 저장하면 접속 후 바로 화면이 열린다.
+**합격:** `.bashrc`에만 `PATH`, `KUBECONFIG`가 있는 서버에서 동작한다. 첫 접속에서 설정을 마친 세션은 다음 접속부터 바로 화면이 열린다. root 전용 kubeconfig 서버에서 복사 버튼과 다시 확인으로 대시보드까지 들어간다.
 
 ### KV.2 — 트리와 상태
 
@@ -174,7 +214,7 @@ kind 클러스터(기존 [검증 절차](../verification/phase63-67.md))와, 사
 
 | 데이터 | 명령 | 주기 |
 |---|---|---|
-| 파드 | `get pods` go-template | 5초 |
+| 파드 | `get pods` go-template | 5초. 다음 조회는 이전 조회가 끝난 뒤 `max(5초, 소요 시간 × 3)` 뒤에 한다 |
 | 워크로드 | `get deployments,statefulsets,daemonsets` | 15초 |
 | 서비스 | `get services,endpoints` | 30초 |
 | 노드 | `get nodes` | 15초 |
@@ -182,7 +222,8 @@ kind 클러스터(기존 [검증 절차](../verification/phase63-67.md))와, 사
 | 경고 이벤트 | `get events --field-selector type=Warning` | 15초 |
 
 - 작업 화면이 보일 때만 조회한다. 탭이 숨겨지면 멈추고, 다시 보이면 바로 갱신한다. 종류별 동시 요청은 1개다(규칙 §7).
-- 동시 원격 실행은 연결당 3개로 제한한다(로그 검색은 별도 상한). 출력 32MiB, 시간 10초가 상한이다. 초과하면 namespace를 좁히도록 안내하고 주기를 늘린다.
+- 동시 원격 실행은 연결당 3개로 제한한다(로그 검색은 별도 상한). 출력 32MiB, 시간 20초가 상한이다. 초과하면 namespace를 좁히도록 안내하고 주기를 늘린다. KV.0에서 파드 5,115개는 3.75MB, 약 6초였다(네트워크 지연 없음, 시간 10초는 여유가 부족해 20초로 올렸다). 전체 namespace 조회는 `-o json`을 쓰지 않는다(65.8MB).
+- `MaxSessions` 기본값 10은 **셸, SFTP, 모니터링, Git 상태, 조회, 로그 검색, 파드 탭이 나눠 쓰는 한도**다. 채널을 열 수 없으면 조회는 다음 주기로 미루고, 파드 탭과 로그 검색은 서버의 동시 세션 한도 때문이라고 안내한다.
 - 실패해도 마지막 데이터를 유지하고 **몇 초 전 데이터인지** 표시한다. 오래된 값을 현재 값처럼 보이지 않게 한다. 권한 없는 항목은 그 항목만 비운다.
 - 서버 문자열은 일반 텍스트로만 표시한다. 명령 인자로 다시 쓰는 이름은 쿠버네티스 이름 규칙으로 검증한다.
 
@@ -209,7 +250,7 @@ kind 클러스터(기존 [검증 절차](../verification/phase63-67.md))와, 사
 | **최근 경고** | 최근 10분 Warning 이벤트 | `get events` |
 
 - 추세는 앱이 켜진 동안의 표본(최대 120개)만 메모리에 둔다. 차트는 기존 모니터링 코드를 재사용한다.
-- metrics-server가 없으면 사용량 대신 요청량과 할당량을 표시하고 이유를 밝힌다.
+- metrics-server가 없으면(`error: Metrics API not available`) 사용량 대신 요청량과 할당량을 표시하고 이유를 밝힌다.
 - 집계와 정렬은 `dashboard.ts`의 순수 함수로 두고 단위 테스트한다.
 
 ### KV.4 — 상세, 로그, 파드 셸
@@ -279,7 +320,9 @@ enum Action { DeletePod { .. }, RolloutRestart { .. }, Cordon { .. }, Uncordon {
 | 주소 미할당 | `status.loadBalancer`가 비어 있음 |
 | TLS Secret 없음 | `get secret -o name`으로 이름만 대조한다. 값은 읽지 않는다 |
 
-**트래픽(컨트롤러 메트릭이 읽힐 때만):** 컨트롤러 파드의 `/metrics`를 `get --raw` proxy로 읽어 호스트별 요청률, 2xx·4xx·5xx 비율, 지연을 표시한다. 사용자 환경인 ingress-nginx를 지원한다(`nginx_ingress_controller_requests` 등, 이름은 KV.0에서 확인). 다른 컨트롤러는 후속이다. 메트릭을 못 읽으면 구성 점검만 표시한다.
+**트래픽(컨트롤러 메트릭이 읽힐 때만):** 컨트롤러 파드의 `/metrics`를 `get --raw` proxy로 읽어 호스트별 요청률, 2xx·4xx·5xx 비율, 지연을 표시한다. 사용자 환경인 ingress-nginx를 지원한다(`nginx_ingress_controller_requests`, `_request_duration_seconds`, `_nginx_process_connections`, KV.0에서 확인). 다른 컨트롤러는 후속이다. 메트릭을 못 읽으면 구성 점검만 표시한다.
+
+KV.0 결과: v1.15.1 정적 매니페스트는 **메트릭이 꺼져 있다**(`--enable-metrics=true` 필요). `/metrics`가 읽혀도 이 이름이 없으면 오류가 아니라 "컨트롤러 메트릭이 꺼져 있음"으로 표시한다. `pods/proxy` get이 없으면 그 이유만 표시한다. 상류 저장소가 보관(archived) 상태이므로 트래픽 표시는 이 컨트롤러 안에서만 유지하고 범위를 넓히지 않는다. 구성 점검은 컨트롤러와 무관하다.
 
 **이동:** 인그레스 행에서 백엔드 파드로 이동하고, 컨트롤러 로그를 해당 호스트로 검색한다(KV.5). 5xx 조사의 기본 흐름이다.
 
@@ -290,7 +333,7 @@ enum Action { DeletePod { .. }, RolloutRestart { .. }, Cordon { .. }, Uncordon {
 **경로 A: 앱 메트릭(정확, 우선).** 앱이 Prometheus `/metrics`를 제공하면 `get --raw` proxy로 읽는다.
 
 - **vLLM을 첫 프리셋으로 삼는다**(사용자 환경). 실행·대기 요청, 처리량, 완료 수를 원본 탐지 규칙으로 찾는다.
-- 특정 앱에 묶지 않는다. 파드의 `containerPort`와 `prometheus.io/*` annotation으로 `/metrics` 후보를 찾아, 읽히면 **그 파드의 유용한 지표**를 목록으로 보여주고 사용자가 고정할 수 있게 한다. 사용 중, 전체, 완료 수에 해당하는 메트릭을 지정하면 반환 판정을 켠다.
+- 특정 앱에 묶지 않는다. 파드의 `containerPort`와 `prometheus.io/*` annotation으로 `/metrics` 후보를 찾아, 읽히면 **그 파드의 유용한 지표**를 목록으로 보여주고 사용자가 고정할 수 있게 한다. KV.0에서 ingress-nginx의 10254처럼 선언되지 않은 메트릭 포트를 확인했으므로 **포트와 경로를 직접 입력하는 칸**을 함께 둔다. 후보의 404·연결 거부는 오류가 아니라 "메트릭 없음"으로 처리한다. 사용 중, 전체, 완료 수에 해당하는 메트릭을 지정하면 반환 판정을 켠다.
 - GET과 `/metrics` 형식 경로만 허용한다. 감시 대상 합계 파드 50개, 동시 4개, 주기 15초.
 
 **경로 B: 프로세스 프로브(앱 수정 불필요).** 파드 안에서 고정 읽기 스크립트를 실행한다.
@@ -306,7 +349,7 @@ enum Action { DeletePod { .. }, RolloutRestart { .. }, Cordon { .. }, Uncordon {
 | FD | 프로세스별 사용량과 한도 |
 | 연결 | TCP 상태별 수(`CLOSE_WAIT` 증가 강조), LISTEN 포트, SYN backlog와 drop, 재전송 |
 
-- 출력 1MiB, 시간 5초로 제한한다. `sh`나 `cat`이 없는 이미지는 "이 컨테이너에서는 읽을 수 없음"으로 표시한다.
+- 출력 1MiB, 시간 5초로 제한한다. `sh`나 `cat`이 없는 이미지는 "이 컨테이너에서는 읽을 수 없음"으로 표시한다. KV.0 기준 이 경우 종료 코드 1과 `executable file not found` 또는 `no such file or directory`가 나온다.
 - 상세의 **런타임** 탭에서 **수집**을 누를 때 실행한다. 워커 감시를 켠 워크로드만 30초 이상 간격으로 반복한다.
 - **조회 모드에서 허용한다.** 기존 터미널 UI는 조회 모드에서 exec를 전부 막았지만, 여기서는 앱에 고정된 읽기 스크립트만 쓴다. 임의 명령 경로가 아니다. 워크로드별로 처음 한 번 "파드 안에서 읽기 명령을 실행합니다"를 확인받는다. RBAC에 `pods/exec`가 없으면 그 사실만 표시한다.
 
@@ -321,7 +364,7 @@ enum Action { DeletePod { .. }, RolloutRestart { .. }, Cordon { .. }, Uncordon {
 
 N은 기본 5분이고 워크로드별로 바꿀 수 있다. **모두 "의심"으로 표시한다.** 메트릭만으로 원인을 단정하지 않는다. 결과는 대시보드와 변화 기록에 올리고, 해당 파드의 런타임 탭과 로그 검색으로 이어 준다.
 
-exec 없이 스레드 수를 얻는 경로(kubelet `container_threads`)가 KV.0에서 확인되면 트리 행에도 표시한다.
+exec 없이 스레드 수를 얻는 경로(`get --raw /api/v1/nodes/<노드>/proxy/metrics/cadvisor`의 `container_threads`)는 KV.0에서 확인했다. `nodes/proxy` get이 필요하고, 노드 하나의 응답이 작은 시험 노드에서도 411KB이므로 트리 전체를 주기 조회하지 않고 **선택한 파드의 노드만** 읽어 상세의 런타임 탭에 표시한다. `container`가 빈 행은 cgroup 합계이므로 쓰지 않는다. 권한이 없으면 경로 B로 넘어간다.
 
 ### KV.10 — vLLM·GPU
 
@@ -340,7 +383,7 @@ SSH 없이 내 PC의 kubeconfig로 접속한다. Mac 판매에 필요할 가능�
 
 ### KV.12 — 터미널 UI 제거와 문서
 
-- **KV.4까지 쓸 수 있어도 기존 터미널 UI는 바로 없애지 않는다.** 그때까지 도구 메뉴의 **PodTree 열기**를 유지한다.
+- **KV.4까지 쓸 수 있어도 기존 터미널 UI 코드는 바로 없애지 않는다.** 도구 메뉴의 **PodTree 열기**는 TW.9에서 이미 숨겼으므로, 그동안 화면에서 여는 경로는 없다.
 - 기능 비교표를 만들어 패킷 캡처, 네트워크 2초 화면, 여러 파드 로그, 트리 저장을 옮길지 뺄지 정한다. 사용자가 확인하면 스크립트와 `Script` 경로를 제거한다.
 - 사용 안내서, 전체 회귀, Mac 실기기 검증을 진행한다. 화면 문구에는 외부 제품명을 쓰지 않는다(규칙 §3).
 
@@ -365,7 +408,7 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이며 �
 ## 6. 보안 요약
 
 - 클러스터 데이터는 신뢰할 수 없는 입력이다. 길이를 먼저 확인하고, 일반 텍스트로 표시하고, 명령 인자로 쓰기 전에 이름 규칙을 검증한다. 모든 명령은 고정 형식이고 값은 인용 함수를 거친다.
-- kubeconfig, 토큰, 인증서 내용을 읽거나 저장하지 않는다. 경로만 저장하며 내보내기에서 뺀다.
+- kubeconfig, 토큰, 인증서 내용을 읽거나 저장하지 않는다. 경로만 저장하며 내보내기에서 뺀다. KV.1의 복사는 서버 안에서 사용자가 버튼으로 실행하며 내용은 앱으로 오지 않는다.
 - 쓰기는 `Action` enum뿐이고 Rust가 운영 모드를 재확인한다. 임의 `kubectl` 입력 경로를 만들지 않는다.
 - 파드 안 프로브와 메트릭 proxy는 고정 스크립트와 제한된 경로만 쓴다. Secret은 이름 대조만 하고 값은 조회하지 않는다.
 - 로그 검색 키워드는 인자로만 전달되고 셸 코드가 되지 않는다.
@@ -411,5 +454,5 @@ Mock으로 실제 클러스터 검증을 대체하지 않는다. 기본 트리 �
 |---|---|
 | 포트 포워딩 | 후속. AT.6 임시 터널과 묶는다 |
 | 독립 창 분리, 로그 검색의 정규식, 여러 파드 실시간 합치기 | 후속 |
-| `sudo kubectl` | 후속. KV.0 결과를 보고 판단한다 |
+| 앱이 실행하는 `sudo kubectl`, `sudo`·root 암호 입력 | 1차 제외(사용자 결정 2026-11-08). KV.1의 복사 안내로 대신한다. 실제로 필요해지면 `kube/runner.rs`의 호출 앞에 붙이는 방식으로 넣는다 |
 | 장기 기록, 앱 밖 감시, 통합 대시보드, YAML 적용, Helm, RBAC 관리, CRD 탐색 | 제외. §1 경계 |
