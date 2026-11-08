@@ -14,13 +14,34 @@
   height: 28px;
   padding: 0 var(--space-xs) 0 var(--space-sm);
 }
-.git-view-branch {
+.git-view-branch-area {
   display: flex;
   flex: 1;
   align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.git-view-branch {
+  display: inline-flex;
+  flex: 0 1 auto;
+  justify-content: flex-start;
   gap: var(--space-xs);
   min-width: 0;
+  height: 22px;
+  min-height: 0;
+  padding: 0 var(--space-xs);
+  border: 0;
+  background: transparent;
   color: var(--color-text-primary);
+}
+.git-view-branch:disabled {
+  background: transparent;
+}
+.git-view-branch-chevron {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-secondary);
+  transform: rotate(90deg);
 }
 .git-view-branch-name {
   overflow: hidden;
@@ -42,6 +63,26 @@
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
+}
+.git-view-tool:hover:enabled {
+  color: var(--color-text-primary);
+}
+.git-view-tool[data-danger]:hover:enabled {
+  color: var(--color-status-error);
+}
+.git-view-tool:disabled {
+  background: transparent;
+}
+/* The changed files and the graph share the height; the handle sets where they meet. */
+.git-view-panes {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.git-view-split {
+  flex: none;
+  height: 3px;
 }
 .git-view-body {
   flex: 1;
@@ -80,6 +121,28 @@
   font-size: var(--font-small);
   font-weight: 400;
 }
+.git-group-bar {
+  display: flex;
+  align-items: center;
+}
+.git-group-bar:hover {
+  background: var(--color-action-hover);
+}
+.git-group-bar .git-group-head {
+  flex: 1;
+  min-width: 0;
+}
+/* The bar is the hover target, so the head's own background would stop short of its buttons. */
+.git-group-bar .git-group-head:hover:enabled {
+  background: transparent;
+}
+.git-group-bar .git-row-actions {
+  margin-right: var(--space-xs);
+}
+.git-group-bar:hover .git-row-actions,
+.git-group-head:focus-visible + .git-row-actions {
+  display: inline-flex;
+}
 .git-list {
   margin: 0;
   padding: 0;
@@ -102,18 +165,36 @@
   outline: var(--border-width-focus) solid var(--color-focus-ring);
   outline-offset: calc(-1 * var(--border-width-focus));
 }
+/* Only under the pointer or focus, so a list of files stays a list of names. */
+.git-row-actions {
+  display: none;
+  flex: none;
+  gap: 1px;
+  margin-left: auto;
+}
+.git-row:hover .git-row-actions,
+.git-row:focus-visible .git-row-actions {
+  display: inline-flex;
+}
+/* While the buttons show, they take the free space and the letter stays beside them. */
+.git-row:hover .git-row-actions + .git-row-mark,
+.git-row:focus-visible .git-row-actions + .git-row-mark {
+  margin-left: 0;
+}
 .git-row-folder-row {
   color: var(--color-text-secondary);
   cursor: pointer;
 }
 .git-row-name {
   overflow: hidden;
-  flex-shrink: 0;
-  max-width: 100%;
+  flex: 0 1 auto;
+  min-width: 2em;
   text-overflow: ellipsis;
 }
+/* The folder gives way first: the file name is what the row is for. */
 .git-row-folder {
   overflow: hidden;
+  flex: 0 1000 auto;
   min-width: 0;
   color: var(--color-text-secondary);
   opacity: 0.8;
@@ -180,6 +261,9 @@
 .git-commit-more svg {
   transform: rotate(90deg);
 }
+.git-commit-button svg {
+  flex: none;
+}
 .git-output {
   flex-shrink: 0;
   max-height: 40%;
@@ -214,8 +298,7 @@
 .git-output p {
   margin: 0;
 }
-.git-dialog-files,
-.git-branch-list {
+.git-dialog-files {
   max-height: 240px;
   margin: var(--space-sm) 0;
   padding: 0;
@@ -227,16 +310,54 @@
   font-family: var(--font-mono);
   font-size: var(--font-small);
 }
-.git-branch-list button {
+/* The branch picker opens near the top, where the eye already is, not mid-window. */
+dialog.git-branch-picker {
+  margin-top: 12vh;
+}
+.git-branch-picker .dialog-body {
+  padding-bottom: var(--space-sm);
+}
+.git-branch-picker input {
   width: 100%;
-  border: 0;
-  background: transparent;
-  text-align: left;
 }
-.git-branch-list button:hover {
-  background: var(--color-surface-subtle);
+.git-branch-picker-list {
+  max-height: min(380px, 50vh);
+  margin: var(--space-sm) calc(-1 * var(--space-sm)) 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
 }
-.git-dialog-heading {
+.git-branch-picker-heading {
+  padding: var(--space-sm) var(--space-sm) 2px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  font-weight: 600;
+}
+.git-branch-picker-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 26px;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-small);
+  cursor: pointer;
+}
+.git-branch-picker-option[aria-selected='true'] {
+  background: var(--color-action-selected);
+}
+.git-branch-picker-name {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-branch-picker-option small {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.git-branch-picker-note {
   margin: var(--space-sm) 0 0;
   color: var(--color-text-secondary);
   font-size: var(--font-small);

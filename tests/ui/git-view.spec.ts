@@ -320,12 +320,10 @@ const row = (page: Page, subject: string) =>
 test('the graph lists the history for the tab and draws its lanes', async ({ page }) => {
   await open(page);
   await expect(page.locator('.git-graph-subject')).toHaveText(['merge feature', 'feature', 'root']);
-  await expect(row(page, 'merge feature').locator('.git-graph-ref')).toHaveText([
-    'main',
-    'origin/main',
-    'v1',
-    '+1',
-  ]);
+  // Only the current branch spends room on its name in a narrow row.
+  const refs = row(page, 'merge feature').locator('.git-graph-ref');
+  await expect(refs).toHaveText(['main', '', '', '+1']);
+  await expect(refs.nth(1)).toHaveAttribute('title', '원격 브랜치 origin/main');
   // The two lanes of the merge: a row is as wide as the widest one.
   await expect(row(page, 'merge feature').locator('.git-graph-dot')).toHaveAttribute(
     'data-merge',
@@ -335,7 +333,12 @@ test('the graph lists the history for the tab and draws its lanes', async ({ pag
   expect(await graphCalls(page)).toEqual([
     {
       command: 'git_graph',
-      args: { source: { kind: 'ssh', connectionId: 'c1' }, folder: '/srv/app', limit: 100 },
+      args: {
+        source: { kind: 'ssh', connectionId: 'c1' },
+        folder: '/srv/app',
+        limit: 100,
+        scope: 'auto',
+      },
     },
   ]);
 });
@@ -355,15 +358,12 @@ test('a WSL tab asks for the graph with its target', async ({ page }) => {
   expect((await graphCalls(page))[0]?.args.source).toEqual({ kind: 'local', targetId: 'wsl:U' });
 });
 
-test('clicking a commit opens its detail once and the header refresh asks again', async ({
+test('clicking a commit opens its files once and the header refresh asks again', async ({
   page,
 }) => {
   await open(page);
   await row(page, 'merge feature').click();
   const opened = page.locator('.git-graph-detail');
-  await expect(opened).toContainText(hash('a'));
-  await expect(opened).toContainText('작성자');
-  await expect(opened.locator('.git-graph-message')).toHaveText('merge feature\n\n본문 줄');
   await expect(opened.locator('.git-row-name')).toHaveText('new name.ts');
   await expect(opened.locator('.git-row-mark')).toHaveText('R');
   await expect(row(page, 'merge feature')).toHaveAttribute('aria-expanded', 'true');
@@ -379,13 +379,185 @@ test('clicking a commit opens its detail once and the header refresh asks again'
   await row(page, 'feature').click();
   await expect(row(page, 'merge feature')).toHaveAttribute('aria-expanded', 'false');
   await row(page, 'merge feature').click();
-  await expect(opened).toContainText(hash('a'));
+  await expect(opened.locator('.git-row-name')).toHaveText('new name.ts');
   expect((await detailCalls()).filter((c) => c.args.hash === hash('a'))).toHaveLength(1);
   await row(page, 'merge feature').click();
   await expect(opened).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Git 새로 고침' }).click();
   await expect.poll(async () => (await graphCalls(page)).length).toBe(2);
+});
+
+test('a commit file previews its diff in a tab, and a double click keeps it', async ({ page }) => {
+  await open(page);
+  await row(page, 'merge feature').click();
+  const file = page.locator('.git-graph-detail .git-row');
+  await file.click();
+  const origin = `commit:${hash('a')}:${hash('b')}:src/new name.ts`;
+  expect((await state(page)).opens).toEqual([[origin, false]]);
+  await file.dblclick();
+  expect((await state(page)).opens.at(-1)).toEqual([origin, true]);
+  await file.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '경로 복사' }).click();
+  await expect
+    .poll(async () => (await state(page)).calls.find((c) => c.command === 'clipboard_write_text'))
+    .toEqual({
+      command: 'clipboard_write_text',
+      args: { text: '/srv/app/src/new name.ts' },
+    });
+});
+
+test('a file in a commit whose name is not UTF-8 opens nothing', async ({ page }) => {
+  await open(page, {
+    detail: { ...detail, files: [{ ...detail.files[0]!, readable: false }] },
+  });
+  await row(page, 'merge feature').click();
+  await page.locator('.git-graph-detail .git-row').click();
+  expect((await state(page)).opens).toEqual([]);
+});
+
+test('hovering a commit shows the whole message beside the row, once', async ({ page }) => {
+  await open(page, {
+    detail: {
+      ...detail,
+      message: 'merge feature\n\n본문 줄\n\nCo-Authored-By: 동료 <a@b>',
+      files: [{ ...detail.files[0]!, added: 12, removed: 3 }],
+    },
+  });
+  await row(page, 'merge feature').hover();
+  const card = page.getByRole('group', { name: '커밋 정보' });
+  await expect(card.locator('.git-commit-card-message')).toHaveText('merge feature\n\n본문 줄');
+  await expect(card).toContainText('작성자');
+  await expect(card).toContainText('동료');
+  await expect(card.locator('.git-commit-card-stat')).toHaveText('파일 1개 변경 +12 −3');
+  await expect(card.locator('.git-graph-ref')).toHaveCount(4);
+  await expect(card.locator('code')).toHaveText(hash('a').slice(0, 7));
+
+  const rowBox = (await row(page, 'merge feature').boundingBox())!;
+  const cardBox = (await card.boundingBox())!;
+  expect(cardBox.x).toBeGreaterThanOrEqual(rowBox.x + rowBox.width);
+
+  // The pointer can reach the card, and the copy button in it.
+  await card.getByRole('button', { name: '해시 복사' }).click();
+  await expect
+    .poll(async () => (await state(page)).calls.find((c) => c.command === 'clipboard_write_text'))
+    .toEqual({ command: 'clipboard_write_text', args: { text: hash('a') } });
+
+  await page.keyboard.press('Escape');
+  await expect(card).toHaveCount(0);
+  await row(page, 'merge feature').hover();
+  await expect(card).toBeVisible();
+  const calls = (await state(page)).calls.filter((c) => c.command === 'git_commit_detail');
+  expect(calls).toHaveLength(1);
+});
+
+test('the graph toolbar runs the network commands and switches what it shows', async ({ page }) => {
+  await open(page);
+  await expect(page.locator('.git-graph-row').first()).toBeVisible();
+  const tools = page.getByRole('toolbar', { name: '이력 작업' });
+  const ask = page.getByRole('dialog', { name: '터미널에 입력' });
+  for (const [name, line] of [
+    ['fetch', 'git fetch'],
+    ['pull', 'git pull'],
+    ['push', 'git push'],
+  ]) {
+    await tools.getByRole('button', { name, exact: true }).click();
+    await ask.getByRole('button', { name: '입력', exact: true }).click();
+    await expect.poll(async () => (await state(page)).sent.at(-1)).toBe(`${line}\r`);
+  }
+
+  await tools.getByRole('button', { name: '표시 범위 자동' }).click();
+  await expect.poll(async () => (await graphCalls(page)).at(-1)?.args.scope).toBe('all');
+  await expect(tools.getByRole('button', { name: '표시 범위 모두' })).toBeVisible();
+  await page.reload();
+  await expect.poll(async () => (await graphCalls(page))[0]?.args.scope).toBe('all');
+
+  const before = (await graphCalls(page)).length;
+  await tools.getByRole('button', { name: '이력 새로 고침' }).click();
+  await expect.poll(async () => (await graphCalls(page)).length).toBe(before + 1);
+});
+
+test('the toolbar moves to the current commit', async ({ page }) => {
+  await open(page);
+  await expect(page.locator('.git-graph-row').first()).toBeVisible();
+  await page
+    .getByRole('toolbar', { name: '이력 작업' })
+    .getByRole('button', { name: '현재 커밋으로 이동' })
+    .click();
+  await expect(row(page, 'merge feature')).toBeFocused();
+});
+
+test('the handle between the files and the graph resizes them and is remembered', async ({
+  page,
+}) => {
+  await open(page);
+  await expect(page.locator('.git-graph-row').first()).toBeVisible();
+  const body = page.locator('.git-view-body');
+  const handle = page.getByRole('separator', { name: '변경 목록과 그래프 크기' });
+  const before = (await body.boundingBox())!.height;
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + 20, box.y + 1);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 20, box.y - 40);
+  await page.mouse.up();
+  await expect.poll(async () => (await body.boundingBox())!.height).toBeLessThan(before - 30);
+  const dragged = (await body.boundingBox())!.height;
+
+  await page.reload();
+  await expect
+    .poll(async () => Math.round((await body.boundingBox())!.height))
+    .toBe(Math.round(dragged));
+
+  await handle.dblclick();
+  await expect.poll(async () => (await body.boundingBox())!.height).toBeGreaterThan(dragged);
+
+  // Folded, the files have the height to themselves.
+  await page
+    .getByRole('region', { name: '그래프' })
+    .getByRole('button', { name: '그래프' })
+    .click();
+  await expect(handle).toHaveCount(0);
+});
+
+test('a row stages, unstages and discards from buttons that appear on hover', async ({ page }) => {
+  await open(page);
+  const changed = rowOf(page, '변경', 'both.ts');
+  const button = (name: string) => changed.getByRole('button', { name, exact: true });
+  await expect(button('스테이지')).toBeHidden();
+  await changed.hover();
+  await expect(button('파일 열기')).toBeVisible();
+  await button('스테이지').click();
+  await expect.poll(() => lastAction(page)).toEqual({ kind: 'stage', paths: ['src/both.ts'] });
+  // The button is not also a click on the row.
+  expect((await state(page)).opens).toEqual([]);
+
+  await changed.hover();
+  await button('변경 버리기…').click();
+  await expect(page.getByRole('dialog', { name: '변경 버리기' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  const staged = rowOf(page, '스테이지됨', 'new.ts');
+  await staged.hover();
+  await staged.getByRole('button', { name: '스테이지 취소', exact: true }).click();
+  await expect.poll(() => lastAction(page)).toEqual({ kind: 'unstage', paths: ['src/app/new.ts'] });
+});
+
+test('a deleted file has no open button, and a group acts on all of its files', async ({
+  page,
+}) => {
+  await open(page);
+  const deleted = rowOf(page, '변경', 'README.md');
+  await deleted.hover();
+  await expect(deleted.getByRole('button', { name: '파일 열기' })).toHaveCount(0);
+  await expect(deleted.getByRole('button', { name: '스테이지', exact: true })).toBeVisible();
+
+  await group(page, '변경').locator('.git-group-bar').hover();
+  await group(page, '변경').getByRole('button', { name: '모두 스테이지', exact: true }).click();
+  await expect
+    .poll(() => lastAction(page))
+    .toEqual({ kind: 'stage', paths: ['src/both.ts', 'README.md'] });
+  // Conflicts have no group action.
+  await expect(group(page, '충돌').locator('.git-group-bar .git-row-actions')).toHaveCount(0);
 });
 
 test('a commit copies its hash and subject, and the keyboard opens it', async ({ page }) => {
@@ -633,19 +805,18 @@ test('switching to a branch: local through the app, remote through the terminal'
   page,
 }) => {
   await open(page);
-  await more(page).click();
-  await choose(page, '브랜치 전환…');
+  await page.locator('.git-view-branch').click();
   let dialog = page.getByRole('dialog', { name: '브랜치 전환' });
   // The current branch is not offered.
-  await expect(dialog.getByRole('button', { name: 'feat', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'main', exact: true })).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'feat', exact: true }).click();
+  await expect(dialog.getByRole('option', { name: 'feat', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('option', { name: 'main', exact: true })).toHaveCount(0);
+  await dialog.getByRole('option', { name: 'feat', exact: true }).click();
   await expect.poll(() => lastAction(page)).toEqual({ kind: 'checkout', branch: 'feat' });
 
   await more(page).click();
   await choose(page, '브랜치 전환…');
   dialog = page.getByRole('dialog', { name: '브랜치 전환' });
-  await dialog.getByRole('button', { name: 'origin/only-remote' }).click();
+  await dialog.getByRole('option', { name: 'origin/only-remote' }).click();
   // No marks in this fixture: nothing reports the terminal, so the user is asked first.
   const ask = page.getByRole('dialog', { name: '터미널에 입력' });
   await expect(ask).toContainText('git checkout --track origin/only-remote');
@@ -653,6 +824,34 @@ test('switching to a branch: local through the app, remote through the terminal'
   await expect
     .poll(async () => (await state(page)).sent)
     .toEqual(['git checkout --track origin/only-remote\r']);
+});
+
+test('the branch picker narrows as you type and goes by keyboard', async ({ page }) => {
+  await open(page);
+  await page.locator('.git-view-branch').click();
+  const dialog = page.getByRole('dialog', { name: '브랜치 전환' });
+  const search = dialog.getByRole('combobox', { name: '브랜치 찾기' });
+  await expect(search).toBeFocused();
+  await expect(dialog.getByRole('option')).toHaveCount(3);
+  // The options read from the left, unlike a centered button.
+  await expect(dialog.getByRole('option').nth(1)).toHaveCSS('justify-content', 'normal');
+
+  await search.fill('fe');
+  await expect(dialog.getByRole('option')).toHaveText(['새 브랜치 만들기: fe', 'feat']);
+  await page.keyboard.press('Enter');
+  await expect.poll(() => lastAction(page)).toEqual({ kind: 'checkout', branch: 'feat' });
+  await expect(dialog).toHaveCount(0);
+});
+
+test('what was typed in the branch picker starts a new branch', async ({ page }) => {
+  await open(page);
+  await page.locator('.git-view-branch').click();
+  const picker = page.getByRole('dialog', { name: '브랜치 전환' });
+  await picker.getByRole('combobox', { name: '브랜치 찾기' }).fill('feat/새 일');
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveCount(0);
+  const dialog = page.getByRole('dialog', { name: '새 브랜치' });
+  await expect(dialog.getByRole('textbox', { name: '이름' })).toHaveValue('feat/새 일');
 });
 
 test('network actions are typed in the terminal and never sent to git_apply', async ({ page }) => {

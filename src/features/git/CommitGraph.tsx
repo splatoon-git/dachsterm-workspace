@@ -1,202 +1,62 @@
-import { useMemo, useState, type MouseEvent } from 'react';
-import { ContextMenu, isMenuKey, anchorBelow, type MenuPoint } from '../../components/ContextMenu';
-import { Icon } from '../../components/Icon';
-import { call, errorText } from '../../lib/ipc';
+import { useRef, useState } from 'react';
+import { Icon, type IconName } from '../../components/Icon';
 import type { Source } from '../../lib/source';
 import { sessionSource } from '../terminal/sessionKind';
 import type { TerminalSession } from '../terminal/session';
-import { CommitGraphDetail, CommitGraphLanes } from './CommitGraphParts';
-import {
-  graphMax,
-  graphStep,
-  graphStopped,
-  layoutGraph,
-  type GraphCommit,
-  type GraphRef,
-  type GraphRow,
-} from './commitGraphModel';
+import { CommitList } from './CommitGraphList';
+import { graphMax, graphStopped, type CommitFileOrigin, type GraphScope } from './commitGraphModel';
+import type { DiffFile } from './gitDiff';
 import { moveFocus } from './GitViewList';
-import { useCommitDetail, useCommitGraph, type DetailState } from './useCommitGraph';
+import { useCommitGraph } from './useCommitGraph';
 import './commitGraph.css';
 
-const openKey = 'dachsterm.gitView.graph';
-function readOpen() {
+const scopeKey = 'dachsterm.gitView.graphScope';
+function readScope(): GraphScope {
   try {
-    return localStorage.getItem(openKey) !== 'false';
+    return localStorage.getItem(scopeKey) === 'all' ? 'all' : 'auto';
   } catch {
-    // Storage can be blocked; the section is open by default.
-    return true;
+    // Storage can be blocked; the current branch is the default.
+    return 'auto';
   }
 }
-function saveOpen(open: boolean) {
+function saveScope(scope: GraphScope) {
   try {
-    localStorage.setItem(openKey, String(open));
+    localStorage.setItem(scopeKey, scope);
   } catch {
-    // Storage can be blocked; the section simply is not remembered.
+    // Storage can be blocked; the choice simply is not remembered.
   }
 }
 
-const refLabel: Record<GraphRef['kind'], string> = {
-  head: '분리된 HEAD',
-  branch: '브랜치',
-  remote: '원격 브랜치',
-  tag: '태그',
+const scopeText: Record<GraphScope, { label: string; title: string }> = {
+  auto: { label: '자동', title: '현재 브랜치와 업스트림만 표시 중. 누르면 모든 브랜치를 봅니다' },
+  all: { label: '모두', title: '모든 브랜치와 태그를 표시 중. 누르면 현재 브랜치만 봅니다' },
 };
-const maxBadges = 3;
 
-function RefBadges({ refs }: { refs: GraphRef[] }) {
-  if (!refs.length) return null;
-  const rest = refs.slice(maxBadges);
-  return (
-    <span className="git-graph-refs">
-      {refs.slice(0, maxBadges).map((item) => (
-        <span
-          key={`${item.kind}:${item.name}`}
-          className="git-graph-ref"
-          data-kind={item.kind}
-          data-current={item.current || undefined}
-          title={`${refLabel[item.kind]} ${item.name}`}
-        >
-          {item.name}
-        </span>
-      ))}
-      {rest.length > 0 && (
-        <span className="git-graph-ref" title={rest.map((item) => item.name).join(', ')}>
-          +{rest.length}
-        </span>
-      )}
-    </span>
-  );
-}
+export type GitGraphActions = {
+  fetch: () => void;
+  pull: () => void;
+  push: () => void;
+  refresh: () => void;
+};
 
-const time = (seconds: number) => new Date(seconds * 1000).toLocaleString();
-
-function Row({
-  commit,
-  row,
-  columns,
-  step,
-  first,
-  opened,
-  detail,
-  toggle,
-  menu,
-}: {
-  commit: GraphCommit;
-  row: GraphRow;
-  columns: number;
-  step: number;
-  first: boolean;
-  opened: boolean;
-  detail: DetailState | undefined;
-  toggle: (hash: string) => void;
-  menu: (commit: GraphCommit, at: MenuPoint | HTMLElement) => void;
-}) {
-  return (
-    <li>
-      <div
-        className="git-graph-row"
-        data-git-row=""
-        role="button"
-        aria-expanded={opened}
-        tabIndex={first ? 0 : -1}
-        title={`${commit.hash.slice(0, 7)} · ${commit.author} · ${time(commit.time)}\n${commit.subject}`}
-        onClick={() => toggle(commit.hash)}
-        onContextMenu={(event: MouseEvent) => {
-          event.preventDefault();
-          menu(commit, { x: event.clientX, y: event.clientY });
-        }}
-        onKeyDown={(event) => {
-          if (isMenuKey(event)) {
-            event.preventDefault();
-            menu(commit, event.currentTarget);
-          } else if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            toggle(commit.hash);
-          }
-        }}
-      >
-        <CommitGraphLanes
-          row={row}
-          columns={columns}
-          step={step}
-          current={commit.refs.some((item) => item.current)}
-        />
-        <span className="git-graph-subject">{commit.subject}</span>
-        <RefBadges refs={commit.refs} />
-      </div>
-      {opened && <CommitGraphDetail row={row} columns={columns} step={step} state={detail} />}
-    </li>
-  );
-}
-
-function CommitList({
-  commits,
-  source,
-  folder,
-  notice,
-}: {
-  commits: GraphCommit[];
-  source: Source;
-  folder: string;
-  notice: (text: string) => void;
-}) {
-  const { rows, columns } = useMemo(() => layoutGraph(commits), [commits]);
-  const step = graphStep(columns);
-  const { opened, details, toggle } = useCommitDetail(source, folder);
-  const [menuAt, setMenuAt] = useState<{ at: MenuPoint; commit: GraphCommit } | null>(null);
-  const copy = (text: string) =>
-    void call('clipboard_write_text', { text }).catch((e) => notice(errorText(e)));
-  return (
-    <>
-      <ul className="git-list">
-        {commits.map((commit, index) => (
-          <Row
-            key={commit.hash}
-            commit={commit}
-            row={rows[index]!}
-            columns={columns}
-            step={step}
-            first={index === 0}
-            opened={opened === commit.hash}
-            detail={details.get(commit.hash)}
-            toggle={toggle}
-            menu={(target, at) =>
-              setMenuAt({
-                at: at instanceof HTMLElement ? anchorBelow(at) : at,
-                commit: target,
-              })
-            }
-          />
-        ))}
-      </ul>
-      {menuAt && (
-        <ContextMenu
-          at={menuAt.at}
-          label={`${menuAt.commit.subject} 작업`}
-          close={() => setMenuAt(null)}
-          items={[
-            { label: '해시 복사', run: () => copy(menuAt.commit.hash) },
-            { label: '제목 복사', run: () => copy(menuAt.commit.subject) },
-          ]}
-        />
-      )}
-    </>
-  );
-}
+type OpenCommitFile = (file: DiffFile, origin: CommitFileOrigin, pinned: boolean) => void;
 
 function Body({
   source,
   folder,
   version,
+  scope,
   notice,
+  openFile,
 }: {
   source: Source;
   folder: string;
   version: string;
+  scope: GraphScope;
   notice: (text: string) => void;
+  openFile: OpenCommitFile;
 }) {
-  const graph = useCommitGraph({ source, folder, version });
+  const graph = useCommitGraph({ source, folder, version, scope });
   const { result, error } = graph;
   if (error && !result) return <p className="git-view-note git-view-error">{error}</p>;
   if (!result) return <p className="git-view-note">조회 중…</p>;
@@ -214,7 +74,13 @@ function Body({
     );
   return (
     <>
-      <CommitList commits={result.commits} source={source} folder={folder} notice={notice} />
+      <CommitList
+        commits={result.commits}
+        source={source}
+        folder={folder}
+        notice={notice}
+        openFile={openFile}
+      />
       {result.hasMore &&
         (graph.canLoadMore ? (
           <button type="button" className="git-graph-more" onClick={graph.loadMore}>
@@ -228,41 +94,94 @@ function Body({
   );
 }
 
+function Tool({ icon, label, run }: { icon: IconName; label: string; run: () => void }) {
+  return (
+    <button type="button" className="git-view-tool" aria-label={label} title={label} onClick={run}>
+      <Icon name={icon} size={14} />
+    </button>
+  );
+}
+
 /** The Git view's history (GE.14): read-only, and only asked for while it is open. */
 export function CommitGraph({
   session,
   folder,
   version,
   notice,
+  open,
+  setOpen,
+  actions,
+  openFile,
 }: {
   /** The parent remounts this per connection, so the source read here stays the right one. */
   session: TerminalSession;
   folder: string;
   version: string;
   notice: (text: string) => void;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  actions: GitGraphActions;
+  openFile: OpenCommitFile;
 }) {
-  const [open, setOpen] = useState(readOpen);
   const [source] = useState(() => sessionSource(session));
+  const [scope, setScope] = useState(readScope);
+  const body = useRef<HTMLDivElement>(null);
   if (!source) return null;
+  const text = scopeText[scope];
+  const toHead = () => {
+    const head = body.current?.querySelector<HTMLElement>('[data-git-head]');
+    head?.scrollIntoView({ block: 'center' });
+    head?.focus({ preventScroll: true });
+  };
   return (
     <section className="git-graph" data-open={open || undefined} aria-label="그래프">
-      <button
-        type="button"
-        className="git-group-head"
-        aria-expanded={open}
-        onClick={() => {
-          setOpen(!open);
-          saveOpen(!open);
-        }}
-      >
-        <span className="git-row-chevron" data-folded={!open || undefined}>
-          <Icon name="chevron" size={12} />
-        </span>
-        <span className="git-graph-title">그래프</span>
-      </button>
+      <div className="git-graph-head">
+        <button
+          type="button"
+          className="git-group-head"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <span className="git-row-chevron" data-folded={!open || undefined}>
+            <Icon name="chevron" size={12} />
+          </span>
+          <span className="git-graph-title">그래프</span>
+        </button>
+        {open && (
+          <div className="git-graph-tools" role="toolbar" aria-label="이력 작업">
+            <button
+              type="button"
+              className="git-graph-scope"
+              aria-label={`표시 범위 ${text.label}`}
+              aria-pressed={scope === 'all'}
+              title={text.title}
+              onClick={() => {
+                const next = scope === 'all' ? 'auto' : 'all';
+                setScope(next);
+                saveScope(next);
+              }}
+            >
+              <Icon name="branch" size={13} />
+              {text.label}
+            </button>
+            <Tool icon="target" label="현재 커밋으로 이동" run={toHead} />
+            <Tool icon="gitFetch" label="fetch" run={actions.fetch} />
+            <Tool icon="gitPull" label="pull" run={actions.pull} />
+            <Tool icon="gitPush" label="push" run={actions.push} />
+            <Tool icon="refresh" label="이력 새로 고침" run={actions.refresh} />
+          </div>
+        )}
+      </div>
       {open && (
-        <div className="git-graph-body" onKeyDown={moveFocus}>
-          <Body source={source} folder={folder} version={version} notice={notice} />
+        <div ref={body} className="git-graph-body" onKeyDown={moveFocus}>
+          <Body
+            source={source}
+            folder={folder}
+            version={version}
+            scope={scope}
+            notice={notice}
+            openFile={openFile}
+          />
         </div>
       )}
     </section>

@@ -12,7 +12,7 @@ use crate::{
     source::Source,
     storage::Result,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// The most commits one view shows. A history longer than this ends with a note.
@@ -28,6 +28,16 @@ const GRAPH_FORMAT: &str = "--format=tformat:%H%x00%P%x00%an%x00%at%x00%D%x00%s%
 const DETAIL_FORMAT: &str = "--format=tformat:%H%x00%P%x00%an%x00%at%x00%B%x00";
 const GRAPH_FIELDS: usize = 6;
 const DETAIL_FIELDS: usize = 5;
+
+/// Which commits the graph walks.
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub enum GraphScope {
+    /// HEAD and its upstream.
+    Auto,
+    /// Every branch, remote branch and tag, and HEAD in case it is detached.
+    All,
+}
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
@@ -103,7 +113,7 @@ fn limits(max_output: usize) -> Limits {
 }
 
 /// A full object name. Only SHA-1 and SHA-256 lengths, so nothing else reaches Git's arguments.
-fn check_hash(hash: &str) -> Result<()> {
+pub(crate) fn check_hash(hash: &str) -> Result<()> {
     let valid = matches!(hash.len(), 40 | 64)
         && hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
     if !valid {
@@ -143,10 +153,16 @@ fn unavailable(host: &GitHost, output: &Output) -> GitGraphResult {
     }
 }
 
+/// `--all` would also walk `refs/stash` and whatever else lives under `refs/`.
+fn all_points() -> Vec<String> {
+    args(["--branches", "--remotes", "--tags", "HEAD"])
+}
+
 /// Where `git log` starts, or the result when there is nothing to walk.
 fn start_points(
     host: &GitHost,
     output: &Output,
+    scope: GraphScope,
 ) -> std::result::Result<Vec<String>, GitGraphResult> {
     let mut parts = output.stdout.split(|b| *b == 0).skip(1);
     let Some(upstream) = parts.next() else {
@@ -158,6 +174,9 @@ fn start_points(
             unavailable(host, output)
         });
     };
+    if scope == GraphScope::All {
+        return Ok(all_points());
+    }
     let mut points = vec!["HEAD".to_string()];
     if output.exit == Some(0) {
         // Git named it, and a name that starts `refs/` cannot be taken for an option.
@@ -273,9 +292,10 @@ async fn read_graph(
     host: &GitHost,
     folder: &str,
     limit: usize,
+    scope: GraphScope,
 ) -> std::result::Result<GitGraphResult, Failure> {
     let start = git_run(host, folder, &start_commands(), limits(MAX_START_OUTPUT)).await?;
-    let points = match start_points(host, &start) {
+    let points = match start_points(host, &start, scope) {
         Ok(points) => points,
         Err(result) => return Ok(result),
     };
@@ -288,9 +308,14 @@ async fn read_graph(
         .ok_or_else(|| Failure::Other("Git 이력을 읽을 수 없습니다.".into()))
 }
 
-/// The newest `limit` commits (at most `MAX_COMMITS`) reachable from HEAD and its upstream.
-pub async fn query(host: &GitHost, folder: &str, limit: usize) -> Result<GitGraphResult> {
-    match read_graph(host, folder, limit.clamp(1, MAX_COMMITS)).await {
+/// The newest `limit` commits (at most `MAX_COMMITS`) the scope reaches.
+pub async fn query(
+    host: &GitHost,
+    folder: &str,
+    limit: usize,
+    scope: GraphScope,
+) -> Result<GitGraphResult> {
+    match read_graph(host, folder, limit.clamp(1, MAX_COMMITS), scope).await {
         Ok(result) => Ok(result),
         Err(Failure::TimedOut) => Ok(GitGraphResult::Stopped {
             reason: StopReason::Timeout,
@@ -310,8 +335,9 @@ fn detail_command(hash: &str) -> Vec<String> {
     command
 }
 
-/// The files a commit changed, as `--name-status -z`. `diff-tree` has no working tree to read.
-fn files_command(parent: Option<&str>, hash: &str) -> Vec<String> {
+/// The files a commit changed, in `--name-status` or `--numstat` form. `diff-tree` has no working
+/// tree to read.
+fn files_command(mode: &str, parent: Option<&str>, hash: &str) -> Vec<String> {
     let mut command = args([
         "diff-tree",
         "-r",
@@ -320,7 +346,7 @@ fn files_command(parent: Option<&str>, hash: &str) -> Vec<String> {
         "--no-textconv",
         "--no-color",
         "--find-renames",
-        "--name-status",
+        mode,
     ]);
     match parent {
         Some(parent) => command.push(parent.to_string()),
@@ -343,8 +369,12 @@ async fn read_files(
     parent: Option<&str>,
     hash: &str,
 ) -> Result<(Vec<DiffFile>, bool)> {
-    let command = files_command(parent, hash);
-    let output = match git_run(host, folder, &[command], limits(MAX_DETAIL_OUTPUT)).await {
+    // The order `parse_list` reads, which takes the missing untracked section as empty.
+    let commands = [
+        files_command("--name-status", parent, hash),
+        files_command("--numstat", parent, hash),
+    ];
+    let output = match git_run(host, folder, &commands, limits(MAX_DETAIL_OUTPUT)).await {
         Ok(output) => output,
         // The message is still worth showing, so the list is marked as cut off.
         Err(Failure::TimedOut | Failure::TooLarge) => return Ok((Vec::new(), true)),
@@ -388,9 +418,10 @@ pub async fn git_graph(
     source: Source,
     folder: String,
     limit: u32,
+    scope: GraphScope,
 ) -> Result<GitGraphResult> {
     let host = GitHost::resolve(&state.connections, &state.locals, &source).await?;
-    query(&host, &folder, limit as usize).await
+    query(&host, &folder, limit as usize, scope).await
 }
 
 #[tauri::command]

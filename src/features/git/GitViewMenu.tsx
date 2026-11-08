@@ -10,7 +10,7 @@ import { revealItem } from '../../lib/revealItem';
 import type { Source } from '../../lib/source';
 import { repoFilePath, type GitGroup, type GitRow, type GitViewRepo } from './gitViewModel';
 import { rowExists, rowOpenItems, type RowOpeners } from './gitRowMenu';
-import { groupItems, rowItems, type FileActions } from './gitWriteMenu';
+import { groupItems, rowItems, type FileActions, type GitActionItem } from './gitWriteMenu';
 import { networkCommands, type GitDialogRequest } from './gitWrite';
 import type { GitWrite } from './useGitWrite';
 
@@ -165,8 +165,23 @@ export function useGitViewMenu({
     const items = groupItems(target, files);
     if (items.length) setOpen({ at: point(at), label: `${target.label} 작업`, items });
   };
+  /** The buttons a row shows on hover, the last one nearest its letter: open, undo, stage. */
+  const rowButtons = (file: GitRow): GitActionItem[] => {
+    const open: GitActionItem[] =
+      repo && rowExists(file)
+        ? [
+            {
+              label: '파일 열기',
+              icon: 'file',
+              run: () => openers.file(repoFilePath(repo.root, file.path)),
+            },
+          ]
+        : [];
+    return [...open, ...rowItems(file, files).reverse()];
+  };
+  const groupButtons = (target: GitGroup) => groupItems(target, files).reverse();
   const menu = open && (
     <ContextMenu at={open.at} items={open.items} label={open.label} close={() => setOpen(null)} />
   );
-  return { more, commitMore, row, group, menu };
+  return { more, commitMore, row, group, rowButtons, groupButtons, menu };
 }

@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, errorText } from '../../lib/ipc';
 import type { Source } from '../../lib/source';
-import { graphMax, graphPage, type CommitDetail, type GitGraphResult } from './commitGraphModel';
+import {
+  graphMax,
+  graphPage,
+  type CommitDetail,
+  type GitGraphResult,
+  type GraphScope,
+} from './commitGraphModel';
 
-type Request = { source: Source; folder: string; limit: number };
+type Request = { source: Source; folder: string; limit: number; scope: GraphScope };
 
 /**
  * The history of one repository. The component remounts for another tab or repository, so every
@@ -13,11 +19,13 @@ export function useCommitGraph({
   source,
   folder,
   version,
+  scope,
 }: {
   source: Source;
   folder: string;
   /** Changes when the history may have: HEAD, the upstream, or a manual refresh. */
   version: string;
+  scope: GraphScope;
 }) {
   const [limit, setLimit] = useState(graphPage);
   const [result, setResult] = useState<GitGraphResult | null>(null);
@@ -35,7 +43,7 @@ export function useCommitGraph({
   }, []);
 
   useEffect(() => {
-    wanted.current = { source, folder, limit };
+    wanted.current = { source, folder, limit, scope };
     if (running.current) return;
     running.current = true;
     void (async () => {
@@ -54,7 +62,7 @@ export function useCommitGraph({
       }
       running.current = false;
     })();
-  }, [source, folder, version, limit, attempt]);
+  }, [source, folder, version, limit, attempt, scope]);
 
   return {
     result,
@@ -74,9 +82,22 @@ export type DetailState =
 export function useCommitDetail(source: Source, folder: string) {
   const [opened, setOpened] = useState<string | null>(null);
   const [details, setDetails] = useState<ReadonlyMap<string, DetailState>>(() => new Map());
-  const set = useCallback(
-    (hash: string, state: DetailState) => setDetails((old) => new Map(old).set(hash, state)),
-    [],
+  // Read before the state updates, so a hover and a click on one commit ask only once.
+  const known = useRef(new Map<string, DetailState>());
+  const set = useCallback((hash: string, state: DetailState) => {
+    known.current.set(hash, state);
+    setDetails(new Map(known.current));
+  }, []);
+  const load = useCallback(
+    (hash: string) => {
+      const state = known.current.get(hash);
+      if (state && state.kind !== 'failed') return;
+      set(hash, { kind: 'loading' });
+      call<CommitDetail>('git_commit_detail', { source, folder, hash })
+        .then((detail) => set(hash, { kind: 'ready', detail }))
+        .catch((e: unknown) => set(hash, { kind: 'failed', error: errorText(e) }));
+    },
+    [source, folder, set],
   );
   const toggle = (hash: string) => {
     if (opened === hash) {
@@ -84,12 +105,7 @@ export function useCommitDetail(source: Source, folder: string) {
       return;
     }
     setOpened(hash);
-    const known = details.get(hash);
-    if (known && known.kind !== 'failed') return;
-    set(hash, { kind: 'loading' });
-    call<CommitDetail>('git_commit_detail', { source, folder, hash })
-      .then((detail) => set(hash, { kind: 'ready', detail }))
-      .catch((e: unknown) => set(hash, { kind: 'failed', error: errorText(e) }));
+    load(hash);
   };
-  return { opened, details, toggle };
+  return { opened, details, toggle, load };
 }

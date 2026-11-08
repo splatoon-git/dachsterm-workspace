@@ -42,6 +42,7 @@ export function GitCommitBox({
           title={title}
           onClick={commit}
         >
+          <Icon name="check" size={14} />
           커밋
         </button>
         <button

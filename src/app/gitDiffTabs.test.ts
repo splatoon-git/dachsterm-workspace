@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GitRow } from '../features/git/gitViewModel';
-import { diffTargetOf, sameDiffTarget } from './gitDiffTabs';
+import { commitDiffTarget, diffTargetOf, sameDiffTarget } from './gitDiffTabs';
 
 const row = (over: Partial<GitRow>): GitRow => ({
   key: 'k',
@@ -66,5 +66,41 @@ describe('one tab per comparison', () => {
 
   it('keeps worktrees apart', () => {
     expect(sameDiffTarget(changed, diffTargetOf(row({}), '/other')!)).toBe(false);
+  });
+});
+
+describe('a commit file', () => {
+  const file = {
+    path: 'new.ts',
+    oldPath: 'old.ts',
+    change: 'renamed',
+    added: 1,
+    removed: 0,
+    binary: false,
+    readable: true,
+  } as const;
+  const origin = { hash: 'a'.repeat(40), parent: 'b'.repeat(40) };
+  const target = commitDiffTarget(file, origin, '/r')!;
+
+  it('compares the commit with its parent, under the name each side had', () => {
+    expect(target).toEqual({
+      folder: '/r',
+      path: 'new.ts',
+      oldPath: 'old.ts',
+      compare: { kind: 'commit', ...origin },
+    });
+  });
+
+  it('is its own tab for each commit, and is not a working tree diff of that file', () => {
+    expect(sameDiffTarget(target, commitDiffTarget(file, origin, '/r')!)).toBe(true);
+    const other = commitDiffTarget(file, { ...origin, hash: 'c'.repeat(40) }, '/r')!;
+    expect(sameDiffTarget(target, other)).toBe(false);
+    const working = { ...target, compare: { kind: 'headIndex' } as const };
+    expect(sameDiffTarget(working, target)).toBe(false);
+    expect(sameDiffTarget(target, working)).toBe(false);
+  });
+
+  it('a name that is not UTF-8 cannot be asked for', () => {
+    expect(commitDiffTarget({ ...file, readable: false }, origin, '/r')).toBeNull();
   });
 });

@@ -28,7 +28,7 @@ declare global {
       buffer: 'normal' | 'alternate';
       /** What the view typed in the terminal. */
       sent: string[];
-      /** The tabs the view asked for: `file:<path>` or `diff:<group>:<path>`, then if pinned. */
+      /** The tabs the view asked for: `file:<path>`, `diff:<group>:<path>`, or `commit:<hash>:<path>`, then if pinned. */
       opens: [string, boolean][];
     };
     /** The tab drops its connection and comes back with a new connection ID. */
@@ -113,6 +113,9 @@ createRoot(document.getElementById('root')!).render(
         openFile={(path, pinned) => state.opens.push([`file:${path}`, pinned])}
         openDiff={(row: GitRow, _root, pinned) =>
           state.opens.push([`diff:${row.group}:${row.path}`, pinned])
+        }
+        openCommitFile={(file, origin, _root, pinned) =>
+          state.opens.push([`commit:${origin.hash}:${origin.parent}:${file.path}`, pinned])
         }
       />
     </div>

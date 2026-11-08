@@ -1,5 +1,6 @@
 import type { MenuItem } from '../../components/ContextMenu';
 import type { GitRow } from './gitViewModel';
+import type { GitActionItem } from './gitWriteMenu';
 
 /** What a file's row can open. The tabs and the external editor belong to the app around the view. */
 export type RowOpeners = {
@@ -13,8 +14,9 @@ export const rowExists = (row: GitRow) => row.readable && row.change !== 'delete
 
 /** A conflict has no single other side to compare with, so it only opens as a file. */
 export function rowOpenItems(row: GitRow, path: string, openers: RowOpeners): MenuItem[] {
-  const file: MenuItem = {
+  const file: GitActionItem = {
     label: '파일 열기',
+    icon: 'file',
     disabled: !rowExists(row),
     run: () => openers.file(path),
   };

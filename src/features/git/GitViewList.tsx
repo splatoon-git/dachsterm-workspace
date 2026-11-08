@@ -2,6 +2,7 @@ import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { isMenuKey, type MenuPoint } from '../../components/ContextMenu';
 import { Icon } from '../../components/Icon';
 import { changeLabel, changeMark } from './gitDiff';
+import type { GitActionItem } from './gitWriteMenu';
 import {
   buildTree,
   flattenTree,
@@ -23,6 +24,36 @@ export function moveFocus(event: KeyboardEvent<HTMLElement>) {
   }
 }
 
+/** A row's buttons, shown while the pointer is on it. The right-click menu has the same actions. */
+function RowButtons({ items }: { items: GitActionItem[] }) {
+  if (!items.length) return null;
+  return (
+    <span
+      className="git-row-actions"
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          className="git-view-tool"
+          data-danger={item.danger || undefined}
+          // The row's keyboard route to these is its menu, so a long list stays one tab stop.
+          tabIndex={-1}
+          aria-label={item.label}
+          title={item.label}
+          disabled={item.disabled}
+          onClick={item.run}
+        >
+          <Icon name={item.icon} size={14} />
+        </button>
+      ))}
+    </span>
+  );
+}
+
 function FileRow({
   row,
   depth,
@@ -30,6 +61,7 @@ function FileRow({
   first,
   open,
   menu,
+  buttons,
 }: {
   row: GitRow;
   depth: number;
@@ -37,6 +69,7 @@ function FileRow({
   first: boolean;
   open: (row: GitRow, pinned: boolean) => void;
   menu: (row: GitRow, at: MenuPoint | HTMLElement) => void;
+  buttons: GitActionItem[];
 }) {
   const { name, folder } = splitPath(row.path);
   const title = `${row.oldPath ? `${row.oldPath} → ` : ''}${row.path} · ${changeLabel[row.change]}${
@@ -68,6 +101,7 @@ function FileRow({
     >
       <span className="git-row-name">{name}</span>
       {showFolder && folder && <span className="git-row-folder">{folder}</span>}
+      <RowButtons items={buttons} />
       <span className="git-row-mark" data-change={row.change} aria-label={changeLabel[row.change]}>
         {changeMark[row.change]}
       </span>
@@ -114,6 +148,8 @@ function Group({
   open,
   menu,
   groupMenu,
+  rowButtons,
+  groupButtons,
 }: {
   group: GitGroup;
   tree: boolean;
@@ -123,6 +159,8 @@ function Group({
   open: (row: GitRow, pinned: boolean) => void;
   menu: (row: GitRow, at: MenuPoint | HTMLElement) => void;
   groupMenu: (group: GitGroup, at: MenuPoint | HTMLElement) => void;
+  rowButtons: (row: GitRow) => GitActionItem[];
+  groupButtons: (group: GitGroup) => GitActionItem[];
 }) {
   const closed = folded.has(group.id);
   const items = useMemo<GitListItem[]>(
@@ -134,27 +172,30 @@ function Group({
   );
   return (
     <section aria-label={group.label}>
-      <button
-        type="button"
-        className="git-group-head"
-        aria-expanded={!closed}
-        onClick={() => toggle(group.id)}
-        onContextMenu={(event: MouseEvent) => {
-          event.preventDefault();
-          groupMenu(group, { x: event.clientX, y: event.clientY });
-        }}
-        onKeyDown={(event) => {
-          if (!isMenuKey(event)) return;
-          event.preventDefault();
-          groupMenu(group, event.currentTarget);
-        }}
-      >
-        <span className="git-row-chevron" data-folded={closed || undefined}>
-          <Icon name="chevron" size={12} />
-        </span>
-        <span>{group.label}</span>
-        <small>{group.rows.length}</small>
-      </button>
+      <div className="git-group-bar">
+        <button
+          type="button"
+          className="git-group-head"
+          aria-expanded={!closed}
+          onClick={() => toggle(group.id)}
+          onContextMenu={(event: MouseEvent) => {
+            event.preventDefault();
+            groupMenu(group, { x: event.clientX, y: event.clientY });
+          }}
+          onKeyDown={(event) => {
+            if (!isMenuKey(event)) return;
+            event.preventDefault();
+            groupMenu(group, event.currentTarget);
+          }}
+        >
+          <span className="git-row-chevron" data-folded={closed || undefined}>
+            <Icon name="chevron" size={12} />
+          </span>
+          <span>{group.label}</span>
+          <small>{group.rows.length}</small>
+        </button>
+        <RowButtons items={groupButtons(group)} />
+      </div>
       {!closed && (
         <ul className="git-list">
           {items.map((item, index) =>
@@ -167,6 +208,7 @@ function Group({
                 first={first && index === 0}
                 open={open}
                 menu={menu}
+                buttons={rowButtons(item.row)}
               />
             ) : (
               <FolderRow key={item.key} item={item} toggle={toggle} />
@@ -185,12 +227,16 @@ export function GitViewList({
   open,
   menu,
   groupMenu,
+  rowButtons,
+  groupButtons,
 }: {
   groups: GitGroup[];
   tree: boolean;
   open: (row: GitRow, pinned: boolean) => void;
   menu: (row: GitRow, at: MenuPoint | HTMLElement) => void;
   groupMenu: (group: GitGroup, at: MenuPoint | HTMLElement) => void;
+  rowButtons: (row: GitRow) => GitActionItem[];
+  groupButtons: (group: GitGroup) => GitActionItem[];
 }) {
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = (key: string) =>
@@ -212,6 +258,8 @@ export function GitViewList({
           open={open}
           menu={menu}
           groupMenu={groupMenu}
+          rowButtons={rowButtons}
+          groupButtons={groupButtons}
         />
       ))}
     </div>

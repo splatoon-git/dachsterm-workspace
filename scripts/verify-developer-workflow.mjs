@@ -285,7 +285,7 @@ async function verifyGitWrite({ page, pane, command, shell, setStage }) {
     await dialog('새 브랜치').getByRole('button', { name: '만들고 전환' }).click();
     await expect(view.locator('.git-view-branch')).toContainText('ge9/작업', { timeout: 15000 });
     await more('브랜치 전환…');
-    await dialog('브랜치 전환').getByRole('button', { name: 'main', exact: true }).click();
+    await dialog('브랜치 전환').getByRole('option', { name: 'main', exact: true }).click();
     await expect(view.locator('.git-view-branch')).toContainText('main', { timeout: 15000 });
     assert.equal(git('symbolic-ref --short HEAD'), 'main');
     await more('태그…');

@@ -9,7 +9,9 @@ export type DiffCompare =
   | { kind: 'headIndex' }
   /** `deleted`: the file is gone from the working tree, so the right side is empty. */
   | { kind: 'indexWorktree'; deleted: boolean }
-  | { kind: 'untracked' };
+  | { kind: 'untracked' }
+  /** A commit against its first parent. `parent` is null for a root commit. */
+  | { kind: 'commit'; hash: string; parent: string | null };
 
 export type GitDiffTarget = {
   /** The repository root. */
@@ -34,20 +36,26 @@ export type DiffReadState =
   /** A different `generation` is a new text on the right, and so a fresh editor. */
   | { status: 'done'; diff: GitFileDiff; generation: number };
 
+const shortHash = (hash: string) => hash.slice(0, 7);
+
 export function sideLabels(compare: DiffCompare): [string, string] {
+  if (compare.kind === 'commit')
+    return [compare.parent ? shortHash(compare.parent) : '없음', shortHash(compare.hash)];
   if (compare.kind === 'headIndex') return ['HEAD', '인덱스'];
   if (compare.kind === 'indexWorktree') return ['인덱스', '작업 트리'];
   return ['없음', '작업 트리'];
 }
 
 export function diffTabTitle(name: string, compare: DiffCompare) {
+  if (compare.kind === 'commit') return `${name} (${shortHash(compare.hash)})`;
   if (compare.kind === 'headIndex') return `${name} ↔ HEAD`;
   if (compare.kind === 'indexWorktree') return `${name} ↔ 인덱스`;
   return `${name} (새 파일)`;
 }
 
 /** Only the working tree can be edited, and saved over. */
-export const editsWorktree = (compare: DiffCompare) => compare.kind !== 'headIndex';
+export const editsWorktree = (compare: DiffCompare) =>
+  compare.kind === 'indexWorktree' || compare.kind === 'untracked';
 
 function sameSide(a: DiffSide, b: DiffSide) {
   return a.kind === b.kind && (a.kind !== 'text' || a.hash === (b as typeof a).hash);
@@ -126,6 +134,8 @@ export function useGitFileDiff(source: Source, target: GitDiffTarget, dirty: () 
   }, [read, revision]);
 
   useEffect(() => {
+    // A commit never changes, whatever the Git view does to the repository.
+    if (target.compare.kind === 'commit') return;
     let running = false;
     let again = false;
     const refresh = () => {
@@ -164,7 +174,7 @@ export function useGitFileDiff(source: Source, target: GitDiffTarget, dirty: () 
       )
         refresh();
     });
-  }, [read, source, target.folder]);
+  }, [read, source, target.folder, target.compare.kind]);
 
   return {
     state,

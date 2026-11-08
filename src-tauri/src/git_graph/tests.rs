@@ -56,13 +56,13 @@ fn the_log_command_cannot_start_a_signature_program_or_be_reformatted() {
         command[command.len() - 3..],
         ["HEAD", "refs/remotes/origin/main", "--"]
     );
-    let files = files_command(Some(HASH_A), HASH_B);
-    for needed in ["--no-ext-diff", "--no-textconv", "--name-status"] {
+    let files = files_command("--numstat", Some(HASH_A), HASH_B);
+    for needed in ["--no-ext-diff", "--no-textconv", "--numstat"] {
         assert!(files.iter().any(|arg| arg == needed), "{needed}");
     }
     assert_eq!(files[files.len() - 3..], [HASH_A, HASH_B, "--"]);
     assert!(
-        files_command(None, HASH_B)
+        files_command("--name-status", None, HASH_B)
             .iter()
             .any(|arg| arg == "--root")
     );
@@ -73,7 +73,7 @@ fn start(
     stderr: &str,
     exit: u32,
 ) -> std::result::Result<Vec<String>, GitGraphResult> {
-    start_points(&native(), &output(stdout, stderr, exit))
+    start_points(&native(), &output(stdout, stderr, exit), GraphScope::Auto)
 }
 
 #[test]
@@ -101,6 +101,23 @@ fn walks_head_and_its_upstream_or_says_why_it_cannot() {
     // Anything but a full ref name is left out rather than passed on.
     assert_eq!(start(b"abc\n\0--all\n", "", 0), Ok(vec!["HEAD".into()]));
     assert_eq!(start(b"abc\n\0refs/\xff\n", "", 0), Ok(vec!["HEAD".into()]));
+}
+
+#[test]
+fn every_branch_is_walked_only_when_asked_and_only_past_a_first_commit() {
+    let reply = output(b"abc\n\0refs/remotes/origin/main\n", "", 0);
+    assert_eq!(
+        start_points(&native(), &reply, GraphScope::All),
+        Ok(args(["--branches", "--remotes", "--tags", "HEAD"]))
+    );
+    assert_eq!(
+        start_points(&native(), &output(b"", "", 1), GraphScope::All),
+        Err(GitGraphResult::Empty)
+    );
+    assert_eq!(
+        serde_json::from_str::<GraphScope>(r#""all""#).unwrap(),
+        GraphScope::All
+    );
 }
 
 #[test]
@@ -223,7 +240,8 @@ async fn reads_a_real_history_with_a_merge_a_tag_and_an_upstream() {
     }
     let host = GitHost::Native(Some(program));
     let folder = repo.to_str().unwrap();
-    let GitGraphResult::Graph { commits, has_more } = query(&host, folder, 100).await.unwrap()
+    let GitGraphResult::Graph { commits, has_more } =
+        query(&host, folder, 100, GraphScope::Auto).await.unwrap()
     else {
         panic!("not a graph");
     };
@@ -261,7 +279,9 @@ async fn a_commit_lists_its_files_against_its_first_parent() {
 
     let host = GitHost::Native(Some(program));
     let folder = repo.to_str().unwrap();
-    let GitGraphResult::Graph { commits, .. } = query(&host, folder, 10).await.unwrap() else {
+    let GitGraphResult::Graph { commits, .. } =
+        query(&host, folder, 10, GraphScope::Auto).await.unwrap()
+    else {
         panic!("not a graph");
     };
     assert_eq!(commits[0].subject, "제목");
@@ -288,6 +308,49 @@ async fn a_commit_lists_its_files_against_its_first_parent() {
     let mut names: Vec<_> = root.files.iter().map(|file| file.path.as_str()).collect();
     names.sort();
     assert_eq!(names, vec!["gone.txt", "old name.txt"]);
+    std::fs::remove_dir_all(&repo).unwrap();
+}
+
+#[tokio::test]
+async fn a_commit_counts_its_lines_and_all_branches_reach_past_head() {
+    let Some(program) = crate::git_credential::git_program() else {
+        return;
+    };
+    let repo = repository("graph-scope");
+    git_at(&repo, &["init", "-q"]);
+    git_at(&repo, &["checkout", "-q", "-b", "main"]);
+    std::fs::write(repo.join("a.txt"), "one\ntwo\n").unwrap();
+    git_at(&repo, &["add", "."]);
+    git_at(&repo, &["commit", "-q", "--no-gpg-sign", "-m", "root"]);
+    git_at(&repo, &["checkout", "-q", "-b", "side"]);
+    std::fs::write(repo.join("a.txt"), "one\nchanged\nthree\n").unwrap();
+    git_at(
+        &repo,
+        &["commit", "-q", "-a", "--no-gpg-sign", "-m", "side only"],
+    );
+    git_at(&repo, &["checkout", "-q", "main"]);
+
+    let host = GitHost::Native(Some(program));
+    let folder = repo.to_str().unwrap();
+    let subjects = |result: &GitGraphResult| match result {
+        GitGraphResult::Graph { commits, .. } => commits
+            .iter()
+            .map(|commit| commit.subject.clone())
+            .collect::<Vec<_>>(),
+        other => panic!("not a graph: {other:?}"),
+    };
+    let auto = query(&host, folder, 10, GraphScope::Auto).await.unwrap();
+    assert_eq!(subjects(&auto), ["root"]);
+    let all = query(&host, folder, 10, GraphScope::All).await.unwrap();
+    assert_eq!(subjects(&all), ["side only", "root"]);
+    let GitGraphResult::Graph { commits, .. } = &all else {
+        panic!("not a graph");
+    };
+
+    let changed = detail(&host, folder, &commits[0].hash).await.unwrap();
+    assert_eq!(changed.files.len(), 1);
+    assert_eq!(changed.files[0].added, Some(2));
+    assert_eq!(changed.files[0].removed, Some(1));
     std::fs::remove_dir_all(&repo).unwrap();
 }
 
@@ -324,7 +387,7 @@ async fn a_long_history_stops_at_the_limit_and_says_so() {
         (0, 1, true),
     ] {
         let GitGraphResult::Graph { commits, has_more } =
-            query(&host, folder, asked).await.unwrap()
+            query(&host, folder, asked, GraphScope::Auto).await.unwrap()
         else {
             panic!("not a graph");
         };
@@ -342,7 +405,9 @@ async fn a_repository_before_its_first_commit_is_empty() {
     git_at(&repo, &["init", "-q"]);
     let host = GitHost::Native(Some(program));
     assert_eq!(
-        query(&host, repo.to_str().unwrap(), 10).await.unwrap(),
+        query(&host, repo.to_str().unwrap(), 10, GraphScope::Auto)
+            .await
+            .unwrap(),
         GitGraphResult::Empty
     );
     std::fs::remove_dir_all(&repo).unwrap();
@@ -357,11 +422,13 @@ async fn a_folder_outside_a_repository_is_told_apart() {
     let host = GitHost::Native(Some(program));
     let spelled = folder.to_str().unwrap();
     assert!(matches!(
-        query(&host, spelled, 10).await.unwrap(),
+        query(&host, spelled, 10, GraphScope::Auto).await.unwrap(),
         GitGraphResult::NotRepo { .. }
     ));
     assert!(matches!(
-        query(&GitHost::Native(None), spelled, 10).await.unwrap(),
+        query(&GitHost::Native(None), spelled, 10, GraphScope::Auto)
+            .await
+            .unwrap(),
         GitGraphResult::NoGit { .. }
     ));
     std::fs::remove_dir_all(&folder).unwrap();
@@ -432,7 +499,9 @@ async fn a_repositorys_signature_program_does_not_run() {
 
     let host = GitHost::Native(Some(program.clone()));
     let GitGraphResult::Graph { commits, .. } =
-        query(&host, repo.to_str().unwrap(), 10).await.unwrap()
+        query(&host, repo.to_str().unwrap(), 10, GraphScope::Auto)
+            .await
+            .unwrap()
     else {
         panic!("not a graph");
     };
@@ -470,7 +539,8 @@ async fn wsl_reads_the_same_graph_and_stops_at_the_limit() {
     let mut target = crate::local::Target::for_test(&format!("wsl:{name}"), "wsl");
     target.program = wsl.clone();
     let host = GitHost::local(target).await.unwrap();
-    let GitGraphResult::Graph { commits, has_more } = query(&host, &folder, 100).await.unwrap()
+    let GitGraphResult::Graph { commits, has_more } =
+        query(&host, &folder, 100, GraphScope::Auto).await.unwrap()
     else {
         panic!("not a graph");
     };
@@ -480,7 +550,9 @@ async fn wsl_reads_the_same_graph_and_stops_at_the_limit() {
     assert_eq!(merge.parents.len(), 2);
 
     let GitGraphResult::Graph { commits, has_more } =
-        query(&host, &big, MAX_COMMITS).await.unwrap()
+        query(&host, &big, MAX_COMMITS, GraphScope::Auto)
+            .await
+            .unwrap()
     else {
         panic!("not a graph");
     };

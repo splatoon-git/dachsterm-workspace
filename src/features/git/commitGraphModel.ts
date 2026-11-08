@@ -12,6 +12,10 @@ export type GraphCommit = {
   refs: GraphRef[];
   subject: string;
 };
+/** Which commits `git_graph` walks. */
+export type GraphScope = 'auto' | 'all';
+/** The commit a file in the graph was changed by, and the side it is compared with. */
+export type CommitFileOrigin = { hash: string; parent: string | null };
 export type GitGraphResult =
   | { kind: 'graph'; commits: GraphCommit[]; hasMore: boolean }
   | { kind: 'empty' }
