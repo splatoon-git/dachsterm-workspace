@@ -763,6 +763,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "drag",
+      "version": "2.1.1",
+      "license": "Apache-2.0 OR MIT",
+      "repository": null,
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "dtoa-short",
       "version": "0.3.5",
       "license": "MPL-2.0",
@@ -3228,6 +3236,22 @@
     {
       "ecosystem": "cargo",
       "name": "windows-core",
+      "version": "0.52.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-core",
+      "version": "0.58.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-core",
       "version": "0.62.2",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/microsoft/windows-rs",
@@ -3244,7 +3268,39 @@
     {
       "ecosystem": "cargo",
       "name": "windows-implement",
+      "version": "0.52.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-implement",
+      "version": "0.58.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-implement",
       "version": "0.60.2",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-interface",
+      "version": "0.52.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-interface",
+      "version": "0.58.0",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/microsoft/windows-rs",
       "licenseTextsFound": 2
@@ -3276,7 +3332,23 @@
     {
       "ecosystem": "cargo",
       "name": "windows-result",
+      "version": "0.2.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-result",
       "version": "0.4.1",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-strings",
+      "version": "0.1.0",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/microsoft/windows-rs",
       "licenseTextsFound": 2
@@ -3341,6 +3413,14 @@
       "ecosystem": "cargo",
       "name": "windows-version",
       "version": "0.1.7",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows",
+      "version": "0.52.0",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/microsoft/windows-rs",
       "licenseTextsFound": 2

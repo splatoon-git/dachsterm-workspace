@@ -4,6 +4,18 @@ import { desktop } from './ipc';
 
 type Point = { x: number; y: number };
 
+let draggingOut = false;
+export const isDraggingOut = () => draggingOut;
+/** Files this app is dragging out are not a drop on it, wherever the user lets go. */
+export async function whileDraggingOut(work: () => Promise<void>) {
+  draggingOut = true;
+  try {
+    await work();
+  } finally {
+    draggingOut = false;
+  }
+}
+
 /** The window reports physical pixels; the page lays out in CSS pixels. */
 export function insideElement(element: HTMLElement | null, position: Point, scale: number) {
   const rect = element?.getBoundingClientRect();
@@ -33,7 +45,7 @@ export function useFileDrop(
     let disposed = false;
     void getCurrentWebview()
       .onDragDropEvent(({ payload }) => {
-        if (payload.type === 'leave') return setOver(false);
+        if (payload.type === 'leave' || draggingOut) return setOver(false);
         const hit = insideElement(target.current, payload.position, window.devicePixelRatio);
         if (payload.type !== 'drop') return setOver(hit);
         setOver(false);

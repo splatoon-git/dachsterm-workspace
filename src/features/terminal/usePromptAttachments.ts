@@ -1,5 +1,6 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { isDraggingOut } from '../../lib/fileDrop';
 import { call, desktop, errorText } from '../../lib/ipc';
 import { isMacPlatform } from './preferences';
 import {
@@ -112,7 +113,8 @@ export function usePromptAttachments(
     let disposed = false;
     void getCurrentWebview()
       .onDragDropEvent((event) => {
-        if (event.payload.type !== 'drop' || document.querySelector('dialog[open]')) return;
+        if (event.payload.type !== 'drop' || isDraggingOut()) return;
+        if (document.querySelector('dialog[open]')) return;
         const rect = pane.current?.getBoundingClientRect();
         const { x, y } = event.payload.position;
         const scale = window.devicePixelRatio;

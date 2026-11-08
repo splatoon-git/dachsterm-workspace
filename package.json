@@ -17,6 +17,7 @@
     "probe": "node scripts/run-probe.mjs",
     "probe:phase1": "node scripts/run-phase1.mjs",
     "test:native": "node scripts/run-phase1.mjs --native",
+    "test:drag-out": "node scripts/test-local-native.mjs --drag-only",
     "test:ui": "playwright test",
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
     "format:check": "prettier --check src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",

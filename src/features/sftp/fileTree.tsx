@@ -124,6 +124,7 @@ export function FileTreeRow<T extends FileEntry>({
       )}
       <button
         {...button}
+        data-file-name={row.name}
         className={`file-row ${selected ? 'selected' : ''}`}
         aria-pressed={selected}
       >

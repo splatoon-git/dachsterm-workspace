@@ -1,10 +1,11 @@
 import { chromium, expect } from '@playwright/test';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { arrangeTabs, chooseTabMenu, dragTab, openNewConnectionForm } from './native-workspace.mjs';
+import { checkServerDragFetch } from './native-drag-fetch.mjs';
 const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-ftp-native-'));
 let app, browser, page;
 let stage = 'launch';
@@ -144,6 +145,31 @@ try {
       .toBe('completed');
     await pane.getByRole('button', { name: '파일 새로 고침', exact: true }).click();
     await expect(pane.locator('.file-row').filter({ hasText: '한글 upload.bin' })).toBeVisible();
+    stage = `${protocol} drag out fetch`;
+    const big = path.join(root, 'big.bin');
+    await writeFile(big, Buffer.alloc(10 * 1024 * 1024 + 1));
+    const [bigJob] = await invoke('transfer_batch', {
+      id,
+      path: `/${protocol}-ui`,
+      mode: 'drop',
+      paths: [big],
+      conflict: 'error',
+    });
+    await expect
+      .poll(async () => (await invoke('transfer_list')).find((t) => t.id === bigJob)?.status)
+      .toBe('completed');
+    await checkServerDragFetch({
+      invoke,
+      source: { kind: 'ftp', connectionId: id },
+      file: `/${protocol}-ui/한글 upload.bin`,
+      body: await readFile(local),
+      folder: `/${protocol}-ui`,
+      big: `/${protocol}-ui/big.bin`,
+      appData: root,
+    });
+    console.log(
+      `PASS native ${protocol} drag out: fetches small files, refuses folders and big ones`,
+    );
     await mkdir(path.resolve('test-results-native'), { recursive: true });
     await page.screenshot({ path: path.resolve(`test-results-native/${protocol}-files.png`) });
     await page.setViewportSize({ width: 800, height: 650 });
