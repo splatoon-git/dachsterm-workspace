@@ -51,8 +51,12 @@ const zshGuide = [
   `(( \${preexec_functions[(Ie)__dachsterm_pre]} )) || preexec_functions+=(__dachsterm_pre)`,
 ];
 
-/** The hook text for one line of input. `guide` adds the program notices to the folder reports. */
-export function shellHook({ guide }: { guide: boolean }) {
+/**
+ * The hook text for one line of input. `guide` adds the program notices to the folder reports.
+ * `git` is the backend's line that hands the connection's HTTPS Git helper to this shell. It
+ * holds single quotes, so it stays outside the evals.
+ */
+export function shellHook({ guide, git }: { guide: boolean; git?: string }) {
   const bash = [
     bashEnd,
     bashPrompt,
@@ -62,5 +66,6 @@ export function shellHook({ guide }: { guide: boolean }) {
     bashHistory,
   ];
   const zsh = [zshEnd, zshPrompt, zshPrecmd, ...zshCommandStart, ...(guide ? zshGuide : [])];
-  return `if [ -n "$BASH_VERSION" ]; then eval '${bash.join('; ')}'; elif [ -n "$ZSH_VERSION" ]; then eval '${zsh.join('; ')}'; fi`;
+  const hook = `if [ -n "$BASH_VERSION" ]; then eval '${bash.join('; ')}'; elif [ -n "$ZSH_VERSION" ]; then eval '${zsh.join('; ')}'; fi`;
+  return git ? `${git}; ${hook}` : hook;
 }

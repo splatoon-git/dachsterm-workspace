@@ -2,6 +2,8 @@ use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::Mutex};
 use uuid::Uuid;
+mod git_credentials;
+pub use git_credentials::GitCredential;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn db_error(_: rusqlite::Error) -> String {
@@ -46,6 +48,9 @@ pub struct Profile {
     pub forward_keys: Vec<ForwardKey>,
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub forward_system_agent: bool,
+    /// HTTPS Git credentials through the server's own git (DX.12). Off unless the form turns it on.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub forward_git_credentials: bool,
     #[serde(default)]
     pub last_connected: Option<i64>,
     #[serde(default)]
@@ -99,6 +104,7 @@ impl Profile {
             forward_login_key: true,
             forward_keys: vec![],
             forward_system_agent: true,
+            forward_git_credentials: false,
             last_connected: None,
             has_secret: false,
         }
@@ -115,7 +121,9 @@ impl Profile {
         if self.protocol != "ssh" && !self.tmux_session.is_empty() {
             return Err("tmux 세션은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
-        if self.protocol != "ssh" && (self.forward_agent || !self.forward_keys.is_empty()) {
+        if self.protocol != "ssh"
+            && (self.forward_agent || !self.forward_keys.is_empty() || self.forward_git_credentials)
+        {
             return Err("키 전달은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
         let keys = &self.forward_keys;
@@ -365,12 +373,13 @@ impl Store {
     /// Callers hold `AppState.mutation`, so nothing is referenced between the query and the
     /// removal. The OS store is called without the database lock.
     pub fn cleanup_credentials(&self) -> Result<()> {
-        let forwarded: std::collections::HashSet<String> = self
+        let mut forwarded: std::collections::HashSet<String> = self
             .list()?
             .profiles
             .iter()
             .flat_map(|p| p.forward_refs().map(String::from))
             .collect();
+        forwarded.extend(self.git_credentials()?.into_iter().map(|e| e.secret_ref));
         let ids = {
             let db = self.0.lock().unwrap();
             db.prepare("SELECT id FROM credential_gc WHERE id NOT IN (SELECT secret_ref FROM profiles WHERE secret_ref IS NOT NULL)").map_err(db_error)?.query_map([],|r|r.get::<_,String>(0)).map_err(db_error)?.collect::<std::result::Result<Vec<_>,_>>().map_err(db_error)?
@@ -536,6 +545,7 @@ pub(crate) mod tests {
             forward_login_key: true,
             forward_keys: vec![],
             forward_system_agent: true,
+            forward_git_credentials: false,
             last_connected: None,
             has_secret: false,
         }
@@ -547,6 +557,11 @@ pub(crate) mod tests {
         assert!(p.validate().is_ok());
         p.protocol = "ftps".into();
         assert!(p.validate().is_err());
+        let mut git = profile();
+        git.forward_git_credentials = true;
+        assert!(git.validate().is_ok());
+        git.protocol = "ftp".into();
+        assert!(git.validate().is_err());
     }
     #[test]
     fn tmux_session_needs_ssh_and_a_safe_name() {

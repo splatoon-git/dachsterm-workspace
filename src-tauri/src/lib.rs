@@ -12,6 +12,7 @@ mod editor_location;
 pub mod encoding;
 pub mod file_ops;
 pub mod ftp;
+pub mod git_credential;
 pub mod git_diff;
 pub mod git_status;
 pub mod hostkeys;
@@ -211,6 +212,10 @@ pub fn run() {
             git_diff::git_diff_file,
             agent_keys::agent_sign_reply,
             ssh_keys::ssh_key_info,
+            git_credential::commands::git_credential_reply,
+            git_credential::commands::git_credential_shell,
+            git_credential::commands::git_credentials_saved,
+            git_credential::commands::git_credential_forget,
             broadcast::broadcast_status,
             broadcast::broadcast_set,
             vault::vault_status,

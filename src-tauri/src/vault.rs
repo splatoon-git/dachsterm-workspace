@@ -267,8 +267,21 @@ impl Vault {
             }
             forwarded.push((crate::storage::profile_data(&profile)?, profile.id));
         }
+        // Saved HTTPS Git credentials (DX.12) live in one setting.
+        let mut git = store.git_credentials()?;
+        for entry in &mut git {
+            let next = copy(&entry.secret_ref)?;
+            changed.push((
+                None,
+                std::mem::replace(&mut entry.secret_ref, next.clone()),
+                next,
+            ));
+        }
         let mut db = store.0.lock().unwrap();
         let tx = db.transaction().map_err(db_error)?;
+        if !git.is_empty() {
+            Store::write_git_credentials(&tx, &git)?;
+        }
         for (data, profile) in forwarded {
             tx.execute(
                 "UPDATE profiles SET data=? WHERE id=?",

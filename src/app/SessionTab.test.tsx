@@ -107,7 +107,9 @@ describe('session tab status', () => {
     expect(label()).toBe('연결됨');
     await request('now', 'c1');
     expect(label()).toBe('입력 대기');
-    await act(() => agentSign.answer(agentSign.snapshot()[1], { decision: 'deny' }));
+    const now = agentSign.snapshot()[1];
+    if (now.type !== 'agentSign') throw new Error('a sign request');
+    await act(() => agentSign.answer(now, { decision: 'deny' }));
     expect(label()).toBe('연결됨');
   });
 });

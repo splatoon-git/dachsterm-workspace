@@ -111,6 +111,7 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
         p.forward_login_key = true;
         p.forward_keys.clear();
         p.forward_system_agent = true;
+        p.forward_git_credentials = false;
     }
     let tunnels = store
         .tunnel_configs()?
@@ -375,6 +376,7 @@ pub(crate) fn apply_bundle(store: &Store, bundle: &mut Bundle, merges: &[Merge])
         p.forward_login_key = saved.is_none_or(|old| old.forward_login_key);
         p.forward_keys = saved.map_or_else(Vec::new, |old| old.forward_keys.clone());
         p.forward_system_agent = saved.is_none_or(|old| old.forward_system_agent);
+        p.forward_git_credentials = saved.is_some_and(|old| old.forward_git_credentials);
         tx.execute(
             "INSERT INTO profiles(id,data,group_id) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET data=?2,group_id=?3",
             params![
@@ -515,6 +517,7 @@ mod tests {
         saved.forward_agent = true;
         saved.forward_login_key = false;
         saved.forward_system_agent = false;
+        saved.forward_git_credentials = true;
         saved.forward_keys = vec![crate::storage::ForwardKey {
             path: "git-key".into(),
             secret_ref: None,
@@ -527,6 +530,7 @@ mod tests {
         );
         assert!(!exported.contains("forwardLoginKey") && !exported.contains("forwardKeys"));
         assert!(!exported.contains("forwardSystemAgent") && !exported.contains("git-key"));
+        assert!(!exported.contains("forwardGitCredentials"));
         let mut incoming = saved.clone();
         incoming.id = "file".into();
         incoming.tmux_session = "from-file".into();
@@ -542,6 +546,7 @@ mod tests {
         fresh.forward_agent = true;
         fresh.forward_login_key = false;
         fresh.forward_system_agent = false;
+        fresh.forward_git_credentials = true;
         let mut bundle = Bundle {
             format: Some("dachsterm.sessions".into()),
             version: 3,
@@ -561,6 +566,7 @@ mod tests {
         assert!(merged.forward_agent, "a file cannot turn it off either");
         assert_eq!(merged.forward_keys, saved.forward_keys);
         assert!(!merged.forward_login_key && !merged.forward_system_agent);
+        assert!(merged.forward_git_credentials);
         let added = profiles.iter().find(|p| p.host == "other.example").unwrap();
         assert_eq!(added.tmux_session, "");
         assert!(!added.forward_agent, "a file cannot turn it on");
@@ -569,6 +575,7 @@ mod tests {
             "nor choose keys or stored Passphrases"
         );
         assert!(added.forward_login_key && added.forward_system_agent);
+        assert!(!added.forward_git_credentials, "a file cannot turn it on");
     }
     #[test]
     fn rejects_secret_and_unknown_schema() {

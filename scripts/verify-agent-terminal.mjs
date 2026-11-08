@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
-import { chooseTabMenu, openNewConnectionForm } from './native-workspace.mjs';
+import { chooseTabMenu, openNewConnectionForm, openSettings } from './native-workspace.mjs';
 
 const promptFolder = '/home/probe/.cache/dachsterm/prompt';
 const tmuxName = 'dachs-native';
@@ -579,4 +579,140 @@ export async function verifyAgentTerminal({
     await rm(process.env.DACHSTERM_AGENT_PAUSE, { force: true });
     await expect.poll(reachable, { timeout: 10000 }).toBe(true);
   }
+
+  // DX.12: HTTPS Git credentials through the server's own git, against the fixture's HTTPS Git
+  // server. This PC's git runs with the isolated HOME and `store` helper run-phase1 prepared.
+  setStage('DX.12 HTTPS Git credentials');
+  const credentialName = 'HTTPS 자격 증명 테스트';
+  const httpsWork = '/home/probe/dx12-native';
+  const httpsUrl = 'https://git.test:3000/probe/dx12-native.git';
+  const localStore = process.env.DACHSTERM_PROBE_GIT_STORE;
+  shell(
+    `rm -rf ${httpsWork} && git init -q ${httpsWork} && ` +
+      `git -C ${httpsWork} config user.email p@example.invalid && ` +
+      `git -C ${httpsWork} config user.name probe`,
+  );
+  await openNewConnectionForm(page);
+  const credentialForm = page.getByRole('dialog');
+  await credentialForm.getByLabel('이름', { exact: true }).fill(credentialName);
+  await credentialForm.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
+  await credentialForm.getByLabel('포트', { exact: true }).fill(probe('PORT'));
+  await credentialForm.getByLabel('사용자', { exact: true }).fill('probe');
+  await credentialForm.getByLabel('비밀번호', { exact: true }).fill(probe('PASSWORD'));
+  await credentialForm.getByLabel('인증정보 보관', { exact: true }).selectOption('replace');
+  await credentialForm.locator('summary', { hasText: '고급 옵션' }).click();
+  await credentialForm.getByLabel('HTTPS Git 자격 증명 전달', { exact: true }).check();
+  await credentialForm.getByRole('button', { name: '저장 후 연결', exact: true }).click();
+  const credentialTab = page.getByRole('tab', { name: new RegExp(`^${credentialName}`) });
+  // The shell hook carries the helper line; it is typed once the shell waits at its prompt.
+  const helperReady = async () => {
+    await connected();
+    await expect
+      .poll(
+        async () => {
+          await command(`printf 'GCP_%s\\n' "\${GIT_CONFIG_PARAMETERS:+set}"`);
+          await sleep(1500);
+          return pane().locator('.xterm-accessibility-tree').innerText();
+        },
+        { timeout: 30000, intervals: [2000] },
+      )
+      .toContain('GCP_set');
+  };
+  const reopen = async () => {
+    await page.getByRole('button', { name: `${credentialName} 탭 닫기`, exact: true }).click();
+    await showConnections();
+    await page
+      .locator('.profile-card')
+      .filter({ hasText: credentialName })
+      .locator('.profile-target')
+      .dblclick();
+    await expect(credentialTab).toHaveAttribute('aria-selected', 'true');
+    await helperReady();
+  };
+  await expect(credentialTab).toHaveAttribute('aria-selected', 'true');
+  await helperReady();
+  const credentialCard = () =>
+    pane().getByRole('alertdialog', { name: 'Git 자격 증명 요청', exact: true });
+  const httpsPush = (n, marker) =>
+    command(
+      `cd ${httpsWork} && echo ${n} > f && git add f && git commit -qm c${n} && ` +
+        `GIT_SSL_NO_VERIFY=1 git push -q ${httpsUrl} HEAD:refs/heads/main ` +
+        `&& printf '${marker}_%s\\n' OK || printf '${marker}_%s\\n' FAIL`,
+    );
+
+  await httpsPush(1, 'TYPED');
+  await expect(credentialCard()).toContainText('git.test:3000', { timeout: 15000 });
+  await expect(credentialCard()).toContainText('서버로 전달됩니다');
+  await expect(credentialCard()).toContainText(credentialName);
+  await expect(page.locator('.session-tab.selected .program-status')).toHaveClass(/blocked/);
+  assert(
+    await page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea')),
+    'the card must not take focus from the terminal',
+  );
+  await page.screenshot({ path: path.join(screenshots, 'git-credential.png') });
+  await credentialCard().getByRole('button', { name: '직접 입력', exact: true }).click();
+  await expect(credentialCard().getByLabel('사용자 이름', { exact: true })).toBeFocused();
+  await credentialCard().getByLabel('사용자 이름', { exact: true }).fill('probe');
+  await credentialCard().getByLabel('토큰 또는 암호', { exact: true }).fill(probe('GIT_PASSWORD'));
+  await credentialCard().getByLabel('이 PC에 저장', { exact: true }).check();
+  await credentialCard().getByRole('button', { name: '확인', exact: true }).click();
+  await output('TYPED_OK');
+  await expect(credentialCard()).toHaveCount(0);
+  // The reply returns once the value is in the OS store and its reference in the database.
+  await expect
+    .poll(() => invoke('git_credentials_saved'))
+    .toEqual([{ host: 'git.test:3000', username: 'probe' }]);
+  console.log('PASS native credential card: typed, saved on this PC, git push over HTTPS works');
+
+  await reopen();
+  await httpsPush(2, 'SAVED');
+  await expect(credentialCard()).toBeVisible({ timeout: 15000 });
+  await credentialCard().getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await output('SAVED_OK');
+  await expect(credentialCard()).toHaveCount(0);
+  console.log('PASS native "allow once" answers with the token saved in the app');
+
+  await reopen();
+  await httpsPush(3, 'REFUSED');
+  await expect(credentialCard()).toBeVisible({ timeout: 15000 });
+  await credentialCard().getByRole('button', { name: '거부', exact: true }).click();
+  await output("Username for 'https://git.test:3000'");
+  await pane().locator('.xterm-helper-textarea').press('Control+C');
+  console.log('PASS native refusal leaves git to ask in the terminal');
+
+  const settings = await openSettings(page, '에이전트');
+  const savedList = settings.getByRole('region', { name: '저장한 Git 자격 증명', exact: true });
+  await expect(savedList).toContainText('https://git.test:3000');
+  await savedList.getByRole('button', { name: 'git.test:3000 probe 삭제', exact: true }).click();
+  await expect(savedList).toContainText('저장한 자격 증명이 없습니다.');
+  assert.deepEqual(await invoke('git_credentials_saved'), []);
+  await settings.getByRole('button', { name: '대화상자 닫기' }).click();
+  console.log('PASS native Settings › Agents lists the saved credential and removes it');
+
+  await writeFile(localStore, `https://probe:${probe('GIT_PASSWORD')}@git.test:3000\n`);
+  try {
+    await reopen();
+    await httpsPush(4, 'FILLED');
+    await expect(credentialCard()).toBeVisible({ timeout: 15000 });
+    await credentialCard()
+      .getByRole('button', { name: '이 연결에서 10분 허용', exact: true })
+      .click();
+    await output('FILLED_OK');
+    await httpsPush(5, 'ALLOWED');
+    await output('ALLOWED_OK');
+    await expect(credentialCard()).toHaveCount(0);
+  } finally {
+    await writeFile(localStore, '');
+  }
+  console.log(
+    "PASS native allow for 10 minutes: this PC's git credential fill answers, the next push asks nothing",
+  );
+  const credentialProfile = (await invoke('sessions')).profiles.find(
+    (p) => p.name === credentialName,
+  );
+  assert.equal(credentialProfile.forwardGitCredentials, true);
+  await page.getByRole('button', { name: `${credentialName} 탭 닫기`, exact: true }).click();
+  await invoke('delete_session', { id: credentialProfile.id });
+  assert.equal((await invoke('sessions')).credentialWarning ?? null, null);
+  await page.locator('.tab-strip').getByRole('tab').first().click();
 }

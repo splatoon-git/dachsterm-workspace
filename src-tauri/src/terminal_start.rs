@@ -70,13 +70,15 @@ pub fn check_name(name: &str) -> Result<()> {
 }
 
 /// Without tmux this falls back to a login shell and tells the app, so the tab is still usable.
-fn tmux_command(name: &str, encoding: &str, launch: Option<&Launch>) -> String {
+/// `git` is the connection's credential socket (DX.12), given to the session's new panes.
+fn tmux_command(name: &str, encoding: &str, launch: Option<&Launch>, git: Option<&str>) -> String {
     // A server's non-login exec environment often has no locale, and tmux would then replace every
     // non-ASCII character. Other session encodings keep tmux's own choice.
     let utf8 = if encoding == "utf-8" { " -u" } else { "" };
-    let start = match launch {
-        None => format!("exec tmux{utf8} new-session -A -s {}", quote(name)),
-        Some(launch) => launch_script(name, utf8, launch),
+    let start = match (launch, git) {
+        (None, None) => format!("exec tmux{utf8} new-session -A -s {}", quote(name)),
+        (None, Some(path)) => credential_script(name, utf8, path),
+        (Some(launch), _) => launch_script(name, utf8, launch, git),
     };
     let script = format!(
         "command -v tmux >/dev/null 2>&1 || {{\n\
@@ -88,10 +90,39 @@ fn tmux_command(name: &str, encoding: &str, launch: Option<&Launch>) -> String {
     format!("sh -c {}", quote(&script))
 }
 
+/// Creates the session detached. With a credential socket, tmux before 3.3 rejects `-e` and the
+/// whole command fails without creating anything, so the plain form follows (DX.12.0).
+fn create(name: &str, utf8: &str, folder: &str, git: bool) -> String {
+    let plain = format!("tmux{utf8} new-session -d -s {}{folder}", quote(name));
+    if git {
+        format!(
+            "{{ {plain} -e \"GIT_CONFIG_PARAMETERS=$GIT_CONFIG_PARAMETERS\" 2>/dev/null || {plain}; }}"
+        )
+    } else {
+        plain
+    }
+}
+
+/// The exported value reaches every pane of a tmux server this start launches;
+/// `set-environment` reaches new windows and panes of a session on a server that already runs.
+/// `has-session` matches name prefixes and tmux 1.8 has no `=name`, so the list is searched.
+fn credential_script(name: &str, utf8: &str, path: &str) -> String {
+    let q = quote(name);
+    format!(
+        "{}\n\
+         tmux list-sessions -F '#{{session_name}}' 2>/dev/null | grep -qxF -- {q} ||\n\
+         {}\n\
+         tmux set-environment -t {q} GIT_CONFIG_PARAMETERS \"$GIT_CONFIG_PARAMETERS\"\n\
+         exec tmux{utf8} attach-session -t {q}",
+        crate::git_credential::protocol::tmux_export(path),
+        create(name, utf8, "", true),
+    )
+}
+
 /// Types the command only into a session this start creates. An existing session is attached as
 /// it is, so a running agent never receives the text. `send-keys` runs it in the user's
 /// interactive shell, whose rc files set the `PATH` where such tools are usually installed.
-fn launch_script(name: &str, utf8: &str, launch: &Launch) -> String {
+fn launch_script(name: &str, utf8: &str, launch: &Launch, git: Option<&str>) -> String {
     let session = quote(&format!("={name}"));
     let pane = quote(&format!("={name}:"));
     let folder = if launch.folder.is_empty() {
@@ -99,14 +130,24 @@ fn launch_script(name: &str, utf8: &str, launch: &Launch) -> String {
     } else {
         format!(" -c {}", quote(&launch.folder))
     };
+    let (before, environment) = match git {
+        Some(path) => (
+            format!("{}\n", crate::git_credential::protocol::tmux_export(path)),
+            format!(
+                "tmux set-environment -t {} GIT_CONFIG_PARAMETERS \"$GIT_CONFIG_PARAMETERS\"\n",
+                quote(name)
+            ),
+        ),
+        None => Default::default(),
+    };
     format!(
-        "tmux has-session -t {session} 2>/dev/null || {{\n\
-         tmux{utf8} new-session -d -s {}{folder} &&\n\
+        "{before}tmux has-session -t {session} 2>/dev/null || {{\n\
+         {} &&\n\
          tmux send-keys -t {pane} -l -- {} &&\n\
          tmux send-keys -t {pane} Enter\n\
          }}\n\
-         exec tmux{utf8} attach-session -t {session}",
-        quote(name),
+         {environment}exec tmux{utf8} attach-session -t {session}",
+        create(name, utf8, &folder, git.is_some()),
         quote(&launch.command)
     )
 }
@@ -115,11 +156,17 @@ pub async fn begin(
     channel: &Channel<client::Msg>,
     profile: &Profile,
     launch: Option<Launch>,
+    git: Option<&str>,
 ) -> std::result::Result<(), russh::Error> {
     if profile.tmux_session.is_empty() {
         channel.request_shell(true).await
     } else {
-        let command = tmux_command(&profile.tmux_session, &profile.encoding, launch.as_ref());
+        let command = tmux_command(
+            &profile.tmux_session,
+            &profile.encoding,
+            launch.as_ref(),
+            git,
+        );
         // `Launch::check` already proved the text fits the session encoding; names are ASCII.
         let bytes = crate::encoding::encode(&command, &profile.encoding)
             .unwrap_or_else(|_| command.into_bytes());
@@ -169,6 +216,7 @@ pub async fn tmux_current_path(
 #[cfg(test)]
 mod tests {
     use super::{Launch, check_name, current_path, launch_script, tmux_command};
+    use crate::git_credential::protocol::tmux_export;
     use crate::storage::Profile;
 
     fn launch(folder: &str, command: &str) -> Launch {
@@ -186,7 +234,12 @@ mod tests {
 
     #[test]
     fn a_launch_types_only_into_a_session_it_creates() {
-        let script = launch_script("work", " -u", &launch("/srv/a b's", "cli --worktree x"));
+        let script = launch_script(
+            "work",
+            " -u",
+            &launch("/srv/a b's", "cli --worktree x"),
+            None,
+        );
         assert_eq!(
             script,
             "tmux has-session -t '=work' 2>/dev/null || {\n\
@@ -197,8 +250,8 @@ mod tests {
              exec tmux -u attach-session -t '=work'"
         );
         // The login folder needs no -c, and the tmux check still comes first.
-        assert!(!launch_script("work", "", &launch("", "cli")).contains(" -c "));
-        let command = tmux_command("work", "utf-8", Some(&launch("", "cli")));
+        assert!(!launch_script("work", "", &launch("", "cli"), None).contains(" -c "));
+        let command = tmux_command("work", "utf-8", Some(&launch("", "cli")), None);
         assert!(command.find("command -v tmux") < command.find("has-session"));
         assert!(!command.contains("new-session -A"));
     }
@@ -261,11 +314,40 @@ mod tests {
 
     #[test]
     fn starts_tmux_by_exec_with_a_login_shell_fallback() {
-        let command = tmux_command("work", "utf-8", None);
+        let command = tmux_command("work", "utf-8", None, None);
         assert!(command.starts_with("sh -c '"));
         assert!(command.contains("exec tmux -u new-session -A -s '\\''work'\\''"));
         assert!(command.contains("]777;DachsTerm;tmux;missing"));
-        assert!(!tmux_command("work", "euc-kr", None).contains(" -u "));
+        assert!(!tmux_command("work", "euc-kr", None, None).contains(" -u "));
+    }
+
+    #[test]
+    fn a_credential_socket_reaches_new_panes_on_every_tmux() {
+        let path = "/tmp/dachsterm-git-0a1b";
+        let script = super::credential_script("work", " -u", path);
+        assert_eq!(
+            script,
+            format!(
+                "{}\n\
+                 tmux list-sessions -F '#{{session_name}}' 2>/dev/null | grep -qxF -- 'work' ||\n\
+                 {{ tmux -u new-session -d -s 'work' -e \"GIT_CONFIG_PARAMETERS=$GIT_CONFIG_PARAMETERS\" 2>/dev/null || tmux -u new-session -d -s 'work'; }}\n\
+                 tmux set-environment -t 'work' GIT_CONFIG_PARAMETERS \"$GIT_CONFIG_PARAMETERS\"\n\
+                 exec tmux -u attach-session -t 'work'",
+                tmux_export(path)
+            )
+        );
+        let command = tmux_command("work", "utf-8", None, Some(path));
+        assert!(command.ends_with(&crate::remote_exec::quote(&script)[1..]));
+        assert!(
+            !script.contains("has-session"),
+            "a prefix would match another session"
+        );
+        let launched = launch_script("work", "", &launch("/srv", "cli"), Some(path));
+        assert!(launched.starts_with(&tmux_export(path)));
+        assert!(launched.contains(
+            "{ tmux new-session -d -s 'work' -c '/srv' -e \"GIT_CONFIG_PARAMETERS=$GIT_CONFIG_PARAMETERS\" 2>/dev/null || tmux new-session -d -s 'work' -c '/srv'; } &&"
+        ));
+        assert!(launched.contains("tmux set-environment -t 'work' GIT_CONFIG_PARAMETERS"));
     }
 
     #[test]

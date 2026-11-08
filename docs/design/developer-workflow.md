@@ -586,6 +586,21 @@ exec tmux attach -t '=<이름>'
 
 **합격 (수동):** 실제 GitHub, GitLab.com, Bitbucket을 이 PC의 자격 증명 관리자로 확인하고, 자체 설치형 GitLab이 있으면 함께 확인한다.
 
+**구현에서 정한 것(2026-11-08, [검증 기록](../verification/git-credential.md#dx12-구현-검증)):**
+
+- **파일 배치:** `git_credential.rs`는 소켓 열기·닫기, 채널 수락, 요청 읽기만 맡는다. 승인 대기·허용 재사용·반복 차단은 `git_credential/approval.rs`, 카드 응답과 설정 창 명령은 `commands.rs`, 프로토콜 파서와 helper 문구(순수 함수)는 `protocol.rs`, 이 PC 쪽 출처(앱 저장 토큰, `git credential fill`·`approve`, git 찾기)는 `local.rs`다. 저장 목록은 `storage/git_credentials.rs`(설정 행 `git-credentials`, 참조와 정리 journal)에 두었다. Rust 상한(600줄)을 지키려고 나눴다.
+- **`ssh.rs` 순증 없음:** `Event`를 `ssh/event.rs`로 옮겨 상쇄했다(669→649줄). `ssh.rs`에 더한 것은 핸들러의 위임 호출, 연결 후 `git_credential::start`, 종료 직전 `finish` 한 줄, 작업 종료 분기의 `stopping`이다.
+- **정상 종료 때 소켓 삭제:** 탭을 닫으면 연결 작업이 `stop` 신호로 바로 취소되어 끝부분 코드가 돌지 않는다. 그래서 `stop` 분기를 `git_credential::stopping`으로 바꿔, 연결이 아직 살아 있는 동안 전달 취소와 자기 소켓 삭제(각 3초 제한)를 한 뒤 연결을 끊는다. 셸에서 `exit`로 끝난 경우는 `run` 끝의 `finish`가 같은 일을 한다.
+- **프런트엔드가 helper 줄을 얻는 방법:** §5에 없던 명령 `git_credential_shell`(연결 ID → 셸에 넣을 한 줄 또는 없음)을 더했다. helper 문구와 인용을 Rust 한 곳(`protocol::shell_export`, `tmux_export`)에서 만들어 셸 훅과 tmux 시작 명령이 같은 값을 쓰게 하려는 것이다. 명령은 그 창이 터미널을 소유할 때만 답한다.
+- **셸에 넣는 줄:** `case "$GIT_CONFIG_PARAMETERS" in *<경로>*) ;; *) export GIT_CONFIG_PARAMETERS="${GIT_CONFIG_PARAMETERS:+$GIT_CONFIG_PARAMETERS }"''\''credential.helper=…'\''';; esac`. 같은 셸에 두 번 넣어도 한 번만 붙는다. `!`를 작은따옴표 안에 두어 대화형 Bash·Zsh의 히스토리 확장을 피한다(설계안 형식은 큰따옴표 안에 `!`가 있어 대화형 셸에서 깨진다). 훅의 `eval` 작은따옴표 밖, 훅 앞에 둔다. 이 옵션이 켜져 있으면 경로 따라가기와 조작표가 꺼져 있어도 훅 전체를 넣는다. 폴더 보고가 함께 들어가지만 파일 패널은 여전히 경로 따라가기 설정을 따른다(조작표만 켠 경우와 같다).
+- **tmux:** 설계대로 `list-sessions | grep -qxF`, `new-session -e` 실패 시 `-e` 없이 생성, `set-environment`, `attach-session`이다. 시작 명령 앞에서 값을 `export`해 새로 뜨는 tmux 서버의 첫 패널도 받는다. 기존 일회성 시작(DX.7, `has-session -t =이름`)에도 같은 값을 넣었다. DX.7의 tmux 1.8 문제는 이번 범위에서 고치지 않았다.
+- **반복 요청 차단은 10초 안 10번 초과로 바꿨다(설계 5번).** LFS 저장소에서는 push 한 번에 `get`이 3번이라, 연달아 두 번 push하면 6번이 되어 정상 사용이 1분 동안 막혔다(Docker 검사에서 발견). 폭주한 git-lfs는 초당 약 40번이라 10번으로도 1초 안에 막힌다.
+- **카드:** 서명 카드와 같은 자리, 같은 대기열이다. `AgentSignQueue`가 서명 요청과 자격 증명 요청(`PendingApproval`)을 함께 들고, 탭의 `입력 대기`와 알림 문구만 종류별로 다르다. 허용을 누르면 값을 찾는 동안 카드에 "가져오는 중"을 보이고, 이 PC의 로그인 창이 열려도 요청이 끝나지 않도록 백엔드가 대기 시간을 130초로 늘린다. 값이 없거나 **직접 입력**을 고르면 백엔드가 120초를 새로 주고 카드가 입력 칸(사용자 이름, 토큰 또는 암호, 이 PC에 저장)으로 바뀐다. 입력값 검사(한 줄, 사용자 이름 256바이트, 토큰 16KiB)는 카드와 백엔드가 같다. 좁은 칸에서는 "서버로 전달됩니다" 한 줄과 버튼은 남고 나머지 설명·상세만 스크롤된다.
+- **승인 이벤트의 소유자:** DX.13의 일반화가 아직 머지되지 않아 DX.2처럼 연결 ID에 묶었다. `git_credential_reply(id, request, …)`의 `id`를 DX.13이 정한 "요청을 받을 탭" 식별자로 바꾸면 되도록 응답 로직을 `commands::answer(connections, …)`로 분리했다. DX.13 머지 때 맞춘다.
+- **이 PC의 git:** Windows는 `PATH`의 `git.exe`, 없으면 `%ProgramFiles%\Git\cmd\git.exe`. macOS는 `PATH`(로그인 셸 값이 이미 들어 있다)에서 `/usr/bin`을 뺀 뒤, Homebrew 두 경로, 그다음 `/usr/bin/xcode-select -p`가 성공할 때만 `/usr/bin/git`. 실행은 콘솔 창 없음, `GIT_TERMINAL_PROMPT=0`, 120초 제한(넘으면 종료)이고 `approve`는 30초다.
+- **저장:** "이 PC에 저장"은 카드에서 직접 입력한 값만 저장한다. OS 저장소에 먼저 쓰고(락 없음) `mutation` 아래 참조를 단다. 같은 호스트·사용자의 이전 값과 삭제한 값은 journal로 정리한다. 마스터 암호를 켜거나 바꿀 때 함께 재암호화하고, `cleanup_credentials`는 이 참조를 지우지 않는다. 손상된 목록은 빈 목록으로 삼키지 않고 오류로 올린다. 저장 목록은 설정 창 › 에이전트에 호스트·사용자와 **삭제** 버튼으로 보인다.
+- **세션 파일:** `forwardGitCredentials`는 내보내기에서 빼고, 가져오기에서는 새 세션이면 꺼짐, 병합이면 저장된 값을 유지한다(DX.11 필드와 같은 규칙).
+
 #### DX.12.0 — 실측 (게이트)
 
 **완료(2026-11-08).** 구현 전에 확인했고, 상세는 [git-credential](../verification/git-credential.md)에 기록했다. Docker 서버 5종(git 1.8.3.1·2.17.1·2.25.1·2.39.5·2.56.0, OpenSSH 7.4~10.6, tmux 1.8~3.8)과 systemd 서버, OpenSSH 클라이언트의 `ssh -R`, 임시 응답 프로그램, HTTPS Git 서버(`tests/git-https`)를 썼다. 위 DX.12 본문에는 결과를 반영했다.
@@ -717,7 +732,8 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이고 �
 | `ssh_key_info` | 키 파일 경로 | 알고리즘, SHA-256 지문, 코멘트, 암호화 여부. 비밀은 읽지 않는다 | DX.11 |
 | `agent_sign_reply` (인자 추가) | 위 + 선택적 Passphrase, 저장 여부 | 추가 키의 Passphrase를 받는다. 첫 줄에서 `Zeroizing` | DX.11 |
 | `git_credential_reply` | 연결 ID, 요청 ID, 판단(거부, 이번만, 10분, 직접 입력과 값·저장 여부) | 대기 중인 자격 증명 요청에 응답. 값은 첫 줄에서 `Zeroizing` | DX.12 |
-| `git_credentials_saved`, `git_credential_forget` | 없음 / 참조 | 앱에 저장한 HTTPS 자격 증명 목록(값 제외)과 삭제 | DX.12 |
+| `git_credentials_saved`, `git_credential_forget` | 없음 / 호스트·사용자 | 앱에 저장한 HTTPS 자격 증명 목록(값 제외)과 삭제 | DX.12 |
+| `git_credential_shell` | 연결 ID | 셸 훅에 덧붙일 helper 줄(소켓이 열린 연결만). 구현에서 추가 | DX.12 |
 | `local_agent_settings`, `local_agent_save` | 없음 / 설정과 키 목록 | 로컬·WSL 탭의 키 제공 설정 읽기와 저장. Passphrase는 첫 줄에서 `Zeroizing` | DX.13, DX.14 |
 
 `agent_sign_reply`와 `git_credential_reply`의 요청 ID는 원격 연결과 로컬 탭을 모두 가리킬 수 있게 한다(DX.13). 새 명령을 따로 만들지 않는다.

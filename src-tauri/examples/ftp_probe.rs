@@ -98,6 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 forward_login_key: true,
                 forward_keys: vec![],
                 forward_system_agent: true,
+                forward_git_credentials: false,
                 last_connected: None,
                 has_secret: false,
             },
