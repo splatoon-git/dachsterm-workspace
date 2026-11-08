@@ -94,9 +94,21 @@ fn decoded(encoding: &'static Encoding, label: &str, bytes: &[u8]) -> Decoded {
     }
 }
 
+/// Text that would not save back to the same bytes counts as lossy: the tab must not let it be edited.
+pub fn decode(
+    bytes: &[u8],
+    chosen: Option<(&'static Encoding, &str)>,
+    fallback: (&'static Encoding, &str),
+) -> Decoded {
+    let mut result = decode_with(bytes, chosen, fallback);
+    result.lossy =
+        result.lossy || !crate::encoding::encodes_back(&result.text, &result.encoding, bytes);
+    result
+}
+
 /// `chosen` is the user's pick and is applied as is. Otherwise a byte order mark settles it, and
 /// without one the connection's encoding does: UTF-8 for SFTP and local files, the session's for FTP.
-pub fn decode(
+fn decode_with(
     bytes: &[u8],
     chosen: Option<(&'static Encoding, &str)>,
     fallback: (&'static Encoding, &str),
@@ -119,7 +131,7 @@ pub fn decode(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use encoding_rs::EUC_KR;
+    use encoding_rs::{EUC_KR, SHIFT_JIS};
 
     const UTF: (&Encoding, &str) = (UTF_8, "utf-8");
 
@@ -208,6 +220,16 @@ mod tests {
             (result.text.as_str(), result.encoding.as_str(), result.lossy),
             ("한글", "euc-kr", false)
         );
+    }
+
+    #[test]
+    fn bytes_that_would_not_save_back_the_same_count_as_lossy() {
+        // Valid Shift_JIS, but a save would write the character's other byte sequence.
+        let result = decode(&[0xFA, 0x54], Some((SHIFT_JIS, "shift_jis")), UTF);
+        assert!(result.lossy);
+        assert!(!decode("한글".as_bytes(), None, UTF).lossy);
+        assert!(!decode(b"\xFF\xFEa\0", None, UTF).lossy);
+        assert!(!decode(b"\xEF\xBB\xBFa", None, UTF).lossy);
     }
 
     #[test]

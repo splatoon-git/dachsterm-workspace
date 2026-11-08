@@ -10,7 +10,8 @@ import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker';
 import type { ThemeDefinition } from '../../themes/contract';
 import { editorTheme } from '../../themes/adapters/editor';
 import { getCurrentTheme, subscribeTheme } from '../../themes/store';
-import type { CodeEditorProps, DiffEditorProps } from './editorTypes';
+import type { CodeEditorProps, DiffEditorProps, EditorHandle } from './editorTypes';
+import { getEditorView, setEditorView, subscribeEditorView, type EditorView } from './editorView';
 
 window.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -52,6 +53,75 @@ const sharedOptions: monaco.editor.IEditorOptions = {
   unicodeHighlight: { ambiguousCharacters: false },
 };
 
+function viewOptions(view: EditorView): monaco.editor.IEditorOptions {
+  return {
+    renderWhitespace: view.whitespace ? 'all' : 'selection',
+    wordWrap: view.wrap ? 'on' : 'off',
+  };
+}
+
+/** In the editor's own right-click menu and command list, not as buttons on the screen. */
+function addViewActions(editor: monaco.editor.IStandaloneCodeEditor) {
+  editor.addAction({
+    id: 'dachsterm.toggleWhitespace',
+    label: '공백 문자 보기',
+    contextMenuGroupId: 'dachsterm',
+    contextMenuOrder: 1,
+    run: () => setEditorView({ whitespace: !getEditorView().whitespace }),
+  });
+  editor.addAction({
+    id: 'dachsterm.toggleWrap',
+    label: '자동 줄바꿈',
+    keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ],
+    contextMenuGroupId: 'dachsterm',
+    contextMenuOrder: 2,
+    run: () => setEditorView({ wrap: !getEditorView().wrap }),
+  });
+}
+
+/**
+ * What the rest of the app may do with one editor's text. Monaco's alternative version id comes
+ * back to the same value after undo, so undoing every edit also clears the unsaved mark.
+ */
+function documentHandle(
+  editor: monaco.editor.ICodeEditor,
+  model: monaco.editor.ITextModel,
+  report: (dirty: boolean) => void,
+) {
+  let clean = model.getAlternativeVersionId();
+  let dirty = false;
+  const update = () => {
+    const now = model.getAlternativeVersionId() !== clean;
+    if (now !== dirty) {
+      dirty = now;
+      report(now);
+    }
+  };
+  const convert = (id: string) => editor.getAction(id)?.run() ?? Promise.resolve();
+  const handle: EditorHandle = {
+    focus: () => editor.focus(),
+    getValue: () => model.getValue(),
+    version: () => model.getAlternativeVersionId(),
+    markClean: (version) => {
+      clean = version;
+      update();
+    },
+    setLineBreak: (lineBreak) =>
+      model.pushEOL(
+        lineBreak === 'CRLF'
+          ? monaco.editor.EndOfLineSequence.CRLF
+          : monaco.editor.EndOfLineSequence.LF,
+      ),
+    setIndent: async ({ tabs, size }) => {
+      // Through tabs, read with the old width, so that 4 spaces become 2 and not 4 again.
+      await convert('editor.action.indentationToTabs');
+      model.updateOptions({ tabSize: size, indentSize: size, insertSpaces: !tabs });
+      if (!tabs) await convert('editor.action.indentationToSpaces');
+    },
+  };
+  return { handle, update, resetClean: () => handle.markClean(handle.version()) };
+}
+
 /** Monaco has one theme per window, so every editor can re-register it safely. */
 function useEditorTheme() {
   const theme = useSyncExternalStore(subscribeTheme, getCurrentTheme);
@@ -67,9 +137,11 @@ export function MonacoCodeEditor(props: CodeEditorProps) {
   const { value, language = 'plaintext', readOnly = false, ariaLabel } = props;
   const host = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const resetClean = useRef<() => void>(() => {});
   const applyingValue = useRef(false);
   const theme = useEditorTheme();
-  const initial = useRef({ value, language, readOnly, ariaLabel, theme });
+  const view = useSyncExternalStore(subscribeEditorView, getEditorView);
+  const initial = useRef({ value, language, readOnly, ariaLabel, theme, view });
   const latest = useRef(props);
   useEffect(() => {
     latest.current = props;
@@ -82,19 +154,24 @@ export function MonacoCodeEditor(props: CodeEditorProps) {
     const editor = monaco.editor.create(host.current, {
       ...sharedOptions,
       ...fontOptions(first.theme),
+      ...viewOptions(first.view),
       model,
       readOnly: first.readOnly,
       ariaLabel: first.ariaLabel,
     });
     editorRef.current = editor;
+    const document = documentHandle(editor, model, (dirty) =>
+      latest.current.onDirtyChange?.(dirty),
+    );
+    resetClean.current = document.resetClean;
     const changes = model.onDidChangeContent(() => {
-      if (!applyingValue.current) latest.current.onChange?.();
+      if (applyingValue.current) return;
+      latest.current.onChange?.();
+      document.update();
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => latest.current.onSave?.());
-    latest.current.onReady?.({
-      focus: () => editor.focus(),
-      getValue: () => model.getValue(),
-    });
+    addViewActions(editor);
+    latest.current.onReady?.(document.handle);
     return () => {
       changes.dispose();
       editorRef.current = null;
@@ -110,6 +187,7 @@ export function MonacoCodeEditor(props: CodeEditorProps) {
     applyingValue.current = true;
     editor.setValue(value);
     applyingValue.current = false;
+    resetClean.current();
   }, [value]);
   useEffect(() => {
     const model = editorRef.current?.getModel();
@@ -121,6 +199,9 @@ export function MonacoCodeEditor(props: CodeEditorProps) {
   useEffect(() => {
     editorRef.current?.updateOptions(fontOptions(theme));
   }, [theme]);
+  useEffect(() => {
+    editorRef.current?.updateOptions(viewOptions(view));
+  }, [view]);
 
   return <div ref={host} className="editor-host" />;
 }
@@ -164,10 +245,10 @@ export function MonacoDiffEditor(props: DiffEditorProps) {
     editor
       .getModifiedEditor()
       .addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => latest.current.onSave?.());
-    latest.current.onReady?.({
-      focus: () => editor.getModifiedEditor().focus(),
-      getValue: () => models.modified.getValue(),
-    });
+    // A diff has no unsaved mark of its own yet, so nothing listens to this report (GE.8).
+    latest.current.onReady?.(
+      documentHandle(editor.getModifiedEditor(), models.modified, () => {}).handle,
+    );
     return () => {
       changes.dispose();
       editorRef.current = null;

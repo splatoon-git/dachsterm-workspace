@@ -24,12 +24,18 @@ const svg = btoa(
 );
 
 type Files = Window['__fileTab']['files'];
-async function open(page: Page, files: Files, status: 'connected' | 'closed' = 'connected') {
+type Answers = Window['__fileTab']['answers'];
+async function open(
+  page: Page,
+  files: Files,
+  status: 'connected' | 'closed' = 'connected',
+  answers: Answers = [],
+) {
   await page.addInitScript(
     (value) => {
       window.__fileTab = value as typeof window.__fileTab;
     },
-    { files, status, calls: [], opened: [] } satisfies Window['__fileTab'],
+    { files, status, calls: [], opened: [], writes: [], answers } satisfies Window['__fileTab'],
   );
   await page.goto('/tests/ui/fixtures/file-tab.html');
   await expect(page.getByRole('tab', { name: '터미널' })).toBeVisible();
@@ -37,7 +43,7 @@ async function open(page: Page, files: Files, status: 'connected' | 'closed' = '
 const state = (page: Page) => page.evaluate(() => window.__fileTab);
 const row = (page: Page, name: string) => page.locator(`[data-file-name="${name}"]`);
 const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true });
-const editor = (page: Page) => page.locator('.editor-host .view-lines').first();
+const editor = (page: Page) => page.locator('.editor-host .view-lines:visible').first();
 const status = (page: Page) => page.getByLabel('파일 정보');
 // The editor has role=alert regions of its own.
 const banner = (page: Page) => page.locator('.file-tab-banner[role="alert"]');
@@ -329,5 +335,361 @@ test.describe('files the tab will not open as they are', () => {
     await row(page, 'a.txt').click();
     await expect(page.getByText('연결이 끊겨 읽기 전용입니다')).toBeVisible();
     await expect(editor(page)).toContainText('내용');
+  });
+});
+
+const dirtyTab = (page: Page, name: string) =>
+  page.getByRole('tab', { name: `${name} 저장 안 됨` });
+// The fixture page is Chromium on every OS, where the app takes Ctrl as well as Cmd.
+const modS = 'Control+s';
+const modShiftS = 'Control+Shift+s';
+
+/** Clicks into the editor, types at the very end of the text and waits for the unsaved mark. */
+async function typeAtEnd(page: Page, value: string) {
+  await editor(page).click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type(value);
+}
+const closeButton = (page: Page, name: string) =>
+  page.getByRole('button', { name: `${name} 탭 닫기` });
+
+test.describe('editing and saving', () => {
+  const files: Files = { '/a.txt': text('내용') };
+
+  test('an edit marks the tab and pins a preview', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+    await expect(dirtyTab(page, 'a.txt')).toHaveCSS('font-style', 'normal');
+  });
+
+  test('undoing every edit clears the mark', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+    await page.keyboard.press('Control+z');
+    await expect(tab(page, 'a.txt')).toBeVisible();
+  });
+
+  test('saving writes the text with the hash it read, then the hash it wrote', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modS);
+    await expect(tab(page, 'a.txt')).toBeVisible();
+    await typeAtEnd(page, 'y');
+    await page.keyboard.press(modS);
+    await expect.poll(async () => (await state(page)).writes.length).toBe(2);
+    const writes = (await state(page)).writes;
+    expect(writes[0]).toMatchObject({
+      path: '/a.txt',
+      content: '내용x',
+      encoding: 'utf-8',
+      baseHash: 'a'.repeat(64) + 2,
+    });
+    expect(writes[1]).toMatchObject({ content: '내용xy', baseHash: 'saved-1' });
+    await expect(tab(page, 'a.txt')).toBeVisible();
+  });
+
+  test('a save with nothing changed writes nothing', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').click();
+    await editor(page).click();
+    await page.keyboard.press(modS);
+    await page.waitForTimeout(200);
+    expect((await state(page)).writes).toHaveLength(0);
+  });
+
+  test('the file encoding goes with the write', async ({ page }) => {
+    await open(page, { '/a.txt': text('한글', { encoding: 'euc-kr' }) });
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modS);
+    await expect.poll(async () => (await state(page)).writes.length).toBe(1);
+    expect((await state(page)).writes[0].encoding).toBe('euc-kr');
+  });
+
+  test('a failed save says why and keeps the edits', async ({ page }) => {
+    await open(page, files, 'connected', [{ fail: '저장 공간이 부족합니다.' }]);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modS);
+    await expect(banner(page)).toContainText('저장 공간이 부족합니다.');
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+  });
+
+  test('read-only files never reach the backend', async ({ page }) => {
+    await open(page, {
+      '/broken.txt': text('깨\uFFFD', { lossy: true }),
+      '/big.log': text('큰 내용', { large: true }),
+    });
+    for (const name of ['broken.txt', 'big.log']) {
+      await row(page, name).click();
+      await editor(page).click();
+      await page.keyboard.type('x');
+      await page.keyboard.press(modS);
+      await expect(editor(page)).not.toContainText('x', { timeout: 500 });
+    }
+    expect((await state(page)).writes).toHaveLength(0);
+  });
+
+  test('an ended connection blocks saving', async ({ page }) => {
+    await open(page, files, 'closed');
+    await row(page, 'a.txt').click();
+    await editor(page).click();
+    await page.keyboard.type('x');
+    await page.keyboard.press(modS);
+    await page.waitForTimeout(200);
+    expect((await state(page)).writes).toHaveLength(0);
+  });
+
+  test('line ending and indent can be changed from the status bar', async ({ page }) => {
+    await open(page, { '/a.txt': text('a\n    b\n') });
+    await row(page, 'a.txt').click();
+    await expect(status(page)).toContainText('공백 4');
+    await status(page).getByRole('button', { name: 'LF' }).click();
+    await page.getByRole('menuitem', { name: 'CRLF' }).click();
+    await expect(status(page)).toContainText('CRLF');
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+    await status(page).getByRole('button', { name: '공백 4' }).click();
+    await page.getByRole('menuitem', { name: '공백 2' }).click();
+    await expect(status(page)).toContainText('공백 2');
+    await editor(page).click();
+    await page.keyboard.press(modS);
+    await expect.poll(async () => (await state(page)).writes.length).toBe(1);
+    expect((await state(page)).writes[0].content).toBe('a\r\n  b\r\n');
+  });
+
+  test('a Markdown edit survives the preview', async ({ page }) => {
+    await open(page, { '/a.md': text('# 제목\n') });
+    await row(page, 'a.md').click();
+    await expect(page.getByRole('heading', { name: '제목' })).toBeVisible();
+    await page.getByRole('button', { name: '원문' }).click();
+    await typeAtEnd(page, '본문 추가');
+    await page.getByRole('button', { name: '미리보기' }).click();
+    await expect(page.locator('.markdown-preview').getByText('본문 추가')).toBeVisible();
+    await page.getByRole('button', { name: '원문' }).click();
+    await expect(editor(page)).toContainText('본문 추가');
+  });
+});
+
+test.describe('save conflicts', () => {
+  const files: Files = { '/a.txt': text('내용') };
+  const card = (page: Page) => page.getByRole('alertdialog', { name: '저장 충돌' });
+
+  test('a changed file shows the card and overwriting names the version warned about', async ({
+    page,
+  }) => {
+    await open(page, files, 'connected', [{ status: 'conflict', hash: 'theirs' }]);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modS);
+    await expect(card(page)).toContainText('내용이 바뀌어 저장하지 않았습니다');
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+    await card(page).getByRole('button', { name: '덮어쓰기' }).click();
+    // The default answer to overwriting is no.
+    const confirm = page.getByRole('dialog', { name: '파일을 덮어씁니다' });
+    await expect(confirm.getByRole('button', { name: '취소' })).toBeFocused();
+    await confirm.getByRole('button', { name: '덮어쓰기' }).click();
+    await expect(card(page)).toHaveCount(0);
+    await expect(tab(page, 'a.txt')).toBeVisible();
+    const writes = (await state(page)).writes;
+    expect(writes).toHaveLength(2);
+    expect(writes[1].baseHash).toBe('theirs');
+  });
+
+  test('the server version can be compared', async ({ page }) => {
+    await open(page, files, 'connected', [{ status: 'conflict', hash: 'theirs' }]);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modS);
+    await card(page).getByRole('button', { name: '서버 내용 보기' }).click();
+    await expect(page.getByText('서버 내용', { exact: true })).toBeVisible();
+    await expect(page.locator('.editor-host .view-lines').nth(1)).toContainText('내용x');
+    await card(page).getByRole('button', { name: '비교 닫기' }).click();
+    await expect(editor(page)).toContainText('내용x');
+  });
+
+  test('canceling keeps the edits and writes nothing more', async ({ page }) => {
+    await open(page, files, 'connected', [{ status: 'conflict', hash: 'theirs' }]);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modS);
+    await card(page).getByRole('button', { name: '취소' }).click();
+    await expect(card(page)).toHaveCount(0);
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+    expect((await state(page)).writes).toHaveLength(1);
+  });
+
+  test('a vanished file offers to create it again', async ({ page }) => {
+    await open(page, files, 'connected', [{ status: 'conflict', hash: null }]);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modS);
+    await expect(card(page)).toContainText('사라져');
+    await card(page).getByRole('button', { name: '다시 만들기' }).click();
+    await page
+      .getByRole('dialog', { name: '파일을 덮어씁니다' })
+      .getByRole('button', { name: '다시 만들기' })
+      .click();
+    await expect.poll(async () => (await state(page)).writes.length).toBe(2);
+    expect((await state(page)).writes[1].baseHash).toBeNull();
+  });
+});
+
+test.describe('save as', () => {
+  test('the tab moves to the new file without reading it again', async ({ page }) => {
+    await open(page, { '/a.txt': text('내용') });
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modS);
+    await expect(tab(page, 'a.txt')).toBeVisible();
+    const reads = (await state(page)).calls.length;
+    await page.keyboard.press(modShiftS);
+    const dialog = page.getByRole('dialog', { name: '다른 이름으로 저장' });
+    await dialog.getByLabel('저장할 경로').fill('/copy.txt');
+    await dialog.getByRole('button', { name: '저장' }).click();
+    await expect(tab(page, 'copy.txt')).toBeVisible();
+    await expect(tab(page, 'a.txt')).toHaveCount(0);
+    const current = await state(page);
+    expect(current.writes.at(-1)).toMatchObject({ path: '/copy.txt', baseHash: null });
+    expect(current.calls).toHaveLength(reads);
+    await expect(editor(page)).toContainText('내용x');
+  });
+
+  test('a taken name asks before replacing it', async ({ page }) => {
+    await open(page, { '/a.txt': text('내용') }, 'connected', [
+      { status: 'conflict', hash: 'other' },
+    ]);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.keyboard.press(modShiftS);
+    const dialog = page.getByRole('dialog', { name: '다른 이름으로 저장' });
+    await dialog.getByLabel('저장할 경로').fill('/taken.txt');
+    await dialog.getByRole('button', { name: '저장' }).click();
+    await expect(page.getByRole('alertdialog', { name: '저장 충돌' })).toContainText('이미 있어');
+    await expect(tab(page, 'a.txt')).toHaveCount(0);
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+    await page.getByRole('button', { name: '덮어쓰기' }).click();
+    await page
+      .getByRole('dialog', { name: '파일을 덮어씁니다' })
+      .getByRole('button', { name: '덮어쓰기' })
+      .click();
+    await expect(tab(page, 'taken.txt')).toBeVisible();
+    expect((await state(page)).writes[1]).toMatchObject({ path: '/taken.txt', baseHash: 'other' });
+  });
+});
+
+test.describe('closing with unsaved edits', () => {
+  const files: Files = { '/a.txt': text('내용'), '/b.txt': text('둘째') };
+  const dialog = (page: Page) => page.getByRole('dialog', { name: 'a.txt 저장' });
+
+  test('a clean tab closes without asking', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').dblclick();
+    await expect(editor(page)).toContainText('내용');
+    await closeButton(page, 'a.txt').click();
+    await expect(tab(page, 'a.txt')).toHaveCount(0);
+  });
+
+  test('cancel keeps the tab and the edits, and is the default', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await closeButton(page, 'a.txt').click();
+    await expect(dialog(page).getByRole('button', { name: '취소' })).toBeFocused();
+    await dialog(page).getByRole('button', { name: '취소' }).click();
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+    await expect(editor(page)).toContainText('내용x');
+  });
+
+  test('do not save closes the tab without writing', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await closeButton(page, 'a.txt').click();
+    await dialog(page).getByRole('button', { name: '저장 안 함' }).click();
+    await expect(dirtyTab(page, 'a.txt')).toHaveCount(0);
+    expect((await state(page)).writes).toHaveLength(0);
+  });
+
+  test('save writes and then closes', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await closeButton(page, 'a.txt').click();
+    await dialog(page).getByRole('button', { name: '저장', exact: true }).click();
+    await expect(dirtyTab(page, 'a.txt')).toHaveCount(0);
+    expect((await state(page)).writes[0].content).toBe('내용x');
+  });
+
+  test('a save that hits a conflict keeps the tab open with the card', async ({ page }) => {
+    await open(page, files, 'connected', [{ status: 'conflict', hash: 'theirs' }]);
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await closeButton(page, 'a.txt').click();
+    await dialog(page).getByRole('button', { name: '저장', exact: true }).click();
+    await expect(page.getByRole('alertdialog', { name: '저장 충돌' })).toBeVisible();
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+  });
+
+  test('an unsaved file on an ended connection can only be discarded', async ({ page }) => {
+    await open(page, { '/a.txt': text('내용') }, 'connected');
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await page.evaluate(() => window.__fileTabEnd?.());
+    await closeButton(page, 'a.txt').click();
+    await expect(dialog(page).getByRole('button', { name: '저장', exact: true })).toBeDisabled();
+    await expect(dialog(page).getByRole('button', { name: '저장 안 함' })).toBeEnabled();
+  });
+
+  test('the window asks once for every unsaved file and answers yes only when settled', async ({
+    page,
+  }) => {
+    await open(page, files);
+    await row(page, 'a.txt').dblclick();
+    await typeAtEnd(page, 'x');
+    await row(page, 'b.txt').dblclick();
+    await expect(page.locator('.pane-cell:not([hidden]) .view-lines')).toContainText('둘째');
+    await typeAtEnd(page, 'y');
+    const answered = page.evaluate(() => window.__fileTab.closeWindow!());
+    const asked = page.getByRole('dialog', { name: '저장 안 된 파일 2개' });
+    await expect(asked).toBeVisible();
+    await asked.getByRole('button', { name: '취소' }).click();
+    expect(await answered).toBe(false);
+    await expect(dirtyTab(page, 'a.txt')).toBeVisible();
+
+    const again = page.evaluate(() => window.__fileTab.closeWindow!());
+    await asked.getByRole('button', { name: '저장', exact: true }).click();
+    expect(await again).toBe(true);
+    expect((await state(page)).writes).toHaveLength(2);
+  });
+
+  test('a window with nothing unsaved closes without asking', async ({ page }) => {
+    await open(page, files);
+    await row(page, 'a.txt').click();
+    await expect(editor(page)).toContainText('내용');
+    expect(await page.evaluate(() => window.__fileTab.closeWindow!())).toBe(true);
+  });
+
+  test('reading again asks before losing edits', async ({ page }) => {
+    await open(page, {
+      '/a.txt': text('한글', { encoding: 'utf-8' }),
+      '/a.txt|euc-kr': text('다른 내용', { encoding: 'euc-kr' }),
+    });
+    await row(page, 'a.txt').click();
+    await typeAtEnd(page, 'x');
+    await status(page).getByRole('button', { name: 'UTF-8' }).click();
+    await page.getByRole('menuitem', { name: 'CP949 / EUC-KR' }).click();
+    const asked = page.getByRole('dialog', { name: '저장 안 한 내용을 버립니다' });
+    await asked.getByRole('button', { name: '취소' }).click();
+    await expect(editor(page)).toContainText('한글x');
+    await status(page).getByRole('button', { name: 'UTF-8' }).click();
+    await page.getByRole('menuitem', { name: 'CP949 / EUC-KR' }).click();
+    await asked.getByRole('button', { name: '버리고 다시 읽기' }).click();
+    await expect(editor(page)).toContainText('다른 내용');
+    await expect(tab(page, 'a.txt')).toBeVisible();
   });
 });

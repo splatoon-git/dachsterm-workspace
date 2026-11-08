@@ -12,7 +12,8 @@ import {
 import { useWorkspaceLayout, type Beside } from './useWorkspaceLayout';
 import { useTabMenu } from './useTabMenu';
 import { useAgentLaunch, type Opening } from './useAgentLaunch';
-import { useAppShortcuts } from './appShortcuts';
+import { useAppShortcuts, type AppShortcut } from './appShortcuts';
+import { useWindowClose } from './useWindowClose';
 import { useAgentBoard } from './useAgentBoard';
 import { useNarrowViewport } from './useNarrowViewport';
 import { SettingsDialog } from './SettingsDialog';
@@ -25,7 +26,6 @@ import {
   type GroupNode,
   type TabRef,
 } from './workspaceLayout';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { InputScopeControl, InputScopeMark } from '../features/terminal/InputScope';
 import { useInputScope } from '../features/terminal/useInputScope';
 import { VaultDialog, type VaultStatus } from '../features/sessions/VaultDialog';
@@ -141,32 +141,6 @@ export function App() {
     }
     return true;
   }, [openWorkspaceTab]);
-  useEffect(() => {
-    if (!desktop) return;
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    void getCurrentWindow()
-      .onCloseRequested((event) => {
-        if (!settleSurvivorBeforeClose()) event.preventDefault();
-      })
-      .then((stop) => {
-        if (disposed) stop();
-        else unlisten = stop;
-      })
-      .catch((e) => setError(errorText(e)));
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [settleSurvivorBeforeClose]);
-  useEffect(() => {
-    // Browser reload/close is best-effort; native close uses the cancellable handler above.
-    const save = (event: BeforeUnloadEvent) => {
-      if (!settleSurvivorBeforeClose()) event.preventDefault();
-    };
-    window.addEventListener('beforeunload', save);
-    return () => window.removeEventListener('beforeunload', save);
-  }, [settleSurvivorBeforeClose]);
   const leaveGame = (id: GameId) => {
     workspace.leaveTab(tabKey({ kind: 'game', id }));
     focusSelectedTab();
@@ -270,7 +244,8 @@ export function App() {
     closeDrawer();
     void session.connect(null);
   }
-  useAppShortcuts((shortcut) => {
+  const keptByFile = (shortcut: AppShortcut) => files.keepsShortcut(shortcut);
+  useAppShortcuts(keptByFile, (shortcut) => {
     switch (shortcut.name) {
       case 'fullscreen':
         return void toggleFullscreen();
@@ -362,6 +337,11 @@ export function App() {
       : requestConnect(savedProfile(t), undefined, { beside });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
   const files = useFileTabs({ workspace, sessions: tabs, narrow });
+  useWindowClose({
+    confirm: async () => settleSurvivorBeforeClose() && files.confirmWindowClose(),
+    blocked: () => !settleSurvivorBeforeClose() || files.hasUnsaved(),
+    fail: setError,
+  });
   const tabMenu = useTabMenu({
     workspace,
     narrow,
@@ -372,6 +352,8 @@ export function App() {
       review: (t) => reviews.open(t),
       reconnect: reconnectTab,
       close: closeKey,
+      reload: files.reload,
+      reloadable: files.reloadable,
       arranged: focusActiveTerminal,
     },
   });
@@ -667,6 +649,7 @@ export function App() {
         agents={agents}
       />
       {tabMenu.element}
+      {files.dialog}
       {commandsOpen && (
         <CommandPanel
           sessions={tabs}

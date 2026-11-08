@@ -65,11 +65,15 @@ export function appShortcut(e: Keys): AppShortcut | null {
  * Runs app shortcuts before the terminal sees the key. A dialog keeps its keys, and a key that is
  * not a shortcut goes on to the terminal untouched.
  */
-export function useAppShortcuts(run: (shortcut: AppShortcut) => void) {
+export function useAppShortcuts(
+  /** A shortcut the focused content uses itself right now. */
+  keptByContent: (shortcut: AppShortcut) => boolean,
+  run: (shortcut: AppShortcut) => void,
+) {
   const handle = useEffectEvent((e: KeyboardEvent) => {
     if (document.querySelector('dialog[open]')) return;
     const shortcut = appShortcut(e);
-    if (!shortcut) return;
+    if (!shortcut || keptByContent(shortcut)) return;
     e.preventDefault();
     e.stopPropagation();
     run(shortcut);

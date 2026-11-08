@@ -63,6 +63,44 @@
   overflow: hidden;
 }
 
+.tab-dirty {
+  margin-right: var(--space-xs);
+  color: var(--color-status-warning);
+}
+
+.file-conflict {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-bottom: var(--border-width-default) solid var(--color-status-warning);
+  background: var(--color-surface-subtle);
+  font-size: var(--font-small);
+}
+
+.file-conflict p {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+}
+
+.file-conflict-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-xs);
+}
+
+.file-diff-labels {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  padding: 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+
 .file-tab-notice {
   display: flex;
   flex: 1;

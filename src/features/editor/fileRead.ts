@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, errorText } from '../../lib/ipc';
 import type { Source } from '../../lib/source';
 
@@ -25,7 +25,8 @@ type ReadOptions = { large: boolean; encoding: string | null };
 export type ReadState =
   | { status: 'loading' }
   | { status: 'failed'; message: string }
-  | { status: 'done'; file: FileRead };
+  /** `generation` counts the reads, so reading the same bytes again still starts a fresh tab. */
+  | { status: 'done'; file: FileRead; generation: number };
 
 const firstOptions: ReadOptions = { large: false, encoding: null };
 
@@ -34,11 +35,20 @@ export function useFileRead(source: Source, path: string) {
   const [options, setOptions] = useState(firstOptions);
   const [revision, setRevision] = useState(0);
   const [state, setState] = useState<ReadState>({ status: 'loading' });
+  const generation = useRef(0);
+  const adopted = useRef<string | null>(null);
   useEffect(() => {
+    // Saved under this name a moment ago: the editor already holds exactly these bytes.
+    if (adopted.current === path) {
+      adopted.current = null;
+      return;
+    }
     let alive = true;
     call<FileRead>('file_read', { source, path, options }).then(
       (file) => {
-        if (alive) setState({ status: 'done', file });
+        if (!alive) return;
+        generation.current += 1;
+        setState({ status: 'done', file, generation: generation.current });
       },
       (e) => {
         if (alive) setState({ status: 'failed', message: errorText(e) });
@@ -57,9 +67,15 @@ export function useFileRead(source: Source, path: string) {
     state,
     openLarge: () => change({ large: true }),
     chooseEncoding,
-    reload: () => {
+    /** The encoding the user picked, or null when the file's own bytes decided it. */
+    chosenEncoding: options.encoding,
+    reload: useCallback(() => {
       setState({ status: 'loading' });
       setRevision((value) => value + 1);
-    },
+    }, []),
+    /** The tab moves to this path after a save, without reading what it just wrote. */
+    adopt: useCallback((next: string) => {
+      adopted.current = next;
+    }, []),
   };
 }

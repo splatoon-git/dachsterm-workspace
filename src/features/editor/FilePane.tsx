@@ -1,17 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Icon } from '../../components/Icon';
 import { formatBytes } from '../../lib/formatBytes';
 import type { Source } from '../../lib/source';
-import { CodeEditor } from './CodeEditor';
-import { isJson, isMarkdown, languageOf } from './fileKinds';
-import { useFileRead, type FileRead } from './fileRead';
-import { setFileStatus } from './fileStatus';
-import { prettyJson, textFacts } from './fileText';
+import { useFileRead } from './fileRead';
+import { setFileDocument } from './fileDocuments';
+import { FileTabBar, TextDocument } from './TextDocument';
 import './fileTab.css';
 
-const MarkdownPreview = lazy(() => import('./MarkdownPreview'));
-
-type TextFile = Extract<FileRead, { kind: 'text' }>;
 export type FilePaneProps = {
   id: string;
   source: Source;
@@ -19,6 +14,9 @@ export type FilePaneProps = {
   name: string;
   /** False once the connection the file came from has ended. */
   live: boolean;
+  pin: () => void;
+  /** A save under another name: the tab now shows that file. */
+  renamed: (path: string) => void;
 };
 
 function Notice({ title, children }: { title: string; children: ReactNode }) {
@@ -31,122 +29,33 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function ViewSwitch<T extends string>({
-  label,
-  value,
-  options,
-  change,
-}: {
-  label: string;
-  value: T;
-  options: readonly (readonly [T, string])[];
-  change: (value: T) => void;
-}) {
-  return (
-    <div className="file-tab-switch" role="group" aria-label={label}>
-      {options.map(([option, text]) => (
-        <button key={option} aria-pressed={value === option} onClick={() => change(option)}>
-          {text}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-const markdownViews = [
-  ['rendered', '미리보기'],
-  ['source', '원문'],
-] as const;
-const jsonViews = [
-  ['source', '원문'],
-  ['rendered', '정리해서 보기'],
-] as const;
-
-function TextView({ file, name, path }: { file: TextFile; name: string; path: string }) {
-  const markdown = isMarkdown(name) && !file.large;
-  const json = isJson(name) && !file.large;
-  const [view, setView] = useState<'source' | 'rendered'>(markdown ? 'rendered' : 'source');
-  const pretty = useMemo(
-    () => (json && view === 'rendered' ? prettyJson(file.text) : null),
-    [json, view, file.text],
-  );
-  const untidy = json && view === 'rendered' && pretty === null;
-  const language = file.large ? 'plaintext' : languageOf(name);
-  return (
-    <>
-      <FileTabBar path={path}>
-        {markdown && (
-          <ViewSwitch label="보기 방식" value={view} options={markdownViews} change={setView} />
-        )}
-        {json && <ViewSwitch label="보기 방식" value={view} options={jsonViews} change={setView} />}
-      </FileTabBar>
-      {file.lossy && (
-        <p className="file-tab-banner" role="alert">
-          이 인코딩으로 읽을 수 없는 바이트가 있어 일부 글자가 깨져 보입니다. 원본을 망가뜨리지
-          않도록 편집을 막습니다. 상태바에서 인코딩을 바꿔 보세요.
-        </p>
-      )}
-      {file.large && (
-        <p className="file-tab-banner" role="status">
-          큰 파일이라 읽기 전용으로 열고 구문 강조를 껐습니다.
-        </p>
-      )}
-      {untidy && (
-        <p className="file-tab-banner" role="status">
-          JSON 형식이 아니어서 정리할 수 없습니다. 원문을 표시합니다.
-        </p>
-      )}
-      <div className="file-tab-body">
-        {markdown && view === 'rendered' ? (
-          <Suspense fallback={<p className="editor-loading">미리보기 준비 중…</p>}>
-            <MarkdownPreview text={file.text} />
-          </Suspense>
-        ) : (
-          <CodeEditor
-            value={pretty ?? file.text}
-            language={language}
-            readOnly
-            ariaLabel={`${name} 내용`}
-          />
-        )}
-      </div>
-    </>
-  );
-}
-
-function FileTabBar({ path, children }: { path: string; children?: ReactNode }) {
-  return (
-    <div className="file-tab-bar">
-      <span className="file-tab-path" title={path}>
-        {path}
-      </span>
-      {children}
-    </div>
-  );
-}
-
 /** A file shown in a tab: the first bytes decide the view, not the name alone. */
-export function FilePane({ id, source, path, name, live }: FilePaneProps) {
-  const { state, openLarge, chooseEncoding, reload } = useFileRead(source, path);
+export function FilePane({ id, source, path, name, live, pin, renamed }: FilePaneProps) {
+  const { state, openLarge, chooseEncoding, chosenEncoding, reload, adopt } = useFileRead(
+    source,
+    path,
+  );
   const file = state.status === 'done' ? state.file : null;
-  const text = file?.kind === 'text' ? file : null;
-  const facts = useMemo(() => (text ? textFacts(text.text) : null), [text]);
-  useEffect(() => {
-    if (!text || !facts) return;
-    setFileStatus(id, {
-      ...facts,
-      encoding: text.encoding,
-      language: text.large ? 'plaintext' : languageOf(name),
-      chooseEncoding,
-    });
-    return () => setFileStatus(id, null);
-  }, [id, name, text, facts, chooseEncoding]);
   const size = file ? formatBytes(file.size) : '';
+  // A tab that shows no text has nothing to save, but its entry keeps it reachable to reload.
+  const textGeneration = state.status === 'done' && file?.kind === 'text' ? state.generation : null;
+  useEffect(() => {
+    if (textGeneration !== null || file === null) return;
+    setFileDocument(id, {
+      dirty: false,
+      canSave: false,
+      save: () => Promise.resolve('failed'),
+      saveAs: () => {},
+      reload,
+    });
+    return () => setFileDocument(id, null);
+  }, [id, file, textGeneration, reload]);
   return (
     <section className="file-tab" aria-label={`파일 ${name}`} data-file-tab={path}>
       {!live && (
         <p className="file-tab-banner" role="status">
-          연결이 끊겨 읽기 전용입니다. 다시 연결한 뒤 파일을 열면 새로 읽습니다.
+          연결이 끊겨 읽기 전용입니다. 저장하지 못한 내용은 복사해 두세요. 다시 연결한 뒤 파일을
+          열면 새로 읽습니다.
         </p>
       )}
       {state.status === 'loading' && (
@@ -160,7 +69,25 @@ export function FilePane({ id, source, path, name, live }: FilePaneProps) {
           <button onClick={reload}>다시 시도</button>
         </Notice>
       )}
-      {text && <TextView key={text.hash} file={text} name={name} path={path} />}
+      {file?.kind === 'text' && textGeneration !== null && (
+        <TextDocument
+          key={textGeneration}
+          id={id}
+          file={file}
+          source={source}
+          path={path}
+          name={name}
+          live={live}
+          chosenEncoding={chosenEncoding}
+          chooseEncoding={chooseEncoding}
+          reread={reload}
+          pin={pin}
+          moved={(target) => {
+            adopt(target);
+            renamed(target);
+          }}
+        />
+      )}
       {file?.kind === 'image' && (
         <>
           <FileTabBar path={path} />

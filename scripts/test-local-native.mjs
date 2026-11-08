@@ -3,7 +3,7 @@ import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import https from 'node:https';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -535,6 +535,58 @@ async function checkFileTab(page, command, pane) {
   await expect(tab('README.md')).toHaveCSS('font-style', 'italic');
   console.log('PASS a double click pins, so the next file opens beside it');
 
+  // GE.6: real file_write on a real disk.
+  await tab('note.txt').click();
+  await expect(editor).toContainText('한글', { timeout: 30000 });
+  const edit = async (text) => {
+    await editor.click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type(text);
+  };
+  const noteFile = path.join(folder, 'note.txt');
+  const dirty = page.getByRole('tab', { name: 'note.txt 저장 안 됨', exact: true });
+  await edit('저장');
+  await expect(dirty).toBeVisible();
+  await page.keyboard.press('Control+s');
+  await expect(dirty).toHaveCount(0);
+  assert.equal(await readFile(noteFile, 'utf8'), '첫 줄\r\n  한글 둘째 줄\r\n저장');
+  await writeFile(noteFile, '바깥에서 바꿈\r\n');
+  await edit('더');
+  await page.keyboard.press('Control+s');
+  const card = shown.getByRole('alertdialog', { name: '저장 충돌' });
+  await expect(card).toContainText('내용이 바뀌어');
+  assert.equal(await readFile(noteFile, 'utf8'), '바깥에서 바꿈\r\n');
+  await card.getByRole('button', { name: '덮어쓰기', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '파일을 덮어씁니다' })
+    .getByRole('button', { name: '덮어쓰기', exact: true })
+    .click();
+  await expect(card).toHaveCount(0);
+  await expect(dirty).toHaveCount(0);
+  assert.equal(await readFile(noteFile, 'utf8'), '첫 줄\r\n  한글 둘째 줄\r\n저장더');
+  await edit('끝');
+  // The real window close, which must wait for the answer.
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  const asked = page.getByRole('dialog', { name: 'note.txt 저장' });
+  await asked.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(dirty).toBeVisible();
+  await page.getByRole('button', { name: 'note.txt 탭 닫기' }).click();
+  await asked.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(dirty).toBeVisible();
+  await page.getByRole('button', { name: 'note.txt 탭 닫기' }).click();
+  await asked.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(tab('note.txt')).toHaveCount(0);
+  assert.equal(await readFile(noteFile, 'utf8'), '첫 줄\r\n  한글 둘째 줄\r\n저장더끝');
+  assert.deepEqual(
+    (await readdir(folder)).filter((name) => name.includes('.dachsterm-')),
+    [],
+  );
+  console.log('PASS a local file saves, stops on a conflict, overwrites, and asks before closing');
+  await row('note.txt').dblclick();
+  await expect(tab('note.txt')).toBeVisible();
+  await row('README.md').click();
+  await expect(tab('README.md')).toBeVisible();
+
   await page.getByRole('button', { name: 'README.md 탭 닫기' }).click();
   await page.getByRole('button', { name: 'note.txt 탭 닫기' }).click();
   await expect(pane.locator('.xterm-accessibility-tree')).toBeVisible();
@@ -558,7 +610,7 @@ async function checkFileTab(page, command, pane) {
   });
   await command(
     linux,
-    `cd "$(mktemp -d)" && printf '리눅스 내용\\n' > wsl.txt && printf 'TAB%s\\n' _WSL`,
+    `cd "$(mktemp -d)" && printf '리눅스 내용\\n' > wsl.txt && chmod 751 wsl.txt && printf 'TAB%s\\n' _WSL`,
     'TAB_WSL',
   );
   await showSidebarView(page, '파일');
@@ -567,8 +619,44 @@ async function checkFileTab(page, command, pane) {
   await expect(editor).toContainText('리눅스 내용', { timeout: 30000 });
   await expect(page.getByLabel('파일 정보')).toContainText('LF');
   console.log('PASS a file inside WSL opens in a tab');
+  await editor.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('WSL 저장');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByRole('tab', { name: 'wsl.txt', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'wsl.txt 탭 닫기' }).click();
+  await command(
+    linux,
+    `stat -c %a wsl.txt; cat wsl.txt; printf 'CAT%s\\n' _DONE`,
+    /751[\s\S]*WSL 저장[\s\S]*CAT_DONE/,
+  );
+  console.log('PASS a WSL file saves through the share and keeps its mode');
   await command(linux, 'exit', '');
+}
+
+/** GE.6: "do not save" really lets the window close, which ends the app and so this run. */
+async function checkDiscardCloses(page, command, pane) {
+  // A folder not shown yet, so moving there lists the new file.
+  const folder = path.join(await realpath(directory), 'file tab leave');
+  await mkdir(folder, { recursive: true });
+  await page.locator('.tab-strip [role="tab"]').first().click();
+  await writeFile(path.join(folder, 'leave.txt'), '버릴 내용');
+  const files = page.getByRole('complementary', { name: '로컬 파일 탐색' });
+  await showSidebarView(page, '파일');
+  await command(pane, `Set-Location '${folder}'; Write-Output ('LEAVE' + '_HERE')`, 'LEAVE_HERE');
+  await files.locator('[data-file-name="leave.txt"]').click();
+  const editor = page.locator('.pane-cell:not([hidden]) .file-tab .view-lines').first();
+  await expect(editor).toContainText('버릴', { timeout: 30000 });
+  await editor.click();
+  await page.keyboard.type('x');
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'leave.txt 저장' })
+    .getByRole('button', { name: '저장 안 함', exact: true })
+    .click();
+  await expect.poll(() => app.exitCode, { timeout: 15000 }).not.toBe(null);
+  assert.equal(await readFile(path.join(folder, 'leave.txt'), 'utf8'), '버릴 내용');
+  console.log('PASS do not save closes the real window and writes nothing');
 }
 
 async function checkGitSettings(page, command, pane) {
@@ -1156,7 +1244,10 @@ try {
     if (gitSettingsOnly) await checkGitSettings(page, command, pane);
     if (dropOnly) await checkLocalDrop(page, command, pane);
     if (dragOnly) await checkDragOut(page, command, pane);
-    if (fileTabOnly) await checkFileTab(page, command, pane);
+    if (fileTabOnly) {
+      await checkFileTab(page, command, pane);
+      await checkDiscardCloses(page, command, pane);
+    }
     throw finished;
   }
   await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');

@@ -11,6 +11,10 @@ import '../../../src/app/styles.css';
 import '../../../src/app/workspace.css';
 
 type Answer = FileRead | { fail: string };
+type WriteAnswer =
+  | { status: 'saved'; hash: string; notice: string | null }
+  | { status: 'conflict'; hash: string | null }
+  | { fail: string };
 
 declare global {
   interface Window {
@@ -20,14 +24,22 @@ declare global {
       status: 'connected' | 'closed';
       calls: { path: string; options: { large: boolean; encoding: string | null } }[];
       opened: string[];
+      /** Every `file_write`, in order. */
+      writes: { path: string; content: string; encoding: string; baseHash: string | null }[];
+      /** Answers for the next writes; after these, each write saves as `saved-N`. */
+      answers: WriteAnswer[];
+      /** `confirmWindowClose`, what closing the window asks. */
+      closeWindow?: () => Promise<boolean>;
     };
     __pwned?: boolean;
+    __fileTabEnd?: () => void;
   }
 }
 
 const state = window.__fileTab;
 state.calls = [];
 state.opened = [];
+state.writes = [];
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
@@ -35,6 +47,17 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
       if (command === 'url_open') {
         state.opened.push(args.url as string);
         return null;
+      }
+      if (command === 'file_write') {
+        const write = args as Window['__fileTab']['writes'][number];
+        state.writes.push(write);
+        const answer = state.answers.shift() ?? {
+          status: 'saved' as const,
+          hash: `saved-${state.writes.length}`,
+          notice: null,
+        };
+        if ('fail' in answer) throw answer.fail;
+        return answer;
       }
       if (command !== 'file_read') throw `unexpected ${command}`;
       const path = args.path as string;
@@ -52,14 +75,22 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
 
 // A stand-in for the part of a terminal session the file tabs read. Like the real one, its
 // snapshot is the same object until something changes.
-const snapshot = { status: state.status };
+let snapshot = { status: state.status };
+const sessionListeners = new Set<() => void>();
 const session = {
   tabId: 't1',
   connectionId: 'c1',
   profile: { protocol: 'ssh', name: '서버' },
-  subscribe: () => () => {},
+  subscribe: (listener: () => void) => {
+    sessionListeners.add(listener);
+    return () => sessionListeners.delete(listener);
+  },
   snapshot: () => snapshot,
 } as unknown as TerminalSession;
+window.__fileTabEnd = () => {
+  snapshot = { status: 'closed' };
+  sessionListeners.forEach((listener) => listener());
+};
 
 // Loaded after the stub, since `desktop` is read when the IPC module loads.
 const [{ useWorkspaceLayout }, { useFileTabs }, { WorkspaceGrid }, { PlainTab }, { FileTreeRow }] =
@@ -77,6 +108,9 @@ function Harness() {
   const { open: openTab } = workspace;
   const files = useFileTabs({ workspace, sessions: [session], narrow: false });
   useEffect(() => openTab({ kind: 'session', tabId: 't1' }), [openTab]);
+  useEffect(() => {
+    state.closeWindow = files.confirmWindowClose;
+  });
   const focusedKey = workspace.focusedGroup.active;
   const focusedTab = workspace.focusedGroup.tabs.find((tab) => tabKey(tab) === focusedKey);
   const row = (path: string) => ({
@@ -127,9 +161,10 @@ function Harness() {
           renderCell={(tab) => (tab.kind === 'file' ? files.renderCell(tab) : <p>터미널 화면</p>)}
         />
       </div>
-      <footer aria-label="상태바" style={{ position: 'fixed', right: 0, bottom: 0 }}>
+      <footer aria-label="상태바" style={{ position: 'fixed', right: 0, bottom: 0, zIndex: 100 }}>
         {files.status(focusedTab)}
       </footer>
+      {files.dialog}
     </div>
   );
 }

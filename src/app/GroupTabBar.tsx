@@ -20,6 +20,7 @@ export function PlainTab({
   controls,
   hint,
   italic,
+  dirty,
   onDoubleClick,
 }: {
   tabKey?: string;
@@ -28,6 +29,8 @@ export function PlainTab({
   hint?: string;
   /** A preview: the next file opened replaces it. */
   italic?: boolean;
+  /** Has changes that are not saved. */
+  dirty?: boolean;
   onDoubleClick?: () => void;
   active: boolean;
   select: () => void;
@@ -46,9 +49,15 @@ export function PlainTab({
         aria-controls={controls}
         aria-selected={active}
         title={hint}
+        aria-label={dirty ? `${title} 저장 안 됨` : undefined}
         onClick={select}
         onDoubleClick={onDoubleClick}
       >
+        {dirty && (
+          <span className="tab-dirty" aria-hidden="true">
+            ●
+          </span>
+        )}
         {title}
       </button>
       {close && (
