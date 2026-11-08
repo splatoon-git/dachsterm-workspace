@@ -54,6 +54,7 @@ fn main() {
             "kube_save",
             "kube_snapshot",
             "kube_detail",
+            "kube_ingress",
             "kube_logs",
             "kube_log_search",
             "kube_log_cancel",

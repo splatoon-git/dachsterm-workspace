@@ -254,6 +254,7 @@ pub fn run() {
             kube::kube_save,
             kube::kube_snapshot,
             kube::kube_detail,
+            kube::kube_ingress,
             kube::kube_logs,
             kube::kube_log_search,
             kube::kube_log_cancel,

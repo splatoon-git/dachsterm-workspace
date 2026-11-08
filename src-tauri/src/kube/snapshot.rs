@@ -90,12 +90,12 @@ pub struct Workload {
 #[derive(Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Service {
-    namespace: String,
-    name: String,
-    service_type: String,
-    selector: BTreeMap<String, String>,
-    ready_endpoints: usize,
-    not_ready_endpoints: usize,
+    pub(super) namespace: String,
+    pub(super) name: String,
+    pub(super) service_type: String,
+    pub(super) selector: BTreeMap<String, String>,
+    pub(super) ready_endpoints: usize,
+    pub(super) not_ready_endpoints: usize,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -218,13 +218,13 @@ pub async fn collect(runner: &Runner<'_>, kube: &KubeSettings, kind: Kind) -> Sn
     }
 }
 
-fn malformed() -> KubeState {
+pub(super) fn malformed() -> KubeState {
     KubeState::Unknown {
         message: "kubectl 출력 형식이 예상과 다릅니다.".into(),
     }
 }
 
-fn now_ms() -> u64 {
+pub(super) fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| {

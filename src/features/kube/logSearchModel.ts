@@ -1,3 +1,4 @@
+import type { IngressController } from './ingressTypes';
 import type { KubeState } from './kubeModel';
 import { stateNote } from './polling';
 import type { KubePod, KubeService } from './snapshotTypes';
@@ -126,7 +127,7 @@ export function applySearchEvents(state: SearchResult, events: SearchEvent[]): S
   return next;
 }
 
-export type ScopeKind = 'all' | 'namespace' | 'workload' | 'service' | 'pod';
+export type ScopeKind = 'all' | 'namespace' | 'workload' | 'service' | 'pod' | 'controller';
 /**
  * `value` is what the search box shows: `namespace` for a namespace, `namespace/Kind/name` for a
  * workload, and `namespace/name` for a service or a pod.
@@ -139,6 +140,7 @@ export const scopeKinds: { id: ScopeKind; label: string }[] = [
   { id: 'workload', label: '워크로드' },
   { id: 'service', label: '서비스' },
   { id: 'pod', label: '파드' },
+  { id: 'controller', label: '인그레스 컨트롤러' },
 ];
 
 const workloadValue = (pod: KubePod) => {
@@ -153,6 +155,7 @@ export function scopeOptions(kind: ScopeKind, pods: KubePod[], services: KubeSer
   const values = (() => {
     switch (kind) {
       case 'all':
+      case 'controller':
         return [];
       case 'namespace':
         return pods.map((pod) => pod.namespace);
@@ -188,8 +191,20 @@ export function podsInScope(
     }
     case 'pod':
       return pods.filter((pod) => podValue(pod) === scope.value);
+    // Often outside the session's namespace, so these come from the ingress report instead.
+    case 'controller':
+      return [];
   }
 }
+
+/** The controller's own pods, which the tree may not list when the session has a namespace. */
+export const controllerTargets = (controllers: IngressController[]): SearchTarget[] =>
+  controllers.map((item) => ({
+    namespace: item.namespace,
+    pod: item.name,
+    containers: [item.container],
+    previous: [],
+  }));
 
 /** A pod that has not started has no log to read. `previous` is only for what really restarted. */
 export function searchTargets(
