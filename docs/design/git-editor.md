@@ -1,7 +1,7 @@
 # Git·파일 편집 작업 화면 — 설계안
 
 - 작업 ID: **GE.1~GE.13**, 설계일: **2026-11-08**. 관련 작업 DX.16(에이전트 시작 옵션)은 [developer-workflow DX.16](developer-workflow.md#dx16--에이전트-시작-옵션-2026-11-08-추가)에 있다.
-- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.11 구현 완료, GE.4 Windows 시험 완료(Mac 실기기 대기), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
+- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.3·GE.7·GE.11 구현(대기 항목은 progress), GE.4 Windows 시험 완료(Mac 실기기 대기), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
 - 선행: DX.15(로컬·WSL 탭 Git 상태, `dev` `d6d2ec4`).
 - 기준 자료: `dev` `57e32bb`의 코드, 2026-11-08 사용자 대화와 스크린샷(VS Code 소스 제어 화면, 앱의 WSL 파일 패널·우클릭 메뉴). 내용은 코드를 읽어 확인했고, 이 설계를 위한 실행 검증은 GE.2 말고는 없다.
 
@@ -268,6 +268,16 @@ __dachsterm_head() {
 | 13 | GE.13 | 문서·회귀·Mac | 전체 | 바꾼 범위 1회 |
 
 - 각 단계는 작업 ID 브랜치에서 하고 끝나면 `dev`에 병합한다(AGENTS.md 브랜치 규칙).
+- **단계 묶음:** 위 표의 선행 관계로 나눴다.
+  - 1단계(`dev` 병합): GE.1·GE.2·GE.3·GE.4·GE.7·GE.11.
+  - 2단계(서로 기다리지 않아 동시 진행 가능): GE.5·GE.9·GE.10.
+  - 3단계: GE.5 뒤 GE.6, GE.6 뒤 GE.8(오른쪽 편집 연동), GE.5 뒤 GE.12, 마지막 GE.13.
+- **2단계에서 겹치는 곳:**
+  - IPC 등록 3곳(`lib.rs`, `build.rs`, `capabilities/main.json`)은 세 작업이 모두 고친다. 나중에 병합하는 쪽이 목록을 합친다.
+  - GE.5의 `file` 탭 종류는 `workspaceLayout.ts`(357줄, 상한 400줄)에 들어간다. 넘을 것 같으면 먼저 나눈다.
+  - GE.9의 `git_apply`와 GE.10의 `git_config_*`는 `git_run.rs` 위에 새 파일로 두고 `git_run.rs` 자체는 적게 고친다.
+  - **설정 → Git** 링크(GE.9의 커밋 실패 안내, GE.7에서 문구만 둔 Git 없음 안내)는 GE.9와 GE.10 중 나중에 병합하는 쪽이 연결한다.
+  - GE.5는 편집기를 `CodeEditor.tsx`로만 쓴다. GE.4 최종 선택(§8)은 2단계를 막지 않는다.
 - Windows에서 실제 앱 자동 검사가 되는 것은 `*-native.mjs`로, Mac은 `mac-verify`로 실기기 확인한다.
 
 ## 8. 남은 결정
