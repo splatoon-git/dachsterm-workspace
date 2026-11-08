@@ -10,6 +10,7 @@ mod config_includes;
 pub mod credential_helper;
 pub mod credentials;
 mod desktop_bridge;
+mod desktop_files;
 pub mod editor;
 mod editor_location;
 pub mod encoding;
@@ -72,6 +73,7 @@ pub struct AppState {
     pub tunnels: Arc<tunnels::Tunnels>,
     pub transfers: Arc<sftp::Transfers>,
     pub editors: Arc<editor::Editors>,
+    pub drag_outs: desktop_files::DragOuts,
     pub directory: PathBuf,
     pub store: Arc<storage::Store>,
     pub connections: Arc<ssh::Connections>,
@@ -136,6 +138,7 @@ pub fn run() {
             let connections = Arc::new(ssh::Connections::default());
             let editors = Arc::new(editor::Editors::default());
             editors.recover(&directory.join("edits"));
+            desktop_files::clear_fetched(&directory);
             {
                 let editors = editors.clone();
                 let connections = connections.clone();
@@ -165,6 +168,7 @@ pub fn run() {
                 tunnels: Arc::default(),
                 transfers,
                 editors,
+                drag_outs: Default::default(),
                 directory,
                 store,
                 connections,
@@ -203,6 +207,9 @@ pub fn run() {
             local_files::local_files_batch,
             local_files::local_files_download,
             local_files::local_files_edit,
+            desktop_files::files_drag_prepare,
+            desktop_files::files_drag_out,
+            desktop_files::files_reveal,
             shell_probe::terminal_supports_directory_hook,
             desktop_bridge::clipboard_write_text,
             desktop_bridge::url_open,
@@ -355,6 +362,7 @@ pub fn run() {
         } else if let tauri::RunEvent::Exit = event {
             app.state::<AppState>().locals.shutdown();
             app.state::<AppState>().connections.shutdown();
+            desktop_files::clear_fetched(&app.state::<AppState>().directory);
         }
     });
 }

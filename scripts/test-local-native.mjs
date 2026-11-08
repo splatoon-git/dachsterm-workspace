@@ -16,13 +16,26 @@ import {
   openTerminalSettings,
   showSidebarView,
 } from './native-workspace.mjs';
+import {
+  appWindow,
+  arrange,
+  closeFolder,
+  dragBetween,
+  folderWindow,
+  openFolder,
+  releaseWindow,
+  screenPoint,
+  selectedInFolder,
+} from './native-mouse.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 // `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab,
 // `--credentials-only` only the DX.14 WSL HTTPS credential steps, and `--git-only` only the
-// DX.15 Git status steps, `--drop-only` only the GE.2 file drop steps.
+// DX.15 Git status steps, `--drop-only` only the GE.2 file drop steps, `--drag-only` only the GE.3
+// drag out to the file manager, which moves the real pointer for a few seconds.
 const agentOnly = process.argv.includes('--agent-only');
 const dropOnly = process.argv.includes('--drop-only');
+const dragOnly = process.argv.includes('--drag-only');
 const credentialsOnly = process.argv.includes('--credentials-only');
 const gitOnly = process.argv.includes('--git-only');
 const finished = Symbol('agent-only');
@@ -45,7 +58,8 @@ async function launch() {
   await new Promise((resolve) => server.close(resolve));
   app = spawn(path.resolve('target/debug/dachsterm.exe'), [], {
     stdio: 'ignore',
-    windowsHide: true,
+    // The real pointer can only reach a window that is on screen.
+    windowsHide: !dragOnly,
     env: {
       ...process.env,
       DACHSTERM_TEST_DATA_DIR: directory,
@@ -239,6 +253,127 @@ async function checkLocalGit(page, command, pane) {
 }
 
 /** GE.2: files dropped from the OS are copied into the folder the local or WSL panel shows. */
+// GE.3: real drags to a real file manager window. The folders are scratch folders.
+async function checkDragOut(page, command, pane) {
+  const files = page.getByRole('complementary', { name: '로컬 파일 탐색' });
+  const scale = await page.evaluate(() => window.devicePixelRatio);
+  const base = await realpath(directory);
+  const from = path.join(base, 'drag from');
+  const into = path.join(base, 'drag into');
+  await mkdir(path.join(from, '폴더째'), { recursive: true });
+  await mkdir(into, { recursive: true });
+  await writeFile(path.join(from, '끌어내기 한글.txt'), 'one');
+  await writeFile(path.join(from, 'second.txt'), 'two');
+  await writeFile(path.join(from, '폴더째', 'inside.txt'), 'three');
+  const appHandle = await appWindow(app.pid);
+  const manager = await openFolder(into);
+  arrange(appHandle, manager);
+  await sleep(800);
+  const row = (name) => files.getByRole('button', { name: new RegExp(name) });
+  const centre = async (locator) => {
+    const box = await locator.boundingBox();
+    return screenPoint(appHandle, box.x + box.width / 2, box.y + box.height / 2, scale);
+  };
+  const managerTop = screenPoint(manager, 0, 0, 1);
+  const dropAt = { x: managerTop.x + 500, y: managerTop.y + 500 };
+  const dragToManager = async (name) =>
+    dragBetween(appHandle, await centre(row(name)), manager, dropAt);
+  const waitFor = async (file, text) => {
+    for (let i = 0; i < 40; i++) {
+      if ((await readFile(file, 'utf8').catch(() => null)) === text) return;
+      await sleep(250);
+    }
+    throw new Error(`Not copied by the drag: ${file}`);
+  };
+  const reveal = async (name) => {
+    await row(name).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '탐색기에서 보기' }).click();
+  };
+  try {
+    await showSidebarView(page, '파일');
+    await command(pane, `Set-Location '${from}'; Write-Output ('DRAG' + '_HERE')`, 'DRAG_HERE');
+    await expect(files.getByLabel('로컬 경로', { exact: true })).toHaveValue(from);
+    await expect(row('second\\.txt')).toBeVisible({ timeout: 15000 });
+
+    await dragToManager('끌어내기 한글\\.txt');
+    await waitFor(path.join(into, '끌어내기 한글.txt'), 'one');
+    assert.equal(await readFile(path.join(from, '끌어내기 한글.txt'), 'utf8'), 'one');
+    console.log('PASS file manager: a dragged file is copied and the original stays');
+
+    // The page must not be left thinking the button is still down.
+    await row('second\\.txt').click();
+    await expect(row('second\\.txt')).toHaveAttribute('aria-pressed', 'true');
+    await row('폴더째').click({ modifiers: ['Control'] });
+    await dragToManager('second\\.txt');
+    await waitFor(path.join(into, 'second.txt'), 'two');
+    await waitFor(path.join(into, '폴더째', 'inside.txt'), 'three');
+    console.log('PASS file manager: the selection, a folder included, is dragged together');
+
+    const before = await files.locator('.file-row').count();
+    const list = await files.locator('.file-list').boundingBox();
+    const inside = screenPoint(appHandle, list.x + list.width / 2, list.y + list.height - 8, scale);
+    dragBetween(appHandle, await centre(row('second\\.txt')), appHandle, inside);
+    await sleep(1500);
+    await files.getByRole('button', { name: '파일 새로 고침' }).click();
+    await sleep(500);
+    await expect(files.locator('.file-row')).toHaveCount(before);
+    console.log('PASS app: letting go over its own panel copies nothing');
+
+    await reveal('second\\.txt');
+    await folderWindow(from);
+    for (let i = 0; selectedInFolder(from)[0] !== path.join(from, 'second.txt'); i++) {
+      assert.ok(i < 40, 'The revealed file is not selected.');
+      await sleep(250);
+    }
+    closeFolder(from);
+    console.log('PASS file manager: "show" selects the item');
+
+    const wsl = page
+      .locator('.local-targets .local-target')
+      .filter({ hasText: 'WSL' })
+      .filter({ hasNotText: 'docker-desktop' });
+    await showSidebarView(page, '연결');
+    if (!(await wsl.count())) {
+      console.log('WSL user distribution absent: WSL drag pending.');
+      return;
+    }
+    const title = await wsl.first().locator('span').textContent();
+    await wsl.first().click();
+    const linux = page.getByRole('region', { name: `${title} 터미널`, exact: true });
+    await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
+      timeout: 15000,
+    });
+    await command(
+      linux,
+      `cd "$(mktemp -d)" && printf wsl > 'from wsl.txt' && printf 'WSL%s\\n' _DRAG`,
+      'WSL_DRAG',
+    );
+    await showSidebarView(page, '파일');
+    const shown = files.getByLabel('로컬 경로', { exact: true });
+    await expect(shown).toHaveValue(/^\/tmp\//);
+    await expect(row('from wsl\\.txt')).toBeVisible({ timeout: 15000 });
+    await dragToManager('from wsl\\.txt');
+    await waitFor(path.join(into, 'from wsl.txt'), 'wsl');
+    console.log('PASS file manager: a WSL file is copied through its network path');
+
+    await reveal('from wsl\\.txt');
+    const names = spawnSync('wsl.exe', ['--list', '--quiet'], { windowsHide: true })
+      .stdout.toString('utf16le')
+      .split(/\r?\n/)
+      .map((name) => name.trim())
+      .filter(Boolean);
+    const distribution = names.find((name) => title.includes(name));
+    assert.ok(distribution, `No WSL distribution in "${title}".`);
+    const folder = `\\\\wsl.localhost\\${distribution}${(await shown.inputValue()).replaceAll('/', '\\')}`;
+    await folderWindow(folder);
+    closeFolder(folder);
+    console.log('PASS file manager: "show" opens the WSL folder');
+  } finally {
+    releaseWindow(appHandle);
+    releaseWindow(manager);
+    closeFolder(into);
+  }
+}
 async function checkLocalDrop(page, command, pane) {
   const invoke = (cmd, args) =>
     page.evaluate(({ cmd, args }) => window.__TAURI_INTERNALS__.invoke(cmd, args), { cmd, args });
@@ -746,11 +881,12 @@ try {
   await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
-  if (agentOnly || credentialsOnly || gitOnly || dropOnly) {
+  if (agentOnly || credentialsOnly || gitOnly || dropOnly || dragOnly) {
     if (agentOnly) await checkLocalAgent(page, command, pane);
     if (credentialsOnly) await checkWslCredentials(page, command);
     if (gitOnly) await checkLocalGit(page, command, pane);
     if (dropOnly) await checkLocalDrop(page, command, pane);
+    if (dragOnly) await checkDragOut(page, command, pane);
     throw finished;
   }
   await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');

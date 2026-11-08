@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, errorText } from '../../lib/ipc';
 import { useFileDrop } from '../../lib/fileDrop';
+import { useFileDragOut } from './dragOut';
+import { copyPathsItem, revealItem } from './fileMenuItems';
 import type { LocalTarget, TerminalSession } from '../terminal/session';
 import { childPath, selectionAfterClick, withoutNested, type FileEntry } from './fileList';
 import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
@@ -89,6 +91,8 @@ export function LocalFilePanel({
   const { rows, toggle } = useFileTree(listing, view, listFolder);
   const selectedPaths = withoutNested(selection).map((name) => childPath(listing.path, name));
   const selected = selection.length === 1 ? rows.find((e) => e.name === selection[0]) : undefined;
+  const source = { kind: 'local', targetId } as const;
+  const drag = useFileDragOut(source, (n) => childPath(listing.path, n), selection, setError);
   function setClipboard(value: Clipboard | null) {
     shareClipboard(value);
     setClipboardState(value);
@@ -277,7 +281,7 @@ export function LocalFilePanel({
           {error}
         </div>
       )}
-      <div className="file-list" aria-busy={busy}>
+      <div className="file-list" aria-busy={busy} {...drag}>
         {rows.map((row) => (
           <FileTreeRow
             key={row.name}
@@ -343,6 +347,7 @@ export function LocalFilePanel({
               disabled: !editable,
               run: () => ask({ kind: 'edit', program: savedEditor() }),
             },
+            revealItem(source, selection.length === 1 ? selectedPaths[0] : undefined, setError),
             {
               label: '이름 바꾸기',
               shortcut: 'F2',
@@ -362,13 +367,7 @@ export function LocalFilePanel({
               disabled: !clipboard,
               run: () => void paste(),
             },
-            {
-              label: '전체 경로 복사',
-              run: () =>
-                void navigator.clipboard
-                  .writeText(selectedPaths.join('\n'))
-                  .catch(() => setError('경로 복사 실패')),
-            },
+            copyPathsItem(selectedPaths, setError),
             {
               label: '삭제',
               shortcut: 'Delete',

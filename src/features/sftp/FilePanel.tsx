@@ -12,6 +12,9 @@ import { selectionAfterClick, withoutNested, type FileEntry } from './fileList';
 import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
 import { FileAction, FilePathBar, FileTreeRow, useFileTree } from './fileTree';
 import { FollowControl, useDirectoryFollow } from './follow';
+import { useFileDragOut } from './dragOut';
+import { copyPathsItem } from './fileMenuItems';
+import { sessionSource } from '../terminal/sessionKind';
 import { operationText } from './fileOperation';
 type FileClipboard = { sourceId: string; operation: 'copy' | 'move'; paths: string[] };
 type BatchOutcome = { completed: string[]; errors: string[] };
@@ -143,6 +146,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
   const { rows: visible, toggle, folderMenu } = useFileTree(listing, view, listFolder);
   const base = listing.path.replace(/\/$/, '');
   const selectedPaths = withoutNested(selection).map((name) => `${base}/${name}`);
+  const drag = useFileDragOut(sessionSource(session), (n) => `${base}/${n}`, selection, setError);
   // Past transfers stay out of the way. Unfinished work opens the tray until the user closes it.
   const trayOpen =
     trayChoice ??
@@ -398,7 +402,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
           {error}
         </div>
       )}
-      <div className="file-list" aria-busy={busy}>
+      <div className="file-list" aria-busy={busy} {...drag}>
         {visible.map((e) => (
           <FileTreeRow
             key={e.name}
@@ -628,13 +632,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               disabled: !clipboard,
               run: () => void paste(),
             },
-            {
-              label: '전체 경로 복사',
-              run: () =>
-                void navigator.clipboard
-                  .writeText(selectedPaths.join('\n'))
-                  .catch(() => setError('경로 복사 실패')),
-            },
+            copyPathsItem(selectedPaths, setError),
             ...folderMenu(selection.length === 1 && selected?.directory ? target : undefined),
             {
               label: '압축하기…',

@@ -101,6 +101,10 @@ fn locate(target: &Target, value: &str) -> Result<Location> {
     let shown = native.to_string_lossy().into_owned();
     Ok(Location { native, shown })
 }
+/// Where a path of this target is on this computer. A WSL path becomes its network share path.
+pub(crate) fn native_path(target: &Target, value: &str) -> Result<PathBuf> {
+    locate(target, value).map(|location| location.native)
+}
 fn hidden(name: &str, metadata: Option<&fs::Metadata>) -> bool {
     #[cfg(windows)]
     {
@@ -295,7 +299,7 @@ fn batch(
     }
     outcome
 }
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T> + Send + 'static,
 ) -> Result<T> {
     tauri::async_runtime::spawn_blocking(work)

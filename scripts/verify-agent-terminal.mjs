@@ -7,6 +7,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { chooseTabMenu, openNewConnectionForm, openSettings } from './native-workspace.mjs';
+import { checkServerDragFetch } from './native-drag-fetch.mjs';
 
 const promptFolder = '/home/probe/.cache/dachsterm/prompt';
 const tmuxName = 'dachs-native';
@@ -157,6 +158,22 @@ export async function verifyAgentTerminal({
     await cdp.detach();
   }
   console.log('PASS native clipboard image: PNG upload, approval for one connection');
+
+  setStage('GE.3 server file fetch');
+  shell(
+    "mkdir -p /tmp/drag-fetch/sub && printf sftp-body > '/tmp/drag-fetch/한글 서버.txt' && " +
+      'head -c 10485761 /dev/zero > /tmp/drag-fetch/big.bin',
+  );
+  await checkServerDragFetch({
+    invoke,
+    source: { kind: 'ssh', connectionId: await pane().getAttribute('data-connection-id') },
+    file: '/tmp/drag-fetch/한글 서버.txt',
+    body: Buffer.from('sftp-body'),
+    folder: '/tmp/drag-fetch/sub',
+    big: '/tmp/drag-fetch/big.bin',
+    appData: directory,
+  });
+  console.log('PASS native SFTP drag out: fetches small files, refuses folders and big ones');
 
   setStage('AT.5 local tab');
   await showConnections();

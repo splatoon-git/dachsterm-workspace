@@ -44,5 +44,9 @@ tauri-plugin-notification = "=2.8.0"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
 
+# Starting a file drag out to the desktop (GE.3). Windows and macOS are the shipped targets.
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+drag = "=2.1.1"
+
 [dev-dependencies]
 
