@@ -16,6 +16,8 @@ export type SessionCapabilities = {
   detach: boolean;
   /** Server monitoring runs over this connection. */
   monitor: boolean;
+  /** The Kubernetes workspace can run over this connection. */
+  kube: boolean;
 };
 
 type SessionLike = {
@@ -31,8 +33,24 @@ export function sessionKind(session: SessionLike): SessionKind {
 }
 
 const table: Record<SessionKind, SessionCapabilities> = {
-  ssh: { terminal: true, log: true, guide: true, split: true, detach: true, monitor: true },
-  local: { terminal: true, log: true, guide: true, split: true, detach: false, monitor: false },
+  ssh: {
+    terminal: true,
+    log: true,
+    guide: true,
+    split: true,
+    detach: true,
+    monitor: true,
+    kube: true,
+  },
+  local: {
+    terminal: true,
+    log: true,
+    guide: true,
+    split: true,
+    detach: false,
+    monitor: false,
+    kube: false,
+  },
   podtree: {
     terminal: true,
     log: false,
@@ -40,8 +58,17 @@ const table: Record<SessionKind, SessionCapabilities> = {
     split: false,
     detach: false,
     monitor: false,
+    kube: false,
   },
-  ftp: { terminal: false, log: false, guide: false, split: false, detach: false, monitor: false },
+  ftp: {
+    terminal: false,
+    log: false,
+    guide: false,
+    split: false,
+    detach: false,
+    monitor: false,
+    kube: false,
+  },
 };
 
 export const capabilities = (session: SessionLike) => table[sessionKind(session)];

@@ -28,7 +28,9 @@
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
     "format:check": "prettier --check src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
     "probe:ftp": "node scripts/run-ftp.mjs",
-    "probe:prompt-branch": "node scripts/probe-prompt-branch.mjs"
+    "probe:prompt-branch": "node scripts/probe-prompt-branch.mjs",
+    "kube:fixture": "wsl -d Ubuntu-24.04 -- bash scripts/kube-fixture.sh",
+    "test:kube-detect": "node scripts/verify-kube-detect.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

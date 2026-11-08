@@ -1,4 +1,3 @@
-import { FtpPane } from '../features/sftp/FtpPane';
 import { ShortcutList } from './ShortcutList';
 import { useFullscreen } from './useFullscreen';
 import { Welcome } from './Welcome';
@@ -44,7 +43,8 @@ import { SessionForm } from '../features/sessions/SessionForm';
 import { TerminalSession, type LocalCatalog, type LocalTarget } from '../features/terminal/session';
 import { PodTreeDialog } from '../features/terminal/PodTreeDialog';
 import { CommandPanel } from '../features/terminal/CommandPanel';
-import { SessionTerminal } from './SessionTerminal';
+import { SessionPane } from './SessionPane';
+import { useInputPanes } from './inputPanes';
 import { GroupDialog } from './GroupDialog';
 import { useReviewTabs } from './useReviewTabs';
 import { useFileTabs } from './useFileTabs';
@@ -366,8 +366,9 @@ export function App() {
   const activeSession = (group: GroupNode) => tabs.find((t) => sessionKey(t) === group.active);
   // Only panes on screen take part: zoom and a narrow window leave one group in view.
   const input = useInputScope(
-    groups(displayRoot(workspace.layout, { zoomed: workspace.zoomed, narrow })).map(
-      (group) => activeSession(group)?.connectionId ?? group.id,
+    useInputPanes(
+      groups(displayRoot(workspace.layout, { zoomed: workspace.zoomed, narrow })),
+      activeSession,
     ),
   );
   const renderTab = (tab: TabRef, group: GroupNode) => {
@@ -429,18 +430,12 @@ export function App() {
       );
     const session = tabs.find((t) => t.tabId === tab.tabId);
     if (!session) return null;
-    return capabilities(session).terminal ? (
-      <SessionTerminal
+    return (
+      <SessionPane
         session={session}
         focused={focused}
         active={visible}
         theme={theme}
-        reconnect={() => reconnectTab(session)}
-        close={() => closeTab(session)}
-      />
-    ) : (
-      <FtpPane
-        session={session}
         open={(path, pinned) => files.open(session, path, pinned)}
         reconnect={() => reconnectTab(session)}
         close={() => closeTab(session)}

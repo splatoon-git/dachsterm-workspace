@@ -143,3 +143,62 @@ kind의 `kindnet` 파드 하나(control-plane)가 파드 5,000개 생성 뒤 `Cr
 | `MaxSessions`가 10보다 작은 서버 | 기본값만 쟀다 |
 | 앱이 시간 초과로 채널을 닫은 뒤 원격 `kubectl`의 종료 | 재지 않았다 |
 | fish 등 다른 셸 | Bash, Zsh만 쟀다 |
+
+## KV.1 앱 검증 (2026-11-08)
+
+대상: 브랜치 `feat/kv1-kube-detect`의 커밋 전 트리. `npm run tauri -- build --debug --no-bundle`로 만든 실제 앱(WebView2), `tests/openssh` 기반 실제 OpenSSH, 실제 kind 클러스터. 명령: `node scripts/verify-kube-detect.mjs --cluster=dachsterm-kv1 --keep`, 종료 0.
+
+### 환경
+
+`scripts/kube-fixture.sh`(`npm run kube:fixture -- <클러스터> up`)가 만든다. kind v0.33.0, `kubectl` 1.34.1, `sshd -T` 기준 `MaxSessions 10`. SSH 서버는 kind 네트워크에 붙어 `--internal` kubeconfig로 API 서버에 닿는다. 검사가 끝나면 클러스터와 SSH 컨테이너는 지웠다.
+
+| 계정 | 흉내 낸 서버 |
+|---|---|
+| `probe` | `~/.bashrc`의 대화형 구간에만 `PATH=/opt/kube/bin`과 `KUBECONFIG=/opt/kube/config`. context 2개 |
+| `rkeuser` | `kubectl`은 `/var/lib/rancher/rke2/bin`, kubeconfig는 `/etc/rancher/rke2/rke2.yaml`(root:root 600). 암호 필요 `sudo`. **실제 RKE2가 아니다** |
+
+### 합격 기준
+
+| 항목 | 결과 |
+|---|---|
+| `.bashrc`에만 `PATH`, `KUBECONFIG`가 있는 서버 | 첫 접속에서 `/opt/kube/bin/kubectl`, `/opt/kube/config` 발견 |
+| context·namespace 선택과 저장 | `second`, `kube-system`, 절대 경로가 세션에 저장, `operate` false |
+| 설정을 마친 세션의 다음 접속 | 재접속에서 설정 화면 없이 바로 작업 화면 |
+| root 전용 kubeconfig | 안내 표시 → 복사 버튼 → 터미널에 명령 입력(Enter는 검사가 사용자처럼 누름) → `sudo` 암호를 터미널에 입력 → `600 rkeuser` 복사본 생성 → 헤더의 다시 확인 → 작업 화면, 세션에 `~/.kube/dachsterm.config` 저장 |
+| 복사한 설정의 다음 접속 | 바로 작업 화면 |
+| 복사본이 낡은 경우(토큰을 틀리게 바꿈) | 재접속 시 "클러스터 인증에 실패했습니다", 복사 버튼 활성 |
+| 숨은 셸 | 작업 화면과 전환해도 출력이 유지되고, 경로 알림 훅이 입력되지 않음 |
+| 터미널 세션에서 탭 메뉴로 열기 | 같은 연결 ID, 세션 저장값 없음, 닫으면 터미널로 복귀 |
+| 프롬프트를 보고하는 셸의 복사 | 명령이 Enter까지 입력되어 `sudo` 프롬프트가 나옴 |
+
+### 앱 SSH 채널의 `MaxSessions` 초과
+
+연결 하나에 `kube_detect`(scan) 14개를 동시에 실행했다. 로그인 셸 rc에 `sleep 4`를 넣어 채널을 오래 잡게 했다. 같은 연결에 셸과 SFTP가 이미 있다.
+
+| 실행 | 결과 | 거부까지 | 성공까지 |
+|---|---|---|---|
+| 1회 | 성공 5, 거부 9 | 기록 안 함 | 전체 3,877ms |
+| 2회 | 성공 6, 거부 8 | 8~11ms 6개, 3,741ms 2개 | 3,859~3,877ms |
+| 3회 | 성공 6, 거부 8 | 7~13ms 8개 | 3,781~3,796ms |
+
+- OpenSSH의 거부는 russh에서 `Error::ChannelOpenFailure`로 온다. `channel_open_session`이 멈추지 않고 바로 실패하며 `KubeState::ChannelLimit`이 된다. 3,741ms의 거부 2개는 앞 단계 채널을 잡았던 호출이 다음 단계 채널을 열 때 거부된 것으로 본다(호출별 단계는 기록하지 않았다).
+- 거부된 뒤에도 연결은 유지됐다. 곧바로 실행한 `kube_detect`는 `ready`이고 터미널 입력도 동작했다.
+- 동시에 잡을 수 있는 채널은 6~8개로, 셸과 SFTP를 뺀 `MaxSessions` 10의 나머지와 맞는다.
+- rc가 `sleep 4`인데 약 3.8초로 나온 것은 측정이 Windows 쪽 시계라 컨테이너 VM 시계와의 차이로 보이며 확인하지 않았다.
+- 파드 탭과 로그 검색의 거부 안내는 KV.2·KV.4·KV.5에서 이 상태를 쓴다. 기본값 10 외의 값은 재지 않았다.
+
+### 단위·UI
+
+- `cargo test -p dachsterm --lib --locked -- kube remote_exec settings storage` 60건 통과. 상태 분류의 입력은 KV.0 실측 문구다.
+- `npx vitest run src/features/kube src/features/terminal/shellReadiness.test.ts src/features/git src/app/tabMenu.test.ts` 112건, 뒤에 넣은 `tabMenu` 2건은 그 파일만 다시 실행.
+- `npx playwright test tests/ui/kube-workspace.spec.ts` 12건.
+- `npm run typecheck`, 바꾼 파일 eslint·prettier, `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` 종료 0.
+
+### 미확인
+
+| 항목 | 이유 |
+|---|---|
+| 실제 RKE2, 실제로 만료된 인증서 | 환경 없음. 복사본의 토큰을 틀리게 바꿔 대신했다 |
+| 숨은 셸에 프로그램이 도는 동안 복사 버튼을 막는 것 | 실제 앱에서 재현하지 않았다. 판단은 Vitest, 표시는 Playwright까지 |
+| Mac 실기기, CI | Mac은 대기. CI는 `main`에 반영할 때 돈다 |
+| 분리 창 | 1차에서 끈다(`새 창으로 분리` 비활성) |

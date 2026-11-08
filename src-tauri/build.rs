@@ -48,6 +48,8 @@ fn main() {
             "local_git_status",
             "git_view",
             "git_apply",
+            "kube_detect",
+            "kube_save",
             "git_config_read",
             "git_config_preview",
             "git_config_write",

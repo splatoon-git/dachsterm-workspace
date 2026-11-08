@@ -25,8 +25,21 @@ export type Profile = {
   forwardSystemAgent?: boolean;
   /** HTTPS Git credentials through the server's git. Off unless the form turns it on. */
   forwardGitCredentials?: boolean;
+  /** What the tab shows after connecting. Absent means the terminal. */
+  workspace?: 'terminal' | 'kubernetes';
+  /** Filled by the first connection's detection. Only the backend writes it. */
+  kube?: KubeSettings | null;
   lastConnected: number | null;
   hasSecret: boolean;
+};
+/** Paths and names on the server; a kubeconfig's contents never reach the app. */
+export type KubeSettings = {
+  context: string;
+  /** Empty means every namespace. */
+  namespace: string;
+  kubectl: string;
+  kubeconfig: string;
+  operate: boolean;
 };
 /** A key file the built-in agent offers. Only the backend sets `secretRef`. */
 export type ForwardKey = { path: string; secretRef?: string | null };

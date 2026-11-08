@@ -122,6 +122,23 @@ describe('tabMenuEntries', () => {
       'closeOthers',
     ]);
   });
+  it('opens the Kubernetes workspace from a terminal session, and keeps detach away from it', () => {
+    const opened = tabMenuEntries({ ...base, kube: 'open' });
+    expect(opened.find((e) => e.command === 'kube')?.label).toBe('쿠버네티스 화면 열기');
+    expect(opened.find((e) => e.command === 'detach')?.disabled).toBe(false);
+    const open = tabMenuEntries({ ...base, kube: 'close' });
+    expect(open.find((e) => e.command === 'kube')?.label).toBe('쿠버네티스 화면 닫기');
+    expect(open.find((e) => e.command === 'detach')?.disabled).toBe(true);
+    const fixed = tabMenuEntries({ ...base, kube: 'fixed' });
+    expect(fixed.some((e) => e.command === 'kube')).toBe(false);
+    expect(fixed.find((e) => e.command === 'detach')?.disabled).toBe(true);
+  });
+
+  it('cannot open the Kubernetes workspace on an ended connection', () => {
+    const entries = tabMenuEntries({ ...base, kube: 'open', connection: 'ended' });
+    expect(entries.find((e) => e.command === 'kube')?.disabled).toBe(true);
+  });
+
   it('disables what cannot apply', () => {
     const entries = tabMenuEntries({ ...base, groupCount: 1, otherTabs: 0, narrow: true });
     const disabled = entries.filter((e) => e.disabled).map((e) => e.command);

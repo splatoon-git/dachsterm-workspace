@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-save"
+description = "Enables the kube_save command without any pre-configured scope."
+commands.allow = ["kube_save"]
+
+[[permission]]
+identifier = "deny-kube-save"
+description = "Denies the kube_save command without any pre-configured scope."
+commands.deny = ["kube_save"]

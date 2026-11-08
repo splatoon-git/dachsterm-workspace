@@ -9,9 +9,20 @@ export type PaneViewState = {
   guide: boolean;
   /** A guide the user chose; it stays until they release it. */
   pinned: GuideProgram | null;
+  /** The tab menu opened the Kubernetes workspace on a terminal session. */
+  kube: boolean;
+  /** The workspace is open but the user went to its server terminal. */
+  kubeTerminal: boolean;
 };
 
-const closed: PaneViewState = { search: false, log: false, guide: false, pinned: null };
+const closed: PaneViewState = {
+  search: false,
+  log: false,
+  guide: false,
+  pinned: null,
+  kube: false,
+  kubeTerminal: false,
+};
 
 /** Per-session view state. It lives on the session so that moving a tab never resets it. */
 export class PaneView {

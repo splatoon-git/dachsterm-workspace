@@ -100,6 +100,8 @@ npm run probe:phase1           제품 엔진을 실제 OpenSSH로 검사. 이름
 npm run test:native            Windows 전용. 앱 빌드 후 WebView2 UI로 실제 SSH 접속
 npm run probe:ftp              FTP/FTPS/CP949. 현재 Windows 전용
 node scripts/test-<기능>-native.mjs    Windows 전용 개별 검사. target/debug/dachsterm.exe가 먼저 필요
+npm run kube:fixture -- <클러스터> [up|down|status]    kind와 SSH 서버 검사 환경. WSL Ubuntu-24.04의 ~/.local/bin/kind 필요
+npm run test:kube-detect       앱 빌드 후 KV.1 합격 시나리오. 위 환경을 자동으로 올리고 내린다(--keep로 유지)
 ```
 
 같은 실행 파일을 빌드와 테스트가 동시에 쓰면 잠금 오류가 난다.
