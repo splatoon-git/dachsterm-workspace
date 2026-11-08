@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { UnsavedDialog } from '../features/editor/FileDialogs';
 import { FilePane } from '../features/editor/FilePane';
+import { GitDiffPane } from '../features/editor/GitDiffPane';
+import { diffTabTitle, type GitDiffTarget } from '../features/editor/gitFileDiff';
+import { repoFilePath, type GitRow } from '../features/git/gitViewModel';
 import { FileStatusItems } from '../features/editor/FileStatusItems';
 import { fileDocument, unsavedFileIds, useFileDirty } from '../features/editor/fileDocuments';
 import type { TerminalSession } from '../features/terminal/session';
 import { sessionKind, sessionSource } from '../features/terminal/sessionKind';
 import { sameSource, type Source } from '../lib/source';
 import type { AppShortcut } from './appShortcuts';
+import { diffTargetOf, sameDiffTarget } from './gitDiffTabs';
 import { PlainTab } from './GroupTabBar';
 import type { Workspace } from './useWorkspaceLayout';
 import { tabKey, type TabRef } from './workspaceLayout';
@@ -20,12 +24,15 @@ type FileTab = {
   name: string;
   sessionTabId: string;
   connectionId: string;
+  /** Present on a diff tab: what its two sides are. */
+  diff?: GitDiffTarget;
 };
 
 /** Files waiting on the save question. `settle` answers a window close instead of closing tabs. */
 type Closing = { ids: string[]; busy: boolean; settle?: (closed: boolean) => void };
 
-const keyOf = (id: string) => tabKey({ kind: 'file', id });
+const refOf = (file: FileTab): DocumentRef => ({ kind: file.diff ? 'diff' : 'file', id: file.id });
+const keyOf = (file: FileTab) => tabKey(refOf(file));
 /** Only a Windows path uses a backslash as a separator; elsewhere it is part of a file name. */
 const windowsPath = (path: string) => /^([A-Za-z]:|\\\\)/.test(path);
 /**
@@ -59,6 +66,18 @@ function FileCell({
   const live =
     file.source.kind === 'local' ||
     (owner?.connectionId === file.connectionId && snapshot?.status === 'connected');
+  if (file.diff)
+    return (
+      <GitDiffPane
+        id={file.id}
+        source={file.source}
+        target={file.diff}
+        path={file.path}
+        name={file.name}
+        live={live}
+        pin={pin}
+      />
+    );
   return (
     <FilePane
       id={file.id}
@@ -90,8 +109,8 @@ function FileTabHeader({
   const dirty = useFileDirty(file.id);
   return (
     <PlainTab
-      tabKey={keyOf(file.id)}
-      title={file.name}
+      tabKey={keyOf(file)}
+      title={file.diff ? diffTabTitle(file.name, file.diff.compare) : file.name}
       hint={file.path}
       italic={italic}
       dirty={dirty}
@@ -104,6 +123,8 @@ function FileTabHeader({
 }
 
 /** File tabs (GE.5), and where the file panels meet the workspace. */
+export type FileTabOpeners = Pick<ReturnType<typeof useFileTabs>, 'open' | 'openDiff'>;
+
 export function useFileTabs({
   workspace,
   sessions,
@@ -118,15 +139,18 @@ export function useFileTabs({
   /** Set once the user chose to leave unsaved work, so a reload is not refused after that. */
   const leaving = useRef(false);
   const find = (id: string) => files.find((file) => file.id === id);
-  const fileOf = (key: string) => files.find((item) => keyOf(item.id) === key);
-  const focusedId = fileOf(workspace.focusedGroup.active)?.id;
+  const fileOf = (key: string) => files.find((item) => keyOf(item) === key);
+  const focused = fileOf(workspace.focusedGroup.active);
+  const focusedId = focused?.id;
+  /** A diff is tied to its file in the repository, so Ctrl+Shift+S keeps its usual meaning there. */
+  const savesAs = !!focused && !focused.diff;
 
   useEffect(() => {
     if (!focusedId) return;
     // On the window, not the editor, so it also works from a Markdown preview or the tab header.
     const onKey = (e: KeyboardEvent) => {
       const save = e.code === 'KeyS' && (e.ctrlKey || e.metaKey) && !e.altKey;
-      if (!save || document.querySelector('dialog[open]')) return;
+      if (!save || document.querySelector('dialog[open]') || (e.shiftKey && !savesAs)) return;
       e.preventDefault();
       const document_ = fileDocument(focusedId);
       if (e.shiftKey) document_?.saveAs();
@@ -134,19 +158,25 @@ export function useFileTabs({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [focusedId]);
+  }, [focusedId, savesAs]);
 
+  const show = (tab: DocumentRef, placement: DocumentPlacement, file: FileTab) => {
+    const replaced = replacedPreview(workspace.layout, tab, placement);
+    setFiles((old) => [...old.filter((item) => keyOf(item) !== replaced), file]);
+    workspace.openDocument(tab, placement);
+  };
+  const showExisting = (file: FileTab, pinned: boolean) => {
+    workspace.openDocument(refOf(file));
+    if (pinned) workspace.pinDocument(keyOf(file));
+  };
   const open = (session: TerminalSession, path: string, pinned: boolean) => {
     const source = sessionSource(session);
     if (!source) return;
     const existing = files.find(
-      (file) => sameSource(file.source, source) && comparable(file.path) === comparable(path),
+      (file) =>
+        !file.diff && sameSource(file.source, source) && comparable(file.path) === comparable(path),
     );
-    if (existing) {
-      workspace.openDocument({ kind: 'file', id: existing.id });
-      if (pinned) workspace.pinDocument(keyOf(existing.id));
-      return;
-    }
+    if (existing) return showExisting(existing, pinned);
     const id = crypto.randomUUID();
     const tab: DocumentRef = { kind: 'file', id, preview: !pinned };
     // An FTP tab is its own file list, which a click must not cover.
@@ -154,23 +184,43 @@ export function useFileTabs({
       sessionKind(session) === 'ftp' && !narrow
         ? { keepVisible: tabKey({ kind: 'session', tabId: session.tabId }) }
         : {};
-    const replaced = replacedPreview(workspace.layout, tab, placement);
-    setFiles((old) => [
-      ...old.filter((file) => keyOf(file.id) !== replaced),
+    show(tab, placement, {
+      id,
+      source,
+      path,
+      name: nameOf(path),
+      sessionTabId: session.tabId,
+      connectionId: session.connectionId,
+    });
+  };
+  /** Opens what a Git view row compares. A row with no diff, such as a conflict, opens nothing. */
+  const openDiff = (session: TerminalSession, row: GitRow, root: string, pinned: boolean) => {
+    const source = sessionSource(session);
+    const diff = diffTargetOf(row, root);
+    if (!source || !diff) return;
+    const existing = files.find(
+      (file) => file.diff && sameSource(file.source, source) && sameDiffTarget(file.diff, diff),
+    );
+    if (existing) return showExisting(existing, pinned);
+    const id = crypto.randomUUID();
+    show(
+      { kind: 'diff', id, preview: !pinned },
+      {},
       {
         id,
         source,
-        path,
-        name: nameOf(path),
+        path: repoFilePath(root, row.path),
+        name: nameOf(row.path),
         sessionTabId: session.tabId,
         connectionId: session.connectionId,
+        diff,
       },
-    ]);
-    workspace.openDocument(tab, placement);
+    );
   };
   const closeTabs = (ids: string[]) => {
+    const closed = files.filter((item) => ids.includes(item.id));
     setFiles((old) => old.filter((item) => !ids.includes(item.id)));
-    ids.forEach((id) => workspace.close(keyOf(id)));
+    closed.forEach((file) => workspace.close(keyOf(file)));
   };
   const close = (key: string) => {
     const file = fileOf(key);
@@ -199,7 +249,8 @@ export function useFileTabs({
     const failed = current.ids.filter((id) => !saved.includes(id));
     answerClosing(current, !failed.length, saved);
     // A conflict or an error is shown on the tab itself.
-    if (failed.length) workspace.openDocument({ kind: 'file', id: failed[0] });
+    const firstFailed = find(failed[0]);
+    if (firstFailed) workspace.openDocument(refOf(firstFailed));
   };
   const closingNames = closing?.ids.map((id) => find(id)?.name ?? '');
   const dialog = closing && closingNames && (
@@ -217,6 +268,7 @@ export function useFileTabs({
   );
   return {
     open,
+    openDiff,
     close,
     dialog,
     /** Asks about unsaved files before the window closes. */
@@ -227,13 +279,13 @@ export function useFileTabs({
     },
     hasUnsaved: () => !leaving.current && unsavedFileIds().length > 0,
     /** Ctrl+Shift+S is "save as" while a file tab has the focus. */
-    keepsShortcut: (shortcut: AppShortcut) => shortcut.name === 'commands' && !!focusedId,
+    keepsShortcut: (shortcut: AppShortcut) => shortcut.name === 'commands' && savesAs,
     reloadable: (key: string) => !!fileOf(key) && !!fileDocument(fileOf(key)!.id),
     reload: (key: string) => {
       const file = fileOf(key);
       if (file) fileDocument(file.id)?.reload();
     },
-    order: files.map((file): TabRef => ({ kind: 'file', id: file.id })),
+    order: files.map((file): TabRef => refOf(file)),
     /** The terminal a focused file tab came from, so the sidebar stays on its connection. */
     owner: (key: string) => {
       const file = fileOf(key);

@@ -1,5 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { editExternally } from '../../lib/externalEdit';
+import { subscribeGitChanges } from '../../lib/gitChanges';
+import { errorText } from '../../lib/ipc';
 import { requestSettings } from '../../lib/settingsRequest';
+import { sameSource } from '../../lib/source';
 import type { TerminalSession } from '../terminal/session';
 import { sessionSource } from '../terminal/sessionKind';
 import { CommitGraph } from './CommitGraph';
@@ -9,7 +13,14 @@ import { GitViewHeader } from './GitViewHeader';
 import { GitViewList } from './GitViewList';
 import { useGitViewMenu } from './GitViewMenu';
 import { GitWriteDialog } from './GitWriteDialogs';
-import { groupEntries, stoppedReason, type GitViewRepo, type GitViewResult } from './gitViewModel';
+import {
+  groupEntries,
+  repoFilePath,
+  stoppedReason,
+  type GitRow,
+  type GitViewRepo,
+  type GitViewResult,
+} from './gitViewModel';
 import type { GitDialogRequest } from './gitWrite';
 import { useGitView } from './useGitView';
 import { useGitWrite } from './useGitWrite';
@@ -95,10 +106,14 @@ function ResultBody({
 export function GitView({
   session,
   review,
+  openFile,
+  openDiff,
 }: {
   session: TerminalSession | undefined;
   /** Opens the change review for this tab, where it can have one. */
   review?: () => void;
+  openFile: (path: string, pinned: boolean) => void;
+  openDiff: (row: GitRow, root: string, pinned: boolean) => void;
 }) {
   const model = useGitView(session);
   const [tree, setTree] = useState(readTree);
@@ -112,6 +127,19 @@ export function GitView({
     ready?.refresh();
     setGraphRefresh((n) => n + 1);
   };
+  // A file saved from a tab shows up here without waiting for the next prompt.
+  const refreshSaved = useRef({ source, refresh });
+  useEffect(() => {
+    refreshSaved.current = { source, refresh };
+  });
+  useEffect(
+    () =>
+      subscribeGitChanges((change) => {
+        const { source: mine, refresh: again } = refreshSaved.current;
+        if (change.kind === 'saved' && mine && sameSource(change.source, mine)) again();
+      }),
+    [],
+  );
   const [dialog, setDialog] = useState<GitDialogRequest | null>(null);
   const write = useGitWrite({
     session,
@@ -137,7 +165,21 @@ export function GitView({
     notice: setNotice,
     write,
     ask: setDialog,
+    source,
+    openers: {
+      file: (path) => openFile(path, true),
+      diff: (row) => repo && openDiff(row, repo.root, true),
+      external: (path) => {
+        if (source && session)
+          editExternally(source, session.profile.id, path).catch((e) => setNotice(errorText(e)));
+      },
+    },
   });
+  const openRow = (row: GitRow, pinned: boolean) => {
+    if (!repo || !row.readable) return;
+    if (row.group === 'conflict') openFile(repoFilePath(repo.root, row.path), pinned);
+    else openDiff(row, repo.root, pinned);
+  };
   if (model.state === 'noTab')
     return (
       <div className="git-view">
@@ -211,7 +253,13 @@ export function GitView({
         {model.result ? (
           <ResultBody result={model.result} remote={model.remote} retry={model.refresh}>
             {groups.length ? (
-              <GitViewList groups={groups} tree={tree} menu={menu.row} groupMenu={menu.group} />
+              <GitViewList
+                groups={groups}
+                tree={tree}
+                open={openRow}
+                menu={menu.row}
+                groupMenu={menu.group}
+              />
             ) : (
               <Empty title="변경 사항이 없습니다" />
             )}

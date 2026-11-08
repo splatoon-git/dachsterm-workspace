@@ -3,6 +3,7 @@
 //! starting a program (external diff, textconv) or changing the format the app parses (prefixes,
 //! colour, relative paths). Diff text is returned to the window only and never logged.
 mod parse;
+pub mod sides;
 #[cfg(test)]
 mod tests;
 

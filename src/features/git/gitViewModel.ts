@@ -61,6 +61,8 @@ export function groupEntries(entries: GitViewEntry[]): GitGroup[] {
     .filter((group) => group.rows.length);
 }
 
+export const repoFilePath = (root: string, path: string) => `${root.replace(/\/+$/, '')}/${path}`;
+
 export function splitPath(path: string) {
   const at = path.lastIndexOf('/');
   return at < 0

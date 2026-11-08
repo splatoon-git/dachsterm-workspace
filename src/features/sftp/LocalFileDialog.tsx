@@ -7,28 +7,11 @@ export type LocalFileOperation =
   | { kind: 'edit'; program: string }
   | { kind: 'delete' };
 
-export function savedEditor() {
-  try {
-    return localStorage.getItem('dachsterm.editor') ?? 'code';
-  } catch {
-    return 'code';
-  }
-}
 export function saveEditor(program: string) {
   try {
     localStorage.setItem('dachsterm.editor', program);
   } catch {
     /* The editor still opened; only the remembered choice is lost. */
-  }
-}
-export function savedEditorArgs() {
-  try {
-    const args: unknown = JSON.parse(localStorage.getItem('dachsterm.editorArgs') ?? '[]');
-    return Array.isArray(args) && args.every((a) => typeof a === 'string')
-      ? (args as string[])
-      : [];
-  } catch {
-    return [];
   }
 }
 

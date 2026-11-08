@@ -57,6 +57,7 @@ fn main() {
             "git_graph",
             "git_commit_detail",
             "git_refs",
+            "git_file_diff",
             "git_diff_files",
             "git_diff_file",
             "agent_sign_reply",

@@ -241,6 +241,7 @@ pub fn run() {
             git_graph::git_graph,
             git_graph::git_commit_detail,
             git_diff::git_refs,
+            git_diff::sides::git_file_diff,
             git_diff::git_diff_files,
             git_diff::git_diff_file,
             agent_keys::agent_sign_reply,

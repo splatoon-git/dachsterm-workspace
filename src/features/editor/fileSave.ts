@@ -1,4 +1,5 @@
 import { useRef, useState, type RefObject } from 'react';
+import { notifyGitChange } from '../../lib/gitChanges';
 import { call, errorText } from '../../lib/ipc';
 import type { Source } from '../../lib/source';
 import type { EditorHandle } from './editorTypes';
@@ -33,6 +34,7 @@ export function useFileSave({
   hash,
   editor,
   moved,
+  saved,
 }: {
   source: Source;
   path: string;
@@ -41,6 +43,8 @@ export function useFileSave({
   editor: RefObject<EditorHandle | null>;
   /** The save went to a new name, and the tab now belongs to it. */
   moved: (path: string) => void;
+  /** The file now holds this text, with this hash. */
+  saved?: (hash: string, text: string) => void;
 }) {
   const base = useRef(hash);
   const running = useRef<Promise<SaveOutcome> | null>(null);
@@ -79,6 +83,8 @@ export function useFileSave({
         base.current = result.hash;
         handle.markClean(version);
         setConflict(null);
+        saved?.(result.hash, content);
+        notifyGitChange({ kind: 'saved', source });
         if (result.notice) setNotice(result.notice);
         if (target !== path) moved(target);
         return finish('saved');

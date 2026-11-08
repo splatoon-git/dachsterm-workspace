@@ -306,7 +306,7 @@ fn base_is_a_tagged_union() {
     assert_eq!(parsed, DiffBase::WorkingTree);
 }
 
-fn git(folder: &std::path::Path, args: &[&str]) {
+pub(super) fn git(folder: &std::path::Path, args: &[&str]) {
     let program = crate::git_credential::git_program().unwrap();
     let done = std::process::Command::new(program)
         .current_dir(folder)

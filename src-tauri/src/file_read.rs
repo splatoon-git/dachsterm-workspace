@@ -69,7 +69,7 @@ pub struct FileRead {
     size: Option<u64>,
     modified: Option<u32>,
     #[serde(flatten)]
-    content: Content,
+    pub(crate) content: Content,
 }
 
 #[derive(Clone, Copy)]
@@ -173,6 +173,13 @@ async fn load(mut reader: impl AsyncRead + Unpin, request: Request<'_>) -> io::R
         content,
         complete: true,
     })
+}
+
+/// The same decisions for bytes already in memory, such as a Git blob.
+pub(crate) async fn content_of(name: &str, bytes: &[u8]) -> io::Result<Content> {
+    let utf8 = (encoding_rs::UTF_8, "utf-8");
+    let loaded = load(bytes, request(name, false, None, utf8)).await?;
+    Ok(loaded.content)
 }
 
 fn modified_seconds(metadata: &std::fs::Metadata) -> Option<u32> {
@@ -289,7 +296,15 @@ pub async fn file_read(
     path: String,
     options: Option<ReadOptions>,
 ) -> Result<FileRead> {
-    let options = options.unwrap_or_default();
+    read(state.inner(), &source, &path, options.unwrap_or_default()).await
+}
+
+pub(crate) async fn read(
+    state: &AppState,
+    source: &Source,
+    path: &str,
+    options: ReadOptions,
+) -> Result<FileRead> {
     let chosen = match options.encoding.as_deref() {
         Some(label) => Some((encoding::get(label)?, label)),
         None => None,
@@ -297,24 +312,24 @@ pub async fn file_read(
     let large = options.large;
     let utf8 = (encoding_rs::UTF_8, "utf-8");
     let reading = async {
-        match &source {
+        match source {
             Source::Local { target_id } => {
                 let target = state.locals.target(target_id)?;
-                let native = local_files::native_path(&target, &path)?;
-                let name = file_name(&path, cfg!(windows));
+                let native = local_files::native_path(&target, path)?;
+                let name = file_name(path, cfg!(windows));
                 read_native(native, request(name, large, chosen, utf8)).await
             }
             Source::Ssh { connection_id } => {
-                let name = file_name(&path, false);
+                let name = file_name(path, false);
                 let wanted = request(name, large, chosen, utf8);
-                read_sftp(&state.connections, connection_id, &path, wanted).await
+                read_sftp(&state.connections, connection_id, path, wanted).await
             }
             Source::Ftp { connection_id } => {
                 let session = state.connections.ftp_session(connection_id)?;
                 let label = session.profile.encoding.as_str();
                 let fallback = (encoding::get(label)?, label);
-                let name = file_name(&path, false);
-                read_ftp(&session, &path, request(name, large, chosen, fallback)).await
+                let name = file_name(path, false);
+                read_ftp(&session, path, request(name, large, chosen, fallback)).await
             }
         }
     };

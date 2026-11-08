@@ -1,7 +1,7 @@
 // Isolated UI fixture. This is not part of the production entry point or an SSH test.
 import { createRoot } from 'react-dom/client';
 import type { CommitDetail, GitGraphResult } from '../../../src/features/git/commitGraphModel';
-import type { GitViewResult } from '../../../src/features/git/gitViewModel';
+import type { GitRow, GitViewResult } from '../../../src/features/git/gitViewModel';
 import type { GitApplyResult } from '../../../src/features/git/gitWrite';
 import type { TerminalSession } from '../../../src/features/terminal/session';
 import { applyTheme } from '../../../src/themes/adapters/css';
@@ -28,6 +28,8 @@ declare global {
       buffer: 'normal' | 'alternate';
       /** What the view typed in the terminal. */
       sent: string[];
+      /** The tabs the view asked for: `file:<path>` or `diff:<group>:<path>`, then if pinned. */
+      opens: [string, boolean][];
     };
     /** The tab drops its connection and comes back with a new connection ID. */
     __gitReconnect: () => void;
@@ -38,6 +40,7 @@ const state = window.__gitView;
 state.calls = [];
 state.reviewed = 0;
 state.sent = [];
+state.opens = [];
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
@@ -50,7 +53,10 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         if (typeof state.detail === 'string') throw state.detail;
         return structuredClone(state.detail);
       }
-      if (command === 'clipboard_write_text') return null;
+      if (
+        ['clipboard_write_text', 'files_reveal', 'local_files_edit', 'edit_start'].includes(command)
+      )
+        return null;
       if (command === 'git_apply')
         return state.applyResult ?? { kind: 'done', commands: ['git add -A'] };
       if (command === 'git_refs')
@@ -104,6 +110,10 @@ createRoot(document.getElementById('root')!).render(
       <GitView
         session={state.tab === 'none' ? undefined : session}
         review={state.reviewable ? () => (state.reviewed += 1) : undefined}
+        openFile={(path, pinned) => state.opens.push([`file:${path}`, pinned])}
+        openDiff={(row: GitRow, _root, pinned) =>
+          state.opens.push([`diff:${row.group}:${row.path}`, pinned])
+        }
       />
     </div>
   </div>,

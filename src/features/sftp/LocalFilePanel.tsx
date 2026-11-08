@@ -2,19 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, errorText } from '../../lib/ipc';
 import { useFileDrop } from '../../lib/fileDrop';
 import { useFileDragOut } from './dragOut';
-import { copyPathsItem, revealItem } from './fileMenuItems';
+import { savedEditor, savedEditorArgs } from '../../lib/externalEdit';
+import { revealItem } from '../../lib/revealItem';
+import { copyPathsItem } from './fileMenuItems';
 import type { LocalTarget, TerminalSession } from '../terminal/session';
 import { childPath, selectionAfterClick, withoutNested, type FileEntry } from './fileList';
 import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
 import { FileAction, FilePathBar, FileTreeRow, formatBytes, useFileTree } from './fileTree';
 import { FollowControl, useDirectoryFollow } from './follow';
-import {
-  LocalFileDialog,
-  saveEditor,
-  savedEditor,
-  savedEditorArgs,
-  type LocalFileOperation,
-} from './LocalFileDialog';
+import { LocalFileDialog, saveEditor, type LocalFileOperation } from './LocalFileDialog';
 
 type Listing = { path: string; entries: FileEntry[] };
 type Outcome = { completed: string[]; errors: string[] };

@@ -31,6 +31,20 @@ const previews = (layout: Layout, id: string) =>
     .map(tabKey);
 
 describe('preview tabs', () => {
+  it('shares one preview between files and diffs', () => {
+    const diff: DocumentRef = { kind: 'diff', id: 'd', preview: true };
+    const layout = one(group('a', [session('t'), preview('f')], preview('f')));
+    expect(replacedPreview(layout, diff)).toBe('file:f');
+    expect(keys(openDocument(layout, diff), 'a')).toEqual(['session:t', 'diff:d']);
+  });
+
+  it('pins a diff like a file', () => {
+    const diff: DocumentRef = { kind: 'diff', id: 'd', preview: true };
+    const opened = openDocument(one(group('a', [session('t')])), diff);
+    const tab = () => findGroup(pinDocument(opened, 'diff:d').root, 'a')!.tabs[1];
+    expect(tab()).toEqual({ kind: 'diff', id: 'd', preview: false });
+  });
+
   it('opens a preview next to the terminal and selects it', () => {
     const next = openDocument(one(group('g', [session('t')])), preview('a'));
     expect(keys(next, 'g')).toEqual(['session:t', 'file:a']);

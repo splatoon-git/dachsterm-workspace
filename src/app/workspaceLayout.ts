@@ -9,7 +9,8 @@ export type TabRef =
   | { kind: 'game'; id: GameId }
   | { kind: 'preview' }
   | { kind: 'review'; id: string }
-  | { kind: 'file'; id: string; preview?: boolean };
+  | { kind: 'file'; id: string; preview?: boolean }
+  | { kind: 'diff'; id: string; preview?: boolean };
 export type GroupNode = {
   type: 'group';
   id: string;

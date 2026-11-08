@@ -28,12 +28,14 @@ function FileRow({
   depth,
   showFolder,
   first,
+  open,
   menu,
 }: {
   row: GitRow;
   depth: number;
   showFolder: boolean;
   first: boolean;
+  open: (row: GitRow, pinned: boolean) => void;
   menu: (row: GitRow, at: MenuPoint | HTMLElement) => void;
 }) {
   const { name, folder } = splitPath(row.path);
@@ -47,11 +49,18 @@ function FileRow({
       style={{ '--git-depth': depth } as React.CSSProperties}
       title={title}
       tabIndex={first ? 0 : -1}
+      onClick={() => open(row, false)}
+      onDoubleClick={() => open(row, true)}
       onContextMenu={(event: MouseEvent) => {
         event.preventDefault();
         menu(row, { x: event.clientX, y: event.clientY });
       }}
       onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          open(row, false);
+          return;
+        }
         if (!isMenuKey(event)) return;
         event.preventDefault();
         menu(row, event.currentTarget);
@@ -102,6 +111,7 @@ function Group({
   first,
   folded,
   toggle,
+  open,
   menu,
   groupMenu,
 }: {
@@ -110,6 +120,7 @@ function Group({
   first: boolean;
   folded: ReadonlySet<string>;
   toggle: (key: string) => void;
+  open: (row: GitRow, pinned: boolean) => void;
   menu: (row: GitRow, at: MenuPoint | HTMLElement) => void;
   groupMenu: (group: GitGroup, at: MenuPoint | HTMLElement) => void;
 }) {
@@ -154,6 +165,7 @@ function Group({
                 depth={item.depth}
                 showFolder={!tree}
                 first={first && index === 0}
+                open={open}
                 menu={menu}
               />
             ) : (
@@ -170,11 +182,13 @@ function Group({
 export function GitViewList({
   groups,
   tree,
+  open,
   menu,
   groupMenu,
 }: {
   groups: GitGroup[];
   tree: boolean;
+  open: (row: GitRow, pinned: boolean) => void;
   menu: (row: GitRow, at: MenuPoint | HTMLElement) => void;
   groupMenu: (group: GitGroup, at: MenuPoint | HTMLElement) => void;
 }) {
@@ -195,6 +209,7 @@ export function GitViewList({
           first={index === 0}
           folded={folded}
           toggle={toggle}
+          open={open}
           menu={menu}
           groupMenu={groupMenu}
         />
