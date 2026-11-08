@@ -25,11 +25,12 @@ import {
   treeRows,
   type Grouping,
   type SortColumn,
+  type TreeGroup,
   type TreeRow,
   type TreeView,
 } from './tree';
 import { visibleRange } from './treeFormat';
-import { leavesFilter, treeKeyAction } from './treeKeys';
+import { foldable, leavesFilter, parentIndex, treeKeyAction } from './treeKeys';
 import { filterActive, matches, parseFilter, podViews, type PodView } from './treePods';
 import { readTreePrefs, writeTreePrefs } from './treePrefs';
 import { planReveal } from './treeReveal';
@@ -37,13 +38,6 @@ import { planReveal } from './treeReveal';
 const ROW_HEIGHT = 26;
 
 export type PodAction = 'logs' | 'shell' | 'events' | 'detail' | 'menu';
-
-const parentIndex = (rows: TreeRow[], index: number) => {
-  for (let at = index - 1; at >= 0; at--) if (rows[at].depth < rows[index].depth) return at;
-  return -1;
-};
-
-const foldable = (row: TreeRow) => row.type === 'group' || row.type === 'nodes';
 
 /** Written as a separate component so it is only re-rendered when new data arrives. */
 export const KubeTree = memo(function KubeTree({
@@ -53,6 +47,7 @@ export const KubeTree = memo(function KubeTree({
   view,
   setView,
   onPod,
+  onGroup,
   panelOpen,
   closePanel,
   focusPod,
@@ -66,6 +61,7 @@ export const KubeTree = memo(function KubeTree({
   view: TreeView;
   setView: Dispatch<SetStateAction<TreeView>>;
   onPod: (action: PodAction, view: PodView, at?: MenuPoint) => void;
+  onGroup: (group: TreeGroup, at?: MenuPoint) => void;
   panelOpen: boolean;
   closePanel: () => void;
   /** A pod shell ended: put the cursor back on its pod. A new object asks again. */
@@ -234,6 +230,12 @@ export const KubeTree = memo(function KubeTree({
     if (focusPod) jumpTo(focusPod);
   }, [focusPod]);
 
+  const rowMenu = (row: TreeRow, index: number, at?: MenuPoint) => {
+    select(index);
+    if (row.type === 'pod') onPod('menu', row.view, at);
+    else if (row.type === 'group') onGroup(row.group, at);
+  };
+
   const rowAnchor = () => {
     const element = document.getElementById(rowDom(activeIndex));
     return element ? anchorBelow(element) : undefined;
@@ -241,9 +243,9 @@ export const KubeTree = memo(function KubeTree({
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (isMenuKey(event)) {
-      if (active?.type !== 'pod') return;
+      if (active?.type !== 'pod' && active?.type !== 'group') return;
       event.preventDefault();
-      onPod('menu', active.view, rowAnchor());
+      rowMenu(active, activeIndex, rowAnchor());
       return;
     }
     const action = treeKeyAction(event);
@@ -421,14 +423,7 @@ export const KubeTree = memo(function KubeTree({
                   select={() => select(index)}
                   fold={() => fold(row)}
                   open={row.type === 'pod' ? () => onPod('logs', row.view) : undefined}
-                  menu={
-                    row.type === 'pod'
-                      ? (at) => {
-                          select(index);
-                          onPod('menu', row.view, at);
-                        }
-                      : undefined
-                  }
+                  menu={(at) => rowMenu(row, index, at)}
                 />
               );
             })}

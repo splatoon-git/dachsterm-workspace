@@ -33,7 +33,10 @@ pub const PODS: &str = concat!(
     "{{end}}\t",
     "{{range .status.containerStatuses}}",
     container_status!(),
-    "{{end}}\n{{end}}",
+    "{{end}}\t",
+    // What kubectl reads when no container is named. Status order is not spec order.
+    "{{with .metadata.annotations}}{{index . \"kubectl.kubernetes.io/default-container\"}}{{end}}\t",
+    "{{(index .spec.containers 0).name}}\n{{end}}",
 );
 
 pub const WORKLOADS: &str = concat!(

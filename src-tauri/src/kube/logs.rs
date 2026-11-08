@@ -24,6 +24,9 @@ pub struct LogRequest<'a> {
     pub container: &'a str,
     pub tail: u32,
     pub previous: bool,
+    /// Read from this time forward, with timestamps, instead of the last `tail` lines. For the lines
+    /// around one search result; passed `is_log_time`.
+    pub since_time: Option<&'a str>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -39,7 +42,7 @@ pub struct Logs {
 }
 
 /// Drops terminal sequences and other control characters: logs are shown as plain text.
-fn clean(bytes: &[u8]) -> String {
+pub(super) fn clean(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -61,12 +64,15 @@ fn clean(bytes: &[u8]) -> String {
 }
 
 fn arguments(request: &LogRequest<'_>, previous: bool) -> String {
+    let range = match request.since_time {
+        Some(time) => format!("--since-time={} --timestamps", quote(time)),
+        None => format!("--tail={}", request.tail.clamp(1, MAX_TAIL)),
+    };
     format!(
-        "logs {} -n {} -c {} --tail={} --limit-bytes={LIMIT_BYTES}{}",
+        "logs {} -n {} -c {} {range} --limit-bytes={LIMIT_BYTES}{}",
         quote(request.pod),
         quote(request.namespace),
         quote(request.container),
-        request.tail.clamp(1, MAX_TAIL),
         if previous { " --previous" } else { "" },
     )
 }
@@ -146,6 +152,7 @@ mod tests {
             container: "app",
             tail,
             previous: false,
+            since_time: None,
         }
     }
 
@@ -157,6 +164,20 @@ mod tests {
         );
         assert!(arguments(&request(0), false).contains("--tail=1 "));
         assert!(arguments(&request(u32::MAX), false).contains("--tail=5000 "));
+    }
+
+    #[test]
+    fn reading_around_a_time_takes_the_lines_after_it_with_timestamps() {
+        let around = LogRequest {
+            since_time: Some("2026-11-08T12:00:00Z"),
+            ..request(100)
+        };
+        let line = arguments(&around, false);
+        assert!(
+            line.contains("--since-time='2026-11-08T12:00:00Z' --timestamps"),
+            "{line}"
+        );
+        assert!(!line.contains("--tail"), "{line}");
     }
 
     #[test]
