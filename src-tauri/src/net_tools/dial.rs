@@ -1,9 +1,10 @@
 //! One TCP connection to a target, from this PC or through an SSH server. The port check only asks
-//! whether it opened; `Connected` is also what the service check will read and write on.
+//! whether it opened; the service check reads and writes on `Connected::into_stream`.
 use crate::ssh::Host;
 use russh::{ChannelOpenFailure, client};
 use std::{
     io::{self, ErrorKind},
+    net::{IpAddr, SocketAddr},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -11,6 +12,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
+    io::{AsyncRead, AsyncWrite},
     net::{TcpStream, lookup_host},
     sync::{Semaphore, TryAcquireError, oneshot, watch},
     time::{Instant, timeout, timeout_at},
@@ -155,6 +157,28 @@ impl Connected {
             }
         }
     }
+    /// Unlike the channel itself, russh's stream closes the channel when it is dropped.
+    pub fn into_stream(self) -> Box<dyn ByteStream> {
+        match self {
+            Self::Local(stream) => Box::new(stream),
+            Self::Remote(channel) => Box::new(channel.into_stream()),
+        }
+    }
+}
+
+pub trait ByteStream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> ByteStream for T {}
+
+/// What name resolution found. Only this PC can time it: a server resolves as part of connecting.
+pub struct Resolved {
+    pub addresses: Vec<IpAddr>,
+    pub took: Duration,
+}
+/// A dial and how its time was spent. `resolved` stays with a connection that then failed.
+pub struct Traced {
+    pub resolved: Option<Resolved>,
+    pub took: Duration,
+    pub result: Result<Connected, Failure>,
 }
 
 #[derive(Clone)]
@@ -175,20 +199,45 @@ impl Dialer {
             Self::Remote(remote) => remote.dial(host, port, wait).await,
         }
     }
+    pub async fn dial_traced(&self, host: &str, port: u16, wait: Duration) -> Traced {
+        match self {
+            Self::Local => local_traced(host, port, wait).await,
+            Self::Remote(remote) => {
+                let started = Instant::now();
+                let result = remote.dial(host, port, wait).await;
+                Traced {
+                    resolved: None,
+                    took: started.elapsed(),
+                    result,
+                }
+            }
+        }
+    }
+    /// Marks a point before a dial, for asking afterwards why it failed.
+    pub fn failures_seen(&self) -> u64 {
+        match self {
+            Self::Local => 0,
+            Self::Remote(remote) => remote.gate.failures_seen(),
+        }
+    }
+    /// Only a server explains a failure separately from reporting it.
+    pub async fn reason_after(&self, seen: u64) -> Option<ServerReason> {
+        match self {
+            Self::Local => None,
+            Self::Remote(remote) => remote.gate.reason_after(seen).await,
+        }
+    }
 }
 
-async fn local(host: &str, port: u16, wait: Duration) -> Result<Connected, Failure> {
-    let wait = if cfg!(windows) {
-        wait.max(WINDOWS_REFUSAL_TIME)
-    } else {
-        wait
-    };
-    let deadline = Instant::now() + wait;
-    let addresses: Vec<_> = timeout_at(deadline, lookup_host((host, port)))
+async fn resolve(host: &str, port: u16, deadline: Instant) -> Result<Vec<SocketAddr>, Failure> {
+    Ok(timeout_at(deadline, lookup_host((host, port)))
         .await
         .map_err(|_| Failure::Unknown("이름 해석 시간이 초과되었습니다.".into()))?
         .map_err(|_| Failure::Unknown("이름을 해석하지 못했습니다.".into()))?
-        .collect();
+        .collect())
+}
+
+async fn connect_any(addresses: Vec<SocketAddr>, deadline: Instant) -> Result<Connected, Failure> {
     let mut failure = Failure::Unknown("이름을 해석하지 못했습니다.".into());
     for address in addresses {
         match timeout_at(deadline, TcpStream::connect(address)).await {
@@ -198,6 +247,46 @@ async fn local(host: &str, port: u16, wait: Duration) -> Result<Connected, Failu
         }
     }
     Err(failure)
+}
+
+fn local_deadline(wait: Duration) -> Instant {
+    let wait = if cfg!(windows) {
+        wait.max(WINDOWS_REFUSAL_TIME)
+    } else {
+        wait
+    };
+    Instant::now() + wait
+}
+
+async fn local(host: &str, port: u16, wait: Duration) -> Result<Connected, Failure> {
+    let deadline = local_deadline(wait);
+    connect_any(resolve(host, port, deadline).await?, deadline).await
+}
+
+async fn local_traced(host: &str, port: u16, wait: Duration) -> Traced {
+    let deadline = local_deadline(wait);
+    let started = Instant::now();
+    let addresses = match resolve(host, port, deadline).await {
+        Ok(addresses) => addresses,
+        Err(failure) => {
+            return Traced {
+                resolved: None,
+                took: started.elapsed(),
+                result: Err(failure),
+            };
+        }
+    };
+    let resolved = Resolved {
+        addresses: addresses.iter().map(SocketAddr::ip).collect(),
+        took: started.elapsed(),
+    };
+    let connecting = Instant::now();
+    let result = connect_any(addresses, deadline).await;
+    Traced {
+        resolved: Some(resolved),
+        took: connecting.elapsed(),
+        result,
+    }
 }
 
 impl RemoteDialer {
@@ -320,6 +409,18 @@ mod tests {
     async fn a_name_that_does_not_resolve_is_not_called_closed() {
         let result = dial("no-such-host.invalid", 80, 5).await;
         assert!(matches!(result, Err(Failure::Unknown(_))), "{result:?}");
+    }
+
+    #[tokio::test]
+    async fn a_traced_dial_separates_the_lookup_from_the_connection() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let traced = Dialer::Local
+            .dial_traced("127.0.0.1", port, Duration::from_secs(3))
+            .await;
+        assert!(traced.result.is_ok());
+        let resolved = traced.resolved.expect("a local dial times its lookup");
+        assert_eq!(resolved.addresses, vec![IpAddr::from([127, 0, 0, 1])]);
     }
 
     fn failed(gate: &Gate, text: &str) {

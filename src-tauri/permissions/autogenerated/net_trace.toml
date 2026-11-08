@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-net-trace"
+description = "Enables the net_trace command without any pre-configured scope."
+commands.allow = ["net_trace"]
+
+[[permission]]
+identifier = "deny-net-trace"
+description = "Denies the net_trace command without any pre-configured scope."
+commands.deny = ["net_trace"]

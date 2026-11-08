@@ -208,7 +208,7 @@ async fn try_dial(
 }
 
 /// What a result means once no second look is coming.
-fn settled(result: std::result::Result<(), Failure>) -> Verdict {
+pub fn settled(result: std::result::Result<(), Failure>) -> Verdict {
     match result {
         Ok(()) => Verdict::of(Outcome::Open),
         Err(Failure::Refused) => Verdict::of(Outcome::Closed),
@@ -220,7 +220,7 @@ fn settled(result: std::result::Result<(), Failure>) -> Verdict {
     }
 }
 
-fn explained(reason: ServerReason) -> Verdict {
+pub fn explained(reason: ServerReason) -> Verdict {
     match reason {
         ServerReason::Refused => Verdict::of(Outcome::Closed),
         ServerReason::NoRoute => Verdict::of(Outcome::Unreachable),

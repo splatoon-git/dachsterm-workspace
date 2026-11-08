@@ -1,4 +1,5 @@
 import type { IconName } from '../../components/Icon';
+import type { Profile } from '../../lib/ipc';
 
 /** Tools the menu runs directly. What each one does stays with the title bar that holds its state. */
 export const toolActions = [
@@ -16,3 +17,6 @@ export const networkTools = [
 
 export type ToolActionId = (typeof toolActions)[number]['id'];
 export type ToolId = (typeof networkTools)[number]['id'];
+
+/** A target sent to the service check. No profile means the check runs from this PC. */
+export type ServiceHandoff = { target: string; profile: Profile | null };

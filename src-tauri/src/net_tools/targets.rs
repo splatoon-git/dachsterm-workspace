@@ -62,18 +62,23 @@ fn expand(token: &str) -> Result<Vec<String>> {
     if token.contains('/') {
         return range(token);
     }
+    single_host(token).map(|host| vec![host])
+}
+
+/// One host name or address, as a user typed it. What it returns is safe to quote into a command.
+pub fn single_host(token: &str) -> Result<String> {
     let bare = token
         .strip_prefix('[')
         .and_then(|rest| rest.strip_suffix(']'))
         .unwrap_or(token);
     if let Ok(address) = bare.parse::<IpAddr>() {
-        return Ok(vec![address.to_string()]);
+        return Ok(address.to_string());
     }
     // A malformed address must not fall through to being looked up as a name.
     if bare.contains(':') || bare.parse::<Ipv6Addr>().is_ok() || !is_host_name(bare) {
         return Err(format!("대상 형식이 잘못되었습니다: {token}"));
     }
-    Ok(vec![bare.to_ascii_lowercase()])
+    Ok(bare.to_ascii_lowercase())
 }
 
 fn hosts(text: &str) -> Result<Vec<String>> {
@@ -95,7 +100,7 @@ fn hosts(text: &str) -> Result<Vec<String>> {
     Ok(hosts)
 }
 
-fn port(text: &str) -> Result<u16> {
+pub fn port(text: &str) -> Result<u16> {
     text.parse()
         .ok()
         .filter(|port| *port != 0)

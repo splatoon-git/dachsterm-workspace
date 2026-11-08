@@ -58,7 +58,7 @@ test('a network tool opens one tab, and closing it removes the tab', async ({ pa
 test('local is the default source and asks the backend for nothing', async ({ page }) => {
   await page.goto(fixture);
   await expect(page.getByRole('radio', { name: '로컬', exact: true })).toBeChecked();
-  await expect(page.locator('.tool-pending')).toContainText('이 PC에서');
+  await expect(page.getByRole('button', { name: '점검', exact: true })).toBeEnabled();
   expect((await state(page)).calls).toEqual([]);
 });
 
@@ -121,7 +121,7 @@ test('host key and login cards appear in the tab and answer the backend', async 
   await expect(card).toBeHidden();
 
   await emit(page, connected);
-  await expect(page.locator('.tool-pending')).toContainText('웹 서버에서');
+  await expect(page.getByRole('button', { name: '점검', exact: true })).toBeEnabled();
 });
 
 test('an ended link offers to connect again, and local lets go of it', async ({ page }) => {
@@ -136,7 +136,7 @@ test('an ended link offers to connect again, and local lets go of it', async ({ 
   const second = calls[1].args.id;
   await page.getByRole('radio', { name: '로컬', exact: true }).check();
   expect((await callsOf(page, 'net_disconnect')).at(-1)!.args.id).toBe(second);
-  await expect(page.locator('.tool-pending')).toContainText('이 PC에서');
+  await expect(page.getByRole('button', { name: '점검', exact: true })).toBeEnabled();
 });
 
 test('a locked vault holds the connection until it opens', async ({ page }) => {

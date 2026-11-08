@@ -21,6 +21,8 @@ tokio = { version = "1", features = ["full"] }
 russh-sftp = "=3.0.1"
 suppaftp = { version = "=12.2.1", features = ["tokio-rustls-ring", "no-log"] }
 rustls-native-certs = "=0.8.5"
+# The service check reads the certificate a server presents (TL.8).
+x509-cert = "=0.3.0"
 encoding_rs = "=0.8.35"
 sha2 = "0.10"
 argon2 = { version = "=0.5.3", features = ["zeroize"] }
@@ -41,7 +43,7 @@ open = "=5.3.3"
 tauri-plugin-notification = "=2.8.0"
 
 # The local tabs' agent pipe (DX.13) needs a DACL for the current user, and the port list (TL.7)
-# reads the socket tables and process names. Already in the graph.
+# reads the socket tables and process names, and the route trace sends ICMP echoes. Already in the graph.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
 

@@ -27,6 +27,7 @@
     "test:ssh-key": "node scripts/test-ssh-key-native.mjs",
     "test:network-base": "node scripts/test-network-base-native.mjs",
     "test:port-tools": "node scripts/test-port-tools-native.mjs",
+    "test:service-tools": "node scripts/test-port-tools-native.mjs --service-only",
     "test:ui": "playwright test",
     "test:editor-trial": "node scripts/test-editor-native.mjs",
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
