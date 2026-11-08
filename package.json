@@ -3,7 +3,8 @@
   "version": "0.5.1",
   "private": true,
   "overrides": {
-    "minimatch@^10.2.6": "11.0.1"
+    "minimatch@^10.2.6": "11.0.1",
+    "dompurify": "3.4.17"
   },
   "type": "module",
   "scripts": {
@@ -19,6 +20,7 @@
     "test:native": "node scripts/run-phase1.mjs --native",
     "test:native:edit": "node scripts/run-phase1.mjs --native --edit-only --reuse-build",
     "test:ui": "playwright test",
+    "test:editor-trial": "node scripts/test-editor-native.mjs",
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
     "format:check": "prettier --check src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
     "probe:ftp": "node scripts/run-ftp.mjs"
@@ -28,6 +30,7 @@
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-search": "0.16.0",
     "@xterm/xterm": "6.0.0",
+    "monaco-editor": "0.57.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
