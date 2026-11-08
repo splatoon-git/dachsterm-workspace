@@ -93,6 +93,19 @@ export async function verifyDeveloperWorkflow({
     assert(!ran(), 'the app ran the repository fsmonitor program');
     console.log('PASS native Git status bar, tab name and tooltip, tree marks, fsmonitor not run');
 
+    setStage('GE.7 Git view');
+    await showSidebarView(page, 'Git');
+    const gitView = page.locator('#git-sidebar');
+    await expect(gitView.locator('.git-view-branch')).toContainText('main', { timeout: 15000 });
+    const groupRows = (name) =>
+      gitView.getByRole('region', { name, exact: true }).locator('.git-row-name');
+    await expect(groupRows('스테이지됨')).toHaveText(['new.txt']);
+    await expect(groupRows('변경')).toHaveText(['a.txt', 's.txt']);
+    await expect(gitView.locator('.git-row-folder')).toHaveText(['src']);
+    assert(!ran(), 'the Git view ran the repository fsmonitor program');
+    await showSidebarView(page, '파일');
+    console.log('PASS native Git view: staged and changed files of the SSH tab, fsmonitor not run');
+
     setStage('DX.6 change review and prompt');
     const reviewTab = page.locator('.tab-strip [role="tab"]').filter({ hasText: /^변경 검토 · / });
     const groupsBefore = await page.locator('.tab-strip').count();

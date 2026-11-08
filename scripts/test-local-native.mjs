@@ -184,6 +184,15 @@ async function checkLocalGit(page, command, pane) {
   await expect(
     files.getByRole('button', { name: /^src/ }).locator('.file-git-mark'),
   ).toHaveAttribute('data-mark', '?', { timeout: 15000 });
+  // GE.7: the Git view lists the same repository, this time file by file.
+  const gitRows = () =>
+    page
+      .locator('#git-sidebar')
+      .getByRole('region', { name: '추적 안 함', exact: true })
+      .locator('.git-row-name');
+  await showSidebarView(page, 'Git');
+  await expect(gitRows()).toHaveText(['new.txt'], { timeout: 15000 });
+  console.log('PASS PowerShell tab: the Git view lists the untracked file');
   await showSidebarView(page, '연결');
   await command(pane, `Set-Location '${directory}'; Write-Output ('GIT' + '_OUT')`, 'GIT_OUT');
   await expect(status).toHaveCount(0, { timeout: 15000 });
@@ -208,6 +217,10 @@ async function checkLocalGit(page, command, pane) {
     'GIT_WSL',
   );
   await expect(status).toHaveText('dx15-wsl ●2', { timeout: 15000 });
+  await showSidebarView(page, 'Git');
+  await expect(gitRows()).toHaveText(['a', 'b'], { timeout: 15000 });
+  console.log('PASS WSL tab: the Git view lists the files through the distribution');
+  await showSidebarView(page, '연결');
   await command(linux, "cd / && printf 'GIT%s\\n' _ROOT", 'GIT_ROOT');
   await expect(status).toHaveCount(0, { timeout: 15000 });
   console.log("PASS WSL tab: the distribution's git status; none outside");
