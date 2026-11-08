@@ -108,6 +108,7 @@
     "allow-kube-snapshot",
     "allow-kube-detail",
     "allow-kube-logs",
+    "allow-kube-ingress",
     "allow-kube-log-search",
     "allow-kube-log-cancel",
     "allow-kube-metrics",

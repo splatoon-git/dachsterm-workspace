@@ -4,6 +4,7 @@ import { MetricChart } from '../../components/MetricChart';
 import { ItemRow, TargetMenu } from './DashboardRows';
 import type { PodRef } from './detailTypes';
 import { WorkerPanel } from './WorkerPanel';
+import { IngressPanel } from './IngressPanel';
 import {
   buildDashboard,
   share,
@@ -15,6 +16,7 @@ import {
   type TopRow,
 } from './dashboard';
 import type { DashboardHistory } from './dashboardHistory';
+import type { IngressData } from './ingressModel';
 import { scopeOfTarget, type SearchScope } from './logSearchModel';
 import { ageAgo, type SnapshotStore } from './polling';
 import { formatCpu, formatMemory, statusMark } from './treeFormat';
@@ -207,9 +209,13 @@ export const KubeDashboard = memo(function KubeDashboard({
   reveal,
   searchLogs,
   openRuntime,
+  ingress,
+  openIngress,
 }: {
   store: SnapshotStore;
   history: DashboardHistory;
+  ingress: IngressData;
+  openIngress: (host: string) => void;
   /** The session's namespace, empty for all. Nodes are cluster-wide even when this is set. */
   namespace: string;
   reveal: (target: TreeTarget) => void;
@@ -351,11 +357,7 @@ export const KubeDashboard = memo(function KubeDashboard({
             )}
           </Panel>
 
-          {/* KV.8 connects the ingress findings here. */}
-          <section className="kube-dash-panel" aria-label="인그레스">
-            <h3>인그레스</h3>
-            <p className="kube-dash-empty">아직 준비 중입니다.</p>
-          </section>
+          <IngressPanel data={ingress} open={openIngress} />
 
           <WorkerPanel now={board.now} reveal={reveal} openRuntime={openRuntime} />
 

@@ -366,3 +366,80 @@ PASS 11줄.
 - `grep --line-buffered`는 busybox 서버에서 쓸 수 없다. kubectl을 busybox 환경에서 쓰는 서버의 실시간 따라가기는 확인하지 않았다.
 - 파일 저장은 만들지 않았다(설계안 KV.5). 대형 클러스터, 실제 IME, 권한 없는 계정은 실행하지 않았다.
 - Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.
+
+## KV.8 앱 검증 (2026-11-09)
+
+### 환경
+
+- 대상: 커밋 전 트리(`feat/kv8-kube-ingress`), `npm run tauri -- build --debug --no-bundle`로 만든 실제 앱, OpenSSH 컨테이너, kind v0.33.0, ingress-nginx controller v1.15.1(kind용 정적 매니페스트).
+- 명령: `node scripts/verify-kube-ingress.mjs --cluster=dachsterm-kv8 --keep`. 환경은 `npm run kube:fixture -- dachsterm-kv8 up`, `ingress-up`, `ingress-metrics-on|off`로 올렸고 끝난 뒤 `down`했다. 기존 `metrics-on|off`는 metrics-server 전환이라 컨트롤러 메트릭과 무관하다.
+
+### 실측
+
+- 메트릭을 끈 컨트롤러의 `/metrics`에 `nginx_ingress_controller_*` 줄은 0개였다.
+- 정적 매니페스트의 기본 접근 로그에는 호스트가 없다. `ok.local` 요청 130건 뒤 로그에서 `ok.local` 일치 0줄이고, 줄 형식은 `... "GET / HTTP/1.1" 200 6 "-" "Wget" 71 0.001 [kv8-ingress-web-80] [] 10.244.0.11:8080 6 0.001 200 <id>`이다.
+- 새 Ingress의 `status.loadBalancer`는 컨트롤러의 동기화 주기를 기다려 생성 후 바로 채워지지 않는다. 그동안 앱은 "주소 미할당"을 표시한다.
+- go-template: `host`가 없는 규칙은 `<no value>`로 나오고 `http`가 없는 규칙은 경로 없이 나온다(파서가 처리).
+
+### 합격 기준
+
+PASS 12줄, 종료 코드 0.
+
+| 항목 | 결과 |
+|---|---|
+| 백엔드 장애 | `dead.local`은 `백엔드 준비 0: down`, `ghost.local`은 `백엔드 없음: nowhere`, `tls.local`은 `TLS Secret 없음: no-such-cert`. 대시보드 패널이 이 호스트들만 나열하고 누르면 해당 호스트로 필터된 인그레스 화면이 열림 |
+| 메트릭 꺼짐 | "컨트롤러 메트릭이 꺼져 있어 구성 점검만 표시합니다", 오류 표시 없음, 비율 칸 `-` |
+| 메트릭 켜짐 | `ingress-metrics-on` 롤아웃 후 안내가 사라짐. 다시 끄면 꺼짐 안내로 돌아감 |
+| 호스트별 비율 | `ok.local`에 200 60건·404 20건·500 20건을 보낸 뒤 2xx 60%, 4xx 20%, 5xx 20%. `dead.local` 503 5건은 5xx 100% |
+| 요청률 | 두 번째 조회 이후 `ok.local` 200 30건을 더 보내면 구간 비율 2xx 100%, 5xx 0%, 요청률 1/s |
+| pods/proxy 권한 없음 | `pods/proxy`가 없는 ServiceAccount context: "pods/proxy 권한이 없어 트래픽을 표시하지 못합니다."만 표시되고 구성 점검은 동작 |
+| 백엔드 파드로 이동 | `ok.local` 행 클릭으로 트리의 `web-*` 파드가 선택됨 |
+| 컨트롤러 로그 검색 | 세션 namespace 밖의 컨트롤러를 범위로 검색. 호스트 `ok.local`은 `검색 완료 1/1 · 0줄`, upstream `kv8-ingress-web-80`은 `검색 완료 1/1 · 130줄` |
+
+같은 시나리오의 앞선 실행 2번은 실패했다. 1번째는 스크립트가 주소 할당을 기다리지 않은 탓이어서 대기만 늘렸다. 2번째는 요청률 단계에서 화면이 트리로 바뀌고 검사가 누르지 않은 파드 우클릭 메뉴가 열려 있었다. 서버 카운터는 정상이었고 앱의 조작 경로에도 이 동작이 없어 외부 마우스 입력으로 추정하지만 원인은 확정하지 못했다. 코드 수정(호스트 행의 upstream 메뉴) 후 재빌드한 앱으로 처음부터 다시 실행한 결과가 위 표다.
+
+### 단위·UI
+
+커밋 전 트리. `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings`, `npm run typecheck`, 바꾼 파일 eslint·prettier 통과. `cargo test -p dachsterm --lib --locked kube::ingress` 22건, Vitest `src/features/kube` 211건, Playwright `kube-ingress` 15건·`kube-log-search` 9건, `kube-dashboard`의 인그레스·워커 자리 1건, `kube-tree`의 마지막 화면 1건.
+
+### 미확인
+
+- 평균 지연 값은 단위·Playwright까지다. 실제 앱에서는 값이 맞는지 대조하지 않았다.
+- 컨트롤러 여러 개의 합산과 일부만 읽힌 표시, 컨트롤러 없음, 컨트롤러 파드 조회 거부, 일시적 읽기 실패 뒤 유지는 단위·Playwright까지다.
+- 전체 namespace 세션(`-A` 경로)과 실제 TLS Secret이 있는 경우의 앱 실행은 하지 않았다. namespace 세션으로만 실행했다.
+- 대형 클러스터의 메트릭 크기, 실제 운영 클러스터, Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.
+
+## KV.9 앱 검증 (2026-11-09)
+
+### 실제 앱·실제 SSH·kind
+
+`npm run test:kube-workers`(`scripts/verify-kube-workers.mjs`), 클러스터 `dachsterm-kv9`. 실행 파일은 `npm run tauri -- build --debug --no-bundle`로 빌드한 커밋 전 트리다. PASS 9줄, 실패 없음.
+
+| 항목 | 결과 |
+|---|---|
+| annotation 후보 | `prometheus.io/port` 파드에서 `:8080/metrics` 지표 4개, annotation 표시. 런타임 내부 지표 `go_goroutines`는 목록에서 빠짐 |
+| 트리 행 표시 | 우클릭으로 사용 중·전체·완료 수를 지정하고 감시를 켜면 워크로드 행에 `사용 8/8` |
+| 스레드 | kubelet `container_threads`에서 컨테이너 `app` 행 표시 |
+| **워커 미반환 재현** | 숫자가 움직이지 않는 파드(`worker_busy 8`, 완료 수 고정), 판정 기준 1분: 트리 행에 `의심`, 제목에 `반환 안 됨 의심`, 값 `사용 8/8` 유지 |
+| 정상 워크로드 | 완료 수가 계속 오르는 파드는 같은 시간에 `사용 2/8`만 표시 |
+| 대시보드 | `반환 안 됨 의심`, `워커 포화 의심`과 정상 워크로드의 `이상 없음` 표시. 판정 행을 누르면 해당 파드의 런타임 탭이 열림 |
+| 프로브 | 워크로드별 첫 수집만 확인 창 표시. `httpd` 프로세스, 8080 포트, ESTABLISHED 표시 |
+| 후보의 404·연결 거부 | `메트릭 없음 (404)`, `메트릭 없음 (연결 거부)`이고 오류 표시 없음 |
+| 포트 직접 입력 | 선언하지 않은 8082를 입력해 읽음 |
+| **셸 없는 이미지** | `registry.k8s.io/pause:3.10`: `이 컨테이너에서는 읽을 수 없음` |
+| **`pods/exec` 권한 없음** | `pods/exec`, `nodes/proxy`가 없는 ServiceAccount context: `pods/exec 권한이 없어 읽을 수 없음`, `nodes/proxy 권한이 없어` 안내 |
+
+위 실행 뒤 프로브 단독 감시의 오래된 값 표시와 트리 칸 제목을 고치고 다시 빌드했다. 그 빌드로는 새로 넣은 단계만 실행했다(`--only-probe-repeat`). 메트릭이 없는 워크로드를 프로브 반복만으로 감시해 트리 행에 `프로세스 N`이 표시됨, PASS 1줄, 종료 코드 0. 앞의 9단계는 재실행하지 않았다.
+
+첫 실행은 스크립트의 기대값 오류(지표 3개, 실제 4개)로 실패했고 기대값만 고쳤다.
+
+### 단위·UI
+
+KV.8과 합친 트리(`dev` 병합 전). `cargo fmt --all --check`, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings`, `npm run typecheck`, `eslint src/features/kube`와 바꾼 스펙 통과. `cargo test -p dachsterm --lib --locked -- kube::` 133건, `vitest run src/features/kube` 274건 통과. Playwright `kube-workers`·`kube-dashboard` 24건 통과, 1건은 KV.8이 더한 대시보드의 `kube_ingress` 조회를 기대값에 넣지 않은 탓에 실패해 기대값을 고치고 그 1건만 재실행했다. `kube-tree`는 병합 전 트리에서 통과했다.
+
+### 미확인
+
+- `CLOSE_WAIT`와 FD·스레드 증가 판정은 단위 테스트까지다. 실제 파드로 재현하지 않았다.
+- KV.8과 합친 뒤의 실제 앱 실행, 메트릭 HTTPS 후보(`prometheus.io/scheme: https`), 실제 운영 앱의 워커 메트릭, 파드 50개 상한, nginx master·worker 구분의 실제 파드 확인은 실행하지 않았다.
+- `verify-kube-detail.mjs`의 파드 메뉴 기대값을 고쳤으나 재실행하지 않았다.
+- Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.

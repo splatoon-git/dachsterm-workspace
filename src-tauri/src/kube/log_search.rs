@@ -45,7 +45,7 @@ const JOB_LIMITS: Limits = Limits {
     timeout: Duration::from_secs(70),
     max_output: 1024 * 1024,
 };
-const STATUS: &str = "DACHSTERM-KUBECTL-EXIT";
+pub(super) const STATUS: &str = "DACHSTERM-KUBECTL-EXIT";
 /// kubectl killed by SIGPIPE: `head` had enough lines and closed the pipe.
 const CLOSED_BY_HEAD: u32 = 141;
 
@@ -207,7 +207,7 @@ fn job_script(kube: &KubeSettings, source: &Source, since: &str, keywords: &Keyw
 }
 
 /// kubectl's exit status and the stderr before it. `None` if it never got to report one.
-fn kubectl_status(stderr: &[u8]) -> (Option<u32>, &[u8]) {
+pub(super) fn kubectl_status(stderr: &[u8]) -> (Option<u32>, &[u8]) {
     let text = String::from_utf8_lossy(stderr);
     let Some(line) = text.lines().rev().find(|line| line.starts_with(STATUS)) else {
         return (None, stderr);

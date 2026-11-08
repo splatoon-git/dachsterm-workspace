@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
 import type { PodRef } from './detailTypes';
+import { IngressView } from './IngressView';
 import { KubeDashboard } from './KubeDashboard';
 import { KubeSetup } from './KubeSetup';
 import { KubeTreeScreen, type PanelState } from './KubeTreeScreen';
@@ -11,6 +12,7 @@ import { freshness } from './polling';
 import { readLastScreen, writeLastScreen } from './screenPref';
 import { initialTreeView } from './tree';
 import type { TreeTarget } from './treeReveal';
+import { useKubeIngress } from './useKubeIngress';
 import { useKubeSnapshots } from './useKubeSnapshots';
 import { useLogSearch } from './useLogSearch';
 import { useWorkerWatch } from './useWorkerWatch';
@@ -78,6 +80,7 @@ export function KubeWorkspace({
   const latest = useRef(0);
   const logSearch = useLogSearch(connectionId);
   const [searchFocus, setSearchFocus] = useState(0);
+  const [ingressFilter, setIngressFilter] = useState('');
 
   const finish = useCallback(
     async (settings: KubeSettings) => {
@@ -178,6 +181,27 @@ export function KubeWorkspace({
     [openScreen],
   );
 
+  const searchController = useCallback(
+    (keyword: string) => {
+      setSearchForm((now) => ({
+        ...now,
+        scope: { kind: 'controller', value: '' },
+        query: keyword,
+      }));
+      setSearchFocus((n) => n + 1);
+      openScreen('logs');
+    },
+    [setSearchForm, openScreen],
+  );
+
+  const openIngress = useCallback(
+    (host: string) => {
+      setIngressFilter(host);
+      openScreen('ingress');
+    },
+    [openScreen],
+  );
+
   const copyToTerminal = (command: string) => {
     const result = copy(command);
     if ('blocked' in result) setNote(result.blocked);
@@ -202,6 +226,12 @@ export function KubeWorkspace({
     visible && display === 'workspace',
     store.pods.data,
     session,
+  );
+  // These two screens are all that show it, and it is the costliest poll here (design KV.8).
+  const ingress = useKubeIngress(
+    connectionId,
+    phase.name === 'open' ? phase.settings : null,
+    visible && display === 'workspace' && (screen === 'ingress' || screen === 'dashboard'),
   );
   const fresh = freshness(store, now);
   const warning =
@@ -298,6 +328,8 @@ export function KubeWorkspace({
                 reveal={reveal}
                 searchLogs={searchLogs}
                 openRuntime={openRuntime}
+                ingress={ingress}
+                openIngress={openIngress}
               />
             )}
             {phase.name === 'open' && screen === 'logs' && (
@@ -309,13 +341,18 @@ export function KubeWorkspace({
                 session={session}
                 focusRequest={searchFocus}
                 openTerminal={openTerminal}
+                controllers={ingress.controllers}
               />
             )}
             {phase.name === 'open' && screen === 'ingress' && (
-              <div className="kube-empty" role="tabpanel">
-                <h2>{kubeScreens.find((item) => item.id === screen)?.label}</h2>
-                <p>이 화면은 아직 준비 중입니다.</p>
-              </div>
+              <IngressView
+                data={ingress}
+                store={store}
+                filter={ingressFilter}
+                setFilter={setIngressFilter}
+                reveal={reveal}
+                searchController={searchController}
+              />
             )}
             {phase.name === 'detecting' && error && <p role="alert">{error}</p>}
           </div>

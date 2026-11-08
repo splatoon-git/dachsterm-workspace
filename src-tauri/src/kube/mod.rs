@@ -2,6 +2,8 @@
 //! delegate; the work is in the modules below.
 mod detail;
 mod detect;
+mod ingress;
+mod ingress_metrics;
 mod log_keywords;
 mod log_scheduler;
 mod log_search;
@@ -141,6 +143,24 @@ pub async fn kube_snapshot(
         .await
         .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
     Ok(collect(&Runner::Ssh(&handle), &kube, kind).await)
+}
+
+/// Runs its reads one after another in a single slot, so it costs a connection what any poll does.
+#[tauri::command]
+pub async fn kube_ingress(
+    state: State<'_, AppState>,
+    slots: State<'_, Slots>,
+    id: String,
+    kube: KubeSettings,
+) -> Result<ingress::Report> {
+    kube.validate()?;
+    let handle = state.connections.handle(&id)?;
+    let slot = slots.for_connection(&id);
+    let _turn = slot
+        .acquire_owned()
+        .await
+        .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
+    Ok(ingress::collect(&Runner::Ssh(&handle), &kube).await)
 }
 
 #[derive(Deserialize)]
