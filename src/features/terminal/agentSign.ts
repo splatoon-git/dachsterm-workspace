@@ -6,7 +6,8 @@ import type { AgentSignRequest } from './sessionTypes';
 import { programNotifier } from './terminalNotify';
 
 export type SignDecision = 'deny' | 'once' | 'connection';
-export type PendingSign = AgentSignRequest & { connectionId: string };
+/** `owner`: the connection or the local tab the request came on, which `agent_sign_reply` names. */
+export type PendingSign = AgentSignRequest & { owner: string };
 export type SignAnswer = { decision: SignDecision; passphrase?: string; remember?: boolean };
 /** `agent_sign_reply`: done, or the card has to ask for the key's Passphrase. */
 export type SignReply =
@@ -21,8 +22,8 @@ type Host = {
 
 /**
  * Sign requests waiting for the user, oldest first. The backend refuses a request by itself after
- * `seconds`, so it also leaves this list then. A request belongs to the connection it came on: a
- * reconnect gets a new ID and an old request can no longer be answered.
+ * `seconds`, so it also leaves this list then. A request belongs to the connection or local tab it
+ * came on: a reconnect gets a new ID and an old request can no longer be answered.
  */
 export class AgentSignQueue {
   private items: readonly PendingSign[] = [];
@@ -40,8 +41,8 @@ export class AgentSignQueue {
     this.items = items;
     this.listeners.forEach((listener) => listener());
   }
-  add(request: AgentSignRequest, connectionId: string) {
-    this.set([...this.items, { ...request, connectionId }]);
+  add(request: AgentSignRequest, owner: string) {
+    this.set([...this.items, { ...request, owner }]);
     setTimeout(() => this.drop(request.request), request.seconds * 1000);
     // The AT.3 path: a notification only when the user is not looking at this terminal.
     this.notify ??= programNotifier({
@@ -65,7 +66,7 @@ export class AgentSignQueue {
     if (!waits) this.drop(item.request);
     try {
       const reply = await call<SignReply | undefined>('agent_sign_reply', {
-        id: item.connectionId,
+        id: item.owner,
         request: item.request,
         ...answer,
       });
@@ -81,20 +82,20 @@ export class AgentSignQueue {
   }
 }
 
-/** The request a pane shows: the oldest one on its current connection. */
-export function currentSign(items: readonly PendingSign[], connectionId: string) {
-  return items.find((item) => item.connectionId === connectionId) ?? null;
+/** The request a pane shows: the oldest one on its current connection or local tab. */
+export function currentSign(items: readonly PendingSign[], owner: string) {
+  return items.find((item) => item.owner === owner) ?? null;
 }
 
 const waiting: ProgramSummary = { state: 'blocked', detail: '키 서명 승인 요청' };
 
 /** A waiting request reads like a program waiting for input, on the tab and in the agent list. */
-export const signWaiting = (items: readonly PendingSign[], connectionId: string) =>
-  currentSign(items, connectionId) ? waiting : null;
+export const signWaiting = (items: readonly PendingSign[], owner: string) =>
+  currentSign(items, owner) ? waiting : null;
 
-export function useSignWaiting(queue: AgentSignQueue, connectionId: string) {
+export function useSignWaiting(queue: AgentSignQueue, owner: string) {
   const items = useSyncExternalStore(queue.subscribe, queue.snapshot);
-  return signWaiting(items, connectionId);
+  return signWaiting(items, owner);
 }
 
 export const signSource = (request: AgentSignRequest) =>
@@ -105,6 +106,20 @@ export const passphraseReason = {
   wrong: 'Passphrase가 맞지 않습니다. 다시 입력하세요.',
   stored: '저장된 Passphrase를 읽지 못했습니다(암호 보관함 잠김 등). 직접 입력하세요.',
 } as const;
+
+/** A local tab (DX.13) asks from a program on this PC, not from a server. */
+export const signText = (request: AgentSignRequest) =>
+  request.local
+    ? {
+        title: '이 탭의 프로그램이 앱의 키로 서명하려고 합니다',
+        where: '탭',
+        allow: '이 탭에서 10분 허용',
+      }
+    : {
+        title: '서버가 이 PC의 키로 서명하려고 합니다',
+        where: '세션',
+        allow: '이 연결에서 10분 허용',
+      };
 
 export function signPurpose(request: AgentSignRequest) {
   if (request.loginUser !== null) return `다른 SSH 서버 로그인 · 사용자 ${request.loginUser}`;

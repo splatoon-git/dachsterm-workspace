@@ -70,6 +70,20 @@ pub struct ForwardKey {
     pub secret_ref: Option<String>,
 }
 pub const MAX_FORWARD_KEYS: usize = 8;
+/// A session's keys to forward and the local tabs' keys (DX.13) follow the same rules.
+pub fn check_forward_keys(keys: &[ForwardKey]) -> Result<()> {
+    if keys.len() > MAX_FORWARD_KEYS
+        || keys.iter().enumerate().any(|(i, k)| {
+            k.path.trim().is_empty()
+                || k.path.len() > 4096
+                || k.path.chars().any(char::is_control)
+                || keys[..i].iter().any(|o| o.path == k.path)
+        })
+    {
+        return Err("전달할 키는 서로 다른 파일로 최대 8개입니다.".into());
+    }
+    Ok(())
+}
 fn default_protocol() -> String {
     "ssh".into()
 }
@@ -118,17 +132,7 @@ impl Profile {
         if self.protocol != "ssh" && (self.forward_agent || !self.forward_keys.is_empty()) {
             return Err("키 전달은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
-        let keys = &self.forward_keys;
-        if keys.len() > MAX_FORWARD_KEYS
-            || keys.iter().enumerate().any(|(i, k)| {
-                k.path.trim().is_empty()
-                    || k.path.len() > 4096
-                    || k.path.chars().any(char::is_control)
-                    || keys[..i].iter().any(|o| o.path == k.path)
-            })
-        {
-            return Err("전달할 키는 서로 다른 파일로 최대 8개입니다.".into());
-        }
+        check_forward_keys(&self.forward_keys)?;
         if self.jump_ids.len() > crate::routes::MAX_HOPS
             || (self.protocol != "ssh" && !self.jump_ids.is_empty())
             || self.tags.len() > 32
@@ -365,12 +369,13 @@ impl Store {
     /// Callers hold `AppState.mutation`, so nothing is referenced between the query and the
     /// removal. The OS store is called without the database lock.
     pub fn cleanup_credentials(&self) -> Result<()> {
-        let forwarded: std::collections::HashSet<String> = self
+        let mut forwarded: std::collections::HashSet<String> = self
             .list()?
             .profiles
             .iter()
             .flat_map(|p| p.forward_refs().map(String::from))
             .collect();
+        forwarded.extend(self.local_agent()?.refs().map(String::from));
         let ids = {
             let db = self.0.lock().unwrap();
             db.prepare("SELECT id FROM credential_gc WHERE id NOT IN (SELECT secret_ref FROM profiles WHERE secret_ref IS NOT NULL)").map_err(db_error)?.query_map([],|r|r.get::<_,String>(0)).map_err(db_error)?.collect::<std::result::Result<Vec<_>,_>>().map_err(db_error)?

@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.14**, 설계일: **2026-11-07**(DX.11~DX.14는 2026-11-08 추가).
-- 현재 상태: **DX.1~DX.11 구현. 실제 CLI 에이전트·외부 push 수동 확인과 Mac 실기기(M.15) 대기. DX.12.0 실측 완료, DX.13.0 Windows 실측 완료(Mac 항목 대기). DX.12~DX.14 설계 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **DX.1~DX.11 구현. 실제 CLI 에이전트·외부 push 수동 확인과 Mac 실기기(M.15) 대기. DX.12.0 실측 완료, DX.13.0 Windows 실측 완료(Mac 항목 대기). DX.13 구현(Windows 네이티브 합격, Mac 대기). DX.12·DX.14 설계 완료, 구현 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -65,7 +65,10 @@ AT의 원칙을 그대로 따른다: 전용 모드 없음, 화면 글자 해석 
 | `features/sessions/ForwardKeysField.tsx` | 세션 고급 옵션의 전달할 키 목록 | DX.11 |
 | `src-tauri/src/git_credential.rs` | 원격 소켓 전달, 요청 파서, 승인 대기, 이 PC 쪽 출처 | DX.12 |
 | `features/terminal/GitCredentialCard.tsx` | 자격 증명 승인과 직접 입력 카드 | DX.12 |
-| `src-tauri/src/local_agent.rs` | 로컬·WSL 탭의 pipe·소켓 수신, 탭 수명, 셸 환경 변수 | DX.13 |
+| `src-tauri/src/local_agent.rs`, `local_agent/pipe.rs`, `local_agent/settings.rs` | 로컬·WSL 탭의 pipe·소켓 수신, 탭 수명, 셸 환경 변수 / Windows pipe의 DACL / 앱 설정과 명령 | DX.13 |
+| `src-tauri/src/agent_relay.rs` | agent 요청 하나에 답하는 중계. 원격 채널과 로컬 탭이 함께 쓴다(`agent_forward.rs`에서 옮김) | DX.13 |
+| `src-tauri/src/approval.rs` | 승인 카드의 소유자(원격 연결 / 로컬 탭)와 이벤트 대상. DX.12도 쓴다 | DX.13 |
+| `components/KeyFileList.tsx`, `components/keyFiles.ts`, `features/agents/LocalAgentSettings.tsx` | 키 파일 목록(세션 폼과 설정 창 공용, `features/sessions/forwardKeys.ts`에서 옮김), 설정 창 › 에이전트의 로컬 탭 절 | DX.13 |
 | `src-tauri/src/credential_helper.rs` | `dachsterm git-credential get` 실행 모드. 화면 없이 pipe로 중계 | DX.14 |
 
 기능 간 직접 import를 만들지 않는다(규칙 §7). `App`이 `features/git`의 값을 `components/fileDecorations.ts` 컨텍스트로 내려보내면 `FileTreeRow`가 표시한다. 이 방식이면 `FilePanel.tsx`를 수정하지 않는다.
@@ -661,6 +664,19 @@ exec tmux attach -t '=<이름>'
 - 처음 보는 호스트로 push하면 호스트키 질문이 PowerShell 탭과 WSL 탭에 보이고 답할 수 있다.
 - 탭을 닫으면 pipe와 소켓이 사라진다. 다른 사용자 계정에서는 pipe에 닿지 못한다.
 - Mac 로컬 탭은 실기기에서 확인한다.
+
+**구현에서 정한 것(2026-11-08):**
+
+- **승인 소유자 일반화(커밋 `8c3f946`, DX.12가 이어서 쓴다).** `approval.rs`의 `Owner::find(state, 창, ID)`가 ID를 원격 연결이나 로컬 탭으로 찾는다. 원격은 지금처럼 `Broker::check`로 창을 확인하고, 로컬 탭은 창을 옮길 수 없으므로 `main` 창만 답할 수 있다. 카드와 안내를 보내는 곳은 `Notify` trait이다(원격 `Broker`, 로컬 탭은 그 탭의 이벤트 채널 `Direct`). `agent_sign_reply`는 이름과 인자를 바꾸지 않고 두 경우를 받는다. `SignRequest.local`이 카드 문구를 바꾼다: 제목 "이 탭의 프로그램이 앱의 키로 서명하려고 합니다", 항목 "탭", 버튼 "이 탭에서 10분 허용". 프런트엔드의 `PendingSign.connectionId`는 `owner`로 바꿨다.
+- **중계 공용화.** `agent_forward.rs`가 상한(600줄)에 가까워 요청 하나에 답하는 `Relay`를 `agent_relay.rs`로 옮겼다. 원격은 채널 루프, 로컬은 스트림 루프만 따로 둔다. `Unlock`의 세션 ID는 `KeyOwner::{Session, Local}`로 바꿔 저장된 Passphrase를 세션과 앱 설정 중 어디서 읽고 쓸지 정한다. 로컬 탭은 **시스템 agent 키 서명을 카드 없이** 그 agent에 넘긴다. 앱의 키 RSA SHA-1 거부 안내는 "이 PC의 SSH 클라이언트가 …"로 바꿨다.
+- **Windows pipe.** 이름은 `\\.\pipe\dachsterm-agent-<UUID 32자리>`. 기본 pipe 보안은 Everyone 읽기를 허용하므로 모든 인스턴스에 DACL `D:P(A;;GA;;;<현재 사용자 SID>)`를 준다. 첫 인스턴스는 `first_pipe_instance`로 만들어 다른 프로그램이 먼저 만든 이름이면 실패한다. `reject_remote_clients`를 켠다. 연결이 오면 다음 인스턴스를 먼저 만들고 넘겨서 탭이 열려 있는 동안 이름이 유지된다. 탭당 동시 클라이언트는 원격 채널과 같은 8개다. SID와 DACL을 만들려고 `windows-sys 0.61.2`(이미 의존성 그래프에 있음)를 Windows 전용 직접 의존성으로 더했다. 새 크레이트는 없다.
+- **macOS 소켓.** `$TMPDIR` 아래 `dachsterm-agent-*` 0700 폴더의 `agent.sock`. 경로가 104바이트를 넘으면 `/tmp` 아래에 같은 폴더를 만든다. 탭을 닫으면 소켓을 지우고, 폴더는 탭 객체가 사라질 때 지운다.
+- **수명.** `local::Control`이 `local_agent::Tab`을 소유하고 `Control::stop`(탭 닫기, 셸 종료, 앱 종료)에서 닫는다. 셸 시작이 실패해도 drop으로 닫힌다. 통로를 연 뒤 셸을 시작하므로, 설정이 손상됐거나 통로를 만들지 못하면 탭이 열리지 않고 이유와 함께 "설정에서 끄면 열 수 있다"고 안내한다.
+- **환경 변수.** `GIT_SSH`는 `%SystemRoot%\System32\OpenSSH\ssh.exe`가 있고 **앱 환경에 사용자의 `GIT_SSH`가 없을 때만** 넣는다. WSL은 `WSLENV`에 `GIT_SSH/up`을 기존 값(`PROMPT_COMMAND/u` 포함) 뒤에 더하고, 사용자의 `WSLENV`가 이미 `GIT_SSH`를 넘기면 `GIT_SSH`와 `WSLENV` 모두 건드리지 않는다. `SSH_AUTH_SOCK`은 `WSLENV`에 넣지 않는다(DX.13.0).
+- **시스템 agent.** 로컬 탭의 클라이언트 연결마다 새로 연결한다. 설정 창에 "이 PC의 SSH agent 키도 사용" 선택지는 두지 않았다. 로컬 프로그램은 원래 그 agent에 닿을 수 있었으므로 끌 이유가 없다.
+- **설정.** 앱 설정 키는 `localAgent`(bool)와 `localAgentKeys`(`ForwardKey` 목록) 두 개다. 손상된 값은 빈 값으로 삼키지 않고 오류다. **`local_agent_save`는 Passphrase를 받지 않는다**(§5 표와 다름). DX.11처럼 카드의 **이 PC에 저장**만 참조를 단다(`Store::set_local_agent_secret`). 빠진 키의 참조는 정리 journal로 보내고, `cleanup_credentials`는 로컬 키의 참조를 지우지 않으며, `Vault::configure`가 함께 재암호화한다. 세션 JSON과 설정 백업에는 들어가지 않는다(설정 표 밖).
+- **설정 창.** 에이전트 분류에 시작 프리셋 아래 **로컬 탭의 SSH 키** 절(켜기 체크박스, 키 목록)을 두었다. 바꿀 때마다 순서대로 저장한다. 키 목록 편집은 DX.11 세션 폼의 것을 `components/KeyFileList.tsx`로 내려 함께 쓴다.
+- **네이티브 합격 검사에서 정한 것.** 사용자 `~/.ssh/known_hosts`를 바꾸지 않으려고 `GIT_SSH`만 쓰는 push는 처음 보는 호스트 질문이 탭에 보이고 답할 수 있는지까지 확인하고 `no`로 답했다. 끝까지 가는 승인·거부 push는 같은 Windows `ssh.exe`를 `core.sshCommand`로 빈 설정·scratch `known_hosts`와 함께 실행했다. 그래서 **`GIT_SSH`만으로 끝까지 가는 push는 여전히 대기**다.
 
 ### DX.14 — WSL 탭의 HTTPS Git 자격 증명 (2026-11-08 추가)
 

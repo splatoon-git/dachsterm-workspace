@@ -1,6 +1,8 @@
 mod agent_filter;
 pub mod agent_forward;
 pub mod agent_keys;
+mod agent_relay;
+mod approval;
 pub mod archive;
 pub mod broadcast;
 mod commands;
@@ -16,6 +18,7 @@ pub mod git_diff;
 pub mod git_status;
 pub mod hostkeys;
 pub mod local;
+mod local_agent;
 mod local_files;
 mod local_links;
 #[cfg(target_os = "macos")]
@@ -210,6 +213,8 @@ pub fn run() {
             git_diff::git_diff_files,
             git_diff::git_diff_file,
             agent_keys::agent_sign_reply,
+            local_agent::settings::local_agent_settings,
+            local_agent::settings::local_agent_save,
             ssh_keys::ssh_key_info,
             broadcast::broadcast_status,
             broadcast::broadcast_set,

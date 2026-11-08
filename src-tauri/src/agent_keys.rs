@@ -4,7 +4,7 @@
 //! and still signed by the system agent.
 use crate::{
     AppState,
-    agent_forward::{Decision, Unlock},
+    agent_forward::{Decision, KeyOwner, Unlock},
     ssh::Connections,
     ssh_keys,
     storage::{ForwardKey, Result, Store},
@@ -288,9 +288,9 @@ pub async fn agent_sign_reply(
     remember: Option<bool>,
 ) -> Result<Reply> {
     let passphrase = passphrase.map(Zeroizing::new);
-    let control = state.connections.control(&id)?;
-    control.broker.check(window.label())?;
-    let unlock = control.agent.unlock_of(&request)?;
+    // `id` is the connection or the local tab the request came on (DX.13).
+    let agent = crate::approval::Owner::find(&state, window.label(), &id)?.agent()?;
+    let unlock = agent.unlock_of(&request)?;
     let typed = passphrase.is_some();
     let passphrase = match (passphrase, &unlock) {
         (Some(typed), _) => Some(typed),
@@ -310,7 +310,7 @@ pub async fn agent_sign_reply(
     let kept = passphrase
         .clone()
         .filter(|_| typed && remember == Some(true));
-    let reply = control.agent.answer(&request, decision, passphrase).await?;
+    let reply = agent.answer(&request, decision, passphrase).await?;
     let (Reply::Done { .. }, Some(unlock), Some(passphrase)) = (&reply, unlock, kept) else {
         return Ok(reply);
     };
@@ -333,9 +333,11 @@ fn stored_passphrase(
     vault: &Vault,
     unlock: &Unlock,
 ) -> Result<Option<Zeroizing<String>>> {
-    let reference = store
-        .profile(&unlock.profile)?
-        .forward_keys
+    let keys = match &unlock.keys {
+        KeyOwner::Session(profile) => store.profile(profile)?.forward_keys,
+        KeyOwner::Local => store.local_agent()?.keys,
+    };
+    let reference = keys
         .into_iter()
         .find(|key| key.path == unlock.path)
         .and_then(|key| key.secret_ref);
@@ -343,13 +345,19 @@ fn stored_passphrase(
 }
 
 /// "Save on this PC" on the card. The OS store is written first and without any lock; the
-/// reference then goes into the session under `mutation` (see `Store::set_forward_secret`).
+/// reference then goes into the session or the local keys under `mutation` (see
+/// `Store::set_forward_secret`).
 fn remember_passphrase(state: &AppState, unlock: &Unlock, passphrase: &str) -> Result<()> {
     let reference = state.vault.save(&state.store, passphrase)?;
     let _guard = state.mutation.lock().unwrap();
-    state
-        .store
-        .set_forward_secret(&unlock.profile, &unlock.path, &reference)
+    match &unlock.keys {
+        KeyOwner::Session(profile) => {
+            state
+                .store
+                .set_forward_secret(profile, &unlock.path, &reference)
+        }
+        KeyOwner::Local => state.store.set_local_agent_secret(&unlock.path, &reference),
+    }
 }
 
 #[cfg(test)]

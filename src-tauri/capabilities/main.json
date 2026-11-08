@@ -96,6 +96,8 @@
     "allow-git-diff-files",
     "allow-git-diff-file",
     "allow-agent-sign-reply",
+    "allow-local-agent-settings",
+    "allow-local-agent-save",
     "allow-ssh-key-info",
     "allow-notification-show",
     "allow-log-status",

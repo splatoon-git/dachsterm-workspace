@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Dialog } from '../components/Dialog';
 import { Icon, type IconName } from '../components/Icon';
 import { AgentPresetSettings } from '../features/agents/AgentPresetSettings';
+import { LocalAgentSettings } from '../features/agents/LocalAgentSettings';
 import { MaintenancePanel } from '../features/settings/MaintenancePanel';
 import { SessionManager } from '../features/sessions/SessionManager';
 import { SessionTransfer } from '../features/sessions/SessionTransfer';
@@ -32,8 +33,7 @@ const entries: Entry[] = [
     id: 'agents',
     label: '에이전트',
     icon: 'snippet',
-    summary:
-      'CLI 에이전트를 시작할 때 고르는 명령입니다. 실행 전에 최종 명령을 한 번 더 보여 줍니다.',
+    summary: 'CLI 에이전트의 시작 명령과, 로컬 탭에서 쓸 SSH 키를 정합니다.',
   },
   { id: 'vault', label: '암호 보관함', icon: 'lock', summary: vaultSummary },
   {
@@ -97,7 +97,12 @@ export function SettingsDialog({
   const content: Record<SettingsSection, ReactNode> = {
     appearance: <ThemePicker />,
     terminal: <TerminalSettingsPanel />,
-    agents: <AgentPresetSettings />,
+    agents: (
+      <>
+        <AgentPresetSettings />
+        <LocalAgentSettings />
+      </>
+    ),
     vault: <VaultPanel />,
     sessions: <SessionManager snapshot={snapshot} changed={changed} />,
     transfer: <SessionTransfer changed={changed} profiles={snapshot.profiles} />,

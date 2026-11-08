@@ -2,6 +2,7 @@
 import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,6 +17,9 @@ import {
 } from './native-workspace.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
+// `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab.
+const agentOnly = process.argv.includes('--agent-only');
+const finished = Symbol('agent-only');
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-local-'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let app, browser;
@@ -67,6 +71,294 @@ async function shutdown() {
   await browser?.close().catch(() => {});
   browser = undefined;
 }
+// DX.13: the app's agent in local tabs, against the OpenSSH fixture used by run-phase1 as an SSH
+// Git server. The key is made here and deleted with the scratch folder. This PC's ssh-agent
+// service, git configuration and ~/.ssh files are left as they are: Windows ssh.exe gets an empty
+// config and a scratch known_hosts on the command line, except for one push that only shows the
+// first-host question and is answered "no".
+const system32 = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32');
+const openssh = (name) => path.join(system32, 'OpenSSH', name);
+const gitServer = `dachsterm-local-agent-${randomUUID()}`;
+let gitServerUp = false;
+function docker(args, input) {
+  const result = spawnSync('docker', args, { encoding: 'utf8', input, timeout: 300_000 });
+  if (result.status !== 0) throw new Error(`docker ${args[0]} failed: ${result.stderr}`);
+  return result.stdout.trim();
+}
+async function startGitServer(publicKey) {
+  docker(['build', '-q', '-t', 'dachsterm-openssh-probe', 'tests/openssh']);
+  docker([
+    'run',
+    '-d',
+    '--rm',
+    '--name',
+    gitServer,
+    '--label',
+    'app.dachsterm.purpose=local-agent-native',
+    '-p',
+    '127.0.0.1::22',
+    '--tmpfs',
+    '/run/probe:rw,noexec,nosuid,mode=0700',
+    'dachsterm-openssh-probe',
+  ]);
+  gitServerUp = true;
+  for (let i = 0; i < 60; i++) {
+    if (spawnSync('docker', ['exec', gitServer, 'test', '-f', '/run/probe/ready']).status === 0) {
+      docker(
+        ['exec', '-i', gitServer, 'sh', '-c', 'cat >> /home/probe/.ssh/authorized_keys'],
+        publicKey,
+      );
+      docker([
+        'exec',
+        '-u',
+        'probe',
+        gitServer,
+        'git',
+        'init',
+        '-q',
+        '--bare',
+        '/home/probe/local.git',
+      ]);
+      return Number(docker(['port', gitServer, '22/tcp']).split(':').at(-1));
+    }
+    await sleep(500);
+  }
+  throw new Error('OpenSSH fixture startup timeout');
+}
+const remoteRefs = () =>
+  docker([
+    'exec',
+    '-u',
+    'probe',
+    gitServer,
+    'git',
+    '--git-dir',
+    '/home/probe/local.git',
+    'show-ref',
+  ]);
+/** Whether the named pipe still accepts a connection. */
+const pipeOpen = (name) =>
+  new Promise((resolve) => {
+    const socket = net.connect(name);
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', () => resolve(false));
+  });
+
+async function checkLocalAgent(page, command, oldShell) {
+  const service = spawnSync(
+    'powershell',
+    ['-NoProfile', '-Command', '(Get-Service ssh-agent).Status'],
+    { encoding: 'utf8', windowsHide: true },
+  ).stdout.trim();
+  console.log(`This PC's ssh-agent service: ${service}`);
+  if (spawnSync('docker', ['version'], { stdio: 'ignore' }).status !== 0) {
+    console.log('Docker unavailable: local agent push checks pending.');
+    return;
+  }
+  const keys = await realpath(await mkdtemp(path.join(directory, 'agent-')));
+  const key = path.join(keys, 'id_local');
+  const made = spawnSync(
+    openssh('ssh-keygen.exe'),
+    ['-q', '-t', 'ed25519', '-N', '', '-C', 'dachsterm-local-test', '-f', key],
+    { windowsHide: true },
+  );
+  assert.equal(made.status, 0, 'test key');
+  const fingerprint = spawnSync(openssh('ssh-keygen.exe'), ['-lf', `${key}.pub`], {
+    encoding: 'utf8',
+    windowsHide: true,
+  }).stdout.split(' ')[1];
+  const port = await startGitServer(await readFile(`${key}.pub`, 'utf8'));
+  const config = path.join(keys, 'empty_config');
+  const knownHosts = path.join(keys, 'known_hosts');
+  await writeFile(config, '');
+  const sshOptions = `-F '${config}' -o UserKnownHostsFile='${knownHosts}' -o StrictHostKeyChecking=accept-new -o IdentityFile=NONE -o BatchMode=yes`;
+  const remote = `ssh://probe@127.0.0.1:${port}/home/probe/local.git`;
+
+  // Settings › Agents. The tab already open keeps what it started with.
+  await page.getByRole('button', { name: '설정', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: '설정' });
+  await settings.getByRole('tab', { name: '에이전트', exact: true }).click();
+  const section = settings.getByRole('region', { name: '로컬 탭의 SSH 키' });
+  await section.getByLabel('로컬 탭에 이 앱의 SSH 키 제공', { exact: true }).check();
+  await expect(section.getByRole('status')).toContainText('저장했습니다');
+  await section.getByLabel('추가할 키 파일 경로', { exact: true }).fill(key);
+  await section.getByLabel('추가할 키 파일 경로', { exact: true }).press('Enter');
+  await expect(section.getByRole('list', { name: '추가 키' })).toContainText(fingerprint);
+  await expect(section.getByRole('status')).toContainText('저장했습니다');
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
+  await page.getByRole('tab', { name: /Windows PowerShell/ }).click();
+  await command(
+    oldShell,
+    "Write-Output ('OLD' + 'SOCK:[' + $env:SSH_AUTH_SOCK + ']')",
+    /OLDSOCK:\[/,
+  );
+  expect(await oldShell.locator('.xterm-accessibility-tree').innerText()).not.toContain(
+    'dachsterm-agent-',
+  );
+  console.log('PASS the setting applies to tabs opened afterwards');
+
+  // A new PowerShell tab: the pipe, the system ssh.exe for Git, and the app's key.
+  const visible = page.locator('.pane-cell:not([hidden]) .terminal-pane');
+  await page.locator('.local-targets').getByTitle('Windows PowerShell 새 터미널 열기').click();
+  await expect(visible).toHaveCount(1);
+  const shellId = await visible.getAttribute('data-connection-id');
+  const shell = page.locator(`.terminal-pane[data-connection-id="${shellId}"]`);
+  await expect(shell.locator('.xterm-accessibility-tree')).toContainText(/\S/, { timeout: 15000 });
+  await command(
+    shell,
+    "Write-Output ('SO' + 'CK:' + $env:SSH_AUTH_SOCK)",
+    /SOCK:\\\\\.\\pipe\\dachsterm-agent-[0-9a-f]{32}/,
+  );
+  const pipe = (await shell.locator('.xterm-accessibility-tree').innerText()).match(
+    /SOCK:(\\\\\.\\pipe\\dachsterm-agent-[0-9a-f]{32})/,
+  )[1];
+  await command(
+    shell,
+    "Write-Output ('GIT' + 'SSH:' + $env:GIT_SSH)",
+    /GITSSH:.*OpenSSH\\ssh\.exe/i,
+  );
+  await command(shell, 'ssh-add -l', fingerprint);
+  assert(await pipeOpen(pipe), 'the tab pipe accepts this user');
+  console.log('PASS PowerShell tab: SSH_AUTH_SOCK, GIT_SSH and ssh-add -l with the app key');
+
+  const repo = path.join(keys, 'repo');
+  await mkdir(repo);
+  await command(
+    shell,
+    `Set-Location '${repo}'; git init -q; git -c user.email=t@example.invalid -c user.name=t commit -q --allow-empty -m one; Write-Output ('RE' + 'PO_OK')`,
+    'REPO_OK',
+  );
+  // GIT_SSH alone: the first-host question shows in the tab and is answered "no", so nothing is
+  // written to ~/.ssh/known_hosts and no key is asked for.
+  await command(shell, `git push ${remote} HEAD:refs/heads/question`, '');
+  await expect(shell.locator('.xterm-accessibility-tree')).toContainText('(yes/no', {
+    timeout: 30000,
+  });
+  // Typed, not pasted: the question reads the console, not the shell's paste handling.
+  await shell.locator('.xterm-helper-textarea').focus();
+  await page.keyboard.type('no');
+  await page.keyboard.press('Enter');
+  await expect(shell.locator('.xterm-accessibility-tree')).toContainText(
+    'Host key verification failed',
+    { timeout: 15000 },
+  );
+  console.log('PASS GIT_SSH runs the system ssh.exe and its first-host question can be answered');
+
+  const card = shell.getByRole('alertdialog', { name: '키 서명 요청', exact: true });
+  const push = (branch) =>
+    command(
+      shell,
+      `git -c core.sshCommand="'${openssh('ssh.exe')}' ${sshOptions}" push -q ${remote} HEAD:refs/heads/${branch}; Write-Output ('PUSH' + '_${branch}:' + $LASTEXITCODE)`,
+      '',
+    );
+  await push('win');
+  await expect(card).toBeVisible({ timeout: 30000 });
+  await expect(card.getByRole('heading')).toHaveText(
+    '이 탭의 프로그램이 앱의 키로 서명하려고 합니다',
+  );
+  await expect(card).toContainText('Windows PowerShell');
+  await expect(card).toContainText('dachsterm-local-test');
+  await expect(card).toContainText('이 앱의 키 파일');
+  await expect(card).not.toBeFocused();
+  await card.getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await expect(shell.locator('.xterm-accessibility-tree')).toContainText('PUSH_win:0', {
+    timeout: 30000,
+  });
+  expect(remoteRefs()).toContain('refs/heads/win');
+  await push('denied');
+  await expect(card).toBeVisible({ timeout: 30000 });
+  await card.getByRole('button', { name: '거부', exact: true }).click();
+  await expect(shell.locator('.xterm-accessibility-tree')).toContainText(/PUSH_denied:[1-9]/, {
+    timeout: 30000,
+  });
+  expect(remoteRefs()).not.toContain('refs/heads/denied');
+  console.log('PASS Git for Windows push through the tab pipe: allowed works, refused fails');
+
+  await chooseTabMenu(page, '탭 닫기', shell);
+  await expect(shell).toHaveCount(0);
+  await expect.poll(() => pipeOpen(pipe), { timeout: 10000 }).toBe(false);
+  console.log('PASS closing the tab removes its pipe');
+
+  const wsl = page
+    .locator('.local-targets .local-target')
+    .filter({ hasText: 'WSL' })
+    .filter({ hasNotText: 'docker-desktop' });
+  if (!(await wsl.count())) {
+    console.log('WSL user distribution absent: WSL agent checks pending.');
+    return;
+  }
+  const openLinux = async () => {
+    await wsl.first().click();
+    await expect(visible).toHaveCount(1);
+    const id = await visible.getAttribute('data-connection-id');
+    const linux = page.locator(`.terminal-pane[data-connection-id="${id}"]`);
+    await expect(linux.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
+      timeout: 15000,
+    });
+    return linux;
+  };
+  const linux = await openLinux();
+  // Linux keeps its own agent setting; Windows programs started from the tab get the pipe.
+  await command(linux, `printf 'LINUX%s[%s]\\n' _SOCK "\${SSH_AUTH_SOCK-}"`, /LINUX_SOCK\[/);
+  expect(await linux.locator('.xterm-accessibility-tree').innerText()).not.toMatch(
+    /LINUX_SOCK\[\\\\/,
+  );
+  await command(
+    linux,
+    `printf 'GIT%s:%s\\n' SSH "$GIT_SSH"`,
+    /GITSSH:\/mnt\/.*\/OpenSSH\/ssh\.exe/i,
+  );
+  await command(linux, "ssh-add.exe -l | sed 's/^/WSLKEY /'", `WSLKEY 256 ${fingerprint}`);
+  await command(
+    linux,
+    `cd "$(mktemp -d)" && git init -q && git -c user.email=t@example.invalid -c user.name=t commit -q --allow-empty -m wsl && git -c core.sshCommand="$GIT_SSH ${sshOptions}" push -q ${remote} HEAD:refs/heads/wsl; printf 'PUSH%s:%s\\n' _wsl $?`,
+    '',
+  );
+  const linuxCard = linux.getByRole('alertdialog', { name: '키 서명 요청', exact: true });
+  await expect(linuxCard).toBeVisible({ timeout: 30000 });
+  await linuxCard.getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await expect(linux.locator('.xterm-accessibility-tree')).toContainText('PUSH_wsl:0', {
+    timeout: 30000,
+  });
+  expect(remoteRefs()).toContain('refs/heads/wsl');
+  console.log(
+    'PASS WSL git push through Windows ssh.exe and the tab pipe, Linux SSH_AUTH_SOCK kept',
+  );
+
+  // Two WSL tabs at once: each one's Windows programs see that tab's pipe.
+  const pipeOf = async (tab) => {
+    await command(tab, "cmd.exe /c 'echo WINSOCK:%SSH_AUTH_SOCK%' | tr -d '\\r'", /WINSOCK:\\\\/);
+    // A narrow pane wraps the name over two rows.
+    const text = await tab.locator('.xterm-accessibility-tree').innerText();
+    return text
+      .replaceAll('\n', '')
+      .match(/WINSOCK:(\\\\\.\\pipe\\dachsterm-agent-[0-9a-f]{32})/)?.[1];
+  };
+  const first = await pipeOf(linux);
+  // The same distribution again on the right, so both tabs are open and visible at once.
+  const linuxId = await linux.getAttribute('data-connection-id');
+  await page.keyboard.press('Control+Shift+Backslash');
+  const second = page.locator(
+    `.pane-cell:not([hidden]) .terminal-pane:not([data-connection-id="${linuxId}"])`,
+  );
+  await expect(second.locator('.xterm-accessibility-tree')).toContainText(/[$#]/, {
+    timeout: 15000,
+  });
+  const other = await pipeOf(second);
+  assert(first && other && first !== other, `separate pipes: ${first} ${other}`);
+  assert((await pipeOpen(first)) && (await pipeOpen(other)), 'both pipes open together');
+  await chooseTabMenu(page, '탭 닫기', second);
+  await expect.poll(() => pipeOpen(other), { timeout: 10000 }).toBe(false);
+  assert(await pipeOpen(first), 'the other tab keeps its pipe');
+  await chooseTabMenu(page, '탭 닫기', linux);
+  await expect(linux).toHaveCount(0);
+  await expect.poll(() => pipeOpen(first), { timeout: 10000 }).toBe(false);
+  console.log('PASS two WSL tabs keep separate pipes, and both close with their tabs');
+}
 try {
   const page = await launch();
   await expect(
@@ -109,6 +401,10 @@ try {
   await expect(pane.locator('.xterm-accessibility-tree')).toContainText(/\S/, {
     timeout: 15000,
   });
+  if (agentOnly) {
+    await checkLocalAgent(page, command, pane);
+    throw finished;
+  }
   await command(pane, "Write-Output ('DACHSTERM' + 'LOCAL_OK')", 'DACHSTERMLOCAL_OK');
   await command(pane, 'Write-Output ([char]0xD55C + [string][char]0xAE00)', '한글');
   await command(pane, "Write-Output ('LOCAL' + 'PID:' + $PID)", 'LOCALPID:');
@@ -302,6 +598,7 @@ try {
     await page.screenshot({ path: 'test-results-native/local-wsl.png' });
     console.log('WSL interactive PTY passed.');
   } else console.log('WSL user distribution absent: real WSL execution pending.');
+  await checkLocalAgent(page, command, pane);
   // Return to PowerShell before checking shortcuts do not reach the PTY.
   await page.getByRole('tab', { name: /Windows PowerShell/ }).click();
   await page.keyboard.press('Control+Shift+B');
@@ -386,6 +683,9 @@ try {
   console.log(
     'Local PTY IO, Unicode, resize, split, isolated close/reopen, app shutdown, output flow and navigation passed.',
   );
+} catch (error) {
+  if (error !== finished) throw error;
 } finally {
   await shutdown();
+  if (gitServerUp) spawnSync('docker', ['rm', '-f', gitServer], { stdio: 'ignore' });
 }

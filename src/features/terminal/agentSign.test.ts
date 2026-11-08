@@ -7,6 +7,7 @@ import {
   currentSign,
   signPurpose,
   signSource,
+  signText,
   type PendingSign,
 } from './agentSign';
 import type { AgentSignRequest } from './sessionTypes';
@@ -26,17 +27,18 @@ const request = (id: string, extra: Partial<AgentSignRequest> = {}): AgentSignRe
   namespace: null,
   hostKey: null,
   source: 'system',
+  local: false,
   passphrase: false,
   seconds: 60,
   ...extra,
 });
 
 describe('which request a pane shows', () => {
-  const pending = (id: string, connectionId: string): PendingSign => ({
+  const pending = (id: string, owner: string): PendingSign => ({
     ...request(id),
-    connectionId,
+    owner,
   });
-  it('shows the oldest request of the current connection only', () => {
+  it('shows the oldest request of the current connection or local tab only', () => {
     const items = [pending('old', 'gone'), pending('a', 'now'), pending('b', 'now')];
     expect(currentSign(items, 'now')?.request).toBe('a');
     expect(currentSign(items, 'other')).toBeNull();
@@ -45,6 +47,14 @@ describe('which request a pane shows', () => {
     expect(signPurpose(request('r', { loginUser: 'git' }))).toContain('사용자 git');
     expect(signPurpose(request('r', { namespace: 'file' }))).toContain('용도 file');
     expect(signPurpose(request('r'))).toBe('용도를 알 수 없는 서명');
+  });
+  it('says a local tab asks, not a server', () => {
+    expect(signText(request('r')).title).toContain('서버가');
+    expect(signText(request('r', { local: true }))).toEqual({
+      title: '이 탭의 프로그램이 앱의 키로 서명하려고 합니다',
+      where: '탭',
+      allow: '이 탭에서 10분 허용',
+    });
   });
   it('says whose key signs', () => {
     expect(signSource(request('r', { source: 'app' }))).toBe('이 앱의 키 파일');

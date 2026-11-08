@@ -267,12 +267,33 @@ impl Vault {
             }
             forwarded.push((crate::storage::profile_data(&profile)?, profile.id));
         }
+        // The local tabs' key files (DX.13) keep theirs in the app settings.
+        let mut local = store.local_agent()?;
+        let local_value = if local.refs().next().is_some() {
+            for key in &mut local.keys {
+                if let Some(previous) = key.secret_ref.take() {
+                    let next = copy(&previous)?;
+                    key.secret_ref = Some(next.clone());
+                    changed.push((None, previous, next));
+                }
+            }
+            Some(crate::local_agent::keys_value(&local.keys)?)
+        } else {
+            None
+        };
         let mut db = store.0.lock().unwrap();
         let tx = db.transaction().map_err(db_error)?;
         for (data, profile) in forwarded {
             tx.execute(
                 "UPDATE profiles SET data=? WHERE id=?",
                 rusqlite::params![data, profile],
+            )
+            .map_err(db_error)?;
+        }
+        if let Some(value) = local_value {
+            tx.execute(
+                "UPDATE settings SET value=? WHERE key=?",
+                rusqlite::params![value, crate::local_agent::KEYS],
             )
             .map_err(db_error)?;
         }

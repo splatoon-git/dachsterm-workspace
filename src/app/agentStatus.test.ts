@@ -34,8 +34,8 @@ function tab() {
   return {
     session: session as unknown as TerminalSession,
     listening: () => signs.listeners.size + states.listeners.size,
-    sign(connectionId: string) {
-      items = [{ request: 'r', connectionId } as PendingSign];
+    sign(owner: string) {
+      items = [{ request: 'r', owner } as PendingSign];
       signs.notify();
     },
     status(status: string) {

@@ -2,22 +2,18 @@
 //! or a program running there, can ask to sign with the user's keys. So only the connection that
 //! asked for forwarding gets a channel, only listing and signing are answered, and every
 //! signature waits for the user's answer in the app. Keys come from the app itself
-//! (`agent_keys`, DX.11) and from this PC's SSH agent; this module picks the source.
+//! (`agent_keys`, DX.11) and from this PC's SSH agent; `agent_relay` answers each request. The
+//! approval state here is also a local tab's (DX.13).
 use crate::{
-    agent_filter::{self, FAILURE, Purpose, Verdict},
-    agent_keys::{self, AppKeys, Ask, Identity, Origin, Reply, Source},
+    agent_filter,
+    agent_keys::{AppKeys, Ask, Reply, Source},
+    agent_relay::{self, Relay},
+    approval::Notify,
     ssh::{Connections, Event},
     ssh_keys,
-    storage::{ForwardKey, Profile, Result},
-    windows::Broker,
+    storage::{Profile, Result},
 };
-use russh::{
-    Channel, ChannelMsg, client,
-    keys::{
-        HashAlg, PrivateKey, PublicKey,
-        agent::client::{AgentClient, AgentStream},
-    },
-};
+use russh::{Channel, ChannelMsg, client, keys::PrivateKey};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -27,33 +23,20 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::{oneshot, watch},
-    task::spawn_blocking,
-    time::timeout,
-};
+use tokio::{sync::oneshot, task::spawn_blocking, time::timeout};
 use zeroize::Zeroizing;
 
 pub const MAX_CHANNELS: usize = 8;
-const ANSWER_TIME: Duration = Duration::from_secs(60);
-/// A chosen key that needs its Passphrase typed on the card.
-const PASSPHRASE_TIME: Duration = Duration::from_secs(120);
 const ALLOW_FOR: Duration = Duration::from_secs(600);
-/// A local agent may ask for its own confirmation, so it gets longer than the user's answer.
-const LOCAL_TIME: Duration = Duration::from_secs(120);
-/// `SSH_AGENT_SUCCESS`, length-prefixed.
-const SUCCESS: [u8; 5] = [0, 0, 0, 1, 6];
 const NO_KEYS: &str =
     "전달할 키가 없습니다. 세션 고급 옵션에서 키를 고르거나 이 PC의 SSH agent에 키를 등록하세요.";
-const SHA1_REFUSED: &str = "RSA 키의 SHA-1 서명 요청을 거부했습니다. 서버의 SSH 클라이언트가 rsa-sha2-256/512를 쓰도록 업데이트하세요.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Decision {
     Deny,
     Once,
-    /// Every signature on this connection for the next ten minutes.
+    /// Every signature on this connection, or in this local tab, for the next ten minutes.
     Connection,
 }
 
@@ -69,15 +52,26 @@ pub struct SignRequest {
     pub namespace: Option<String>,
     pub host_key: Option<String>,
     pub source: Source,
+    /// Asked by a program in a local tab (DX.13), not by a server.
+    pub local: bool,
     /// The key file is encrypted and not unlocked: allowing asks for its Passphrase.
     pub passphrase: bool,
     pub seconds: u64,
 }
 
+/// Where a chosen key file and its saved Passphrase are listed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum KeyOwner {
+    /// A session's keys to forward (DX.11), by profile ID.
+    Session(String),
+    /// The keys local tabs offer, in the app settings (DX.13).
+    Local,
+}
+
 /// A chosen key file to unlock when the user allows the signature.
 #[derive(Clone, Debug)]
 pub struct Unlock {
-    pub profile: String,
+    pub keys: KeyOwner,
     pub path: String,
 }
 
@@ -85,18 +79,18 @@ struct Pending {
     sender: oneshot::Sender<Answer>,
     unlock: Option<Unlock>,
 }
-struct Answer {
-    decision: Decision,
-    key: Option<Arc<PrivateKey>>,
+pub(crate) struct Answer {
+    pub(crate) decision: Decision,
+    pub(crate) key: Option<Arc<PrivateKey>>,
 }
 
-/// Per connection, in memory only. Locks are never held across an await.
+/// Per connection or local tab, in memory only. Locks are never held across an await.
 #[derive(Default)]
 pub struct Agent {
     requested: AtomicBool,
     channels: AtomicUsize,
     notified: AtomicBool,
-    sha1_notified: AtomicBool,
+    pub(crate) sha1_notified: AtomicBool,
     allowed_until: Mutex<Option<Instant>>,
     pending: Mutex<HashMap<String, Pending>>,
     pub keys: AppKeys,
@@ -174,16 +168,17 @@ impl Agent {
         }
     }
     fn allowed(&self) -> bool {
-        self.allowed_until
-            .lock()
-            .unwrap()
+        self.allowed_until()
             .is_some_and(|until| Instant::now() < until)
+    }
+    pub(crate) fn allowed_until(&self) -> Option<Instant> {
+        *self.allowed_until.lock().unwrap()
     }
     /// No answer, a closed window or a moved terminal all end as a refusal. A standing allowance
     /// skips the card unless a key still has to be unlocked.
-    async fn approve(
+    pub(crate) async fn approve(
         &self,
-        broker: &Broker,
+        events: &dyn Notify,
         mut request: SignRequest,
         unlock: Option<Unlock>,
         wait: Duration,
@@ -203,7 +198,7 @@ impl Agent {
             .lock()
             .unwrap()
             .insert(id.clone(), Pending { sender, unlock });
-        let answer = if broker.send(Event::AgentSign(request)).is_ok() {
+        let answer = if events.notify(Event::AgentSign(request)).is_ok() {
             timeout(wait, answer).await.ok().and_then(|r| r.ok())
         } else {
             None
@@ -215,9 +210,9 @@ impl Agent {
         }
         Some(answer)
     }
-    fn notice_once(&self, flag: &AtomicBool, broker: &Broker, message: &str) {
+    pub(crate) fn notice_once(&self, flag: &AtomicBool, events: &dyn Notify, message: &str) {
         if !flag.swap(true, SeqCst) {
-            let _ = broker.send(Event::AgentNotice {
+            let _ = events.notify(Event::AgentNotice {
                 message: message.into(),
             });
         }
@@ -249,7 +244,7 @@ pub async fn request(channel: &mut Channel<client::Msg>, manager: &Connections, 
         control.agent.keys.forget();
         control.agent.notice_once(
             &control.agent.notified,
-            &control.broker,
+            &*control.broker,
             "서버가 키 전달을 허용하지 않아 이 연결에서는 사용할 수 없습니다.",
         );
     }
@@ -282,9 +277,9 @@ pub fn open(
     let use_system = control.profile.forward_system_agent;
     let mut relay = Relay {
         agent: control.agent.clone(),
-        broker: control.broker.clone(),
+        events: control.broker.clone(),
         session: control.profile.name.clone(),
-        profile: control.profile.id.clone(),
+        keys: KeyOwner::Session(control.profile.id.clone()),
         login_path: control.profile.key_path.clone(),
         extras: control.profile.forward_keys.clone(),
         system: None,
@@ -295,41 +290,29 @@ pub fn open(
     tokio::spawn(async move {
         let _slot = slot;
         if use_system {
-            relay.system = timeout(Duration::from_secs(5), connect_local())
-                .await
-                .ok()
-                .flatten();
+            relay.system = agent_relay::connect_system().await;
         }
         // Without this PC's agent the app's keys are enough. Only having none at all is reported.
         if relay.system.is_none() && relay.app_identities().await.is_empty() {
             relay
                 .agent
-                .notice_once(&relay.agent.notified, &relay.broker, NO_KEYS);
+                .notice_once(&relay.agent.notified, &*relay.events, NO_KEYS);
             return;
         }
         reply.accept().await;
         let mut channel = channel;
         tokio::select! {
             _ = stop.wait_for(|stopped| *stopped) => {}
-            _ = relay.run(&mut channel) => {}
+            _ = run(&mut relay, &mut channel) => {}
         }
         let _ = channel.close().await;
     });
 }
 
-type LocalStream = Box<dyn AgentStream + Send + Unpin>;
-
-async fn connect_local() -> Option<LocalStream> {
-    #[cfg(windows)]
-    let client = AgentClient::connect_named_pipe(crate::ssh_auth::agent_pipe()).await;
-    #[cfg(unix)]
-    let client = AgentClient::connect_env().await;
-    client.ok().map(AgentClient::into_inner)
-}
-
-struct Slot(Arc<Agent>);
+/// One of a connection's or a local tab's agent clients, counted while it lives.
+pub struct Slot(Arc<Agent>);
 impl Slot {
-    fn take(agent: &Arc<Agent>) -> Option<Self> {
+    pub fn take(agent: &Arc<Agent>) -> Option<Self> {
         agent
             .channels
             .try_update(SeqCst, SeqCst, |n| (n < MAX_CHANNELS).then_some(n + 1))
@@ -343,215 +326,34 @@ impl Drop for Slot {
     }
 }
 
-struct Relay {
-    agent: Arc<Agent>,
-    broker: Arc<Broker>,
-    session: String,
-    profile: String,
-    login_path: String,
-    extras: Vec<ForwardKey>,
-    /// This PC's SSH agent, when the session uses it and it answered.
-    system: Option<LocalStream>,
-    /// From the last `session-bind`: the server the remote client says it signs in to.
-    host_key: Option<String>,
-    stop: watch::Receiver<bool>,
-}
-
-impl Relay {
-    /// One request, one answer, in order. A bad frame ends the channel.
-    async fn run(&mut self, channel: &mut Channel<client::Msg>) {
-        let mut buffer = Vec::new();
-        loop {
-            match agent_filter::take_frame(&mut buffer) {
-                Ok(Some(body)) => {
-                    let answer = self.answer(&body).await;
-                    if channel.data(&answer[..]).await.is_err() {
-                        return;
-                    }
-                    continue;
+/// One request, one answer, in order. A bad frame ends the channel.
+async fn run(relay: &mut Relay, channel: &mut Channel<client::Msg>) {
+    let mut buffer = Vec::new();
+    loop {
+        match agent_filter::take_frame(&mut buffer) {
+            Ok(Some(body)) => {
+                let answer = relay.answer(&body).await;
+                if channel.data(&answer[..]).await.is_err() {
+                    return;
                 }
-                Ok(None) => {}
-                Err(_) => return,
+                continue;
             }
-            match channel.wait().await {
-                Some(ChannelMsg::Data { data }) => buffer.extend_from_slice(&data),
-                Some(ChannelMsg::Eof | ChannelMsg::Close) | None => return,
-                _ => {}
-            }
+            Ok(None) => {}
+            Err(_) => return,
+        }
+        match channel.wait().await {
+            Some(ChannelMsg::Data { data }) => buffer.extend_from_slice(&data),
+            Some(ChannelMsg::Eof | ChannelMsg::Close) | None => return,
+            _ => {}
         }
     }
-    /// A framed answer for one request body.
-    async fn answer(&mut self, body: &[u8]) -> Vec<u8> {
-        match agent_filter::classify(body) {
-            Verdict::Refuse => FAILURE.to_vec(),
-            Verdict::Forward => {
-                agent_filter::frame(&agent_keys::identities_answer(&self.identities().await))
-            }
-            Verdict::Bind { host_key } => {
-                self.host_key = fingerprint(&host_key);
-                // This PC's agent records the binding for its own keys. The answer is the app's.
-                let _ = self.system(body).await;
-                SUCCESS.to_vec()
-            }
-            Verdict::Sign { key, purpose } => self.sign(body, key, purpose).await,
-        }
-    }
-    // `&mut`: the system stream is `Send` but not `Sync`, so a shared borrow cannot cross an await.
-    async fn app_identities(&mut self) -> Vec<Identity> {
-        let login = self.agent.keys.login();
-        let (path, extras) = (self.login_path.clone(), self.extras.clone());
-        spawn_blocking(move || agent_keys::app_identities(login.as_deref(), &path, &extras))
-            .await
-            .unwrap_or_default()
-    }
-    async fn identities(&mut self) -> Vec<Identity> {
-        let app = self.app_identities().await;
-        let system = match self.system(&[agent_filter::REQUEST_IDENTITIES]).await {
-            Some(body) => agent_filter::identities(&body),
-            None => vec![],
-        };
-        agent_keys::merge(app, system)
-    }
-    /// One exchange with this PC's agent. A broken one is dropped; the app's keys keep working.
-    async fn system(&mut self, body: &[u8]) -> Option<Vec<u8>> {
-        let answer = exchange(self.system.as_mut()?, body).await;
-        if answer.is_none() {
-            self.system = None;
-        }
-        answer
-    }
-    async fn sign(&mut self, body: &[u8], key: Vec<u8>, purpose: Purpose) -> Vec<u8> {
-        // A key nobody here holds cannot be signed. Nothing to ask about.
-        let Some(identity) = self.identities().await.into_iter().find(|i| i.blob == key) else {
-            return FAILURE.to_vec();
-        };
-        let Some((data, flags)) = agent_keys::sign_request(body) else {
-            return FAILURE.to_vec();
-        };
-        if identity.source() == Source::App && agent_keys::refuses_sha1(&key, flags) {
-            self.agent
-                .notice_once(&self.agent.sha1_notified, &self.broker, SHA1_REFUSED);
-            return FAILURE.to_vec();
-        }
-        let held = match &identity.origin {
-            Origin::Login => self.agent.keys.login(),
-            Origin::Extra(extra) => match self.agent.keys.unlocked(&key) {
-                Some(key) => Some(key),
-                // Read at the moment of signing and dropped right after.
-                None if !extra.encrypted => {
-                    let path = extra.path.clone();
-                    spawn_blocking(move || ssh_keys::load(&path, "").ok().map(Arc::new))
-                        .await
-                        .ok()
-                        .flatten()
-                }
-                None => None,
-            },
-            Origin::System => None,
-        };
-        let unlock = match &identity.origin {
-            Origin::Extra(extra) if held.is_none() => Some(Unlock {
-                profile: self.profile.clone(),
-                path: extra.path.clone(),
-            }),
-            _ => None,
-        };
-        let wait = if unlock.is_some() {
-            PASSPHRASE_TIME
-        } else {
-            ANSWER_TIME
-        };
-        let request = SignRequest {
-            request: String::new(),
-            session: self.session.clone(),
-            key: identity.comment.clone(),
-            fingerprint: fingerprint(&key).unwrap_or_default(),
-            login_user: match &purpose {
-                Purpose::Login { user } => Some(user.clone()),
-                _ => None,
-            },
-            namespace: match purpose {
-                Purpose::Signature { namespace } => Some(namespace),
-                _ => None,
-            },
-            host_key: self.host_key.clone(),
-            source: identity.source(),
-            passphrase: false,
-            seconds: 0,
-        };
-        let Some(answer) = self
-            .agent
-            .approve(&self.broker, request, unlock, wait)
-            .await
-        else {
-            return FAILURE.to_vec();
-        };
-        if identity.origin == Origin::System {
-            return self
-                .system(body)
-                .await
-                .map_or_else(|| FAILURE.to_vec(), |b| agent_filter::frame(&b));
-        }
-        if answer.decision == Decision::Connection
-            && let Some(unlocked) = &answer.key
-        {
-            self.hold(key, unlocked.clone());
-        }
-        let Some(signer) = held.or(answer.key) else {
-            return FAILURE.to_vec();
-        };
-        let data = data.to_vec();
-        match spawn_blocking(move || agent_keys::sign(&signer, &data, flags)).await {
-            Ok(Ok(response)) => agent_filter::frame(&response),
-            _ => FAILURE.to_vec(),
-        }
-    }
-    /// Keeps a key unlocked for "allow for 10 minutes" and no longer.
-    fn hold(&self, blob: Vec<u8>, key: Arc<PrivateKey>) {
-        let until = self
-            .agent
-            .allowed_until
-            .lock()
-            .unwrap()
-            .unwrap_or_else(Instant::now);
-        self.agent.keys.hold(blob, key, until);
-        let agent = self.agent.clone();
-        let mut stop = self.stop.clone();
-        // Owned by the connection: ends when the allowance ends or the connection stops.
-        tokio::spawn(async move {
-            tokio::select! {
-                _ = tokio::time::sleep_until(until.into()) => agent.keys.expire(),
-                _ = stop.wait_for(|stopped| *stopped) => agent.keys.forget(),
-            }
-        });
-    }
-}
-
-fn fingerprint(blob: &[u8]) -> Option<String> {
-    let key = PublicKey::from_bytes(blob).ok()?;
-    Some(key.fingerprint(HashAlg::Sha256).to_string())
-}
-
-/// Sends one request to the local agent and reads its answer body.
-async fn exchange(local: &mut LocalStream, body: &[u8]) -> Option<Vec<u8>> {
-    let work = async {
-        local.write_all(&agent_filter::frame(body)).await.ok()?;
-        let mut header = [0; 4];
-        local.read_exact(&mut header).await.ok()?;
-        let length = u32::from_be_bytes(header) as usize;
-        if length == 0 || length > agent_filter::MAX_FRAME {
-            return None;
-        }
-        let mut answer = vec![0; length];
-        local.read_exact(&mut answer).await.ok()?;
-        Some(answer)
-    };
-    timeout(LOCAL_TIME, work).await.ok().flatten()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::windows::Broker;
+    use russh::keys::HashAlg;
     use std::sync::Mutex as StdMutex;
 
     fn recorder() -> (Arc<Broker>, Arc<StdMutex<Vec<SignRequest>>>) {
@@ -575,6 +377,7 @@ mod tests {
             namespace: None,
             host_key: None,
             source: Source::System,
+            local: false,
             passphrase: false,
             seconds: 0,
         }
@@ -595,7 +398,7 @@ mod tests {
         let (agent2, broker2) = (agent.clone(), broker.clone());
         let task = tokio::spawn(async move {
             agent2
-                .approve(&broker2, request(), None, Duration::from_millis(300))
+                .approve(&*broker2, request(), None, Duration::from_millis(300))
                 .await
                 .is_some()
         });
@@ -642,13 +445,13 @@ mod tests {
         let (broker, seen) = recorder();
         *agent.allowed_until.lock().unwrap() = Some(Instant::now() + ALLOW_FOR);
         let unlock = Unlock {
-            profile: "p".into(),
+            keys: KeyOwner::Session("p".into()),
             path: path.clone(),
         };
         let (agent2, broker2) = (agent.clone(), broker.clone());
         let task = tokio::spawn(async move {
             agent2
-                .approve(&broker2, request(), Some(unlock), Duration::from_secs(30))
+                .approve(&*broker2, request(), Some(unlock), Duration::from_secs(30))
                 .await
         });
         let id = pending(&agent).await;

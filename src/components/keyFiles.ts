@@ -1,4 +1,4 @@
-import type { ForwardKey } from '../../lib/ipc';
+import type { ForwardKey } from '../lib/ipc';
 
 /** What `ssh_key_info` returns: the public part of a key file only. */
 export type KeyInfo = {
