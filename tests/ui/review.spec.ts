@@ -156,7 +156,10 @@ test('explains files it does not draw and offers the terminal command', async ({
 test('compares with a listed branch and switches worktrees', async ({ page }) => {
   await open(page, 1100);
   const first = (await state(page)).calls[0];
-  expect(first).toEqual({ command: 'git_refs', args: { id: 'c1', folder: '/srv/app/src' } });
+  expect(first).toEqual({
+    command: 'git_refs',
+    args: { source: { kind: 'ssh', connectionId: 'c1' }, folder: '/srv/app/src' },
+  });
   await page.getByRole('combobox', { name: '기준' }).selectOption('refs/heads/main');
   const lastList = async () =>
     (await state(page)).calls.filter((c) => c.command === 'git_diff_files').at(-1)?.args;
@@ -168,7 +171,7 @@ test('compares with a listed branch and switches worktrees', async ({ page }) =>
     .poll(
       async () => (await state(page)).calls.filter((c) => c.command === 'git_refs').at(-1)?.args,
     )
-    .toEqual({ id: 'c1', folder: '/srv/app-fix' });
+    .toEqual({ source: { kind: 'ssh', connectionId: 'c1' }, folder: '/srv/app-fix' });
   await expect.poll(async () => (await lastList())?.root).toBe('/srv/app-fix');
   await expect(page.getByRole('combobox', { name: '작업 폴더' })).toHaveValue('/srv/app-fix');
 });

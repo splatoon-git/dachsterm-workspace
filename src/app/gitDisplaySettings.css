@@ -1,0 +1,34 @@
+/* The sample repository under Settings → Git → display. */
+.git-preview {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  font-size: var(--font-small);
+}
+.git-preview-terminal {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-subtle);
+  font-family: var(--font-mono);
+}
+.git-preview-tree {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.git-preview-tree li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+.git-preview-status {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}

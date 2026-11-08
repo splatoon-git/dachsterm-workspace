@@ -1,4 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react';
+import { gitDisplay } from '../../lib/gitDisplay';
 import { call, errorText } from '../../lib/ipc';
 import { commandMarksOf } from '../terminal/commandMarks';
 import { terminalPreferences, useTerminalPreferences } from '../terminal/preferences';
@@ -27,9 +28,10 @@ class GitStatusStore {
         const id = session.connectionId;
         const target = session.localTarget;
         const askedAt = Date.now();
+        const untrackedFiles = gitDisplay().untracked === 'files';
         const result = await (target
-          ? call<GitResult>('local_git_status', { targetId: target.id, folder })
-          : call<GitResult>('git_status', { id, folder }));
+          ? call<GitResult>('local_git_status', { targetId: target.id, folder, untrackedFiles })
+          : call<GitResult>('git_status', { id, folder, untrackedFiles }));
         if (id !== session.connectionId) return null;
         this.askedAt.set(folder, askedAt);
         return result;

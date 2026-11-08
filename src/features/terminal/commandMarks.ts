@@ -129,6 +129,23 @@ export class CommandMarks {
     const current = this.current;
     return !!current && current.startedAt === undefined && this.normal;
   }
+  /** The shell reports its prompts here, so `promptWaiting` says something. */
+  get reportsPrompts() {
+    return this.records.length > 0;
+  }
+  /** Something is on the prompt line that a typed command would be added to. */
+  get promptHasText() {
+    const from = this.typedFrom;
+    return !!from && this.promptWaiting && !!this.typedText(from).trim();
+  }
+  /** The app typed a whole command at this prompt, which the shell may not report as started. */
+  typedCommand() {
+    const current = this.current;
+    if (!current || current.startedAt !== undefined || !this.normal) return;
+    current.startedAt = Date.now();
+    current.command = this.marker(0);
+    this.changed();
+  }
   /** The line the latest prompt began on, or -1 when it has left the buffer. */
   get promptLine() {
     return this.current?.prompt.line ?? -1;
@@ -188,23 +205,27 @@ export class CommandMarks {
     this.promptListeners.forEach((listener) => listener(replaying));
     this.changed();
   }
-  /** What the user typed at the prompt, for shells that do not report command starts. */
+  /** What is on the screen from where typing began to the cursor's line. */
+  private typedText(from: { line: number; x: number }) {
+    const buffer = this.terminal.buffer.active;
+    const end = buffer.baseY + buffer.cursorY;
+    let typed = '';
+    for (let line = from.line; line <= end; line++)
+      typed += buffer.getLine(line)?.translateToString(true, line === from.line ? from.x : 0) ?? '';
+    return typed;
+  }
+  /** What the user typed at the prompt. Without shell reports, Enter is the start of a command. */
   input(data: string) {
     const current = this.current;
-    if (this.shellStarts || !current || current.startedAt !== undefined || !this.normal) return;
+    if (!current || current.startedAt !== undefined || !this.normal) return;
     if (this.host.replaying()) return;
     const buffer = this.terminal.buffer.active;
     this.typedFrom ??= { line: buffer.baseY + buffer.cursorY, x: buffer.cursorX };
+    if (this.shellStarts) return;
     const enter = data.indexOf('\r');
     if (enter < 0) return;
     // An empty line only draws the prompt again. Echo may lag, so the sent text counts too.
-    let typed = data.slice(0, enter);
-    const end = buffer.baseY + buffer.cursorY;
-    for (let line = this.typedFrom.line; line <= end; line++)
-      typed +=
-        buffer
-          .getLine(line)
-          ?.translateToString(true, line === this.typedFrom.line ? this.typedFrom.x : 0) ?? '';
+    const typed = data.slice(0, enter) + this.typedText(this.typedFrom);
     if (!typed.trim()) return;
     current.startedAt = Date.now();
     current.command = this.marker(0);

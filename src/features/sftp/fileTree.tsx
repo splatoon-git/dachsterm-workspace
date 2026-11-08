@@ -4,6 +4,7 @@ import { Icon, type IconName } from '../../components/Icon';
 import type { MenuItem } from '../../components/ContextMenu';
 import { fileMarkLabels, useFileDecorations } from '../../components/fileDecorations';
 import { useFileOpener } from '../../components/fileOpen';
+import { useGitDisplay } from '../../lib/gitDisplay';
 import {
   childPath,
   flattenTree,
@@ -116,6 +117,7 @@ export function FileTreeRow<T extends FileEntry>({
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const decorations = useFileDecorations();
   const open = useFileOpener();
+  const { treeMarks } = useGitDisplay();
   const mark = row.path ? decorations?.mark(row.path) : undefined;
   // A link may lead to a folder, so a click only previews a plain file.
   const file = open && row.path && !row.directory && !row.symlink ? row.path : null;
@@ -149,16 +151,19 @@ export function FileTreeRow<T extends FileEntry>({
         aria-pressed={selected}
       >
         <Icon name={row.directory ? 'folder' : 'file'} size={15} />
-        <span>
+        <span data-git-name={mark && treeMarks !== 'letter' ? mark : undefined}>
           {row.label}
           {row.symlink ? ' ↗' : ''}
         </span>
-        {mark && (
-          <small className="file-git-mark" data-mark={mark} title={`Git ${fileMarkLabels[mark]}`}>
-            <span aria-hidden="true">{mark === 'folder' ? '•' : mark}</span>
+        {mark &&
+          (treeMarks === 'color' ? (
             <span className="sr-only">, Git {fileMarkLabels[mark]}</span>
-          </small>
-        )}
+          ) : (
+            <small className="file-git-mark" data-mark={mark} title={`Git ${fileMarkLabels[mark]}`}>
+              <span aria-hidden="true">{mark === 'folder' ? '•' : mark}</span>
+              <span className="sr-only">, Git {fileMarkLabels[mark]}</span>
+            </small>
+          ))}
         {!row.directory && <small>{formatBytes(row.size)}</small>}
       </button>
     </div>

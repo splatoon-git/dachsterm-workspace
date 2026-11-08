@@ -6,8 +6,14 @@ import assert from 'node:assert/strict';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
-import { chooseTabMenu, openNewConnectionForm, openSettings } from './native-workspace.mjs';
+import {
+  chooseTabMenu,
+  openNewConnectionForm,
+  openSettings,
+  showSidebarView,
+} from './native-workspace.mjs';
 import { checkServerDragFetch } from './native-drag-fetch.mjs';
+import { checkGitConfigTarget } from './verify-git-settings.mjs';
 
 const promptFolder = '/home/probe/.cache/dachsterm/prompt';
 const tmuxName = 'dachs-native';
@@ -455,6 +461,30 @@ export async function verifyAgentTerminal({
     )
     .toContain('DENIED_FAIL');
   assert.equal(shell(`git --git-dir ${work}.git log -1 --format=%s main`), 'c1');
+
+  // GE.9: the Git view types `git push` in this terminal, and the key card answers it there.
+  setStage('GE.9 push with the key card');
+  await command(
+    `cd ${work} && git checkout -q -B main && echo ge9 > f && git add f && git commit -qm ge9-key && ` +
+      `git remote add origin ssh://probe@127.0.0.1${work}.git; ` +
+      `git config core.sshCommand 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ` +
+      `-o BatchMode=yes -o LogLevel=ERROR' && git config branch.main.remote origin && ` +
+      `git config branch.main.merge refs/heads/main && printf 'GE9_%s\\n' READY`,
+  );
+  await output('GE9_READY');
+  await showSidebarView(page, 'Git');
+  const signView = page.locator('#git-sidebar');
+  await signView.getByRole('button', { name: 'Git 더 보기' }).click();
+  await page.getByRole('menuitem', { name: 'push', exact: true }).click();
+  await expect(signCard()).toContainText(mine, { timeout: 15000 });
+  await signCard().getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await expect
+    .poll(() => shell(`git --git-dir ${work}.git log -1 --format=%s main`), { timeout: 15000 })
+    .toBe('ge9-key');
+  await expect(signCard()).toHaveCount(0);
+  await showSidebarView(page, '연결');
+  console.log('PASS native Git view push is typed in the terminal and answered by the key card');
+
   const forwardProfile = (await invoke('sessions')).profiles.find((p) => p.name === forwardName);
   assert.equal(forwardProfile.forwardAgent, true);
   await page.getByRole('button', { name: `${forwardName} 탭 닫기`, exact: true }).click();
@@ -689,6 +719,29 @@ export async function verifyAgentTerminal({
   await expect(credentialCard()).toHaveCount(0);
   console.log('PASS native "allow once" answers with the token saved in the app');
 
+  // GE.9: a push from the Git view reaches the same card. A new tab, so "allow once" is over.
+  setStage('GE.9 push with the credential card');
+  await reopen();
+  await command(
+    `cd ${httpsWork} && git checkout -q -B main && echo ge9 > f && git add f && git commit -qm ge9-https && ` +
+      `git remote add origin ${httpsUrl}; git config http.sslVerify false && ` +
+      `git config branch.main.remote origin && git config branch.main.merge refs/heads/main && ` +
+      `printf 'GE9_%s\\n' HTTPS_READY`,
+  );
+  await output('GE9_HTTPS_READY');
+  await showSidebarView(page, 'Git');
+  const credentialView = page.locator('#git-sidebar');
+  await credentialView.getByRole('button', { name: 'Git 더 보기' }).click();
+  await page.getByRole('menuitem', { name: 'push', exact: true }).click();
+  await expect(credentialCard()).toContainText('git.test:3000', { timeout: 15000 });
+  await credentialCard().getByRole('button', { name: '이번만 허용', exact: true }).click();
+  await expect(credentialCard()).toHaveCount(0);
+  await output('main -> main');
+  await showSidebarView(page, '연결');
+  console.log(
+    'PASS native Git view push is typed in the terminal and answered by the credential card',
+  );
+
   await reopen();
   await httpsPush(3, 'REFUSED');
   await expect(credentialCard()).toBeVisible({ timeout: 15000 });
@@ -697,14 +750,14 @@ export async function verifyAgentTerminal({
   await pane().locator('.xterm-helper-textarea').press('Control+C');
   console.log('PASS native refusal leaves git to ask in the terminal');
 
-  const settings = await openSettings(page, '에이전트');
+  const settings = await openSettings(page, 'Git');
   const savedList = settings.getByRole('region', { name: '저장한 Git 자격 증명', exact: true });
   await expect(savedList).toContainText('https://git.test:3000');
   await savedList.getByRole('button', { name: 'git.test:3000 probe 삭제', exact: true }).click();
   await expect(savedList).toContainText('저장한 자격 증명이 없습니다.');
   assert.deepEqual(await invoke('git_credentials_saved'), []);
   await settings.getByRole('button', { name: '대화상자 닫기' }).click();
-  console.log('PASS native Settings › Agents lists the saved credential and removes it');
+  console.log('PASS native Settings › Git lists the saved credential and removes it');
 
   await writeFile(localStore, `https://probe:${probe('GIT_PASSWORD')}@git.test:3000\n`);
   try {
@@ -732,4 +785,9 @@ export async function verifyAgentTerminal({
   await invoke('delete_session', { id: credentialProfile.id });
   assert.equal((await invoke('sessions')).credentialWarning ?? null, null);
   await page.locator('.tab-strip').getByRole('tab').first().click();
+  await checkGitConfigTarget(page, {
+    match: /^서버 · /,
+    read: (key) => shell(`git config --global --get ${key} || true`),
+    marker: 'GE10 서버',
+  });
 }

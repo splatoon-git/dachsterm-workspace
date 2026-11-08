@@ -1,7 +1,7 @@
 # Git·파일 편집 작업 화면 — 설계안
 
-- 작업 ID: **GE.1~GE.13**, 설계일: **2026-11-08**. 관련 작업 DX.16(에이전트 시작 옵션)은 [developer-workflow DX.16](developer-workflow.md#dx16--에이전트-시작-옵션-2026-11-08-추가)에 있다.
-- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.3·GE.7·GE.11 구현(대기 항목은 progress), GE.4 Windows 시험 완료(Mac 실기기 대기), GE.5 구현(대기 항목은 progress), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
+- 작업 ID: **GE.1~GE.14**, 설계일: **2026-11-08**. 관련 작업 DX.16(에이전트 시작 옵션)은 [developer-workflow DX.16](developer-workflow.md#dx16--에이전트-시작-옵션-2026-11-08-추가)에 있다.
+- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.3·GE.7·GE.9·GE.10·GE.11·GE.14 구현(대기 항목은 progress), GE.4 Windows 시험 완료(Mac 실기기 대기), GE.5 구현(대기 항목은 progress), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
 - 선행: DX.15(로컬·WSL 탭 Git 상태, `dev` `d6d2ec4`).
 - 기준 자료: `dev` `57e32bb`의 코드, 2026-11-08 사용자 대화와 스크린샷(VS Code 소스 제어 화면, 앱의 WSL 파일 패널·우클릭 메뉴). 내용은 코드를 읽어 확인했고, 이 설계를 위한 실행 검증은 GE.2 말고는 없다.
 
@@ -168,6 +168,18 @@
 - 커밋 실패의 흔한 원인(이름·이메일 없음, 훅 실패)은 stderr 첫 줄과 함께 보여주고, 이름·이메일이면 **설정 → Git**으로 안내한다. 사전 커밋 훅은 저장소 설정이므로 그대로 실행된다(`--no-verify` 메뉴는 두지 않는다).
 - 실행한 Git 명령은 Git 보기 아래 **출력** 접이식 영역에 최근 50개를 남긴다(VS Code의 Git 출력과 같은 용도). 내용과 의견은 로그·진단 내보내기에 남기지 않는다.
 
+구현에서 정한 것(2026-11-08):
+
+- `GIT_LITERAL_PATHSPECS=1`은 자식 프로세스로 상속된다. `stash --include-untracked`가 내부에서 부르는 `git clean ... :/`와 커밋 훅의 `:(exclude)`가 깨지므로, 경로를 받지 않는 동작(`commit`, 브랜치 만들기·전환, `stash`)에는 `--no-literal-pathspecs`를 붙인다. 경로를 받는 `add`, `reset`, `checkout --`, `clean`은 글자 그대로 둔다.
+- 스테이지 취소는 `git reset -q`(첫 커밋 전에도 동작, Git 2.23 미만 서버 포함), 변경 버리기는 `git checkout -q --`(스테이지한 쪽은 남음), 추적 안 함 삭제는 파일 삭제가 아니라 `git clean -f -q --`(그 사이 Git이 추적하게 된 파일은 건드리지 않음)이다.
+- 경로 목록은 16KiB마다 나눠 실행한다. Windows 명령줄 32K와, WSL 스크립트가 인자 하나로 들어가는 제약 때문이다. **그룹 전체 동작은 화면에 보이는 파일 목록만** 넘겨, 5,000개 상한 뒤의 보이지 않는 파일을 건드리지 않는다. 경로 없이 전체에 적용되는 것은 위험이 없는 `⋯ → 모두 스테이지`·`모두 스테이지 취소`뿐이다.
+- `git_refs`의 입력을 연결 ID에서 **출처**로 넓혔다(브랜치 전환 목록이 로컬·WSL에서도 필요). 새 조회 명령은 만들지 않았다.
+- 터미널 입력 판단(`gitTerminal.ts`): 프롬프트 대기 중이면 입력, 명령 실행 중·전체 화면이면 **터미널이 사용 중입니다**, 프롬프트에 글자가 남아 있으면 막음(입력에 덧붙지 않게), 저장소 폴더 밖이거나 폴더를 모르면 막음. **프롬프트를 보고하지 않는 셸(PowerShell, cmd, 훅 없는 셸)과 tmux는 상태를 알 수 없으므로 명령을 보여 주고 확인을 받는다(기본 취소).** tmux는 화면이 항상 보조 화면이라 전체 화면 판단을 쓸 수 없고, 폴더만 `tmux_current_path`로 확인한다.
+- 원격 브랜치 체크아웃의 `git checkout --track <이름>`은 셸마다 인용이 달라 인용하지 않는다. 글자·숫자·`_`·`.`·`/`·`-`만으로 된 이름만 입력하고 나머지는 직접 입력하도록 안내한다.
+- 명령 실행 시간 상한은 120초(커밋 훅), 출력은 stdout 8MiB, stderr 64KiB만 남기고 끝까지 읽어 버린다. 전에는 상한을 넘은 뒤 파이프를 비우지 않아 훅이 많이 출력하면 커밋이 시간 초과까지 멈췄다(`git_run.rs`의 `read_capped`).
+- 이름·이메일이 없는 커밋 실패는 stderr 문구가 아니라 `git var GIT_AUTHOR_IDENT`·`GIT_COMMITTER_IDENT`의 종료 코드로 판단한다(엔지니어링 규칙 §6).
+- 첫 푸시용 `git push -u origin <브랜치>` 메뉴는 두지 않았다. 원격 이름을 추측해야 하므로, 업스트림이 없을 때는 `git push`의 안내를 터미널에서 그대로 본다. 커밋 실패 안내의 **설정 → Git**은 GE.10이 만든 `requestSettings`로 연결했다.
+
 ### GE.10 — 설정 → Git
 
 새 분류 **Git**(`features/settings/GitSettings.tsx`). Git 자동 조회(지금 터미널 분류)와 HTTPS Git 자격 증명(지금 에이전트 분류)을 여기로 옮기고, 원래 자리에는 링크만 남긴다.
@@ -182,6 +194,16 @@
 3. **Git 설정 편집(`git config`):** 위쪽에서 **대상**을 고른다: 이 PC / WSL 배포판(목록) / 현재 SSH 연결의 서버. 범위는 사용자 전역(`--global`), Git 보기의 `⋯`에서는 저장소(`--local`)도 연다. 값은 그 대상에서 읽어 오고, 사용자가 바꾼 항목만 `git config --global <키> <값>`으로 쓴다.
    - 항목: `user.name`, `user.email`, `init.defaultBranch`, `pull.rebase`(false/true/merges), `pull.ff`, `fetch.prune`, `push.autoSetupRemote`, `push.default`, `core.autocrlf`(true/input/false), `core.eol`, `core.editor`, `merge.conflictStyle`(merge/diff3/zdiff3), `rebase.autoStash`, `rerere.enabled`, `credential.helper`(읽기 표시만, 바꾸려면 직접 입력), `safe.directory`(목록 보기와 추가, 와일드카드 `*`는 경고).
    - 쓰기 전 최종 명령을 보여주고 확인받는다. 설정 파일을 직접 고치지 않고 항상 `git config`를 거친다.
+
+구현에서 정한 것(2026-11-08):
+
+- 설정 창은 다른 대화상자를 열지 않는다는 규칙에 따라 최종 명령 확인은 대화상자가 아니라 분류 안의 카드로 띄운다. 미리보기와 실행은 Rust의 같은 함수에서 명령을 만들어 둘이 달라질 수 없다(`git_config_preview`, `git_config_write`).
+- 읽기는 표의 키만 `--get-regexp`로 묻는다. `http.extraHeader` 같은 다른 항목은 대상 밖으로 나오지 않는다. `credential.helper`는 값이 `!`로 시작하거나 `@`, `password`, `token`, `secret`, `key=`를 담으면 내용을 보내지 않고 "숨김"으로만 알린다.
+- 값이 여러 개인 키를 바꾸면 그때만 `--replace-all`·`--unset-all`을 붙인다. `safe.directory`는 Git이 저장소 설정에서 읽지 않으므로 저장소 범위에서는 뺐다.
+- 사용자 지정 Git은 DB `git-program`에 두고 `git_program()`이 읽는다. `GitHost::local`에 저장소를 넘기지 않으려고(GE.9와 충돌 방지) 값은 프로세스 전역 변수에 두고 시작할 때 읽는다. 손상된 값은 자동 찾기로 넘어가지 않고 Git 없음으로 동작하며 설정 화면에 알린다.
+- `features/settings`가 다른 기능을 import하지 않도록 표시 설정(`app/GitDisplaySettings.tsx`)과 자격 증명은 `app/GitSettingsSection.tsx`가 넣는다. 새 표시 설정은 `lib/gitDisplay.ts`(`dachsterm.gitDisplay`)에 두고, `promptBranch`·`gitStatus`는 셸 훅 삽입에 쓰이므로 터미널 설정에 그대로 둔다.
+- 표시 내용은 프롬프트 배지와 상태바에 함께 적용한다. 에이전트 보드의 Git 글자는 바꾸지 않는다. 추적 안 함 파일 설정은 상태바·파일 트리 조회(`git_status`, `local_git_status`의 `untrackedFiles`)에만 적용하고, Git 보기는 GE.7대로 항상 파일 단위다.
+- 저장소 범위는 Git 보기 `⋯ → 이 저장소의 Git 설정…`으로만 열리며 대상 목록의 첫 항목으로 나타난다. 어디서든 설정을 열 수 있게 `lib/settingsRequest.ts`를 두었다.
 
 ### GE.11 — 터미널 안 브랜치
 
@@ -232,6 +254,22 @@ __dachsterm_head() {
 - Git 항목 앞에 브랜치 아이콘. 바뀐 파일이 없어도 Git 표시인지 알아보게 한다. 누르면 Git 보기를 연다(지금은 새로 고침).
 - 파일 탭이 선택되면 상태바 오른쪽에 인코딩·줄바꿈·들여쓰기·언어(GE.5).
 
+### GE.14 — 커밋 그래프(읽기 전용)
+
+VS Code 소스 제어의 **그래프**를 기준으로 하며, 쓰기 동작(체크아웃, cherry-pick, revert, 태그·브랜치 만들기)은 메뉴에 두지 않는다.
+
+- **표시 위치:** Git 보기 아래쪽의 접이식 구역 **그래프**. 펼치면 변경 목록과 세로를 반씩 나누고 각자 스크롤한다. 접은 상태는 `dachsterm.gitView.graph`에 기억하고, 접혀 있으면 조회하지 않는다. 저장소가 아니면 구역이 없다.
+- **보여 주는 커밋:** `HEAD`와 그 upstream에서 닿는 커밋(업스트림이 없거나 분리된 HEAD면 `HEAD`만). `--topo-order`로 부모가 자식보다 먼저 나오지 않게 한다. 모든 브랜치 보기는 넣지 않는다.
+- **커밋 수 상한:** 처음 100개, 목록 끝의 **더 불러오기**로 100개씩, 최대 1,000개. 상한에 닿으면 "최근 1,000개까지만 표시합니다"를 보인다. 커밋을 하나 더 요청해 다음이 있는지 판단한다. 더 불러올 때는 처음부터 다시 조회한다. 그 사이 새 커밋이 생겨도 `--skip`처럼 어긋나지 않는다.
+- **조회 제한:** 15초, 출력 4MiB. 넘으면 이유와 **다시 조회**를 보인다. 큰 저장소에서 `--topo-order`는 전체 이력을 걷을 수 있어 시간 제한이 실제로 쓰인다.
+- **다시 조회:** 저장소 객체가 알린 HEAD·upstream·앞섬·뒤처짐이 바뀌거나 머리줄의 새로 고침을 누를 때. 앞선 요청이 끝난 뒤 최신 요청 하나만 보낸다.
+- **행:** 그래프, 제목, 참조 배지(현재 브랜치, 브랜치, 원격, 태그, 최대 3개와 `+N`). `refs/remotes/*/HEAD`는 표시하지 않는다. 툴팁은 짧은 해시·작성자·시각·제목.
+- **커밋 클릭:** 그 행 아래로 펼쳐 전체 해시, 작성자, 시각, 부모, 전체 메시지, 바뀐 파일 목록을 보인다. VS Code에서 커밋을 펼치는 것과 같고, 한 번에 하나만 펼친다. 다시 누르면 닫는다. 커밋은 바뀌지 않으므로 받은 상세는 그 구역이 살아 있는 동안 다시 조회하지 않는다.
+- **파일 목록:** 병합 커밋은 첫 번째 부모와 비교하고, 최초 커밋은 빈 트리와 비교한다. 5,000항목 상한이 지나거나 시간·크기 제한에 걸리면 목록이 잘렸음을 표시한다. 파일 행을 눌러 diff를 여는 것은 GE.8 뒤에 잇는다(지금은 표시만).
+- **우클릭:** 전체 해시 복사, 제목 복사. Enter·Space로 펼치고, 위아래 화살표로 행을 옮긴다.
+- **배치 계산:** `commitGraphModel.ts`의 순수 함수(이름을 `commitGraph.ts`로 하면 `CommitGraph.tsx`와 대소문자만 달라 충돌). 각 칸은 다음에 나올 커밋(lane)을 기다린다. 커밋이 기다리던 칸이 여럿이면 그 칸들이 커밋으로 모이고, 첫 번째 부모가 커밋의 칸을 잇고, 나머지 부모는 오른쪽에 새 칸을 연다. 칸 색은 칸이 열릴 때 정해 끝까지 유지한다. 칸이 많으면 칸 폭을 줄여 전체 폭 96px 안에 넣는다.
+- **안전 설정:** `git_run`의 설정에 더해 `--no-show-signature`(저장소의 `log.showSignature`와 `gpg.program`이 프로그램을 실행하지 못하게), `--no-color`, `--encoding=UTF-8`, diff에 `--no-ext-diff --no-textconv`. 해시는 40·64자 16진수만 받는다. 참조 이름은 Git이 준 `refs/` 이름만 넘긴다.
+
 ### GE.13 — 문서·회귀·Mac
 
 사용 안내서(Git 보기, 파일 탭, 편집, 설정 → Git, 끌어내기), Mac 실기기 항목을 [macos-readiness](../verification/macos-readiness.md)에 등록(한글 입력, Finder 끌기, Keychain과 무관). 바꾼 범위의 검사만 1회.
@@ -249,7 +287,10 @@ __dachsterm_head() {
 | `git_view` | 출처, 폴더 | 브랜치·원격·스테이지 구분 항목 | GE.7 |
 | `git_file_diff` | 출처, 폴더, 경로, 비교 기준 | 양쪽 내용 | GE.8 |
 | `git_apply` | 출처, 폴더, 동작(판별 유니온) | 결과, stderr 첫 줄 | GE.9 |
-| `git_program_info`, `git_config_read`, `git_config_write` | 대상 / 키·값 | 경로·버전 / 값 | GE.10 |
+| `git_program_info`, `git_program_pick`, `git_program_set` | 없음 / 경로 | 경로·버전·문제(이 PC만) | GE.10 |
+| `git_config_read`, `git_config_preview`, `git_config_write` | 출처, 범위 / 변경 목록 | 값 / 최종 명령 / 없음 | GE.10 |
+| `git_graph` | 출처, 폴더, 개수(1~1,000) | 커밋(해시, 부모, 작성자, 시각, 참조, 제목)과 다음 있음, 또는 커밋 없음·저장소 아님·Git 없음·중단 | GE.14 |
+| `git_commit_detail` | 출처, 폴더, 해시 | 부모, 작성자, 시각, 전체 메시지, 바뀐 파일(`DiffFile`), 잘림 | GE.14 |
 
 - **출처**는 판별 유니온 `{ kind: 'ssh', connectionId } | { kind: 'local', targetId } | { kind: 'ftp', connectionId }`. 문자열에 상태를 섞지 않는다(규칙 §7).
 - `git_apply`의 동작도 판별 유니온(`stage`, `unstage`, `commit`, `discard`, `branchCreate`, `checkout`, `stashPush`, `stashPop`, `tag`)이고, 경로는 `--` 뒤 글자 그대로(`GIT_LITERAL_PATHSPECS=1`). 네트워크 동작은 명령이 없다(터미널 입력).
@@ -279,13 +320,14 @@ __dachsterm_head() {
 | 10 | GE.10 | 설정 → Git | GE.7 | 대상별 읽기·쓰기, Git 위치 지정, 미리보기 |
 | 11 | GE.3 | 끌어내기·탐색기에서 보기 | — | Windows 탐색기·Mac Finder 실기기 |
 | 12 | GE.12 | 상태바 | GE.5, GE.7 | Playwright |
-| 13 | GE.13 | 문서·회귀·Mac | 전체 | 바꾼 범위 1회 |
+| 13 | GE.14 | 읽기 전용 커밋 그래프 | GE.7 | SSH·로컬·WSL에서 같은 그래프, 큰 이력에서 상한 동작 |
+| 14 | GE.13 | 문서·회귀·Mac | 전체 | 바꾼 범위 1회 |
 
 - 각 단계는 작업 ID 브랜치에서 하고 끝나면 `dev`에 병합한다(AGENTS.md 브랜치 규칙).
 - **단계 묶음:** 위 표의 선행 관계로 나눴다.
   - 1단계(`dev` 병합): GE.1·GE.2·GE.3·GE.4·GE.7·GE.11.
   - 2단계(서로 기다리지 않아 동시 진행 가능): GE.5·GE.9·GE.10.
-  - 3단계: GE.5 뒤 GE.6, GE.6 뒤 GE.8(오른쪽 편집 연동), GE.5 뒤 GE.12, 마지막 GE.13.
+  - 3단계: GE.5 뒤 GE.6, GE.6 뒤 GE.8(오른쪽 편집 연동), GE.5 뒤 GE.12, 마지막 GE.13. GE.14는 GE.7만 기다리므로 언제든 시작할 수 있고 GE.13보다 먼저 끝낸다.
 - **2단계에서 겹치는 곳:**
   - IPC 등록 3곳(`lib.rs`, `build.rs`, `capabilities/main.json`)은 세 작업이 모두 고친다. 나중에 병합하는 쪽이 목록을 합친다.
   - GE.5의 `file` 탭 종류는 `workspaceLayout.ts`(357줄, 상한 400줄)에 들어간다. 넘을 것 같으면 먼저 나눈다.
@@ -297,5 +339,5 @@ __dachsterm_head() {
 ## 8. 남은 결정
 
 1. 편집기 최종 선택: GE.4 결과로 정한다(기본 Monaco).
-2. 커밋 그래프(VS Code 소스 제어의 **그래프**): 읽기 전용 그래프를 GE.9 뒤에 넣을지. 권장: GE.13 뒤 별도 판단.
+2. 커밋 그래프(VS Code 소스 제어의 **그래프**): **결정(2026-11-08 사용자): 읽기 전용 그래프를 넣는다.** GE.14로 GE.13 앞에 둔다.
 3. PowerShell 프롬프트 브랜치: 후속(사용자 의견 "빠져도 됨").

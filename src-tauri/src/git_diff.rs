@@ -11,10 +11,11 @@ use crate::{
     git_run::{GitHost, SizeGuard, args, git_run, git_run_guarded},
     git_status::{StopReason, first_line},
     remote_exec::{Failure, Limits, Output},
+    source::Source,
     storage::Result,
 };
-pub(crate) use parse::change;
-use parse::{parse_file, parse_list, parse_refs};
+pub(crate) use parse::{change, parse_list};
+use parse::{parse_file, parse_refs};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -256,7 +257,7 @@ fn untracked_commands(path: &str) -> Vec<Vec<String>> {
 }
 
 /// A failed step is an error the review shows: the folder or Git itself.
-fn checked(output: Output, what: &str) -> Result<Vec<u8>> {
+pub(crate) fn checked(output: Output, what: &str) -> Result<Vec<u8>> {
     if output.exit == Some(0) {
         return Ok(output.stdout);
     }
@@ -371,10 +372,11 @@ pub async fn file(host: &GitHost, request: FileRequest<'_>) -> Result<FileDiff> 
 #[tauri::command]
 pub async fn git_refs(
     state: tauri::State<'_, AppState>,
-    id: String,
+    source: Source,
     folder: String,
 ) -> Result<GitRefs> {
-    refs(&GitHost::ssh(&state.connections, &id)?, &folder).await
+    let host = GitHost::resolve(&state.connections, &state.locals, &source).await?;
+    refs(&host, &folder).await
 }
 
 #[tauri::command]

@@ -1,4 +1,5 @@
 import { fileMarkLabels, type FileMark } from '../../components/fileDecorations';
+import type { GitDisplay } from '../../lib/gitDisplay';
 
 /**
  * Git status of a tab's folder (DX.5, local and WSL tabs DX.15): when to ask, and how a result
@@ -59,7 +60,7 @@ export function gitPath(path: string) {
   return path.replace(/\\/g, '/').replace(/^[a-z]:/, (drive) => drive.toUpperCase());
 }
 
-const inside = (path: string, root: string) =>
+export const inside = (path: string, root: string) =>
   path === root || path.startsWith(root.endsWith('/') ? root : `${root}/`);
 
 /**
@@ -183,9 +184,19 @@ export const hookBranch = (repo: GitRepo) =>
 
 export const changeCount = (repo: GitRepo) => `${repo.entries.length}${repo.truncated ? '+' : ''}`;
 
-/** The short status bar text, such as `main ●3`. */
-export const gitStatusText = (repo: GitRepo) =>
-  repo.entries.length ? `${branchLabel(repo)} ●${changeCount(repo)}` : branchLabel(repo);
+/** Commits ahead of and behind the upstream, such as `↑1 ↓2`, or nothing when in step. */
+export const syncText = (repo: Pick<GitRepo, 'ahead' | 'behind'>) =>
+  [repo.ahead ? `↑${repo.ahead}` : '', repo.behind ? `↓${repo.behind}` : '']
+    .filter(Boolean)
+    .join(' ');
+
+/** The short status bar text, such as `main ●3`, with as much as the setting asks for. */
+export function gitStatusText(repo: GitRepo, detail: GitDisplay['detail'] = 'changes') {
+  const parts = [branchLabel(repo)];
+  if (detail !== 'branch' && repo.entries.length) parts.push(`●${changeCount(repo)}`);
+  if (detail === 'sync' && syncText(repo)) parts.push(syncText(repo));
+  return parts.join(' ');
+}
 
 /** A whole sentence for screen readers and tab tooltips. */
 export const gitSentence = (repo: GitRepo) =>

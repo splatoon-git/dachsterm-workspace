@@ -227,6 +227,11 @@ describe('git status text', () => {
     expect(gitStatusText(repo('/r'))).toBe('main');
     expect(gitStatusText(repo('/r', { branch: null }))).toBe('(abcdef0)');
     expect(gitStatusText({ ...changed, truncated: true })).toBe('main ●3+');
+    const ahead = { ...changed, ahead: 1, behind: 2 };
+    expect(gitStatusText(ahead, 'branch')).toBe('main');
+    expect(gitStatusText(ahead, 'changes')).toBe('main ●3');
+    expect(gitStatusText(ahead, 'sync')).toBe('main ●3 ↑1 ↓2');
+    expect(gitStatusText({ ...repo('/r'), ahead: 4, behind: 0 }, 'sync')).toBe('main ↑4');
     expect(gitSentence(changed)).toBe('Git main, 변경 3개');
     expect(gitSentence(repo('/r'))).toBe('Git main, 변경 없음');
   });

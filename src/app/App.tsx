@@ -757,13 +757,13 @@ export function App() {
         />
       )}
       {agent.dialogs}
-      {settingsOpen && (
-        <SettingsDialog
-          snapshot={snapshot}
-          changed={() => void refresh()}
-          close={() => setSettingsOpen(false)}
-        />
-      )}
+      <SettingsDialog
+        open={settingsOpen}
+        setOpen={setSettingsOpen}
+        snapshot={snapshot}
+        session={selected}
+        changed={() => void refresh()}
+      />
       {form && (
         <SessionForm
           initial={form}

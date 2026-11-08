@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-git-program-pick"
+description = "Enables the git_program_pick command without any pre-configured scope."
+commands.allow = ["git_program_pick"]
+
+[[permission]]
+identifier = "deny-git-program-pick"
+description = "Denies the git_program_pick command without any pre-configured scope."
+commands.deny = ["git_program_pick"]

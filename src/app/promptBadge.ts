@@ -44,9 +44,12 @@ export function middleEllipsis(text: string, limit: number) {
   return `${head}…${tail}`;
 }
 
-/** The badge's text, within its limit: `⎇ main` and, with changes, the count after it. */
-export function badgeText(branch: string, count: string | null) {
-  const suffix = count ? ` ●${count}` : '';
+/** What follows the branch name: ` ●3` and ` ↑1 ↓2`, each only when there is something to say. */
+export const badgeSuffix = (count: string | null, sync = '') =>
+  `${count ? ` ●${count}` : ''}${sync ? ` ${sync}` : ''}`;
+
+/** The badge's text, within its limit. The suffix always shows whole; the name gives way. */
+export function badgeText(branch: string, suffix = '') {
   return `⎇ ${middleEllipsis(branch, maxCells - cells('⎇ ') - cells(suffix))}${suffix}`;
 }
 

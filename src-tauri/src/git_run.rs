@@ -17,7 +17,10 @@ use std::{
     process::Stdio,
     sync::Arc,
 };
-use tokio::{io::AsyncReadExt, process::Command};
+use tokio::{
+    io::{self, AsyncRead, AsyncReadExt},
+    process::Command,
+};
 
 /// A repository's own settings must not start a program, and optional locks would collide with
 /// the user's own Git commands. Pathspecs are read literally, so a file named `:(top)*` is that
@@ -156,6 +159,17 @@ fn native_command(program: &Path, folder: &str, args: &[String]) -> Command {
     command
 }
 
+/// Keeps at most `max` bytes and reads on to the end. A process writing to a pipe nobody empties
+/// would wait forever, which a commit hook with a lot to say otherwise does.
+async fn read_capped<R: AsyncRead + Unpin>(
+    from: &mut R,
+    max: u64,
+    into: &mut Vec<u8>,
+) -> io::Result<()> {
+    (&mut *from).take(max).read_to_end(into).await?;
+    io::copy(from, &mut io::sink()).await.map(|_| ())
+}
+
 /// One process, its output cut at the limit. The process is killed when the call is dropped.
 async fn process(mut command: Command, max_output: usize) -> std::result::Result<Output, Failure> {
     command
@@ -168,13 +182,14 @@ async fn process(mut command: Command, max_output: usize) -> std::result::Result
     let mut child = command
         .spawn()
         .map_err(|e| Failure::Other(format!("Git을 실행하지 못했습니다: {e}")))?;
-    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+    let (Some(mut stdout), Some(mut stderr)) = (child.stdout.take(), child.stderr.take()) else {
         return Err(Failure::Other("Git 출력을 읽을 수 없습니다.".into()));
     };
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let (mut stdout, mut stderr) = (stdout.take(max_output as u64 + 1), stderr.take(MAX_ERROR));
-    let (read_out, read_err) =
-        tokio::join!(stdout.read_to_end(&mut out), stderr.read_to_end(&mut err));
+    let (read_out, read_err) = tokio::join!(
+        read_capped(&mut stdout, max_output as u64 + 1, &mut out),
+        read_capped(&mut stderr, MAX_ERROR, &mut err),
+    );
     if out.len() > max_output {
         return Err(Failure::TooLarge);
     }

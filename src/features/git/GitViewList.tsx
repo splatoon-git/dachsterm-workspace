@@ -12,7 +12,7 @@ import {
 } from './gitViewModel';
 
 /** Arrow keys move between the visible rows, so a long list is one tab stop. */
-function moveFocus(event: KeyboardEvent<HTMLElement>) {
+export function moveFocus(event: KeyboardEvent<HTMLElement>) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
   const rows = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-git-row]')];
   const at = rows.indexOf(document.activeElement as HTMLElement);
@@ -103,6 +103,7 @@ function Group({
   folded,
   toggle,
   menu,
+  groupMenu,
 }: {
   group: GitGroup;
   tree: boolean;
@@ -110,6 +111,7 @@ function Group({
   folded: ReadonlySet<string>;
   toggle: (key: string) => void;
   menu: (row: GitRow, at: MenuPoint | HTMLElement) => void;
+  groupMenu: (group: GitGroup, at: MenuPoint | HTMLElement) => void;
 }) {
   const closed = folded.has(group.id);
   const items = useMemo<GitListItem[]>(
@@ -126,6 +128,15 @@ function Group({
         className="git-group-head"
         aria-expanded={!closed}
         onClick={() => toggle(group.id)}
+        onContextMenu={(event: MouseEvent) => {
+          event.preventDefault();
+          groupMenu(group, { x: event.clientX, y: event.clientY });
+        }}
+        onKeyDown={(event) => {
+          if (!isMenuKey(event)) return;
+          event.preventDefault();
+          groupMenu(group, event.currentTarget);
+        }}
       >
         <span className="git-row-chevron" data-folded={closed || undefined}>
           <Icon name="chevron" size={12} />
@@ -160,10 +171,12 @@ export function GitViewList({
   groups,
   tree,
   menu,
+  groupMenu,
 }: {
   groups: GitGroup[];
   tree: boolean;
   menu: (row: GitRow, at: MenuPoint | HTMLElement) => void;
+  groupMenu: (group: GitGroup, at: MenuPoint | HTMLElement) => void;
 }) {
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = (key: string) =>
@@ -183,6 +196,7 @@ export function GitViewList({
           folded={folded}
           toggle={toggle}
           menu={menu}
+          groupMenu={groupMenu}
         />
       ))}
     </div>
