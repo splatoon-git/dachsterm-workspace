@@ -42,6 +42,8 @@ Mac 실행 결과와 알려진 차이는 [macos-readiness](docs/verification/mac
 - `dev`와 작업 브랜치는 언제든 푸시해도 된다. CI는 `main` 푸시와 `main` 대상 PR에서만 돈다.
 - `main`은 사용자가 요청할 때만 `dev`로 fast-forward해 푸시한다(`git push origin dev:main`). 이때 Windows·macOS CI가 한 번 돈다. `main`에 직접 커밋하지 않는다.
 - `dev`에서 CI가 필요하면 Actions의 `workflow_dispatch`로 `dev`를 지정해 수동 실행한다.
+- 병합한 작업 브랜치는 로컬과 원격에서 바로 지운다. 원격에는 `main`과 `dev`, 진행 중인 작업 브랜치만 남긴다.
+- 작업 브랜치에 미커밋 변경을 둔 채 다음 작업으로 넘어가지 않는다. 검증이 막히면 막힌 이유를 progress에 적고 커밋한다.
 
 `Phase N 구현해` 요청:
 
