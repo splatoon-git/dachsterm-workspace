@@ -17,6 +17,7 @@ pub mod file_ops;
 pub mod ftp;
 pub mod git_credential;
 pub mod git_diff;
+pub mod git_run;
 pub mod git_status;
 pub mod hostkeys;
 pub mod local;
@@ -214,6 +215,7 @@ pub fn run() {
             terminal_start::tmux_current_path,
             git_status::git_status,
             git_status::local::local_git_status,
+            git_status::view::git_view,
             git_diff::git_refs,
             git_diff::git_diff_files,
             git_diff::git_diff_file,

@@ -2,14 +2,15 @@ import { Icon } from '../components/Icon';
 import { modKey } from '../lib/platform';
 import './sidebarTabs.css';
 
-export type SidebarView = 'connections' | 'files';
-const views: [SidebarView, string, 'server' | 'folder', string, string][] = [
+export type SidebarView = 'connections' | 'files' | 'git';
+const views: [SidebarView, string, 'server' | 'folder' | 'branch', string, string?][] = [
   ['connections', '연결', 'server', 'session-sidebar', 'Shift+B'],
   ['files', '파일', 'folder', 'file-sidebar', 'Shift+E'],
+  ['git', 'Git', 'branch', 'git-sidebar'],
 ];
 
 /**
- * The top line of the sidebar: the connections and files views as two tabs. Adding is in the
+ * The top line of the sidebar: the connections, files and Git views as tabs. Adding is in the
  * connection tree's section menus, and the sidebar folds from the title bar or Ctrl/Cmd+Shift+B.
  */
 export function SidebarTabs({
@@ -28,14 +29,15 @@ export function SidebarTabs({
         onKeyDown={(e) => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
           e.preventDefault();
-          const next =
+          const at = views.findIndex(([id]) => id === view);
+          const step = e.key === 'ArrowRight' ? 1 : -1;
+          const index =
             e.key === 'Home'
-              ? 'connections'
+              ? 0
               : e.key === 'End'
-                ? 'files'
-                : view === 'files'
-                  ? 'connections'
-                  : 'files';
+                ? views.length - 1
+                : (at + step + views.length) % views.length;
+          const next = views[index][0];
           choose(next);
           document.getElementById(`sidebar-tab-${next}`)?.focus();
         }}
@@ -45,7 +47,7 @@ export function SidebarTabs({
             key={id}
             id={`sidebar-tab-${id}`}
             role="tab"
-            title={`${label} · ${modKey(keys)}`}
+            title={keys ? `${label} · ${modKey(keys)}` : label}
             aria-selected={view === id}
             aria-controls={panel}
             tabIndex={view === id ? 0 : -1}

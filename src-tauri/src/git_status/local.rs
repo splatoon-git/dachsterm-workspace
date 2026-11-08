@@ -1,122 +1,14 @@
 //! Git status of a folder in a local or WSL tab (DX.15). The query, limits and result are those
-//! of a remote folder; only where Git runs differs: this PC's git for a local shell, and the
-//! distribution's own git for WSL, since Windows git on `\\wsl.localhost` is slow and refuses
-//! repositories owned by the Linux user.
-use super::{GitStatus, MAX_OUTPUT, StopReason, TIMEOUT, check_folder, outcome, status_script};
-use crate::{AppState, local::Target, remote_exec::Output, storage::Result};
-use std::{path::Path, process::Stdio};
-use tokio::{io::AsyncReadExt, process::Command};
-
-const MAX_ERROR: u64 = 64 * 1024;
-
-enum Ran {
-    Done(Output),
-    Stopped(StopReason),
-}
-
-/// A shell reports the folder it is in, so it must be absolute. WSL folders are Linux paths.
-fn check_local_folder(target: &Target, folder: &str) -> Result<()> {
-    if target.kind == "wsl" {
-        return check_folder(folder);
-    }
-    if !Path::new(folder).is_absolute() || folder.len() > 4096 || folder.contains('\0') {
-        return Err("Git 저장소 폴더가 올바르지 않습니다.".into());
-    }
-    Ok(())
-}
-
-/// `wsl.exe` runs the remote query script in the distribution, so both use one script.
-fn wsl_args(target: &Target, folder: &str) -> Vec<String> {
-    let distribution = target.id.strip_prefix("wsl:").unwrap_or(&target.name);
-    ["--distribution", distribution, "--exec", "sh", "-c"]
-        .map(String::from)
-        .into_iter()
-        .chain([status_script(folder)])
-        .collect()
-}
-
-/// The settings of `SAFE_GIT`, given as arguments because no shell runs here.
-fn native_git(program: &Path, folder: &str, args: &[&str]) -> Command {
-    let mut command = Command::new(program);
-    command
-        .env("LC_ALL", "C")
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .args(["-C", folder, "-c", "core.fsmonitor=false"])
-        .args(args);
-    command
-}
-
-/// Runs within the remote query's limits. A process past the time limit is killed on drop.
-async fn run(mut command: Command) -> Result<Ran> {
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    #[cfg(windows)]
-    command.creation_flags(0x08000000);
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("Git을 실행하지 못했습니다: {e}"))?;
-    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
-        return Err("Git 출력을 읽을 수 없습니다.".into());
-    };
-    let work = async move {
-        let (mut out, mut err) = (Vec::new(), Vec::new());
-        let (mut stdout, mut stderr) = (stdout.take(MAX_OUTPUT as u64 + 1), stderr.take(MAX_ERROR));
-        let (read_out, read_err) =
-            tokio::join!(stdout.read_to_end(&mut out), stderr.read_to_end(&mut err));
-        if out.len() > MAX_OUTPUT {
-            return Ok(Ran::Stopped(StopReason::TooLarge));
-        }
-        read_out
-            .and(read_err)
-            .map_err(|e| format!("Git 출력을 읽지 못했습니다: {e}"))?;
-        let status = child
-            .wait()
-            .await
-            .map_err(|e| format!("Git 종료를 확인하지 못했습니다: {e}"))?;
-        Ok(Ran::Done(Output {
-            stdout: out,
-            stderr: err,
-            exit: status.code().and_then(|c| u32::try_from(c).ok()),
-        }))
-    };
-    tokio::time::timeout(TIMEOUT, work)
-        .await
-        .unwrap_or(Ok(Ran::Stopped(StopReason::Timeout)))
-}
-
-async fn native(folder: &str) -> Result<GitStatus> {
-    let program = tokio::task::spawn_blocking(crate::git_credential::git_program)
-        .await
-        .map_err(|e| e.to_string())?;
-    let Some(program) = program else {
-        return Ok(GitStatus::NotRepo {
-            detail: "이 PC에서 git을 찾지 못했습니다.".into(),
-        });
-    };
-    let paths = ["rev-parse", "--show-toplevel", "--show-prefix"];
-    let root = match run(native_git(&program, folder, &paths)).await? {
-        Ran::Stopped(reason) => return Ok(GitStatus::Stopped { reason }),
-        Ran::Done(output) if output.exit != Some(0) => return outcome(&output),
-        Ran::Done(output) => root_as_shell_spells(folder, &String::from_utf8_lossy(&output.stdout)),
-    };
-    let status = ["status", "--porcelain=v2", "--branch", "-z"];
-    match run(native_git(&program, folder, &status)).await? {
-        Ran::Stopped(reason) => Ok(GitStatus::Stopped { reason }),
-        Ran::Done(mut output) => {
-            output.stdout.splice(0..0, format!("{root}\n").into_bytes());
-            outcome(&output)
-        }
-    }
-}
+//! of a remote folder; `git_run` decides where Git runs. What is left here is the spelling of the
+//! root, which only this PC's git needs.
+use super::GitStatus;
+use crate::{AppState, git_run::GitHost, storage::Result};
 
 /// The repository root in the folder's own spelling, so the app can match the shell's folders
 /// and the file panel's rows against it. Git prints the real path instead, which differs for a
 /// Windows short name (`ADMINI~1`), a `subst` drive or a symbolic link on the way. Removing the
 /// prefix Git reports from the folder gives the same root as the shell sees it.
-fn root_as_shell_spells(folder: &str, rev_parse: &str) -> String {
+pub(super) fn root_as_shell_spells(folder: &str, rev_parse: &str) -> String {
     let mut lines = rev_parse.lines().map(|l| l.trim_end_matches('\r'));
     let toplevel = lines.next().unwrap_or_default().to_string();
     let depth = lines
@@ -144,19 +36,6 @@ fn root_as_shell_spells(folder: &str, rev_parse: &str) -> String {
     }
 }
 
-pub async fn query(target: &Target, folder: &str) -> Result<GitStatus> {
-    check_local_folder(target, folder)?;
-    if target.kind != "wsl" {
-        return native(folder).await;
-    }
-    let mut command = Command::new(&target.program);
-    command.args(wsl_args(target, folder));
-    match run(command).await? {
-        Ran::Stopped(reason) => Ok(GitStatus::Stopped { reason }),
-        Ran::Done(output) => outcome(&output),
-    }
-}
-
 #[tauri::command]
 pub async fn local_git_status(
     state: tauri::State<'_, AppState>,
@@ -164,12 +43,21 @@ pub async fn local_git_status(
     folder: String,
 ) -> Result<GitStatus> {
     let target = state.locals.target(&target_id)?;
-    query(&target, &folder).await
+    super::query(&GitHost::local(target).await?, &folder).await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{check_local_folder, query, root_as_shell_spells, wsl_args};
+    use super::root_as_shell_spells;
+    use crate::{
+        git_run::GitHost,
+        git_status::{self, GitStatus},
+        local::Target,
+    };
+
+    async fn query(target: &Target, folder: &str) -> Result<GitStatus, String> {
+        git_status::query(&GitHost::local(target.clone()).await?, folder).await
+    }
 
     #[test]
     fn the_root_keeps_the_folder_spelling() {
@@ -201,28 +89,6 @@ mod tests {
         );
         assert_eq!(root_as_shell_spells(r"C:\src", "C:/\nsrc/\n"), "C:/");
         assert_eq!(root_as_shell_spells(r"D:\", "D:/\n\n"), "D:/");
-    }
-    use crate::{git_status::GitStatus, local::Target};
-
-    #[test]
-    fn wsl_runs_the_remote_script_in_its_distribution() {
-        let wsl = Target::for_test("wsl:Ubuntu 22", "wsl");
-        let args = wsl_args(&wsl, "/home/a/it's");
-        assert_eq!(
-            args[..5],
-            ["--distribution", "Ubuntu 22", "--exec", "sh", "-c"]
-        );
-        assert!(args[5].starts_with("cd -- '/home/a/it'\\''s' && "));
-        assert!(check_local_folder(&wsl, "C:\\repo").is_err());
-    }
-
-    #[test]
-    fn local_folders_must_be_absolute() {
-        let shell = Target::for_test("shell", "shell");
-        assert!(check_local_folder(&shell, "relative").is_err());
-        assert!(check_local_folder(&shell, "").is_err());
-        let absolute = if cfg!(windows) { "C:\\repo" } else { "/repo" };
-        assert!(check_local_folder(&shell, absolute).is_ok());
     }
 
     fn git(folder: &std::path::Path, args: &[&str]) {

@@ -1,21 +1,18 @@
-//! Read-only Git status of one remote folder (DX.5), and of a local or WSL folder in `local`
-//! (DX.15). Git queries live here and not in the command layer, so the diff review (DX.6) runs Git
-//! with the same program-free settings.
+//! Read-only Git status of one folder (DX.5), with the query of a local or WSL tab in `local`
+//! (DX.15) and the sidebar Git view's fuller listing in `view` (GE.7). All of them run Git through
+//! `git_run`, so its program-free settings apply to every query.
 pub mod local;
+pub mod view;
 
 use crate::{
     AppState,
-    remote_exec::{self, Failure, Limits, Output, quote},
-    ssh::Connections,
+    git_run::{GitHost, args, git_run},
+    remote_exec::{Failure, Limits, Output},
     storage::Result,
 };
 use serde::Serialize;
 use std::time::Duration;
 
-/// A repository's own settings must not start a program. `core.fsmonitor` names a hook the
-/// repository chooses, and optional locks would collide with the user's own Git commands. Clean
-/// filters cannot be turned off by name and remain, which the user guide states.
-pub const SAFE_GIT: &str = "LC_ALL=C GIT_OPTIONAL_LOCKS=0 git -c core.fsmonitor=false";
 pub const MAX_ENTRIES: usize = 5000;
 const TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_OUTPUT: usize = 1024 * 1024;
@@ -82,11 +79,14 @@ pub(crate) fn check_folder(folder: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn status_script(folder: &str) -> String {
-    format!(
-        "cd -- {} && {SAFE_GIT} rev-parse --show-toplevel && {SAFE_GIT} status --porcelain=v2 --branch -z",
-        quote(folder)
-    )
+/// `extra` goes on the `status` command, so a query can ask for more than the default listing.
+pub(crate) fn status_commands(extra: &[&str]) -> Vec<Vec<String>> {
+    let mut status = args(["status", "--porcelain=v2", "--branch", "-z"]);
+    status.extend(extra.iter().map(|s| s.to_string()));
+    vec![
+        args(["rev-parse", "--show-toplevel", "--show-prefix"]),
+        status,
+    ]
 }
 
 pub(crate) fn first_line(stderr: &[u8]) -> String {
@@ -100,101 +100,145 @@ pub(crate) fn first_line(stderr: &[u8]) -> String {
 }
 
 /// Git for Windows prints its root as `C:/path`.
-fn windows_root(root: &str) -> bool {
+pub(crate) fn windows_root(root: &str) -> bool {
     let bytes = root.as_bytes();
     bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/'
 }
 
-fn mark(kind: &str, xy: &str) -> Mark {
+fn mark(kind: u8, xy: &[u8]) -> Mark {
     match kind {
-        "u" => Mark::Conflict,
-        "?" => Mark::Untracked,
-        "2" => Mark::Added,
-        _ if xy.contains('D') => Mark::Deleted,
-        _ if xy.starts_with('A') => Mark::Added,
+        b'u' => Mark::Conflict,
+        b'?' => Mark::Untracked,
+        b'2' => Mark::Added,
+        _ if xy.contains(&b'D') => Mark::Deleted,
+        _ if xy.first() == Some(&b'A') => Mark::Added,
         _ => Mark::Modified,
     }
 }
 
-/// `rev-parse --show-toplevel` output, then `status --porcelain=v2 --branch -z` records.
-fn parse(stdout: &[u8]) -> Option<GitStatus> {
-    let newline = stdout.iter().position(|b| *b == b'\n')?;
-    let root = String::from_utf8_lossy(&stdout[..newline])
-        .trim_end_matches('\r')
-        .to_string();
+/// One file of `status --porcelain=v2 -z`, with paths as Git wrote them.
+pub(crate) struct Record<'a> {
+    pub kind: u8,
+    pub xy: &'a [u8],
+    pub path: &'a [u8],
+    pub old_path: Option<&'a [u8]>,
+}
+
+/// A query's branch headers and file records.
+pub(crate) struct Scanned<'a> {
+    pub root: String,
+    pub branch: Option<String>,
+    pub oid: Option<String>,
+    pub upstream: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    pub records: Vec<Record<'a>>,
+}
+
+/// `rev-parse` output, NUL, then `status --porcelain=v2 --branch -z` records. `spelled` is the
+/// folder to take the root's spelling from.
+pub(crate) fn scan<'a>(stdout: &'a [u8], spelled: Option<&str>) -> Option<Scanned<'a>> {
+    let split = stdout.iter().position(|b| *b == 0)?;
+    let head = String::from_utf8_lossy(&stdout[..split]);
+    let root = head.lines().next()?.trim_end_matches('\r').to_string();
     if !root.starts_with('/') && !windows_root(&root) {
         return None;
     }
-    let (mut branch, mut oid, mut upstream, mut ahead, mut behind) = (None, None, None, 0, 0);
-    let mut entries = Vec::new();
-    let mut truncated = false;
-    let mut records = stdout[newline + 1..].split(|b| *b == 0);
-    while let Some(record) = records.next() {
-        let record = String::from_utf8_lossy(record);
-        if let Some(header) = record.strip_prefix("# ") {
-            let (key, value) = header.split_once(' ').unwrap_or((header, ""));
+    let root = match spelled {
+        Some(folder) => local::root_as_shell_spells(folder, &head),
+        None => root,
+    };
+    let mut scanned = Scanned {
+        root,
+        branch: None,
+        oid: None,
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+        records: Vec::new(),
+    };
+    let mut parts = stdout[split + 1..].split(|b| *b == 0);
+    while let Some(record) = parts.next() {
+        if let Some(header) = record.strip_prefix(b"# ") {
+            let header = String::from_utf8_lossy(header);
+            let (key, value) = header.split_once(' ').unwrap_or((&header, ""));
             match key {
-                "branch.oid" => oid = (value != "(initial)").then(|| value.to_string()),
-                "branch.head" => branch = (value != "(detached)").then(|| value.to_string()),
-                "branch.upstream" => upstream = Some(value.to_string()),
+                "branch.oid" => scanned.oid = (value != "(initial)").then(|| value.to_string()),
+                "branch.head" => {
+                    scanned.branch = (value != "(detached)").then(|| value.to_string())
+                }
+                "branch.upstream" => scanned.upstream = Some(value.to_string()),
                 "branch.ab" => {
                     let mut counts = value
                         .split(' ')
                         .map(|n| n.get(1..).and_then(|v| v.parse().ok()).unwrap_or(0));
-                    ahead = counts.next().unwrap_or(0);
-                    behind = counts.next().unwrap_or(0);
+                    scanned.ahead = counts.next().unwrap_or(0);
+                    scanned.behind = counts.next().unwrap_or(0);
                 }
                 _ => {}
             }
             continue;
         }
-        let kind = record.split(' ').next().unwrap_or("");
-        let xy = record.get(2..4).unwrap_or("");
-        let (xy, path) = match kind {
-            "1" => record.splitn(9, ' ').nth(8).map(|p| (xy, p)),
-            "2" => record.splitn(10, ' ').nth(9).map(|p| (xy, p)),
-            "u" => record.splitn(11, ' ').nth(10).map(|p| (xy, p)),
-            "?" => record.get(2..).map(|p| ("", p)),
-            _ => None,
-        }
-        .filter(|(_, p)| !p.is_empty())
-        .unzip();
-        // A rename is followed by its original path as one more record.
-        if kind == "2" {
-            records.next();
-        }
-        let (Some(xy), Some(path)) = (xy, path) else {
+        let (Some(&kind), Some(b' ')) = (record.first(), record.get(1)) else {
             continue;
         };
-        if entries.len() == MAX_ENTRIES {
-            truncated = true;
-            break;
+        let field = |n: usize| record.splitn(n + 1, |b| *b == b' ').nth(n);
+        let path = match kind {
+            b'1' => field(8),
+            b'2' => field(9),
+            b'u' => field(10),
+            b'?' => record.get(2..),
+            _ => None,
         }
-        entries.push(Entry {
-            path: path.to_string(),
-            mark: mark(kind, xy),
+        .filter(|path| !path.is_empty());
+        // A rename is followed by its original path as one more record.
+        let old_path = if kind == b'2' { parts.next() } else { None };
+        let Some(path) = path else { continue };
+        let xy = if kind == b'?' {
+            b"".as_slice()
+        } else {
+            record.get(2..4).unwrap_or_default()
+        };
+        scanned.records.push(Record {
+            kind,
+            xy,
+            path,
+            old_path,
         });
     }
+    Some(scanned)
+}
+
+fn parse(stdout: &[u8], spelled: Option<&str>) -> Option<GitStatus> {
+    let scanned = scan(stdout, spelled)?;
+    let truncated = scanned.records.len() > MAX_ENTRIES;
+    let entries = scanned
+        .records
+        .iter()
+        .take(MAX_ENTRIES)
+        .map(|record| Entry {
+            path: String::from_utf8_lossy(record.path).into_owned(),
+            mark: mark(record.kind, record.xy),
+        })
+        .collect();
     Some(GitStatus::Repo {
-        root,
-        branch,
-        oid,
-        upstream,
-        ahead,
-        behind,
+        root: scanned.root,
+        branch: scanned.branch,
+        oid: scanned.oid,
+        upstream: scanned.upstream,
+        ahead: scanned.ahead,
+        behind: scanned.behind,
         entries,
         truncated,
     })
 }
 
-pub async fn query(connections: &Connections, id: &str, folder: &str) -> Result<GitStatus> {
-    check_folder(folder)?;
-    let handle = connections.handle(id)?;
+pub async fn query(host: &GitHost, folder: &str) -> Result<GitStatus> {
     let limits = Limits {
         timeout: TIMEOUT,
         max_output: MAX_OUTPUT,
     };
-    let output = match remote_exec::run(&handle, &status_script(folder), limits).await {
+    let output = match git_run(host, folder, &status_commands(&[]), limits).await {
         Ok(output) => output,
         Err(Failure::TimedOut) => {
             return Ok(GitStatus::Stopped {
@@ -208,17 +252,17 @@ pub async fn query(connections: &Connections, id: &str, folder: &str) -> Result<
         }
         Err(Failure::Other(message)) => return Err(message),
     };
-    outcome(&output)
+    outcome(&output, host.spells_folder().then_some(folder))
 }
 
 /// Any failed step means "nothing to show": no folder, no Git (127) or not a repository (128).
-fn outcome(output: &Output) -> Result<GitStatus> {
+fn outcome(output: &Output, spelled: Option<&str>) -> Result<GitStatus> {
     if output.exit != Some(0) {
         return Ok(GitStatus::NotRepo {
             detail: first_line(&output.stderr),
         });
     }
-    parse(&output.stdout).ok_or_else(|| "Git 상태 출력을 읽을 수 없습니다.".into())
+    parse(&output.stdout, spelled).ok_or_else(|| "Git 상태 출력을 읽을 수 없습니다.".into())
 }
 
 #[tauri::command]
@@ -227,13 +271,17 @@ pub async fn git_status(
     id: String,
     folder: String,
 ) -> Result<GitStatus> {
-    query(&state.connections, &id, &folder).await
+    query(&GitHost::ssh(&state.connections, &id)?, &folder).await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Entry, GitStatus, MAX_ENTRIES, Mark, check_folder, first_line, outcome, parse};
+    use super::{Entry, GitStatus, MAX_ENTRIES, Mark, check_folder, first_line, outcome};
     use crate::remote_exec::Output;
+
+    fn parse(output: &[u8]) -> Option<GitStatus> {
+        super::parse(output, None)
+    }
 
     fn repo(output: &[u8]) -> (Option<String>, Option<String>, u32, u32, Vec<Entry>, bool) {
         match parse(output) {
@@ -259,7 +307,7 @@ mod tests {
 
     #[test]
     fn reads_branch_headers_and_every_entry_kind() {
-        let output = b"/srv/app\n\
+        let output = b"/srv/app\n\0\
 # branch.oid 0123456789abcdef0123456789abcdef01234567\0\
 # branch.head main\0\
 # branch.upstream origin/main\0\
@@ -292,7 +340,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
 
     #[test]
     fn detached_head_and_first_commit_have_no_name() {
-        let output = b"/r\n# branch.oid (initial)\0# branch.head (detached)\0";
+        let output = b"/r\n\0# branch.oid (initial)\0# branch.head (detached)\0";
         match parse(output) {
             Some(GitStatus::Repo {
                 branch,
@@ -306,7 +354,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
 
     #[test]
     fn stops_listing_at_the_entry_limit() {
-        let mut output = b"/r\n# branch.head main\0".to_vec();
+        let mut output = b"/r\n\0# branch.head main\0".to_vec();
         for n in 0..=MAX_ENTRIES {
             output.extend_from_slice(format!("? f{n}\0").as_bytes());
         }
@@ -319,14 +367,14 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
     fn refuses_output_without_an_absolute_root() {
         assert!(parse(b"").is_none());
         assert!(parse(b"/r").is_none());
-        assert!(parse(b"warning\n# branch.head main\0").is_none());
-        assert!(parse(b"C:\\r\n# branch.head main\0").is_none());
+        assert!(parse(b"warning\n\0# branch.head main\0").is_none());
+        assert!(parse(b"C:\\r\n\0# branch.head main\0").is_none());
         assert!(matches!(
-            parse(b"C:/Users/a/repo\n# branch.head main\0"),
+            parse(b"C:/Users/a/repo\n\0# branch.head main\0"),
             Some(GitStatus::Repo { root, .. }) if root == "C:/Users/a/repo"
         ));
         // A malformed record is skipped, not misread.
-        let (.., entries, _) = repo(b"/r\n1 .M\0? \0? ok\0");
+        let (.., entries, _) = repo(b"/r\n\x001 .M\0? \0? ok\0");
         assert_eq!(entries, vec![entry("ok", Mark::Untracked)]);
     }
 
@@ -337,10 +385,20 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
             assert!(check_folder(bad).is_err(), "{bad:?}");
         }
         assert!(check_folder(&format!("/{}", "a".repeat(4096))).is_err());
-        let script = super::status_script("/srv/it's $(x)");
-        assert!(script.starts_with("cd -- '/srv/it'\\''s $(x)' && "));
-        assert_eq!(script.matches("-c core.fsmonitor=false").count(), 2);
-        assert_eq!(script.matches("GIT_OPTIONAL_LOCKS=0").count(), 2);
+    }
+
+    #[test]
+    fn the_status_query_is_two_commands_and_takes_extra_switches() {
+        let commands = super::status_commands(&["--untracked-files=all"]);
+        assert_eq!(commands.len(), 2);
+        assert_eq!(commands[0][0], "rev-parse");
+        assert_eq!(
+            commands[1].last().map(String::as_str),
+            Some("--untracked-files=all")
+        );
+        // A subfolder's prefix between the root and the records is not read as a record.
+        let (.., entries, _) = repo(b"/r\n? x/\n\0? ok\0");
+        assert_eq!(entries, vec![entry("ok", Mark::Untracked)]);
     }
 
     #[test]
@@ -362,7 +420,7 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
                 exit,
             };
             assert_eq!(
-                outcome(&output),
+                outcome(&output, None),
                 Ok(GitStatus::NotRepo {
                     detail: stderr.into()
                 })

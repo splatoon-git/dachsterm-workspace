@@ -1,7 +1,9 @@
 //! Git status (DX.5) against the OpenSSH fixture: a real repository is read, and the
 //! repository's own `core.fsmonitor` program never runs during the app's query.
 use dachsterm::{
-    git_status::{self, GitStatus, Mark},
+    git_diff::Change,
+    git_run::GitHost,
+    git_status::{self, GitStatus, Mark, view::GitViewResult},
     ssh::Connections,
 };
 use russh::ChannelMsg;
@@ -35,6 +37,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
          printf '#!/bin/sh\\ntouch \"$0.ran\"\\n' > \"$H\"; chmod +x \"$H\"; \
          git config core.fsmonitor \"$H\""
     );
+    let host = GitHost::ssh(manager, id)?;
     let result = async {
         assert_eq!(shell(manager, id, &setup).await?, 0, "fixture repository");
         let GitStatus::Repo {
@@ -43,7 +46,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
             entries,
             truncated,
             ..
-        } = git_status::query(manager, id, &root).await?
+        } = git_status::query(&host, &root).await?
         else {
             panic!("the fixture repository was not read");
         };
@@ -61,6 +64,25 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
                 ("새 파일.txt", Mark::Untracked),
             ]
         );
+        // The Git view lists the same files with the staged and unstaged sides apart.
+        let GitViewResult::Repo { entries, .. } = git_status::view::query(&host, &root).await?
+        else {
+            panic!("the Git view did not read the fixture repository");
+        };
+        let mut sides: Vec<_> = entries
+            .iter()
+            .map(|e| (e.path.as_str(), e.index, e.worktree))
+            .collect();
+        sides.sort_by_key(|(path, ..)| *path);
+        assert_eq!(
+            sides,
+            vec![
+                ("removed.txt", None, Some(Change::Deleted)),
+                ("staged file.txt", Some(Change::Added), None),
+                ("tracked.txt", None, Some(Change::Modified)),
+                ("새 파일.txt", None, Some(Change::Untracked)),
+            ]
+        );
         let ran = format!("test -e '{hook}.ran'");
         assert_ne!(shell(manager, id, &ran).await?, 0, "fsmonitor ran");
         // The same repository runs the program for a plain `git status`, so the check above
@@ -70,7 +92,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
         for folder in ["/tmp", &format!("/tmp/dachsterm-git-{token}-missing")] {
             assert!(
                 matches!(
-                    git_status::query(manager, id, folder).await?,
+                    git_status::query(&host, folder).await?,
                     GitStatus::NotRepo { .. }
                 ),
                 "{folder}"

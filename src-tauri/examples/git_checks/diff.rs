@@ -4,6 +4,7 @@
 use super::{Result, shell};
 use dachsterm::{
     git_diff::{self, Change, DiffBase, DiffList, FileDiff, FileRequest},
+    git_run::GitHost,
     ssh::Connections,
 };
 
@@ -39,18 +40,18 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
          git config diff.noprefix true; git config color.ui always"
     );
     let ran = |kind: &str| format!("test -e '{program}{kind}.ran'");
+    let host = GitHost::ssh(manager, id)?;
     let result = async {
         assert_eq!(shell(manager, id, &setup).await?, 0, "fixture repository");
 
-        let refs = git_diff::refs(manager, id, &root).await?;
+        let refs = git_diff::refs(&host, &root).await?;
         assert_eq!(refs.root, root);
         assert_eq!(refs.refs, vec!["refs/heads/base", "refs/heads/main"]);
         assert_eq!(refs.worktrees.len(), 1);
         assert_eq!(refs.worktrees[0].branch.as_deref(), Some("refs/heads/main"));
 
         let head = DiffBase::WorkingTree;
-        let DiffList::Files { files, truncated } =
-            git_diff::list(manager, id, &root, &head).await?
+        let DiffList::Files { files, truncated } = git_diff::list(&host, &root, &head).await?
         else {
             panic!("the change list stopped");
         };
@@ -95,7 +96,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
             old_path: old,
             untracked,
         };
-        let tracked = text(git_diff::file(manager, id, file("tracked.txt", None, false)).await?);
+        let tracked = text(git_diff::file(&host, file("tracked.txt", None, false)).await?);
         assert!(
             tracked.contains("--- a/tracked.txt\n+++ b/tracked.txt\n"),
             "{tracked}"
@@ -104,26 +105,19 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
             tracked.contains("\n+B\n") && !tracked.contains('\x1b'),
             "{tracked}"
         );
-        let added = text(git_diff::file(manager, id, file("new file.txt", None, false)).await?);
+        let added = text(git_diff::file(&host, file("new file.txt", None, false)).await?);
         assert!(added.contains("new file mode") && added.contains("\n+n\n"));
-        let removed = text(git_diff::file(manager, id, file("removed.txt", None, false)).await?);
+        let removed = text(git_diff::file(&host, file("removed.txt", None, false)).await?);
         assert!(removed.contains("deleted file mode") && removed.contains("\n-x\n"));
-        let renamed = text(
-            git_diff::file(
-                manager,
-                id,
-                file("새 이름.txt", Some("old name.txt"), false),
-            )
-            .await?,
-        );
+        let renamed =
+            text(git_diff::file(&host, file("새 이름.txt", Some("old name.txt"), false)).await?);
         assert!(renamed.contains("rename from old name.txt\nrename to 새 이름.txt"));
-        let binary = text(git_diff::file(manager, id, file("image.bin", None, false)).await?);
+        let binary = text(git_diff::file(&host, file("image.bin", None, false)).await?);
         assert!(binary.contains("Binary files a/image.bin and b/image.bin differ"));
-        let untracked =
-            text(git_diff::file(manager, id, file("추적 안 함.txt", None, true)).await?);
+        let untracked = text(git_diff::file(&host, file("추적 안 함.txt", None, true)).await?);
         assert!(untracked.contains("+++ b/추적 안 함.txt") && untracked.contains("\n+u\n"));
         assert_eq!(
-            git_diff::file(manager, id, file("big.log", None, true)).await?,
+            git_diff::file(&host, file("big.log", None, true)).await?,
             FileDiff::TooLarge {
                 size: Some(3_145_728)
             }
@@ -133,8 +127,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
         let branch = DiffBase::Branch {
             reference: "refs/heads/base".into(),
         };
-        let DiffList::Files { files, .. } = git_diff::list(manager, id, &root, &branch).await?
-        else {
+        let DiffList::Files { files, .. } = git_diff::list(&host, &root, &branch).await? else {
             panic!("the branch list stopped");
         };
         let tracked = files.iter().find(|f| f.path == "tracked.txt").unwrap();
@@ -142,7 +135,7 @@ pub async fn run(manager: &Connections, id: &str) -> Result<()> {
         let missing = DiffBase::Branch {
             reference: "refs/heads/nope".into(),
         };
-        assert!(git_diff::list(manager, id, &root, &missing).await.is_err());
+        assert!(git_diff::list(&host, &root, &missing).await.is_err());
 
         for kind in ["fsmonitor", "external", "textconv"] {
             assert_ne!(shell(manager, id, &ran(kind)).await?, 0, "{kind} ran");

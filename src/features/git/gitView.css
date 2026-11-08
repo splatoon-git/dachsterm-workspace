@@ -1,0 +1,149 @@
+/* The sidebar's Git view: a one-line header, then the changed files by group. */
+.git-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  font-size: var(--font-small);
+}
+.git-view-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 var(--space-xs) 0 var(--space-sm);
+}
+.git-view-branch {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+.git-view-branch-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-view-sync {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}
+.git-view-tool {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.git-view-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.git-view-body > .file-empty {
+  margin: var(--space-lg) 0;
+}
+.git-view-note {
+  margin: var(--space-xs) var(--space-sm);
+  color: var(--color-text-secondary);
+}
+.git-view-error {
+  color: var(--color-status-error);
+  overflow-wrap: anywhere;
+}
+.git-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  height: 24px;
+  min-height: 0;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+  font-weight: 600;
+  text-align: left;
+}
+.git-group-head small {
+  margin-left: auto;
+  font-size: var(--font-small);
+  font-weight: 400;
+}
+.git-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.git-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 22px;
+  padding: 0 var(--space-sm) 0 calc(var(--space-sm) + 12px + var(--git-depth, 0) * var(--space-md));
+  color: var(--color-text-primary);
+  cursor: default;
+  white-space: nowrap;
+}
+.git-row:hover {
+  background: var(--color-surface-subtle);
+}
+.git-row:focus-visible {
+  outline: var(--border-width-focus) solid var(--color-focus-ring);
+  outline-offset: calc(-1 * var(--border-width-focus));
+}
+.git-row-folder-row {
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.git-row-name {
+  overflow: hidden;
+  flex-shrink: 0;
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+.git-row-folder {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+  text-overflow: ellipsis;
+}
+.git-row-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  transform: rotate(90deg);
+}
+.git-row-chevron[data-folded] {
+  transform: none;
+}
+/* A letter, so the state never depends on color alone (as `.file-git-mark`). */
+.git-row-mark {
+  flex: none;
+  min-width: 1.2em;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-align: center;
+  color: var(--color-status-warning);
+}
+.git-row-mark[data-change='added'] {
+  color: var(--color-status-success);
+}
+.git-row-mark[data-change='deleted'],
+.git-row-mark[data-change='conflict'] {
+  color: var(--color-status-error);
+}
+.git-row-mark[data-change='untracked'] {
+  color: var(--color-status-info);
+}

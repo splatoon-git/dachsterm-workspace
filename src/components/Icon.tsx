@@ -36,7 +36,8 @@ export type IconName =
   | 'star'
   | 'clock'
   | 'more'
-  | 'palette';
+  | 'palette'
+  | 'branch';
 const paths: Record<IconName, string> = {
   game: 'M7 7h10c3 0 4 3 4 7s-2 5-4 3l-2-2H9l-2 2c-2 2-4 1-4-3s1-7 4-7z M8 10v5 M5.5 12.5h5 M16 11h.01 M18 14h.01',
   server: 'M4 3h16v7H4z M4 14h16v7H4z M7 6.5h.01 M7 17.5h.01 M11 6.5h6 M11 17.5h6',
@@ -79,6 +80,8 @@ const paths: Record<IconName, string> = {
   star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2',
   more: 'M5 12h.01 M12 12h.01 M19 12h.01',
+  branch:
+    'M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M18 9a9 9 0 0 1-9 9',
 };
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return (

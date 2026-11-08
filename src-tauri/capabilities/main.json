@@ -94,6 +94,7 @@
     "allow-tmux-current-path",
     "allow-git-status",
     "allow-local-git-status",
+    "allow-git-view",
     "allow-git-refs",
     "allow-git-diff-files",
     "allow-git-diff-file",

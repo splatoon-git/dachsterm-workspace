@@ -41,6 +41,7 @@ fn main() {
             "tmux_current_path",
             "git_status",
             "local_git_status",
+            "git_view",
             "git_refs",
             "git_diff_files",
             "git_diff_file",

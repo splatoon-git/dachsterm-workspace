@@ -53,11 +53,11 @@ import { ResizeHandle } from '../components/ResizeHandle';
 import { SessionTab } from './SessionTab';
 import { capabilities } from '../features/terminal/sessionKind';
 import type { CSSProperties } from 'react';
-import { SidebarFiles } from './SidebarFiles';
+import { SidebarViews } from './SidebarViews';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
 import { TitleBar } from './TitleBar';
-import { SidebarTabs } from './SidebarTabs';
+import { SidebarTabs, type SidebarView } from './SidebarTabs';
 import { ConnectionTree, useFolded } from './ConnectionTree';
 import { HeaderActions, HeaderMenus } from './HeaderTools';
 import { modKey } from '../lib/platform';
@@ -86,7 +86,7 @@ export function App() {
     () => window.innerWidth > 700 && localStorage.getItem('dachsterm.sidebar') !== 'false',
   );
   // No tab survives a restart, so the file view would open empty.
-  const [sidebarView, setSidebarView] = useState<'connections' | 'files'>('connections');
+  const [sidebarView, setSidebarView] = useState<SidebarView>('connections');
   const closeDrawer = () => {
     if (window.innerWidth <= 700) setSidebarOpen(false);
   };
@@ -95,7 +95,7 @@ export function App() {
     setSidebarView('files');
     if (window.innerWidth > 700) setSidebarOpen(true);
   };
-  const showSidebar = async (view: 'connections' | 'files', focusSearch = false) => {
+  const showSidebar = async (view: SidebarView, focusSearch = false) => {
     if (fullscreen) await toggleFullscreen();
     setSidebarView(view);
     setSidebarOpen(true);
@@ -589,19 +589,13 @@ export function App() {
               />
             </div>
           </aside>
-          <div
-            id="file-sidebar"
-            className="sidebar-file-panel"
-            role="tabpanel"
-            aria-labelledby="sidebar-tab-files"
-            hidden={sidebarView !== 'files'}
-          >
-            <SidebarFiles
-              session={selected}
-              showConnections={() => setSidebarView('connections')}
-              startAgent={(folder) => selected && agent.ask(savedProfile(selected), folder)}
-            />
-          </div>
+          <SidebarViews
+            view={sidebarView}
+            session={selected}
+            showConnections={() => setSidebarView('connections')}
+            startAgent={(folder) => selected && agent.ask(savedProfile(selected), folder)}
+            openReview={() => selected && reviews.open(selected)}
+          />
         </div>
         {sidebarOpen && (
           <ResizeHandle

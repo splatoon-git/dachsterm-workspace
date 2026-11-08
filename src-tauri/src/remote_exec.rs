@@ -5,6 +5,7 @@ use crate::ssh::Host;
 use russh::{ChannelMsg, client};
 use std::time::Duration;
 
+#[derive(Clone, Copy)]
 pub struct Limits {
     pub timeout: Duration,
     pub max_output: usize,
