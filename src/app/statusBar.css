@@ -94,8 +94,11 @@
     display: none;
   }
 }
-/* The branch of the focused SSH tab's folder: plain text that refreshes on click. */
+/* The branch of the focused tab's folder: an icon and plain text that open the Git view. */
 .status-bar .status-git {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
   flex-shrink: 0;
   border: 0;
   background: none;
