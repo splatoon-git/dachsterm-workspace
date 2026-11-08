@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   badgeFits,
+  badgeSuffix,
   badgeText,
   cells,
   lineEnd,
@@ -30,11 +31,13 @@ describe('branch badge text', () => {
   });
 
   it('keeps the whole badge within 24 cells, count included', () => {
-    expect(badgeText('main', null)).toBe('⎇ main');
-    expect(badgeText('main', '3')).toBe('⎇ main ●3');
-    expect(cells(badgeText('feature/a-very-long-branch-name-here', '5000+'))).toBeLessThanOrEqual(
-      24,
-    );
+    expect(badgeText('main')).toBe('⎇ main');
+    expect(badgeText('main', badgeSuffix('3'))).toBe('⎇ main ●3');
+    expect(badgeText('main', badgeSuffix(null, '↑1'))).toBe('⎇ main ↑1');
+    expect(badgeText('main', badgeSuffix('3', '↑1 ↓2'))).toBe('⎇ main ●3 ↑1 ↓2');
+    const long = badgeText('feature/a-very-long-branch-name-here', badgeSuffix('5000+', '↑10 ↓20'));
+    expect(cells(long)).toBeLessThanOrEqual(24);
+    expect(long.endsWith(' ●5000+ ↑10 ↓20')).toBe(true);
   });
 });
 

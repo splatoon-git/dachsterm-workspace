@@ -1,7 +1,7 @@
 # Git·파일 편집 작업 화면 — 설계안
 
 - 작업 ID: **GE.1~GE.13**, 설계일: **2026-11-08**. 관련 작업 DX.16(에이전트 시작 옵션)은 [developer-workflow DX.16](developer-workflow.md#dx16--에이전트-시작-옵션-2026-11-08-추가)에 있다.
-- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.3·GE.7·GE.11 구현(대기 항목은 progress), GE.4 Windows 시험 완료(Mac 실기기 대기), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
+- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.3·GE.7·GE.10·GE.11 구현(대기 항목은 progress), GE.4 Windows 시험 완료(Mac 실기기 대기), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
 - 선행: DX.15(로컬·WSL 탭 Git 상태, `dev` `d6d2ec4`).
 - 기준 자료: `dev` `57e32bb`의 코드, 2026-11-08 사용자 대화와 스크린샷(VS Code 소스 제어 화면, 앱의 WSL 파일 패널·우클릭 메뉴). 내용은 코드를 읽어 확인했고, 이 설계를 위한 실행 검증은 GE.2 말고는 없다.
 
@@ -169,6 +169,16 @@
    - 항목: `user.name`, `user.email`, `init.defaultBranch`, `pull.rebase`(false/true/merges), `pull.ff`, `fetch.prune`, `push.autoSetupRemote`, `push.default`, `core.autocrlf`(true/input/false), `core.eol`, `core.editor`, `merge.conflictStyle`(merge/diff3/zdiff3), `rebase.autoStash`, `rerere.enabled`, `credential.helper`(읽기 표시만, 바꾸려면 직접 입력), `safe.directory`(목록 보기와 추가, 와일드카드 `*`는 경고).
    - 쓰기 전 최종 명령을 보여주고 확인받는다. 설정 파일을 직접 고치지 않고 항상 `git config`를 거친다.
 
+구현에서 정한 것(2026-11-08):
+
+- 설정 창은 다른 대화상자를 열지 않는다는 규칙에 따라 최종 명령 확인은 대화상자가 아니라 분류 안의 카드로 띄운다. 미리보기와 실행은 Rust의 같은 함수에서 명령을 만들어 둘이 달라질 수 없다(`git_config_preview`, `git_config_write`).
+- 읽기는 표의 키만 `--get-regexp`로 묻는다. `http.extraHeader` 같은 다른 항목은 대상 밖으로 나오지 않는다. `credential.helper`는 값이 `!`로 시작하거나 `@`, `password`, `token`, `secret`, `key=`를 담으면 내용을 보내지 않고 "숨김"으로만 알린다.
+- 값이 여러 개인 키를 바꾸면 그때만 `--replace-all`·`--unset-all`을 붙인다. `safe.directory`는 Git이 저장소 설정에서 읽지 않으므로 저장소 범위에서는 뺐다.
+- 사용자 지정 Git은 DB `git-program`에 두고 `git_program()`이 읽는다. `GitHost::local`에 저장소를 넘기지 않으려고(GE.9와 충돌 방지) 값은 프로세스 전역 변수에 두고 시작할 때 읽는다. 손상된 값은 자동 찾기로 넘어가지 않고 Git 없음으로 동작하며 설정 화면에 알린다.
+- `features/settings`가 다른 기능을 import하지 않도록 표시 설정(`app/GitDisplaySettings.tsx`)과 자격 증명은 `app/GitSettingsSection.tsx`가 넣는다. 새 표시 설정은 `lib/gitDisplay.ts`(`dachsterm.gitDisplay`)에 두고, `promptBranch`·`gitStatus`는 셸 훅 삽입에 쓰이므로 터미널 설정에 그대로 둔다.
+- 표시 내용은 프롬프트 배지와 상태바에 함께 적용한다. 에이전트 보드의 Git 글자는 바꾸지 않는다. 추적 안 함 파일 설정은 상태바·파일 트리 조회(`git_status`, `local_git_status`의 `untrackedFiles`)에만 적용하고, Git 보기는 GE.7대로 항상 파일 단위다.
+- 저장소 범위는 Git 보기 `⋯ → 이 저장소의 Git 설정…`으로만 열리며 대상 목록의 첫 항목으로 나타난다. 어디서든 설정을 열 수 있게 `lib/settingsRequest.ts`를 두었다.
+
 ### GE.11 — 터미널 안 브랜치
 
 **브랜치 출처:** 셸 훅이 프롬프트마다 `.git/HEAD`를 셸 내장 명령만으로 읽어 `OSC 777;DachsTerm;branch;<이름>`으로 알린다(프로세스 실행 없음). 지금 Git 조회는 프롬프트 기준 5초 간격이라 checkout 직후 예전 브랜치가 보일 수 있어서다.
@@ -235,7 +245,8 @@ __dachsterm_head() {
 | `git_view` | 출처, 폴더 | 브랜치·원격·스테이지 구분 항목 | GE.7 |
 | `git_file_diff` | 출처, 폴더, 경로, 비교 기준 | 양쪽 내용 | GE.8 |
 | `git_apply` | 출처, 폴더, 동작(판별 유니온) | 결과, stderr 첫 줄 | GE.9 |
-| `git_program_info`, `git_config_read`, `git_config_write` | 대상 / 키·값 | 경로·버전 / 값 | GE.10 |
+| `git_program_info`, `git_program_pick`, `git_program_set` | 없음 / 경로 | 경로·버전·문제(이 PC만) | GE.10 |
+| `git_config_read`, `git_config_preview`, `git_config_write` | 출처, 범위 / 변경 목록 | 값 / 최종 명령 / 없음 | GE.10 |
 
 - **출처**는 판별 유니온 `{ kind: 'ssh', connectionId } | { kind: 'local', targetId } | { kind: 'ftp', connectionId }`. 문자열에 상태를 섞지 않는다(규칙 §7).
 - `git_apply`의 동작도 판별 유니온(`stage`, `unstage`, `commit`, `discard`, `branchCreate`, `checkout`, `stashPush`, `stashPop`, `tag`)이고, 경로는 `--` 뒤 글자 그대로(`GIT_LITERAL_PATHSPECS=1`). 네트워크 동작은 명령이 없다(터미널 입력).

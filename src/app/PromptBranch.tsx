@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { changeCount, gitTooltip, hookBranch } from '../features/git/gitStatus';
+import { changeCount, gitTooltip, hookBranch, syncText } from '../features/git/gitStatus';
 import { useGitStatus } from '../features/git/useGitStatus';
 import { commandMarksOf } from '../features/terminal/commandMarks';
 import { useTerminalPreferences } from '../features/terminal/preferences';
 import type { TerminalSession } from '../features/terminal/session';
-import { badgeFits, badgeText, cells, lineEnd, promptShowsBranch } from './promptBadge';
+import { useGitDisplay } from '../lib/gitDisplay';
+import {
+  badgeFits,
+  badgeSuffix,
+  badgeText,
+  cells,
+  lineEnd,
+  promptShowsBranch,
+} from './promptBadge';
 import './promptBadge.css';
 
 /** Lines above the input line searched for a prompt theme's own branch. */
@@ -12,7 +20,7 @@ const promptLinesAbove = 4;
 
 type Shown = {
   text: string;
-  count: string | null;
+  suffix: string;
   stale: boolean;
   top: number;
   left: number;
@@ -25,7 +33,7 @@ const sameShown = (a: Shown | null, b: Shown | null) =>
   (!!a &&
     !!b &&
     a.text === b.text &&
-    a.count === b.count &&
+    a.suffix === b.suffix &&
     a.stale === b.stale &&
     a.top === b.top &&
     a.left === b.left &&
@@ -41,6 +49,7 @@ const sameShown = (a: Shown | null, b: Shown | null) =>
 export function PromptBranch({ session, active }: { session: TerminalSession; active: boolean }) {
   const git = useGitStatus(session);
   const { promptBranch } = useTerminalPreferences();
+  const { detail } = useGitDisplay();
   const enabled = !!git && promptBranch !== 'off' && !session.profile.tmuxSession;
   const anchor = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState<Shown | null>(null);
@@ -72,16 +81,17 @@ export function PromptBranch({ session, active }: { session: TerminalSession; ac
       for (let y = first; y <= cursor; y++)
         if (promptShowsBranch(buffer.getLine(y)?.translateToString(true) ?? '', branch))
           return null;
-      const count = repo?.entries.length ? changeCount(repo) : null;
-      const text = badgeText(branch, count);
+      const count = detail !== 'branch' && repo?.entries.length ? changeCount(repo) : null;
+      const suffix = badgeSuffix(count, detail === 'sync' && repo ? syncText(repo) : '');
+      const text = badgeText(branch, suffix);
       const width = cells(text);
       if (!badgeFits(cols, Math.max(lineEnd(line, cols), buffer.cursorX), width)) return null;
       const cell = box.width / cols;
       const height = box.height / rows;
       return {
         text,
-        count,
-        stale: !!count && answerTime < marks.promptAt,
+        suffix,
+        stale: !!suffix && answerTime < marks.promptAt,
         top: box.top - base.top + row * height,
         left: box.left - base.left + (cols - width) * cell,
         width: width * cell,
@@ -110,9 +120,9 @@ export function PromptBranch({ session, active }: { session: TerminalSession; ac
       unsubscribe();
       events.forEach((event) => event.dispose());
     };
-  }, [session, enabled, active, repo, answerTime]);
+  }, [session, enabled, active, repo, answerTime, detail]);
   if (!enabled || !active) return null;
-  const name = shown?.count ? shown.text.slice(0, shown.text.lastIndexOf(' ●')) : shown?.text;
+  const name = shown?.text.slice(0, shown.text.length - shown.suffix.length);
   return (
     <div className="prompt-branch-anchor" ref={anchor} aria-hidden="true">
       {shown && (
@@ -132,8 +142,8 @@ export function PromptBranch({ session, active }: { session: TerminalSession; ac
           onClick={() => git?.refresh()}
         >
           {name}
-          {shown.count && (
-            <span className={shown.stale ? 'prompt-branch-stale' : undefined}> ●{shown.count}</span>
+          {shown.suffix && (
+            <span className={shown.stale ? 'prompt-branch-stale' : undefined}>{shown.suffix}</span>
           )}
         </span>
       )}
