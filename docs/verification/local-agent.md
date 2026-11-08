@@ -146,3 +146,57 @@ WSL에서 직접 실행한 결과다. 시간은 20회 중앙값이다.
 | 실제 앱 탭에서 `GIT_SSH`만으로 SSH push | 사용자 `known_hosts`에 기록하지 않으려고 명령 옵션 경로로 대신함 | DX.13 `test-local-native`. 사용자 `known_hosts`를 바꾸지 않는 방법은 DX.13에서 정한다 |
 | 실제 앱 실행 파일의 helper 시작 시간 | 아직 helper 분기가 없음 | DX.14 구현 |
 | WSL tmux 안에서, 처음 연 탭을 닫은 뒤의 interop | 측정하지 않음. 처음 탭이 닫히면 그 탭의 pipe도 사라진다 | DX.13 구현 때 안내서 범위 결정 |
+
+## DX.13 구현 검증
+
+- 실행일: 2026-11-08. 브랜치 `feat/dx13-local-agent`, 승인 소유자 일반화 커밋 `8c3f946` 위의 미커밋 트리(이 절과 같은 커밋으로 들어간다). 설계에서 정한 것은 [설계안 DX.13 "구현에서 정한 것"](../design/developer-workflow.md#dx13--로컬wsl-탭의-ssh-키-제공-2026-11-08-추가).
+- 이 PC의 상태는 바꾸지 않았다. 실행 뒤 다시 확인했다.
+  - `ssh-agent` 서비스: Stopped/Disabled 그대로
+  - 사용자 `~/.ssh/known_hosts`: 수정 시각 2026-01-25 그대로, `[127.0.0.1]` 항목 0건
+  - 전역 git `core.sshCommand`: 없음 그대로
+  - 남은 `dachsterm-agent-*` pipe 0개, 검사 컨테이너 0개
+- 시험 키는 실행 중에 Windows `ssh-keygen.exe`로 격리 앱 데이터 폴더(`%TEMP%\dachsterm-local-*`) 안에 만들었다. 공개키만 Docker 서버의 `authorized_keys`에 넣었다.
+
+### 자동 검사
+
+| 명령 | 결과 |
+|---|---|
+| `cargo test -p dachsterm --lib --locked local_agent` | 10 passed. pipe DACL이 현재 사용자 한 항목(`D:P(A;;FA;;;<SID>)`, 이 계정은 SDDL에서 `LA`로 표기)뿐이고 같은 이름을 다시 선점할 수 없음, 탭이 닫히면 pipe가 사라짐, 설정이 꺼져 있으면 아무것도 열지 않음, 앱 키 서명은 탭 카드(`local: true`) 허용 뒤에만, 거부는 `FAILURE`, 시스템 agent 키는 카드 없이 그 agent가 서명, 키 추가·전체 삭제(19, 9)·잠금 거부, 잘못된 프레임은 연결 종료, Windows·WSL 환경 변수, 설정 손상 오류와 참조 journal |
+| `cargo test -p dachsterm --lib --locked agent_forward` / `agent_keys` / `storage` / `vault` | 5 / 5 / 12 / 3 passed |
+| `cargo clippy -p dachsterm --all-targets --locked -- -D warnings`, `cargo fmt --all --check` | 통과 |
+| `npm run typecheck`, 바꾼 파일 eslint·prettier | 통과 |
+| `npx vitest run src/features/terminal/agentSign.test.ts src/app/SessionTab.test.tsx src/app/agentStatus.test.ts src/components/keyFiles.test.ts` | 17 + 3 passed |
+| `npx playwright test tests/ui/agent-sign.spec.ts tests/ui/forward-keys.spec.ts tests/ui/agent-launch.spec.ts` | 8 + 7 passed. 로컬 탭 카드 문구 1건 추가 |
+
+### 네이티브 (`node scripts/test-local-native.mjs`, `npm run tauri -- build --debug --no-bundle`로 만든 앱)
+
+- 첫 실행(전체 단계): 기존 단계와 DX.13 단계 6개가 PASS한 뒤, 마지막 "두 WSL 탭" 단계에서 실패했다. 검사 쪽 결함이다: 숨은 탭에 명령을 입력했다.
+- 고친 뒤 새 `--agent-only`(DX.13 단계만)로 두 번 실행했다. 두 번째 실행은 분할한 좁은 칸에서 pipe 이름이 두 줄로 나뉘어 정규식이 못 잡았다(검사 쪽 결함). 세 번째 실행 종료 0, PASS 8줄:
+
+| 단계 | 결과 |
+|---|---|
+| 설정 › 에이전트 › 로컬 탭의 SSH 키 켜기, 키 추가 | 저장. 이미 열린 PowerShell 탭의 `SSH_AUTH_SOCK`은 바뀌지 않음(새 탭부터 적용) |
+| 새 PowerShell 탭 | `SSH_AUTH_SOCK=\.\pipe\dachsterm-agent-<32자리>`, `GIT_SSH=C:\WINDOWS\System32\OpenSSH\ssh.exe`. `ssh-add -l`이 앱의 키 지문을 보여줌. 같은 사용자는 pipe에 연결됨 |
+| `GIT_SSH`만으로 `git push`(처음 보는 Docker 서버) | Windows `ssh.exe`의 호스트키 질문이 탭에 보임. 키 입력 `no`로 답해 `Host key verification failed`. 사용자 `known_hosts`에 쓰지 않음 |
+| 같은 탭의 Git for Windows SSH push(`core.sshCommand`로 Windows `ssh.exe`, 빈 설정, scratch `known_hosts`) | 카드 제목 "이 탭의 프로그램이 앱의 키로 서명하려고 합니다", 탭 이름·키 코멘트·"이 앱의 키 파일" 표시, 포커스를 가져가지 않음. **이번만 허용** → push 성공, 서버에 ref 생김. **거부** → push 실패(종료 코드 0 아님), ref 없음 |
+| 탭 닫기 | pipe가 사라짐(연결 실패) |
+| 새 WSL 탭(Ubuntu 24.04) | Linux의 `SSH_AUTH_SOCK`은 pipe 값이 아님(원래대로). `GIT_SSH=/mnt/c/WINDOWS/System32/OpenSSH/ssh.exe`. `ssh-add.exe -l`이 앱의 키를 보여줌. WSL git의 push(`$GIT_SSH`로 Windows `ssh.exe`) → 탭 카드 허용 → 성공 |
+| 같은 배포판을 오른쪽에 하나 더(`Ctrl+Shift+\`) | 두 탭의 interop `cmd.exe`가 받은 `SSH_AUTH_SOCK`이 서로 다른 pipe. 둘 다 열림. 한쪽을 닫으면 그 pipe만 사라지고, 다른 쪽을 닫으면 그 pipe도 사라짐 |
+
+### 원격 키 전달 회귀 (`node scripts/run-phase1.mjs --native --agent-only --skip-app-build`)
+
+`agent_forward.rs`의 중계를 `agent_relay.rs`로 옮겼으므로 원격 경로를 한 번 확인했다.
+
+- 종료 1, PASS 76줄. **키 전달 관련 단계는 모두 PASS**: probe의 DX.2·DX.11 16줄(전달 거부 안내, `ssh-add -l`·`-D` 차단, 승인 push·거부, 10분 허용, 옵션 끔·경유 호스트, 내장 agent 목록·Passphrase 카드·RSA SHA-2·SHA-1 거부·키 없음 안내·시스템 agent 합치기)과 네이티브 서명 카드·거부·내장 agent·Passphrase 저장 5줄.
+- **실패:** 그 뒤 `DX.8 independent window` 단계. `scripts/verify-developer-workflow.mjs:403`의 `expect.poll(focused).toBe(true)`, 즉 현황판에서 독립 창 줄을 누른 뒤 그 창이 OS 포커스를 받는지 확인하는 곳이다. 이번 변경은 창 포커스·현황판·독립 창 코드를 바꾸지 않았다(`Broker`에는 `Notify` 구현만 더했다). 원인은 확인하지 않았고 재실행하지 않았다. 검사 중 다른 창이 앞에 있어 Windows 포그라운드 잠금이 `set_focus`를 막았을 가능성을 추정한다(사실 아님). 이 단계 뒤의 `--agent-only` 단계는 실행되지 않았다.
+
+### 대기
+
+| 항목 | 이유 |
+|---|---|
+| 실제 앱 탭에서 `GIT_SSH`만으로 끝까지 가는 SSH push | 사용자 `~/.ssh/known_hosts`에 기록해야 한다. 질문 표시와 Windows `ssh.exe`·pipe·카드 경로는 확인했다 |
+| 다른 사용자 계정에서 pipe 접근 거부 | 이 PC에 다른 계정을 만들지 않았다. DACL이 현재 사용자 한 항목뿐인 것은 단위 테스트로 확인했다 |
+| 마스터 암호를 켠 상태에서 로컬 키 Passphrase 저장과 `Vault::configure` 재암호화 | 실행하지 않음(코드 경로만 추가). 암호화된 로컬 키의 카드 Passphrase 입력도 이번 네이티브 검사에 넣지 않았다(DX.11 원격 경로와 같은 코드) |
+| macOS 로컬 탭의 소켓, 시스템 agent 합치기, push | Mac 실기기 필요. [macos-readiness M.15 ⑧](macos-readiness.md) |
+| WSL tmux 안에서 처음 연 탭을 닫은 뒤의 interop | 측정하지 않음. 그 탭의 pipe가 사라지므로 tmux 서버가 상속한 값은 끊긴다. 안내서에 적을지 DX.12·DX.13 안내서 갱신 때 정한다 |
+| CI | 푸시하지 않았다 |

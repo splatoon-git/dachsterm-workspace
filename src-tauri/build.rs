@@ -43,6 +43,8 @@ fn main() {
             "git_diff_files",
             "git_diff_file",
             "agent_sign_reply",
+            "local_agent_settings",
+            "local_agent_save",
             "ssh_key_info",
             "archive_run",
             "file_batch",

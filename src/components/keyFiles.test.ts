@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addProblem, fileName, keyDetail, MAX_FORWARD_KEYS, type KeyInfo } from './forwardKeys';
+import { addProblem, fileName, keyDetail, MAX_FORWARD_KEYS, type KeyInfo } from './keyFiles';
 
 const info: KeyInfo = {
   path: 'C:\\Users\\me\\.ssh\\id_git',

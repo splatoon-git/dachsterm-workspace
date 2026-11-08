@@ -46,12 +46,12 @@ pub struct Control {
     stopped: AtomicBool,
     exited: AtomicBool,
     ack: (Mutex<u64>, Condvar),
-    agent: Option<Arc<crate::agent_forward::Agent>>,
+    /// The app's agent for this tab (DX.13), when the setting was on as it opened.
+    agent: Option<crate::local_agent::Tab>,
 }
 impl Control {
-    /// Sign requests of this tab, when it was opened with the app's agent (DX.13).
     pub(crate) fn agent(&self) -> Option<Arc<crate::agent_forward::Agent>> {
-        self.agent.clone()
+        self.agent.as_ref().map(|tab| tab.agent.clone())
     }
     pub(crate) fn ready(&self) -> bool {
         !self.stopped.load(Ordering::SeqCst) && !self.exited.load(Ordering::SeqCst)
@@ -61,6 +61,9 @@ impl Control {
         // Wake a blocking input worker so cancellation also drops the PTY master.
         let _ = self.input.try_send(Input::Data(Vec::new()));
         self.ack.1.notify_all();
+        if let Some(agent) = &self.agent {
+            agent.close();
+        }
         if !self.exited.load(Ordering::SeqCst) {
             let _ = self.killer.lock().unwrap().kill();
         }
@@ -274,6 +277,13 @@ pub async fn local_open(
         .get(&target_id)
         .cloned()
         .ok_or("로컬 목록을 새로고침한 뒤 다시 선택하세요.")?;
+    let events = on_event.clone();
+    let agent = crate::local_agent::start(
+        store.clone(),
+        &target,
+        Arc::new(move |e| events.send(e).map_err(|_| "탭 구독 종료".into())),
+    )
+    .await?;
     tauri::async_runtime::spawn_blocking(move || {
         // Serialize startup with insertion so duplicate IDs cannot orphan a process.
         let mut entries = locals.entries.lock().unwrap();
@@ -300,7 +310,8 @@ pub async fn local_open(
             command.cwd(home);
         }
         command.env("TERM", "xterm-256color");
-        for (key, value) in &target.env {
+        let (agent_env, agent) = agent.map(|a| (a.env, a.tab)).unzip();
+        for (key, value) in target.env.iter().chain(agent_env.iter().flatten()) {
             command.env(key, value);
         }
         let mut child = pair
@@ -316,7 +327,7 @@ pub async fn local_open(
             stopped: AtomicBool::new(false),
             exited: AtomicBool::new(false),
             ack: (Mutex::new(0), Condvar::new()),
-            agent: None,
+            agent,
         });
         logs.register(&id, "utf-8")?;
         crate::session_log::auto_start(

@@ -2,7 +2,14 @@
 //! answered by the ID of that tab: a remote connection (its cards follow the terminal window it
 //! moved to, `Broker`) or a local tab (always in the main window). Cards are never kept for a new
 //! window: an unanswered one ends as a refusal.
-use crate::{AppState, agent_forward::Agent, local, ssh::Event, storage::Result, windows::Broker};
+use crate::{
+    AppState,
+    agent_forward::Agent,
+    local,
+    ssh::{Event, Sink},
+    storage::Result,
+    windows::Broker,
+};
 use std::sync::Arc;
 
 /// Where a tab's cards and notices go.
@@ -12,6 +19,13 @@ pub trait Notify: Send + Sync {
 impl Notify for Broker {
     fn notify(&self, event: Event) -> Result<()> {
         self.send(event)
+    }
+}
+/// A local tab's event channel. Local tabs do not move to another window, so no `Broker`.
+pub struct Direct(pub Sink);
+impl Notify for Direct {
+    fn notify(&self, event: Event) -> Result<()> {
+        (self.0)(event)
     }
 }
 
