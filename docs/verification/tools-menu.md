@@ -320,7 +320,7 @@ chroot의 `lsof`, `netstat`은 해당 형식을 출력하는 **대역 스크립�
 
 ### 미검증
 
-- Mac 실기기 전체(`/usr/sbin/lsof`, 파일 이름 없는 포트 목록의 UI), CI.
+- Mac 실기기 전체(`/usr/sbin/lsof`의 실제 출력과 일반 권한 동작), CI.
 - 표준 사용자 계정의 Windows 결과. 이 PC는 내장 Administrator다.
 - OpenSSH 외 SSH 서버의 실패 설명. 모르는 설명은 `확인 불가`로 처리하는 코드만 있다.
 - 실제 비 Linux 서버의 `lsof`, `netstat -an`.
