@@ -10,7 +10,15 @@ mod listeners;
 #[cfg(windows)]
 mod listeners_windows;
 mod port_check;
+mod service_check;
+mod service_http;
+mod service_target;
+mod service_tls;
 mod targets;
+mod trace;
+mod trace_parse;
+#[cfg(windows)]
+mod trace_windows;
 
 pub use jobs::Jobs;
 
@@ -147,6 +155,50 @@ pub async fn net_listeners(
             listeners::remote(&handle).await
         }
     }
+}
+
+/// None when it was cancelled.
+#[tauri::command]
+pub async fn net_service_check(
+    state: State<'_, AppState>,
+    source: SourceArg,
+    target: String,
+    format: service_target::Format,
+    job_id: String,
+) -> Result<Option<service_check::Report>> {
+    if Uuid::parse_str(&job_id).is_err() {
+        return Err("잘못된 작업 ID".into());
+    }
+    service_check::run(state.connections.clone(), source, &target, format, job_id).await
+}
+
+/// Starts tracing the route. Hops and the conclusion come as events.
+#[tauri::command]
+pub async fn net_trace(
+    state: State<'_, AppState>,
+    source: SourceArg,
+    host: String,
+    port: u16,
+    job_id: String,
+    on_event: Channel<trace::Event>,
+) -> Result<()> {
+    if Uuid::parse_str(&job_id).is_err() {
+        return Err("잘못된 작업 ID".into());
+    }
+    trace::start(
+        state.connections.clone(),
+        trace::Request {
+            source,
+            host,
+            port,
+            job_id,
+            events: Arc::new(move |event| {
+                on_event
+                    .send(event)
+                    .map_err(|_| "도구 구독이 종료되었습니다.".into())
+            }),
+        },
+    )
 }
 
 #[tauri::command]

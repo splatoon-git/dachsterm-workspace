@@ -55,10 +55,42 @@ test('a network tool opens one tab, and closing it removes the tab', async ({ pa
   await expect(page.getByRole('region', { name: '포트 개통', exact: true })).toHaveCount(0);
 });
 
+test('each network tool fills its cell and its controls line up', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await page.goto('/');
+  const edges: number[] = [];
+  for (const title of ['포트 개통', '포트 사용 여부', '서비스 연결']) {
+    await openTools(page);
+    await page
+      .getByRole('navigation', { name: '네트워크 도구 목록' })
+      .getByRole('button', { name: title, exact: true })
+      .click();
+    const measured = await page
+      .getByRole('region', { name: title, exact: true })
+      .evaluate((pane) => {
+        const box = (element: Element) => element.getBoundingClientRect();
+        const form = pane.querySelector('.tool-form')!;
+        const controls = [...form.querySelectorAll('input, select, button')];
+        return {
+          pane: box(pane).width,
+          cell: box(pane.closest('.pane-cell')!).width,
+          heights: controls.map((control) => box(control).height),
+          right: box(form.querySelector('button')!).right - box(pane).left,
+          primary: [...pane.querySelectorAll('button.primary')].length,
+        };
+      });
+    expect(measured.pane, title).toBe(measured.cell);
+    expect(new Set(measured.heights).size, title).toBe(1);
+    expect(measured.primary, title).toBe(1);
+    edges.push(measured.right);
+  }
+  expect(new Set(edges).size).toBe(1);
+});
+
 test('local is the default source and asks the backend for nothing', async ({ page }) => {
   await page.goto(fixture);
   await expect(page.getByRole('radio', { name: '로컬', exact: true })).toBeChecked();
-  await expect(page.locator('.tool-pending')).toContainText('이 PC에서');
+  await expect(page.getByRole('button', { name: '점검', exact: true })).toBeEnabled();
   expect((await state(page)).calls).toEqual([]);
 });
 
@@ -121,7 +153,7 @@ test('host key and login cards appear in the tab and answer the backend', async 
   await expect(card).toBeHidden();
 
   await emit(page, connected);
-  await expect(page.locator('.tool-pending')).toContainText('웹 서버에서');
+  await expect(page.getByRole('button', { name: '점검', exact: true })).toBeEnabled();
 });
 
 test('an ended link offers to connect again, and local lets go of it', async ({ page }) => {
@@ -136,7 +168,7 @@ test('an ended link offers to connect again, and local lets go of it', async ({ 
   const second = calls[1].args.id;
   await page.getByRole('radio', { name: '로컬', exact: true }).check();
   expect((await callsOf(page, 'net_disconnect')).at(-1)!.args.id).toBe(second);
-  await expect(page.locator('.tool-pending')).toContainText('이 PC에서');
+  await expect(page.getByRole('button', { name: '점검', exact: true })).toBeEnabled();
 });
 
 test('a locked vault holds the connection until it opens', async ({ page }) => {

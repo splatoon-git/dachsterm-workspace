@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import { networkTools, type ToolId } from '../features/tools/catalog';
+import { networkTools, type ServiceHandoff, type ToolId } from '../features/tools/catalog';
 import type { VaultReady } from '../features/tools/useSource';
 import type { TerminalSession } from '../features/terminal/session';
 import { sessionKind } from '../features/terminal/sessionKind';
@@ -25,9 +25,20 @@ export function useToolTabs({
   vaultReady: VaultReady;
 }) {
   const [open, setOpen] = useState<ToolId[]>([]);
+  const [handoff, setHandoff] = useState<ServiceHandoff | null>(null);
+  const openTool = (id: ToolId) => {
+    setOpen((old) => (old.includes(id) ? old : [...old, id]));
+    workspace.open(refOf(id));
+  };
+  const viewService = (next: ServiceHandoff) => {
+    setHandoff(next);
+    openTool('service');
+  };
   const close = (key: string) => {
     const id = open.find((tool) => tabKey(refOf(tool)) === key);
     if (!id) return false;
+    // A target handed over belongs to that tab: opened again, it starts empty.
+    if (id === 'service') setHandoff(null);
     setOpen((old) => old.filter((tool) => tool !== id));
     workspace.close(key);
     return true;
@@ -42,10 +53,7 @@ export function useToolTabs({
     );
   return {
     order: open.map(refOf),
-    open: (id: ToolId) => {
-      setOpen((old) => (old.includes(id) ? old : [...old, id]));
-      workspace.open(refOf(id));
-    },
+    open: openTool,
     close,
     renderTab: (tab: ToolRef, active: boolean, select: () => void) => (
       <PlainTab
@@ -58,7 +66,14 @@ export function useToolTabs({
     ),
     renderCell: (tab: ToolRef, visible: boolean) => (
       <Suspense fallback={visible ? <p>준비 중…</p> : null}>
-        <ToolPane tool={tab.id} profiles={profiles} live={live} vaultReady={vaultReady} />
+        <ToolPane
+          tool={tab.id}
+          profiles={profiles}
+          live={live}
+          vaultReady={vaultReady}
+          handoff={tab.id === 'service' ? handoff : null}
+          viewService={viewService}
+        />
       </Suspense>
     ),
   };

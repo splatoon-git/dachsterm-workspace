@@ -306,6 +306,8 @@ pub fn run() {
             net_tools::net_disconnect,
             net_tools::net_port_check,
             net_tools::net_listeners,
+            net_tools::net_service_check,
+            net_tools::net_trace,
             net_tools::net_cancel,
             commands::terminal_input,
             commands::terminal_resize,

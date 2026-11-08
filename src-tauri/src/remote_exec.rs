@@ -228,9 +228,77 @@ pub async fn stream_refusable(
         .map_err(|_| Refusable::Failure(Failure::TimedOut))?
 }
 
+/// For commands that report as they go: each stdout line arrives as soon as the server sends it,
+/// so what came before a time limit is not lost with the rest.
+pub async fn run_lines(
+    handle: &client::Handle<Host>,
+    script: &str,
+    limits: Limits,
+    mut on_line: impl FnMut(&str) + Send,
+) -> Result<(), Failure> {
+    let mut lines = Lines::default();
+    let mut total = 0;
+    let result = stream_refusable(handle, script, limits, |data| {
+        total += data.len();
+        if total > limits.max_output {
+            return ControlFlow::Break(());
+        }
+        lines.feed(data, &mut on_line);
+        ControlFlow::Continue(())
+    })
+    .await;
+    lines.finish(&mut on_line);
+    if total > limits.max_output {
+        return Err(Failure::TooLarge);
+    }
+    result.map(drop).map_err(|failure| match failure {
+        Refusable::ChannelRefused => Failure::Other("원격 명령 채널을 열 수 없습니다.".into()),
+        Refusable::Failure(failure) => failure,
+    })
+}
+
+/// Cuts stdout into lines, however the pieces happen to arrive.
+#[derive(Default)]
+struct Lines {
+    pending: Vec<u8>,
+}
+impl Lines {
+    fn line(line: &[u8], on_line: &mut impl FnMut(&str)) {
+        on_line(&String::from_utf8_lossy(
+            line.strip_suffix(b"\r").unwrap_or(line),
+        ));
+    }
+    fn feed(&mut self, data: &[u8], on_line: &mut impl FnMut(&str)) {
+        self.pending.extend_from_slice(data);
+        let mut start = 0;
+        while let Some(at) = self.pending[start..].iter().position(|b| *b == b'\n') {
+            Self::line(&self.pending[start..start + at], on_line);
+            start += at + 1;
+        }
+        self.pending.drain(..start);
+    }
+    fn finish(self, on_line: &mut impl FnMut(&str)) {
+        if !self.pending.is_empty() {
+            Self::line(&self.pending, on_line);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{after_marker, quote};
+    use super::{Lines, after_marker, quote};
+
+    #[test]
+    fn lines_survive_being_split_across_pieces() {
+        let mut seen = Vec::new();
+        let mut lines = Lines::default();
+        let mut record = |line: &str| seen.push(line.to_string());
+        for piece in [&b"one\ntw"[..], b"o\r\n", b"three"] {
+            lines.feed(piece, &mut record);
+        }
+        lines.finish(&mut record);
+        assert_eq!(seen, ["one", "two", "three"]);
+    }
 
     #[test]
     fn quotes_for_posix_shells() {

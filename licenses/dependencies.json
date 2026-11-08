@@ -651,6 +651,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "der_derive",
+      "version": "0.8.0",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/RustCrypto/formats",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "der",
       "version": "0.8.3",
       "license": "Apache-2.0 OR MIT",
@@ -944,6 +952,14 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/cc-rs",
       "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "flagset",
+      "version": "0.4.7",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/enarx/flagset",
+      "licenseTextsFound": 1
     },
     {
       "ecosystem": "cargo",
@@ -2907,6 +2923,22 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "tls_codec_derive",
+      "version": "0.4.2",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/RustCrypto/formats",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tls_codec",
+      "version": "0.4.2",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/RustCrypto/formats",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "tokio-macros",
       "version": "2.7.2",
       "license": "MIT",
@@ -3483,6 +3515,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "x509-cert",
+      "version": "0.3.0",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/RustCrypto/formats",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "yoke-derive",
       "version": "0.8.4",
       "license": "Unicode-3.0",
@@ -3528,6 +3568,14 @@
       "license": "Unicode-3.0",
       "repository": "https://github.com/unicode-org/icu4x",
       "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zeroize_derive",
+      "version": "1.5.0",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/RustCrypto/utils",
+      "licenseTextsFound": 2
     },
     {
       "ecosystem": "cargo",

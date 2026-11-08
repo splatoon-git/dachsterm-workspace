@@ -7,6 +7,8 @@ import type { LinkEvent } from '../../../src/features/tools/sourceLink';
 import type { ToolId } from '../../../src/features/tools/catalog';
 import type { CheckEvent, CheckStart } from '../../../src/features/tools/portCheck';
 import type { ListenerReport } from '../../../src/features/tools/portUse';
+import type { ServiceReport } from '../../../src/features/tools/serviceCheck';
+import type { TraceEvent } from '../../../src/features/tools/routeTrace';
 import '../../../src/app/styles.css';
 import '../../../src/app/workspace.css';
 
@@ -21,6 +23,10 @@ interface ToolSourceFixture {
   checkError: string | null;
   /** What the next `net_listeners` answers, or the error it fails with. */
   listeners: ListenerReport | string;
+  /** Resolves the running `net_service_check`. A string fails it, and null is a cancel. */
+  answerService: (answer: ServiceReport | string | null) => void;
+  /** Sends one event to the most recent `net_trace` channel. */
+  emitTrace: (event: TraceEvent) => void;
   /** `vault_status` says the vault is locked, and `unlock` answers it. */
   locked: boolean;
   unlock: () => void;
@@ -37,6 +43,9 @@ let lastChannel = 0;
 let checkChannel = 0;
 let sent = 0;
 let checkSent = 0;
+let traceChannel = 0;
+let traceSent = 0;
+let settleService: ((answer: ServiceReport | string | null) => void) | null = null;
 const state: ToolSourceFixture = {
   calls: [],
   locked: false,
@@ -47,6 +56,10 @@ const state: ToolSourceFixture = {
   },
   emitCheck: (event) => {
     callbacks.get(checkChannel)?.({ message: event, index: checkSent++ });
+  },
+  answerService: (answer) => settleService?.(answer),
+  emitTrace: (event) => {
+    callbacks.get(traceChannel)?.({ message: event, index: traceSent++ });
   },
   checkStart: { state: 'running' },
   checkError: null,
@@ -75,6 +88,17 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         checkChannel = (onEvent as { id: number }).id;
         checkSent = 0;
         return state.checkStart;
+      }
+      if (command === 'net_service_check') {
+        return await new Promise((resolve, reject) => {
+          settleService = (answer) =>
+            typeof answer === 'string' ? reject(answer) : resolve(answer);
+        });
+      }
+      if (command === 'net_trace') {
+        traceChannel = (onEvent as { id: number }).id;
+        traceSent = 0;
+        return null;
       }
       if (command === 'net_listeners') {
         if (typeof state.listeners === 'string') throw state.listeners;

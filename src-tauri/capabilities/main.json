@@ -136,6 +136,8 @@
     "allow-net-disconnect",
     "allow-net-port-check",
     "allow-net-listeners",
+    "allow-net-service-check",
+    "allow-net-trace",
     "allow-net-cancel",
     "allow-git-credential-reply",
     "allow-git-credential-shell",

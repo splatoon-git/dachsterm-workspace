@@ -83,6 +83,8 @@ fn main() {
             "net_disconnect",
             "net_port_check",
             "net_listeners",
+            "net_service_check",
+            "net_trace",
             "net_cancel",
             "git_credential_reply",
             "git_credential_shell",

@@ -130,13 +130,18 @@ pub fn identities(body: &[u8]) -> Vec<(Vec<u8>, String)> {
 
 /// Server text shown as plain text: no control, hidden or direction characters, and short.
 pub fn plain(bytes: &[u8]) -> String {
+    plain_up_to(bytes, MAX_TEXT)
+}
+
+/// Text that came from a server, without anything that could disguise it on screen.
+pub fn plain_up_to(bytes: &[u8], limit: usize) -> String {
     String::from_utf8_lossy(bytes)
         .chars()
         .filter(|c| {
             !c.is_control()
                 && !matches!(*c as u32, 0xad | 0x61c | 0x200b..=0x200f | 0x202a..=0x202e | 0x2060..=0x206f | 0xfeff)
         })
-        .take(MAX_TEXT)
+        .take(limit)
         .collect()
 }
 

@@ -1,4 +1,5 @@
-// Port check and port list (TL.6, TL.7) in the built app against real OpenSSH servers and targets.
+// Port check and port list (TL.6, TL.7), then the service check and route trace (TL.8, TL.9, in
+// lib/service-tools-stages), in the built app against real OpenSSH servers and targets.
 // Passwords are generated or read per run and are never printed.
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
@@ -10,18 +11,28 @@ import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { launchNativeApp } from './lib/native-app.mjs';
+import { prepareServices, serviceStages } from './lib/service-tools-stages.mjs';
 
 const executable =
   process.env.DACHSTERM_EXE ??
   path.resolve(process.env.CARGO_TARGET_DIR ?? 'target', 'debug', 'dachsterm.exe');
 const run = randomUUID().slice(0, 8);
-const network = `dachsterm-tl6-net-${run}`;
-const name = (part) => `dachsterm-tl6-${part}-${run}`;
+/** Containers are named by the work they check, so two sessions' never collide. */
+const scope = ['--service-only', '--port-only'].some((flag) => process.argv.includes(flag))
+  ? 'tl8'
+  : 'tl6';
+const network = `dachsterm-${scope}-net-${run}`;
+const name = (part) => `dachsterm-${scope}-${part}-${run}`;
 const containers = [];
-const directory = mkdtempSync(path.join(tmpdir(), 'dachsterm-tl6-'));
+const directory = mkdtempSync(path.join(tmpdir(), `dachsterm-${scope}-`));
 const alpinePassword = randomBytes(24).toString('hex');
 /** Runs only the port list stages, for when the port check stages have already passed. */
 const listOnly = process.argv.includes('--list-only');
+/** Runs only the service check and route trace stages. */
+const serviceOnly = process.argv.includes('--service-only');
+/** Runs only the TL.6 and TL.7 stages, as a regression of what they share with the later tools. */
+const portOnly = process.argv.includes('--port-only');
+const networks = [network];
 const OPEN = '포트 개통';
 const USE = '포트 사용 여부';
 
@@ -44,10 +55,10 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const build = (tag, dockerfile) =>
   docker(['build', '-q', '-t', tag, '-'], { input: dockerfile, timeout: 300000 });
 
-function start(part, image, args, command = []) {
+function start(part, image, args, command = [], on = network) {
   const container = name(part);
   containers.push(container);
-  docker(['run', '-d', '--name', container, '--network', network, ...args, image, ...command]);
+  docker(['run', '-d', '--name', container, '--network', on, ...args, image, ...command]);
   return container;
 }
 const portOf = (container, inner) =>
@@ -99,7 +110,7 @@ function alpine(part, script, sshOptions = '-o AllowTcpForwarding=no') {
     ['sh', '-c', `${ALPINE_BASE}${script}${SSHD} ${sshOptions}`],
   );
 }
-const name2 = (tag) => `dachsterm-tl6-${tag}`;
+const name2 = (tag) => `dachsterm-${scope}-${tag}`;
 
 let opened;
 let stage = 'startup';
@@ -139,6 +150,9 @@ async function pick(title, session) {
 /** Answers only what appears: a connected terminal or a known host key asks nothing. */
 async function login(title, session, password) {
   await pick(title, session);
+  await answerLogin(title, password);
+}
+async function answerLogin(title, password) {
   const prompt = region(title).getByRole('form', { name: '서버 추가 인증' });
   const card = region(title).getByRole('alert', { name: '최초 호스트키 확인' });
   const connected = status(title).filter({ hasText: '연결됨' });
@@ -225,10 +239,10 @@ const localListener = net.createServer();
 const localUdp = dgram.createSocket('udp4');
 try {
   stage = 'images and network';
-  docker(['build', '-q', '-t', 'dachsterm-tl6-openssh', 'tests/openssh'], { timeout: 300000 });
+  docker(['build', '-q', '-t', name2('openssh'), 'tests/openssh'], { timeout: 300000 });
   build(
     name2('main'),
-    'FROM dachsterm-tl6-openssh\nRUN apt-get update && apt-get install -y --no-install-recommends iproute2 && rm -rf /var/lib/apt/lists/*\n',
+    `FROM ${name2('openssh')}\nRUN apt-get update && apt-get install -y --no-install-recommends iproute2 && rm -rf /var/lib/apt/lists/*\n`,
   );
   build(name2('alpine'), 'FROM alpine:3.22\nRUN apk add --no-cache openssh-server\n');
   build(name2('target'), 'FROM alpine:3.22\nRUN apk add --no-cache iptables socat\n');
@@ -299,6 +313,29 @@ try {
   for (const container of [nc, bare, jailLsof, jailNetstat])
     await until(sshdUp(container, 22), container);
 
+  stage = 'service check servers';
+  const services =
+    listOnly || portOnly
+      ? null
+      : await prepareServices({
+          docker,
+          build,
+          name,
+          name2,
+          network,
+          networks,
+          start,
+          until,
+          tool,
+          portOf,
+          sshdUp,
+          profile,
+          alpine,
+          alpinePassword,
+          ALPINE_BASE,
+          NO_TOOLS,
+        });
+
   stage = 'app start and sessions';
   opened = await launchNativeApp({ executable, directory });
   pageOf().setDefaultTimeout(15000);
@@ -314,6 +351,7 @@ try {
     profile('TL6-jn', portOf(jailNetstat, 22)),
     // Not the main server's port: a connected terminal there would be reused and SSH would work.
     profile('TL6-dead', portOf(main, 2230)),
+    ...(services?.sessions ?? []),
   ];
   const imported = await invoke('config_apply', {
     data: JSON.stringify({
@@ -329,7 +367,7 @@ try {
   await pageOf().reload();
   await expect(pageOf().getByRole('heading', { name: '서버 작업의 편안한 시작' })).toBeVisible();
 
-  if (!listOnly) {
+  if (!listOnly && !serviceOnly) {
     stage = 'local: the five results';
     await openTool(OPEN);
     const closedPort = await freePort();
@@ -505,77 +543,108 @@ try {
     console.log('PASS cancelling on a shared terminal leaves that terminal connected');
   }
 
-  stage = 'local port list';
-  const listenPort = await freePort();
-  await new Promise((resolve) => localListener.listen(listenPort, '127.0.0.1', resolve));
-  await new Promise((resolve) => localUdp.bind(0, '127.0.0.1', resolve));
-  const udpPort = localUdp.address().port;
-  const unused = await freePort();
-  await openTool(USE);
-  await button(USE, '확인').click();
-  await expect(summary(USE)).toContainText('Windows 소켓 표', { timeout: 20000 });
-  assert.ok((await rows(USE).count()) > 0, 'the whole list is empty');
-  const ports = region(USE).getByLabel('포트(비우면 전체)');
-  await ports.fill(`${listenPort},${udpPort},${unused}`);
-  await expect(summary(USE)).toContainText('사용 중 2개 · 사용 안 함 1개');
-  await expect(rows(USE).filter({ hasText: String(listenPort) })).toContainText('node.exe');
-  await expect(rows(USE).filter({ hasText: String(udpPort) })).toContainText('UDP');
-  await expect(region(USE).locator('.tool-unused')).toContainText(String(unused));
-  await closeTool(USE);
-  console.log('PASS this PC lists TCP and UDP with process names and answers about a port');
-
-  stage = 'remote port list ladder';
-  async function listFrom(session, secret, expected, check) {
+  if (!serviceOnly) {
+    stage = 'local port list';
+    const listenPort = await freePort();
+    await new Promise((resolve) => localListener.listen(listenPort, '127.0.0.1', resolve));
+    await new Promise((resolve) => localUdp.bind(0, '127.0.0.1', resolve));
+    const udpPort = localUdp.address().port;
+    const unused = await freePort();
     await openTool(USE);
-    await login(USE, session, secret);
     await button(USE, '확인').click();
-    await expect(summary(USE)).toContainText(expected, { timeout: 20000 });
-    await check();
+    await expect(summary(USE)).toContainText('Windows 소켓 표', { timeout: 20000 });
+    assert.ok((await rows(USE).count()) > 0, 'the whole list is empty');
+    const ports = region(USE).getByLabel('포트(비우면 전체)');
+    await ports.fill(`${listenPort},${udpPort},${unused}`);
+    await expect(summary(USE)).toContainText('사용 중 2개 · 사용 안 함 1개');
+    await expect(rows(USE).filter({ hasText: String(listenPort) })).toContainText('node.exe');
+    await expect(rows(USE).filter({ hasText: String(udpPort) })).toContainText('UDP');
+    await expect(region(USE).locator('.tool-unused')).toContainText(String(unused));
     await closeTool(USE);
-    console.log(`PASS ${session} reads the port list by ${expected}`);
-  }
-  await listFrom('TL6-main', password, '/proc/net, ss', async () => {
-    await expect(rows(USE).filter({ hasText: '7777' }).first()).toContainText('python3 (');
-    const ssh = rows(USE).filter({ has: pageOf().locator('td:first-child', { hasText: /^22$/ }) });
-    await expect(ssh.first()).toContainText('권한 없음');
-    await expect(region(USE).locator('.tool-notice')).toContainText('다른 계정');
-  });
-  await listFrom('TL6-nc', alpinePassword, '/proc/net, netstat', async () => {
-    await expect(rows(USE).filter({ hasText: 'TCP' }).first()).toBeVisible();
-  });
-  await listFrom('TL6-bare', alpinePassword, '프로세스 이름을 읽을 도구가 없습니다', async () => {
-    await expect(rows(USE).first()).toContainText('알 수 없음');
-  });
-  await listFrom('TL6-jl', alpinePassword, 'lsof', async () => {
-    await expect(rows(USE).filter({ hasText: '7000' })).toContainText('exampled (42)');
-  });
-  await listFrom('TL6-jn', alpinePassword, 'netstat', async () => {
-    await expect(rows(USE).filter({ hasText: '7001' })).toContainText('알 수 없음');
-  });
+    console.log('PASS this PC lists TCP and UDP with process names and answers about a port');
 
-  stage = 'SSH fails: asked ports are tried from this PC';
-  await openTool(USE);
-  await pick(USE, 'TL6-dead');
-  const prompt = region(USE).getByRole('form', { name: '서버 추가 인증' });
-  await expect(prompt).toBeVisible({ timeout: 30000 });
-  await prompt.locator('input').fill('not-the-password');
-  await prompt.getByRole('button', { name: '인증 응답', exact: true }).click();
-  const newKey = region(USE).getByRole('alert', { name: '최초 호스트키 확인' });
-  await expect(newKey.or(button(USE, '다시 연결')).first()).toBeVisible({ timeout: 30000 });
-  if (await newKey.isVisible())
-    await newKey.getByRole('button', { name: '지문 확인 · 신뢰하고 연결', exact: true }).click();
-  await expect(button(USE, '다시 연결')).toBeVisible({ timeout: 30000 });
-  await expect(button(USE, '확인')).toBeDisabled();
-  const deadPort = portOf(main, 2230);
-  await region(USE).getByLabel('포트(비우면 전체)').fill(String(deadPort));
-  await button(USE, '확인').click();
-  await expect(region(USE).getByRole('heading', { name: '외부에서 확인한 결과' })).toBeVisible({
-    timeout: 20000,
-  });
-  await expectOutcome(USE, '127.0.0.1', deadPort, '열림');
-  await closeTool(USE);
-  console.log('PASS with SSH failed the asked port is tried from this PC and labelled so');
-  console.log('PASS TL.6 and TL.7 port tools');
+    stage = 'remote port list ladder';
+    async function listFrom(session, secret, expected, check) {
+      await openTool(USE);
+      await login(USE, session, secret);
+      await button(USE, '확인').click();
+      await expect(summary(USE)).toContainText(expected, { timeout: 20000 });
+      await check();
+      await closeTool(USE);
+      console.log(`PASS ${session} reads the port list by ${expected}`);
+    }
+    await listFrom('TL6-main', password, '/proc/net, ss', async () => {
+      await expect(rows(USE).filter({ hasText: '7777' }).first()).toContainText('python3 (');
+      const ssh = rows(USE).filter({
+        has: pageOf().locator('td:first-child', { hasText: /^22$/ }),
+      });
+      await expect(ssh.first()).toContainText('권한 없음');
+      await expect(region(USE).locator('.tool-notice')).toContainText('다른 계정');
+    });
+    await listFrom('TL6-nc', alpinePassword, '/proc/net, netstat', async () => {
+      await expect(rows(USE).filter({ hasText: 'TCP' }).first()).toBeVisible();
+    });
+    await listFrom('TL6-bare', alpinePassword, '프로세스 이름을 읽을 도구가 없습니다', async () => {
+      await expect(rows(USE).first()).toContainText('알 수 없음');
+    });
+    await listFrom('TL6-jl', alpinePassword, 'lsof', async () => {
+      await expect(rows(USE).filter({ hasText: '7000' })).toContainText('exampled (42)');
+    });
+    await listFrom('TL6-jn', alpinePassword, 'netstat', async () => {
+      await expect(rows(USE).filter({ hasText: '7001' })).toContainText('알 수 없음');
+    });
+
+    stage = 'SSH fails: asked ports are tried from this PC';
+    await openTool(USE);
+    await pick(USE, 'TL6-dead');
+    const prompt = region(USE).getByRole('form', { name: '서버 추가 인증' });
+    await expect(prompt).toBeVisible({ timeout: 30000 });
+    await prompt.locator('input').fill('not-the-password');
+    await prompt.getByRole('button', { name: '인증 응답', exact: true }).click();
+    const newKey = region(USE).getByRole('alert', { name: '최초 호스트키 확인' });
+    await expect(newKey.or(button(USE, '다시 연결')).first()).toBeVisible({ timeout: 30000 });
+    if (await newKey.isVisible())
+      await newKey.getByRole('button', { name: '지문 확인 · 신뢰하고 연결', exact: true }).click();
+    await expect(button(USE, '다시 연결')).toBeVisible({ timeout: 30000 });
+    await expect(button(USE, '확인')).toBeDisabled();
+    const deadPort = portOf(main, 2230);
+    await region(USE).getByLabel('포트(비우면 전체)').fill(String(deadPort));
+    await button(USE, '확인').click();
+    await expect(region(USE).getByRole('heading', { name: '외부에서 확인한 결과' })).toBeVisible({
+      timeout: 20000,
+    });
+    await expectOutcome(USE, '127.0.0.1', deadPort, '열림');
+    await closeTool(USE);
+    console.log('PASS with SSH failed the asked port is tried from this PC and labelled so');
+  }
+  if (!listOnly && !serviceOnly) console.log('PASS TL.6 and TL.7 port tools');
+  if (services)
+    await serviceStages(
+      {
+        region,
+        button,
+        status,
+        pageOf,
+        openTool,
+        closeTool,
+        login,
+        answerLogin,
+        pick,
+        submit,
+        rowOf,
+        docker,
+        portOf,
+        freePort,
+        password,
+        alpinePassword,
+        OPEN,
+        main,
+        setStage: (name) => {
+          stage = name;
+        },
+      },
+      services,
+    );
 } catch (error) {
   console.error(`FAILED at: ${stage}`);
   const failure = process.env.DACHSTERM_FAILURE_SCREENSHOT;
@@ -595,6 +664,6 @@ try {
     // Never bound: an earlier stage failed.
   }
   for (const container of containers) tool('docker', ['rm', '-f', container]);
-  tool('docker', ['network', 'rm', network]);
+  for (const created of networks) tool('docker', ['network', 'rm', created]);
   rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }

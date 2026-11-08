@@ -4,6 +4,7 @@ import { Dialog, defaultChoice } from '../../components/Dialog';
 import { errorText } from '../../lib/ipc';
 import { CheckRows } from './CheckRows';
 import { checkSummary, rowText, type CheckRow, type CheckStart } from './portCheck';
+import { hostPort } from './serviceCheck';
 import type { Source } from './sourceLink';
 import { usePortCheck } from './usePortCheck';
 
@@ -15,9 +16,11 @@ const MANY_RESULTS = 16;
 export function PortOpenTool({
   source,
   sourceName,
+  viewService,
 }: {
   source: Source | null;
   sourceName: string;
+  viewService?: (target: string) => void;
 }) {
   const [targets, setTargets] = useState('');
   const [ports, setPorts] = useState('');
@@ -74,6 +77,9 @@ export function PortOpenTool({
           run: () => void navigator.clipboard.writeText(rowText(row, sourceName)).catch(() => {}),
         },
         { label: '다시 점검', run: () => void recheck(row), disabled: state.running || !source },
+        ...(viewService
+          ? [{ label: '서비스 연결로 보기', run: () => viewService(hostPort(row.host, row.port)) }]
+          : []),
       ],
     });
 
@@ -116,7 +122,11 @@ export function PortOpenTool({
             onChange={(event) => setSeconds(event.target.value)}
           />
         </label>
-        <button className="primary" type="submit" disabled={!state.running && !source}>
+        <button
+          className={state.running ? undefined : 'primary'}
+          type="submit"
+          disabled={!state.running && !source}
+        >
           {state.running ? '취소' : '점검'}
         </button>
       </form>

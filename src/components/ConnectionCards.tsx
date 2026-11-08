@@ -101,7 +101,9 @@ export function AuthPromptCard({
         <button type="button" onClick={cancel}>
           취소 · 연결 종료
         </button>
-        <button disabled={busy}>{busy ? '응답 확인 중' : '인증 응답'}</button>
+        <button className="primary" disabled={busy}>
+          {busy ? '응답 확인 중' : '인증 응답'}
+        </button>
       </div>
     </form>
   );

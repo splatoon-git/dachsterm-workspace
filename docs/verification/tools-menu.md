@@ -324,3 +324,91 @@ chroot의 `lsof`, `netstat`은 해당 형식을 출력하는 **대역 스크립�
 - 표준 사용자 계정의 Windows 결과. 이 PC는 내장 Administrator다.
 - OpenSSH 외 SSH 서버의 실패 설명. 모르는 설명은 `확인 불가`로 처리하는 코드만 있다.
 - 실제 비 Linux 서버의 `lsof`, `netstat -an`.
+
+## TL.8·TL.9 서비스 연결과 경로 추적
+
+2026-11-08~09 Windows 11, Docker OpenSSH. 대상은 `feat/tl8-service-check`의 커밋 전 트리다. 설계는 [TL.8](../design/tools-menu.md#tl8--서비스-연결), [TL.9](../design/tools-menu.md#tl9--경로-추적-서비스-연결의-펼치기).
+
+### 자동 검사
+
+| 명령 | 범위 | 결과 |
+|---|---|---|
+| `cargo fmt --all --check` | 전체 | 종료 0 |
+| `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` | Windows | 종료 0 |
+| `cargo clippy -p dachsterm --all-targets --locked --target aarch64-apple-darwin -- -D warnings` | macOS 타입·린트. C 컴파일러는 빈 파일 대역이라 링크·실행은 아니다 | 종료 0 |
+| `cargo test -p dachsterm --lib --locked -- net_tools remote_exec agent_filter` | 네트워크 도구와 고친 공용 모듈 | 106/106 (인증서 해석 테스트 추가와 TLS 오류 박싱 전) |
+| `cargo test -p dachsterm --lib --locked -- net_tools::service net_tools::trace` | 위 두 변경 뒤 | 49/49 |
+| `npm run typecheck`, 바꾼 파일 eslint·prettier | | 종료 0 |
+| `npx vitest run src/features/tools` | | 41/41 |
+| `npx playwright test tests/ui/service-tool.spec.ts tests/ui/port-tools.spec.ts` | | 20/20 |
+| `npx playwright test tests/ui/tools.spec.ts` | `준비 중` 문구가 사라진 3건을 고친 뒤 | 7/7 |
+| `node scripts/audit-windows.mjs` | `x509-cert` 포함 그래프 | 0건 (대상 그래프 밖 5건은 보고서에 유지) |
+| `node scripts/generate-notices.mjs` | | 466개, 라이선스 문서 검토 필요 0건 |
+
+### 실제 앱 (Windows, Docker OpenSSH)
+
+`npm run test:service-tools`(`node scripts/test-port-tools-native.mjs --service-only`). `verify-windows.ps1 -Native`의 `test:port-tools`에 함께 들어간다. 단계별 재실행은 `--from=<단계 이름>`이다. 단계가 실패하면 그 단계부터 다시 돌렸으므로 앞 단계의 결과는 그 시점의 빌드 기준이다(뒤의 빌드와 차이는 아래 "이 검사가 잡은 결함"의 두 수정뿐).
+
+서비스 연결:
+
+| 대상 | 출발지 | 결과 |
+|---|---|---|
+| nginx HTTP, 자동 | 로컬·리모트 | `연결됨 · HTTP 200`, `Server: nginx` |
+| nginx HTTPS(자체 서명), 자동 | 로컬·리모트 | `연결됨 · HTTPS 200`, `자체 서명(신뢰 안 됨)`, 인증서 이름 `svc.example` |
+| URL 입력, TLS 형식, HTTP 포트에 TLS 형식 | 로컬 | 각각 `HTTPS 200`, `연결됨 · TLS`, `서비스 확인 안 됨` + TLS 실패 이유 |
+| 먼저 말하는 서버 | 로컬·리모트 | `연결됨 · 배너`, `220 mail.example ready` |
+| 연결 후 말이 없는 서버 | 로컬·리모트 | `서비스 확인 안 됨`, 장비·프록시 안내. 리모트는 끝난 뒤 서버의 ESTABLISHED 연결 0개(`ss`) |
+| 닫힌 포트 | 로컬·리모트 | `닫힘` |
+| 응답 없음 | 로컬 `192.0.2.1`, 리모트 iptables DROP | `응답 없음` |
+| 공인 HTTPS(`www.google.com`) | 로컬·리모트 | `HTTPS`, `신뢰 OK`, 이름 해석 표시 |
+| 컨테이너 이름 대상 | 리모트 | `서버에서 해석(시간 측정 불가)`와 `getent`가 준 주소 |
+| `AllowTcpForwarding no` | 리모트 | `확인 불가 · 서버가 이 연결을 금지했습니다.` |
+| 진행 중 취소 | 로컬 | `취소됨` |
+| 포트 개통 행의 `서비스 연결로 보기` | 로컬·리모트 | 같은 출발지로 탭을 열고 바로 점검 |
+
+경로 추적. 두 Docker 네트워크 사이에 라우터 컨테이너를 두어 대상 앞에 홉을 만들었다.
+
+| 출발지 | 대상 | 결과 |
+|---|---|---|
+| Windows | `127.0.0.1` | 1홉, `참고용 ICMP`와 무관 안내, `대상까지 도달했습니다.` |
+| Windows | `1.1.1.1`(실제 경로) | 14홉 표시, 결론 표시 |
+| Windows | `192.0.2.1`, 진행 중 취소 | `취소됨`, 결론 없음 |
+| root(정식 `traceroute`) | 라우터 너머 대상 | `점검한 포트로 보낸 TCP`, 1홉 라우터, 마지막 홉 대상, `대상까지 도달했습니다.` |
+| 일반 계정 | 같은 대상 | `참고용 UDP`와 무관 안내, 1홉 라우터, 도달 |
+| root, 대상이 INPUT 전부 DROP | 같은 대상 | `마지막 응답 장비는 <라우터>, 그 다음 구간에서 끊김`, 그 뒤 홉은 `응답 없음` |
+| `traceroute` 없는 Alpine | | `이 서버에서는 경로 추적을 할 수 없습니다`, 홉 0개 |
+| BusyBox `traceroute`, 일반 계정(권한 오류) | | 같은 문구, 홉 0개 |
+
+### TL.10 회귀
+
+TL.8·TL.9가 함께 바꾼 `dial.rs`(로컬 다이얼 분리), `targets.rs`(`single_host`), `remote_exec.rs`(`run_lines` 추가), 결과 행 메뉴가 닿는 범위만 돌렸다.
+
+`node scripts/test-port-tools-native.mjs --port-only`, 최종 빌드: 종료 0. 포트 개통 전 항목(로컬·리모트 결과 5종, 상한·확인, 취소, 2단계 판정, 미해결 상한 256, 자원 고갈, bash·nc 대체, 터미널 공유)과 포트 사용 여부 전 항목 PASS.
+
+dev 병합(KV.5)에서 `remote_exec.rs`가 충돌해 `run_lines`를 KV.5의 `stream_refusable` 위로 옮겼다. 병합본으로 다시 빌드해 `--from="trace: root sends TCP to the port"`(root·일반 계정·끊김·도구 없음)를 돌렸고 종료 0이다. Windows·macOS 타깃 `clippy -D warnings`, `cargo test --lib -- remote_exec net_tools::trace` 23/23도 병합본 기준이다.
+
+### 이 검사가 잡은 결함
+
+- 행 메뉴로 서비스 탭을 연 뒤 탭을 닫고 다시 열면 지난 대상과 출발지가 다시 적용됐다. 탭을 닫을 때 넘겨받은 값을 지운다(`useToolTabs`). 재현은 이 단계에서 다음 단계로 넘어가는 네이티브 검사다.
+- `clippy`(`result_large_err`): `handshake`의 오류를 `Box<TlsStep>`으로 줄였다. 동작 변화는 없다.
+
+검사 환경을 고친 것: socat `SYSTEM:`이 인사말의 따옴표를 먹어 `220`만 나가던 것을 스크립트 파일로 바꿨다. Alpine sshd 기본값 `AllowTcpForwarding no`를 추적 서버에서 열었다. `example.com`은 이 PC의 DNS에서 11초 뒤 실패해(앱의 `이름 해석 시간 초과`가 맞음) 공인 HTTPS 대상을 `www.google.com`으로 바꿨다.
+
+### 화면 정리 (사용자 지적, 2026-11-09)
+
+`.tool-pane`이 칸을 채우지 않아 포커스 칸의 위쪽 선이 패널 오른쪽에만 드러나 탭 아래 줄이 두 개로 보였다. 패널이 칸을 채우게 하고, 세 도구의 입력칸·버튼 높이(32px)와 내용 폭(880px)을 맞췄다. 도구마다 주 버튼은 하나이고, 진행 중의 `취소`와 나머지는 일반 버튼이다. 인증 카드의 `인증 응답`을 호스트 키 카드와 같은 주 버튼으로 맞췄다(터미널에서도 같은 카드를 쓴다). 탭 제목은 글자 선택이 되지 않는다. 앱 전체의 버튼은 이번에 다루지 않았다.
+
+`npx playwright test tests/ui/tools.spec.ts` 8/8(패널 폭, 컨트롤 높이, 버튼 오른쪽 끝, 주 버튼 수를 세 도구에서 재는 재현 테스트 포함), typecheck, 바꾼 파일 eslint·prettier 종료 0. 화면 캡처로 모양을 확인했다. CSS와 버튼 클래스만 바꿔 네이티브 검사는 다시 돌리지 않았다. WKWebView 표시는 Mac 대기(M.22).
+
+### 회귀로 돌리지 않은 것
+
+`test:network-base`, `run-phase1 --native`, 전체 게이트는 돌리지 않았다. `remote_exec::run`의 호출 경로는 포트 사용 여부의 실제 검사가 지나가고, 터미널·터널 코드는 바꾸지 않았다.
+
+### 미검증
+
+- Mac 실기기 전체([macos-readiness M.22](macos-readiness.md)): `/usr/sbin/traceroute`의 `-P tcp` 일반 권한 동작과 UDP로 넘어가기, Keychain 기반 신뢰 결과, 결과 행 우클릭. CI.
+- 표준 사용자 계정의 Windows 결과. 이 PC는 내장 Administrator다.
+- Windows의 IPv6 경로 추적은 구현하지 않았다(안내 문구만).
+- `tracepath`만 있는 서버의 실제 실행. 파서 단위 테스트와 도구 순서 단위 테스트만 있다.
+- 만료·이름 불일치 인증서의 실제 서버. 오류 분류 단위 테스트만 있다.
+- 리모트 `Location`, 재전송 등 HTTP 변형과 OpenSSH 외 SSH 서버.
