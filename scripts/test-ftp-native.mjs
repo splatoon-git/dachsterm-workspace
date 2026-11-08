@@ -202,9 +202,14 @@ try {
   await expect(bar.locator('.program-guide, .monitor-bar')).toHaveCount(0);
   await tabOf('ftp').click({ button: 'right' });
   const menu = page.getByRole('menu', { name: '탭 메뉴' });
-  // No terminal items on a file tab: search, logs, guides and splitting with a new shell.
+  // No terminal items on a file tab: search, logs, guides and splitting with a new shell. The
+  // whole-window layouts are offered because the window has two tabs.
   await expect(menu.getByRole('menuitem')).toHaveText([
     /^이 창 확대/,
+    '모든 탭 좌우',
+    '모든 탭 상하',
+    '모든 탭 2 × 2',
+    '모든 탭 하나로',
     '연결 종료',
     '탭 닫기',
     '다른 탭 닫기',

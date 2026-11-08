@@ -419,3 +419,83 @@ Playwright는 1420 포트를 이 PC의 다른 프로세스가 쓰고 있어(이 
 - **경과 시간 갱신(30초)과 Git 표시가 있는 행:** 단위·Playwright 픽스처로만 확인했다. 실제 앱 검사의 탭은 저장소 밖(`/tmp`)이었다.
 - **전체 게이트** `verify-windows.ps1 -Native`, 전체 Vitest·Playwright, CI(푸시하지 않음).
 - Playwright는 1420 포트를 다른 작업 트리의 dev 서버가 쓰고 있어, 이 트리의 서버를 1521 포트로 띄우는 임시 설정으로 실행했다(설정 파일은 지웠다).
+
+## DX.10 문서와 전체 회귀
+
+- 실행일: 2026-11-08. 대상: 브랜치 `docs/dx10-guide-regression`(main `6d55589` 위)의 **미커밋 트리**. `6d55589`는 DX.6(`6845709`), DX.7(`dd222b2`), DX.8(`6d55589`) 병합이다. 이 작업은 제품 코드를 바꾸지 않았고, 바뀐 것은 문서와 네이티브 검사 스크립트 4개다.
+- 실제 앱은 게이트의 `test:native`가 이 트리에서 만든 `target/debug/dachsterm.exe`(01:29)이고, 이후 재실행은 모두 `--reuse-build`로 같은 실행 파일을 썼다.
+- 1420 포트를 다른 작업 트리(`dachsterm-dx7`)의 vite 개발 서버가 쓰고 있었고 `127.0.0.1:1420`에 응답했다. 저장소 설정(`reuseExistingServer`)이면 Playwright가 그 트리의 코드를 검사하게 되므로, 다른 세션의 프로세스는 두고 게이트 동안만 `playwright.config.ts`를 1431 포트로 바꿨다. 끝난 뒤 되돌렸고 커밋하지 않았다.
+
+### 병합
+
+DX.6 → DX.7 → DX.8 순으로 `--no-ff` 병합했다. 충돌은 문서(`progress.md`, `agent-terminal.md`, 설계안 상태 줄과 §3.1 표), `App.tsx`(DX.7의 `{ beside }` 인자와 DX.6의 `useReviewTabs` 줄), `verify-developer-workflow.mjs`·`test-native.mjs`(머리말, import, 인자)였다. 자동 병합이 DX.8의 `verifyAgentList` 호출을 DX.7의 `verifyAgentLaunch` 끝에 넣어(그 함수에는 `connectNewTab`이 없다) 원래 자리인 `verifyDeveloperWorkflow` 끝으로 옮겼다. 각 병합 뒤 `npm run typecheck` 통과, DX.8 병합 뒤 바꾼 파일 `prettier --check`와 `eslint src/app scripts/…` 통과.
+
+### 전체 게이트 `verify-windows.ps1 -Native`
+
+첫 실행(01:25~01:31)은 `test:native`의 `S1 terminal follow`에서 멈췄다. 그 앞 단계는 모두 통과했다.
+
+| 단계 | 결과 |
+|---|---|
+| `npm run typecheck`, `lint`, `format:check` | 통과 |
+| `npm test`(Vitest) | 54파일 586/586 |
+| `npm run build` | 통과 |
+| `npm run test:ui -- --workers=2`(Playwright) | 166 passed |
+| `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과 |
+| `cargo test --workspace --locked` | `dachsterm` lib 116/116, `ssh-probe` 1/1, 나머지 0건 |
+| `npm audit --audit-level=low` | 0 vulnerabilities |
+| `audit-windows.mjs` | 0 findings(대상 그래프 밖 5건은 보고서에 유지) |
+| `generate-notices.mjs` | 446 components, 검토 필요 0. 생성 파일은 줄바꿈(CRLF)만 달라져 되돌렸다 |
+| `test:native`(`run-phase1 --native`) | **실패**: AT·DX 단계는 모두 PASS, 그 뒤 `S1 terminal follow` |
+
+첫 실행이 PowerShell `*>>` 리다이렉션으로 Vitest의 stderr 경고를 오류로 바꿔 멈춘 것은 실행 방법 문제여서 `powershell.exe -File`로 다시 실행했고, 위 표는 그 실행이다.
+
+**`test:native` 실패 원인(검사 스크립트, 제품 결함 아님):** DX.5(`53ba4eb`) 이후 DX 작업은 모두 `--agent-only`로만 실행해 S1 이후 단계가 돌지 않았다. 그사이 쌓인 어긋남 세 가지를 차례로 찾아 고쳤다.
+
+| 단계 | 원인 | 수정 |
+|---|---|---|
+| `S1 terminal follow` | S1이 "연결 직후" 상태(사이드바 **파일**, 원격 경로 `/home/probe`)를 가정했으나 DX.5~DX.8 단계의 정리가 사이드바를 **연결**로, 셸을 `/tmp`로 바꾼다 | 연결 직후 확인은 `test-native.mjs`의 첫 연결 바로 뒤로 옮기고, S1은 **파일** 보기와 `cd /home/probe`로 시작 상태를 만든다 |
+| `S1 terminal mouse` | 저장된 터미널 설정 비교값에 DX.5 `gitStatus`, DX.9 `longCommandNotify`가 없었다 | 기대값에 `gitStatus: true`, `longCommandNotify: 30` 추가 |
+| `detached window ownership` | 설정 창이 마지막 분류로 열리므로 DX.7 단계 뒤에는 **에이전트** 분류가 열려 테마 라디오가 없었다 | `openSettings(mainPage, '테마')`로 분류를 고른다 |
+
+같은 실행 파일로 `node scripts/run-phase1.mjs --native --reuse-build`를 다시 실행해 **종료 0**(PASS 55줄, 01:37~01:40). AT.5·AT.6·DX.2~DX.9 단계, S1, 다섯 탭, 동시 입력, 분할, 독립 창, KeepAlive 재접속, 재시작, 마스터 암호 이행(TW.9 기록의 실패 단계), 호스트키 변경 차단까지 모두 PASS다.
+
+이어서 게이트의 나머지 단계를 같은 순서로 실행했다.
+
+| 단계 | 결과 |
+|---|---|
+| `node scripts/test-workspace-native.mjs` | 종료 0 |
+| `node scripts/test-maintenance-native.mjs` | 종료 0 |
+| `node scripts/run-ftp.mjs --native` | 첫 실행: 새 worktree에 FTP 픽스처용 Python 가상환경(`.tools/ftp-fixture`, 저장소 밖)이 없어 시작 실패. 같은 고정 버전(pyftpdlib 2.2.0, pyOpenSSL 26.4.0)인 main 작업 트리의 가상환경을 `DACHSTERM_FTP_PYTHON`으로 지정해 실행했다. 이후 아래 |
+
+`run-ftp --native` 결과:
+
+- FTP/FTPS 프로토콜 검사(FTP·FTPS·EUC-KR 큐, REST 재개, 신뢰하지 않는 인증서 거부)와 **네이티브 FTP, 네이티브 FTPS 단계는 세 번 모두 PASS**였다. **AT 기록의 기존 실패(FTPS 탭의 `enter directory`)는 이번에 재현되지 않았다.** 원인은 여전히 미확인이고, 고친 것이 아니라 재현되지 않은 것이다.
+- 별개로 그 뒤 단계 `file tab status bar and menu`가 실패했다(검사 스크립트, TW.9·TW.10 이후 실행되지 않았던 단계). ① 공용 `arrangeTabs`가 "배치할 것이 없으면 메뉴 항목이 없다"고 가정했으나 지금 메뉴는 그룹이 하나면 **모든 탭 하나로**를 비활성으로 보여 준다. 활성일 때만 누르도록 고쳤다(`native-workspace.mjs`, 다른 호출부는 항목이 활성인 경우라 동작이 같다). ② 파일 탭 메뉴 기대값에 TW.9에서 탭 메뉴로 옮긴 **모든 탭 좌우·상하·2 × 2·하나로**가 없었다. 원인은 오류 문구를 숨기는 스크립트를 한 번만 임시로 고쳐 메시지를 보고 찾았고, 그 임시 수정은 되돌렸다.
+- 고친 뒤 **종료 0**(PASS 26줄, `PASS native FTP/FTPS tabs: status bar security, file-only tab menu, …` 포함).
+
+정리: 게이트의 모든 단계가 현재 트리에서 한 번씩 통과했다. 다만 `verify-windows.ps1 -Native`를 처음부터 끝까지 한 번에 통과시킨 실행은 없다. 고친 것은 검사 스크립트뿐이라 앞 단계(Vitest, Playwright, cargo)는 다시 실행하지 않았다.
+
+### 실제 프로토콜 `npm run probe:phase1`
+
+종료 0, PASS 44줄(01:47~01:48). DX 관련: Git 상태(fsmonitor 미실행), Git diff(모든 변경 종류, 공백·한글 경로, 브랜치 기준, 크기 상한, 외부 diff·textconv·fsmonitor 미실행), DX.7 tmux 시작 한 번·붙기만, agent 전달(서버의 `ssh-add -l`, `ssh-add -D` 차단, 승인 후 실제 `git push`, 거부 시 실패, 10분 허용, 옵션 끔, 거부 서버 안내, 경유 시 최종 서버만). `git push` 대상은 픽스처 안의 저장소이며 외부 Git 호스팅이 아니다.
+
+### 안내서 내용 확인(Docker)
+
+tmux 재접속 뒤 `SSH_AUTH_SOCK` 안내를 쓰기 전에 픽스처 이미지(`dachsterm-openssh-probe`, OpenSSH, tmux 3.3a)의 일회용 컨테이너에서 OpenSSH `ssh -A`로 확인했다(앱이 아니라 서버 동작 확인). 첫 연결이 tmux 세션을 만들고, 그 연결이 끝난 뒤 두 번째 연결이 `tmux attach`로 붙은 상태에서: 기존 패널의 `ssh-add -l`은 종료 코드 2(끊긴 소켓), 세션 환경(`tmux show-environment -s SSH_AUTH_SOCK`)은 두 번째 연결의 소켓, 패널에서 `eval "$(tmux show-environment -s SSH_AUTH_SOCK)"` 뒤 `ssh-add -l`은 0이었다. 컨테이너는 지웠다.
+
+### 수동 확인(대기)
+
+| 항목 | 상태와 이유 |
+|---|---|
+| 실제 CLI 에이전트: tmux 훅 상태, 새 worktree 프리셋 시작, 검토 의견 전달 | **대기.** 서버(픽스처 컨테이너)에 CLI 에이전트가 없다. 이 PC에는 2.1.114가 있으나 DX.4·DX.6·DX.7은 SSH 서버에서 실행되는 에이전트가 필요하고, 서버에서 로그인하려면 사용자 계정 인증이 필요하다(AT 때는 사용자가 일회용 컨테이너에 로그인했다). 대역 스크립트나 셸 `printf` 결과로 대체하지 않는다 |
+| 이 PC의 Windows `ssh-agent` 서비스 | **대기.** `ssh-agent` 서비스가 **Disabled/Stopped**이고 `~/.ssh`에 개인키가 없다(`ssh-add -l`: `Error connecting to agent`, OpenSSH_for_Windows_9.5p2). 서비스 시작 유형 변경과 키 생성은 사용자 시스템 설정이라 하지 않았다. 검사는 지금도 격리된 named pipe의 agent로만 한다 |
+| 외부 Git 호스팅 push | **대기.** 위 agent에 키가 없고 호스팅에 등록된 키도 없다. 이 작업은 푸시하지 않는 조건이라 테스트 저장소에도 push하지 않았다 |
+
+수동 확인 순서(사용자 환경에서): ① 관리자 PowerShell로 `ssh-agent`를 자동 시작으로 바꾸고 `ssh-add`로 키 등록 → ② 키 전달을 켠 SSH 세션에서 서버의 `ssh-add -l`, 외부 Git 호스팅 저장소로 `git push`, 카드의 거부·이번만 허용 → ③ 같은 서버에 CLI 에이전트를 로그인해 tmux 세션 프로필로 **새 worktree** 프리셋 시작, 훅 예시를 넣은 뒤 `입력 대기`·`완료`가 탭과 현황판에 오는지, 검토 탭 의견이 에이전트 입력 줄에 Enter 없이 들어가는지. 각 결과에 에이전트 버전을 함께 적는다.
+
+### 그 밖의 대기
+
+- **Mac 실기기:** [macos-readiness](macos-readiness.md) M.15로 등록했다(Finder 앱의 `SSH_AUTH_SOCK`과 Unix 소켓 중계, tmux, 단축키, 검토 탭, 실제 앱의 Bash 3.2, 에이전트 시작 우클릭, 현황판 창 포커스). MacBook에서 `mac-verify`로 확인한다.
+- **CI:** 푸시하지 않아 실행하지 않았다.
+- DX.6·DX.7·DX.8 절의 다른 대기 항목(재접속·끊김 상태 전송, 프롬프트가 늦는 서버, 최소화된 독립 창 등)은 이번에 따로 실행하지 않았다.
+- 기본 명령에 `SSH_AUTH_SOCK` 갱신 줄 추가는 설계안 DX.10 메모대로 후속이다.

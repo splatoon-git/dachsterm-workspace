@@ -22,11 +22,10 @@ export async function verifyTerminalBasics({
 }) {
   setStage('S1 terminal follow');
   await expect(page.getByLabel('터미널 경로 따라가기', { exact: true })).toBeChecked();
-  // Connecting shows the files and starts following, without the hook appearing on screen.
-  await expect(page.getByRole('tab', { name: '파일', exact: true })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  // The view right after connecting is checked in test-native.mjs; the agent stages ran since
+  // and left the sidebar on connections and the shell elsewhere.
+  await showSidebarView(page, '파일');
+  await command('cd /home/probe');
   await expect(page.getByLabel('원격 경로', { exact: true })).toHaveValue('/home/probe', {
     timeout: 20000,
   });
@@ -154,6 +153,8 @@ export async function verifyTerminalBasics({
     osNotifications: true,
     bellNotifications: true,
     programGuide: true,
+    gitStatus: true,
+    longCommandNotify: 30,
   });
   await openTerminalSettings(page);
   await preferences.getByLabel('Backspace 전송', { exact: true }).selectOption('del');

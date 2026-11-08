@@ -1,7 +1,7 @@
 # 개발자 작업 흐름 — 설계안
 
 - 작업 ID: **DX.0~DX.10**, 설계일: **2026-11-07**.
-- 현재 상태: **DX.1·DX.2·DX.3·DX.4·DX.5·DX.6·DX.7·DX.8·DX.9 구현, 나머지 미착수.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
+- 현재 상태: **DX.1~DX.10 구현. 실제 CLI 에이전트·Windows ssh-agent·외부 push 수동 확인과 Mac 실기기(M.15) 대기.** 상태 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §19](../roadmap.md)이다.
 - 선행 설계: [에이전트 터미널 지원](agent-terminal.md)(AT). 이 문서는 AT 위에 서버 작업 기반, Git, 여러 에이전트 운영을 더한다.
 - 기준 자료: Claude Code 공식 문서(2026-11-07 확인), russh 0.65.1 문서, OpenSSH·tmux 매뉴얼, 저장소 코드 `a01efa6`.
 - 문서로 확정되지 않은 동작은 **DX.0 실측**으로 표시했다. 실측 전에는 사실로 취급하지 않는다. 크기, 시간, 개수 값은 구현 출발점인 제안값이다.
@@ -419,6 +419,15 @@ exec tmux attach -t '=<이름>'
 ### DX.10 — 문서와 전체 회귀
 
 사용 안내서, 전체 회귀, Mac 실기기 검증을 진행한다. README의 "지원하지 않는 것"에서 agent forwarding을 뺀다. 안내서에는 agent 서명 승인과 위험, 무인 실행용 배포 키, tmux 설정, 훅 예시, Git 조회가 실행하는 명령과 남는 위험, 프롬프트 전달 방법을 적는다.
+
+**TW 반영과 구현에서 정한 것(2026-11-08):**
+
+- **README:** "지원하지 않는 것"의 agent forwarding은 DX.2(`91f9b1c`)에서 이미 뺐다. 이번에는 기능 목록에 SSH 키 전달과 "서버에서 개발하기"(tmux, Git·변경 검토, 에이전트 시작·현황)를 더했다.
+- **안내서 배치:** 키 전달은 "SSH 연결" 아래 새 절 **SSH 키 전달**로 옮기고 인증 방식 목록에는 링크만 남겼다. 배포 키와 tmux 재접속 뒤 `SSH_AUTH_SOCK`도 그 절에 둔다. 에이전트 시작과 현황은 "터미널"의 "CLI 에이전트와 함께 쓰기" 다음 절이다. 단축키 표에 `Ctrl/Cmd+Shift+.`, 설정 분류에 **에이전트**, 상태바 설명에 현황 항목을 더했다.
+- **훅 예시:** 전체 JSON(약 80줄)을 안내서에 옮기지 않고 이벤트와 상태의 표, 이벤트 하나의 모양만 둔다. 전체는 설정 창의 **훅 예시 복사**가 정본이다(`agentHooks.ts`). 두 곳에 같은 JSON을 두면 한쪽만 고쳐질 수 있다.
+- **배포 키 예시:** 서버 `~/.ssh/config`에 `IdentitiesOnly yes`와 `IdentityAgent none`을 둔다. 키 전달을 켠 연결에서도 그 저장소의 push가 전달된 agent를 쓰지 않아 승인 카드가 뜨지 않는다.
+- **`SSH_AUTH_SOCK`(DX.3 표의 항목):** 안내서에만 넣었다. 기본 명령(`guideData.ts`)에 `eval "$(tmux show-environment -s SSH_AUTH_SOCK)"`를 넣는 것은 코드 변경이라 이번 문서 범위에서 빼고 후속으로 남긴다. 안내 내용은 Docker OpenSSH와 tmux 3.3a에서 확인했다. 재접속해 붙은 뒤 기존 패널은 끊긴 소켓을 가리켜 `ssh-add -l`이 종료 코드 2였고, `eval` 뒤 새 소켓으로 0이 됐다.
+- **Git 조회 명령:** 안내서에 `git_status.rs`가 실제로 보내는 명령 전체와 clean 필터를 확인하는 명령(`git config --show-origin --get-regexp '^filter\.'`)을 적었다.
 
 ## 5. IPC
 
