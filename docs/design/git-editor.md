@@ -1,7 +1,7 @@
 # Git·파일 편집 작업 화면 — 설계안
 
 - 작업 ID: **GE.1~GE.14**, 설계일: **2026-11-08**. 관련 작업 DX.16(에이전트 시작 옵션)은 [developer-workflow DX.16](developer-workflow.md#dx16--에이전트-시작-옵션-2026-11-08-추가)에 있다.
-- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.3·GE.7·GE.9·GE.10·GE.11·GE.14 구현(대기 항목은 progress), GE.4 Windows 시험 완료(Mac 실기기 대기), GE.5·GE.6·GE.8 구현(대기 항목은 progress), 나머지 미착수.** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
+- 현재 상태: **설계 확정(2026-11-08 사용자 결정 반영), GE.1·GE.2·GE.3·GE.7·GE.9·GE.10·GE.11·GE.14 구현(대기 항목은 progress), GE.4 Windows 시험 완료(Mac 실기기 대기), GE.5·GE.6·GE.8·GE.12 구현(대기 항목은 progress), GE.13 사용 안내서·Mac 항목 등록 완료(회귀 결과와 대기 항목은 progress).** 구현 상태의 정본은 [progress.md](../progress.md), 범위 정본은 [roadmap.md §23](../roadmap.md)이다.
 - 선행: DX.15(로컬·WSL 탭 Git 상태, `dev` `d6d2ec4`).
 - 기준 자료: `dev` `57e32bb`의 코드, 2026-11-08 사용자 대화와 스크린샷(VS Code 소스 제어 화면, 앱의 WSL 파일 패널·우클릭 메뉴). 내용은 코드를 읽어 확인했고, 이 설계를 위한 실행 검증은 GE.2 말고는 없다.
 
