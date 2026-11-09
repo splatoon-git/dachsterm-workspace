@@ -2,7 +2,11 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { terminalColorOptions, terminalTheme } from '../../themes/adapters/xterm';
+import {
+  terminalColorOptions,
+  terminalFontFamily,
+  terminalTheme,
+} from '../../themes/adapters/xterm';
 import type { ThemeDefinition } from '../../themes/contract';
 export function TerminalPreview({ theme }: { theme: ThemeDefinition }) {
   const host = useRef<HTMLDivElement>(null);
@@ -10,7 +14,7 @@ export function TerminalPreview({ theme }: { theme: ThemeDefinition }) {
   useEffect(() => {
     const terminal = new Terminal({
       ...terminalColorOptions(theme),
-      fontFamily: theme.foundations.font.mono,
+      fontFamily: terminalFontFamily(theme),
       fontSize: 13,
       cursorBlink: false,
       disableStdin: true,
@@ -50,7 +54,7 @@ export function TerminalPreview({ theme }: { theme: ThemeDefinition }) {
   useEffect(() => {
     if (instance.current) {
       instance.current.options.theme = terminalTheme(theme);
-      instance.current.options.fontFamily = theme.foundations.font.mono;
+      instance.current.options.fontFamily = terminalFontFamily(theme);
     }
   }, [theme]);
   return (

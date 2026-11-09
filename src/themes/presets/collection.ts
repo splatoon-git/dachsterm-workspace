@@ -17,7 +17,7 @@ export const whiteTheme = createTheme({
   interaction: ['#EAEEF2', '#D8E2EE', '#DDF4FF'],
   status: ['#116329', '#0550AE', '#864800', '#A40E26'],
   ansi: [
-    '#000000',
+    '#1F2328',
     '#A40E26',
     '#418354',
     '#7D4E00',
@@ -193,7 +193,7 @@ export const gruvboxLightTheme = createTheme({
   status: ['#526000', '#075B68', '#814500', '#9D0006'],
   terminalBackground: '#FFFEFA',
   ansi: [
-    '#000000',
+    '#3C3836',
     '#9D0006',
     '#747B28',
     '#805500',
@@ -264,7 +264,7 @@ export const solarizedLightTheme = createTheme({
   status: ['#596800', '#176A79', '#895A00', '#B52D29'],
   terminalBackground: '#FFFEFA',
   ansi: [
-    '#000000',
+    '#073642',
     '#B52D29',
     '#6F7C22',
     '#895A00',

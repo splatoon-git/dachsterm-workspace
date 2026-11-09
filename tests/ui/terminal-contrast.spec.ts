@@ -34,13 +34,15 @@ for (const theme of themes) {
     await page.goto('/tests/ui/fixtures/terminal-pane.html');
     await expect(page.locator('.xterm-rows')).toBeVisible();
     // Same colors a Powerline-style prompt sends: default text on black, then a black arrow.
-    const line = '\x1b[40m onblack \x1b[30;44m\uE0B0\x1b[0m plaintext \x1b[31mredtext\x1b[0m';
+    const line =
+      '\x1b[40m onblack \x1b[30;44m\uE0B0\x1b[0m plaintext \x1b[31mredtext\x1b[0m ' +
+      '\x1b[30;42mongreen\x1b[0m \x1b[30;44monblue\x1b[0m \x1b[30;46moncyan\x1b[0m';
     await page.evaluate(
       (value) =>
         new Promise<void>((done) => window.__terminalPane.session.terminal.write(value, done)),
       line,
     );
-    await expect(page.locator('.xterm-rows')).toContainText('redtext');
+    await expect(page.locator('.xterm-rows')).toContainText('oncyan');
 
     const { terminal } = theme;
     expect(
@@ -50,5 +52,12 @@ for (const theme of themes) {
     expect(await painted(page, 'plaintext')).toEqual(fromHex(terminal.foreground));
     expect(await painted(page, 'redtext')).toEqual(fromHex(terminal.red));
     expect(await painted(page, '\uE0B0')).toEqual(fromHex(terminal.black));
+    // ANSI black text on the colored rows htop draws, whatever black the theme chose.
+    for (const [text, background] of [
+      ['ongreen', terminal.green],
+      ['onblue', terminal.blue],
+      ['oncyan', terminal.cyan],
+    ] as const)
+      expect(contrast(await painted(page, text), fromHex(background))).toBeGreaterThanOrEqual(4.5);
   });
 }

@@ -23,7 +23,11 @@ import {
   type Profile,
   type TerminalLaunch,
 } from '../../lib/ipc';
-import { terminalColorOptions, terminalTheme } from '../../themes/adapters/xterm';
+import {
+  terminalColorOptions,
+  terminalFontFamily,
+  terminalTheme,
+} from '../../themes/adapters/xterm';
 import type { ThemeDefinition } from '../../themes/contract';
 export class TerminalSession {
   followDirectory?: boolean;
@@ -129,7 +133,7 @@ export class TerminalSession {
   ) {
     this.terminal = new Terminal({
       ...terminalColorOptions(theme),
-      fontFamily: theme.foundations.font.mono,
+      fontFamily: terminalFontFamily(theme),
       ...terminalDisplay(),
       cursorBlink: true,
       screenReaderMode: true,
@@ -218,7 +222,7 @@ export class TerminalSession {
   }
   applyTheme(theme: ThemeDefinition) {
     this.terminal.options.theme = terminalTheme(theme);
-    this.terminal.options.fontFamily = theme.foundations.font.mono;
+    this.terminal.options.fontFamily = terminalFontFamily(theme);
   }
   configure(fontSize: number, scrollback: number) {
     if (this.terminal.options.fontSize !== fontSize) this.terminal.options.fontSize = fontSize;

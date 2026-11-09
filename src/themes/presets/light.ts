@@ -36,7 +36,7 @@ export const lightTheme = {
     cursorAccent: surface.panel,
     selectionBackground: '#DCE8F2',
     selectionForeground: text.primary,
-    black: '#000000',
+    black: text.primary,
     red: '#B54137',
     green: '#468150',
     yellow: '#87600D',

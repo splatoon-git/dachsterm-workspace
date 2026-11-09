@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { defaultTheme, getTheme, themes } from './registry';
 import { cssVariables } from './adapters/css';
-import { terminalTheme } from './adapters/xterm';
+import { terminalFontFamily, terminalTheme } from './adapters/xterm';
 import { chartTheme } from './adapters/chart';
 import type { ThemeDefinition } from './contract';
 function contrast(a: string, b: string) {
@@ -28,6 +28,11 @@ describe('theme contract', () => {
       );
       expect(terminalTheme(theme)).toEqual(theme.terminal);
     }
+  });
+  it('keeps theme fonts first and offers Powerline fonts only as a fallback', () => {
+    const family = terminalFontFamily(defaultTheme);
+    expect(family.startsWith(defaultTheme.foundations.font.mono)).toBe(true);
+    expect(family).toContain('Nerd Font Mono');
   });
   it('derives every renderer from an unregistered replacement definition', () => {
     const alternative: ThemeDefinition = structuredClone(defaultTheme);
@@ -69,12 +74,16 @@ describe('theme contract', () => {
     ).toBeGreaterThanOrEqual(4.5);
     expect(contrast(terminal.cursor, terminal.background)).toBeGreaterThanOrEqual(3);
     expect(contrast(terminal.cursorAccent, terminal.cursor)).toBeGreaterThanOrEqual(3);
-    // htop uses ANSI black text on these colored header/selection backgrounds.
-    for (const background of [terminal.green, terminal.blue, terminal.cyan])
-      expect(
-        contrast(terminal.black, background),
-        `ANSI black on ${background}`,
-      ).toBeGreaterThanOrEqual(4.5);
+    // htop uses ANSI black text on these colored header/selection backgrounds. In light themes
+    // black is the theme's ink so prompt bands match it, and xterm's minimum contrast keeps that
+    // text readable; tests/ui/terminal-contrast.spec.ts measures the painted result.
+    if (theme.colorScheme === 'dark')
+      for (const background of [terminal.green, terminal.blue, terminal.cyan])
+        expect(
+          contrast(terminal.black, background),
+          `ANSI black on ${background}`,
+        ).toBeGreaterThanOrEqual(4.5);
+    if (theme.colorScheme === 'light') expect(terminal.black).toBe(color.text.primary);
     for (const key of [
       'black',
       'red',
