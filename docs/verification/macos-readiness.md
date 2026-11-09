@@ -109,7 +109,7 @@ M.2~M.4는 수정했고(`0fcf569`), 나머지는 미착수다. Mac 실기기에�
 | `bash scripts/verify-macos.sh --package` | 종료 0. Vitest 1322, Playwright 519, Rust 637(무시 3)+1, `npm audit` 0, 의존성 감사 0(대상 밖 5), 고지 505개·검토 필요 0, debug `.app` |
 | `npm run probe:ftp` | 종료 0. FTP, FTPS, EUC-KR, 큐, `NFD local name arrives as NFC` |
 | 위 NFD 검사, 정규화를 임시로 끈 코드 | 실패(재현 확인) 후 원복 |
-| `npm run probe:phase1` | **종료 1.** 큐·NFD·SFTP·터널·모니터링·Git·tmux 단계는 통과. 인증정보 저장 단계에서 실패. [`ed799a4`의 깨끗한 트리에서도 같은 지점](kubernetes-workspace.md)이고 `credentials.rs`와 검사 코드는 바꾸지 않았다. 원인은 미확인이며 뒤 단계는 실행되지 않았다 |
+| `npm run probe:phase1` | **종료 1.** 큐·NFD·SFTP·터널·모니터링·Git·tmux 단계는 통과. 인증정보 저장 단계에서 실패. [`ed799a4`의 깨끗한 트리에서도 같은 지점](kubernetes-workspace.md)이고 `credentials.rs`와 검사 코드는 바꾸지 않았다. 뒤 단계는 실행되지 않았다. **뒤에 확인한 원인:** `run-phase1.mjs`가 git 격리용 `HOME`을 프로브 전체에 적용해 Keychain이 `-25307`(기본 키체인 없음)을 냈다. 제품 결함이 아니다. Mac에서 `HOME`을 유지하게 고친 뒤(`9855a93` + 미커밋 스크립트 수정) 종료 0, PASS 61건, Keychain·금고·agent 전달·HTTPS 자격 증명·LFS까지 통과. git은 `GIT_CONFIG_GLOBAL`·`GIT_CONFIG_NOSYSTEM`으로 계속 격리된다 |
 | `plutil`, `codesign --verify --deep --strict` | `NSLocalNetworkUsageDescription`, `LSMinimumSystemVersion` 13.1, `Signature=adhoc`, 검증 종료 0 |
 
 미실행: Windows 게이트와 CI, LAN 권한 창, 앱 화면 조작.

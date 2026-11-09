@@ -187,7 +187,9 @@ try {
   );
   env.DACHSTERM_PROBE_GIT_STORE = gitStore;
   const isolatedGit = {
-    HOME: gitHome,
+    // macOS finds the login Keychain through HOME, and the probe's OS credential checks use it.
+    // GIT_CONFIG_GLOBAL and GIT_CONFIG_NOSYSTEM below still keep git off the user's settings.
+    ...(process.platform === 'darwin' ? {} : { HOME: gitHome }),
     XDG_CONFIG_HOME: gitHome,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_CONFIG_GLOBAL: path.join(gitHome, 'gitconfig'),
