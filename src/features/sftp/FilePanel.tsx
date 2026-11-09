@@ -13,7 +13,7 @@ import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
 import { FileAction, FilePathBar, FileTreeRow, useFileTree } from './fileTree';
 import { FollowControl, useDirectoryFollow } from './follow';
 import { useFileDragOut } from './dragOut';
-import { copyPathsItem } from './fileMenuItems';
+import { copyPathsItem, fileKeys } from './fileMenuItems';
 import { sessionSource } from '../terminal/sessionKind';
 import { operationText } from './fileOperation';
 type FileClipboard = { sourceId: string; operation: 'copy' | 'move'; paths: string[] };
@@ -620,14 +620,14 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
             },
             {
               label: '복사',
-              shortcut: 'Ctrl+C',
+              shortcut: fileKeys.copy,
               separated: true,
               run: () => void copySelection('copy'),
             },
-            { label: '잘라내기', shortcut: 'Ctrl+X', run: () => void copySelection('move') },
+            { label: '잘라내기', shortcut: fileKeys.cut, run: () => void copySelection('move') },
             {
               label: '붙여넣기',
-              shortcut: 'Ctrl+V',
+              shortcut: fileKeys.paste,
               disabled: !clipboard,
               run: () => void paste(),
             },
