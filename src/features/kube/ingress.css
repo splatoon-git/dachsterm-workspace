@@ -23,6 +23,43 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
+  white-space: nowrap;
+}
+.kube-ingress-tools label input {
+  width: auto;
+  margin: 0;
+}
+.kube-ingress-list > li {
+  position: relative;
+  margin-bottom: var(--space-sm);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  overflow: hidden;
+}
+.kube-ingress-list > li > .kube-ingress-row.host {
+  min-height: 30px;
+  background: var(--color-surface-header);
+}
+/* The heading too, so that its columns stay over the rows' while the flow button takes this room. */
+.kube-ingress-row.host {
+  padding-right: 92px;
+}
+.kube-ingress-flow {
+  position: absolute;
+  top: 3px;
+  right: var(--space-xs);
+  min-height: 0;
+  height: 24px;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-small);
+  opacity: 0;
+}
+.kube-ingress-list > li:hover > .kube-ingress-flow,
+.kube-ingress-flow:focus-visible {
+  opacity: 1;
+}
+.kube-ingress-row.path {
+  min-height: 26px;
 }
 .kube-ingress-stale {
   color: var(--color-status-warning);
@@ -73,10 +110,9 @@ button.kube-ingress-row:hover {
   font-weight: 400;
 }
 .kube-ingress-row.path {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) 96px minmax(0, 1.5fr) 72px minmax(
-      0,
-      1fr
-    ) 32px;
+  grid-template-columns:
+    minmax(0, 1.2fr) minmax(0, 1.5fr) 96px minmax(0, 1.5fr) 72px minmax(0, 1fr)
+    32px;
   padding-left: var(--space-lg);
   color: var(--color-text-secondary);
 }

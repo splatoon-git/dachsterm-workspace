@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { call, type KubeSettings } from '../../lib/ipc';
 import type { PodLogs, PodOverview, PodRef } from './detailTypes';
+import { levelOf } from './logBoardModel';
 import { chooseContainer, filterLines, rememberContainer } from './podPanel';
 import type { PodTerminalRequest } from './podShell';
 import { shellTitle } from './podShell';
@@ -19,6 +20,7 @@ export function PodLogsView({
   session,
   tick,
   openTerminal,
+  watchPod,
 }: {
   connectionId: string;
   kube: KubeSettings;
@@ -27,6 +29,7 @@ export function PodLogsView({
   session: string;
   tick: number;
   openTerminal: (request: PodTerminalRequest) => void;
+  watchPod?: (pod: PodRef) => void;
 }) {
   const names = overview?.containers.map((c) => c.name) ?? [];
   const [picked, setPicked] = useState('');
@@ -118,6 +121,11 @@ export function PodLogsView({
         >
           따라가기
         </button>
+        {watchPod && (
+          <button title="여러 파드와 나란히 봅니다" onClick={() => watchPod(target)}>
+            실시간 로그에 추가
+          </button>
+        )}
       </div>
       <div className="kube-panel-note" role="status">
         {logs.loading && '로그를 읽는 중…'}
@@ -133,7 +141,12 @@ export function PodLogsView({
       )}
       {!empty && (
         <pre ref={body} className="kube-log" tabIndex={0} aria-label="로그">
-          {lines.join('\n')}
+          {lines.map((line, at) => (
+            <span key={at} className={`kube-log-line ${levelOf(line, false)}`}>
+              {line}
+              {'\n'}
+            </span>
+          ))}
         </pre>
       )}
     </div>

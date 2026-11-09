@@ -110,6 +110,7 @@
     "allow-kube-logs",
     "allow-kube-ingress",
     "allow-kube-log-search",
+    "allow-kube-log-stream",
     "allow-kube-log-cancel",
     "allow-kube-metrics",
     "allow-kube-probe",

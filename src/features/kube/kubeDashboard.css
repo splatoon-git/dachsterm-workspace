@@ -14,20 +14,24 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
   gap: var(--space-sm);
-  align-items: start;
+  /* Panels in a row share a height, so the page reads as rows instead of a ragged edge. */
+  align-items: stretch;
 }
 .kube-dash-panel {
   min-width: 0;
-  padding: var(--space-sm);
+  padding: var(--space-sm) var(--space-md) var(--space-md);
   border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-medium);
   background: var(--color-surface-panel);
+  font-variant-numeric: tabular-nums;
 }
 .kube-dash-panel.wide {
   grid-column: 1 / -1;
 }
 .kube-dash-panel h3 {
-  margin: 0 0 var(--space-xs);
+  margin: 0 calc(-1 * var(--space-md)) var(--space-sm);
+  padding: 0 var(--space-md) var(--space-sm);
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
   font-size: var(--font-small);
   font-weight: 600;
 }
@@ -118,7 +122,8 @@ button.kube-dash-row:hover {
   text-overflow: ellipsis;
 }
 .kube-dash-row.node {
-  grid-template-columns: minmax(0, 2fr) minmax(40px, 1fr) 72px minmax(40px, 1fr) 84px;
+  /* The name stops growing, so a wide window gives its room to the meters. */
+  grid-template-columns: minmax(120px, 260px) minmax(40px, 1fr) 72px minmax(40px, 1fr) 84px;
 }
 .kube-dash-row.trouble {
   grid-template-columns: minmax(0, 3fr) minmax(0, 4fr) max-content 64px;

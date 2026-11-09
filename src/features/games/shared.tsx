@@ -96,7 +96,12 @@ export function RoundControls({
   return (
     <div className="game-actions">
       {!over && (
-        <button onClick={() => (round.phase === 'playing' ? round.pause() : round.start())}>
+        <button
+          // WebKit does not focus a clicked button, so the board's blur would pause the round
+          // first and this click would read as resume. Keeping focus on the board avoids that.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => (round.phase === 'playing' ? round.pause() : round.start())}
+        >
           {round.phase === 'playing'
             ? '일시정지'
             : round.phase === 'paused'

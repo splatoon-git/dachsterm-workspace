@@ -164,6 +164,7 @@ export const kubeScreens = [
   { id: 'tree', label: '트리' },
   { id: 'dashboard', label: '대시보드' },
   { id: 'ingress', label: '인그레스' },
+  { id: 'board', label: '실시간 로그' },
   { id: 'logs', label: '로그 검색' },
 ] as const;
 export type KubeScreen = (typeof kubeScreens)[number]['id'];

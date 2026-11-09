@@ -57,6 +57,7 @@ fn main() {
             "kube_ingress",
             "kube_logs",
             "kube_log_search",
+            "kube_log_stream",
             "kube_log_cancel",
             "kube_metrics",
             "kube_probe",

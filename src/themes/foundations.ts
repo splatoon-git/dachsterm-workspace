@@ -2,8 +2,10 @@ import type { Foundations } from './contract';
 export const foundations: Foundations = {
   space: { xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '24px', xxl: '32px' },
   font: {
-    ui: "'Segoe UI', 'Apple SD Gothic Neo', sans-serif",
-    mono: "'Cascadia Code', 'SFMono-Regular', Consolas, monospace",
+    ui: "'Segoe UI', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
+    // Menlo is on every Mac. SF Mono is not installed for other apps, and a bare `monospace` in
+    // WebKit is Courier. The Korean faces are for the glyphs the Latin ones do not have.
+    mono: "'Cascadia Code', ui-monospace, Menlo, Consolas, 'Apple SD Gothic Neo', 'Malgun Gothic', monospace",
     small: '12px',
     body: '14px',
     title: '28px',

@@ -65,6 +65,7 @@ import { SidebarTabs, type SidebarView } from './SidebarTabs';
 import { ConnectionTree, useFolded } from './ConnectionTree';
 import { HeaderActions, HeaderMenus } from './HeaderTools';
 import { modKey } from '../lib/platform';
+import { saveSetting } from '../lib/saveSetting';
 const GamePane = lazy(() => import('../features/games/GamePane'));
 import { games, type GameId } from '../features/games/catalog';
 const sessionRef = (session: TerminalSession): TabRef => ({
@@ -119,9 +120,7 @@ export function App() {
     // Discovery is read-only and does not start a shell or a WSL distribution.
     void refreshLocal();
   }, [refreshLocal]);
-  useEffect(() => {
-    localStorage.setItem('dachsterm.sidebar', String(sidebarOpen));
-  }, [sidebarOpen]);
+  useEffect(() => saveSetting('dachsterm.sidebar', String(sidebarOpen)), [sidebarOpen]);
   const workspace = useWorkspaceLayout();
   const { open: openWorkspaceTab } = workspace;
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
@@ -169,9 +168,7 @@ export function App() {
   const [leftWidth, setLeftWidth] = useState(() =>
     Math.max(200, Math.min(420, Number(localStorage.getItem('dachsterm.leftWidth')) || 240)),
   );
-  useEffect(() => {
-    localStorage.setItem('dachsterm.leftWidth', String(leftWidth));
-  }, [leftWidth]);
+  useEffect(() => saveSetting('dachsterm.leftWidth', String(leftWidth)), [leftWidth]);
   const [query, setQuery] = useState('');
   const refresh = useCallback(async () => {
     if (desktop) {

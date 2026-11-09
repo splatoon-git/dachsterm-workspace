@@ -10,6 +10,7 @@ import type {
 } from '../../../src/features/kube/detailTypes';
 import type { IngressReport } from '../../../src/features/kube/ingressTypes';
 import type { Detection, KubeDisplay } from '../../../src/features/kube/kubeModel';
+import type { StreamEvent } from '../../../src/features/kube/logBoardModel';
 import type { SearchEvent } from '../../../src/features/kube/logSearchModel';
 import type { PodTerminalRequest } from '../../../src/features/kube/podShell';
 import type { MetricsRead, ProbeRead } from '../../../src/features/kube/runtimeTypes';
@@ -49,6 +50,9 @@ declare global {
       emitSearch?: (event: SearchEvent) => void;
       /** Ends the fake `kube_log_search` call, as the backend does when a search is over. */
       endSearch?: () => void;
+      /** Sent to the running log board's channel. */
+      emitStream?: (event: StreamEvent) => void;
+      endStream?: () => void;
       calls: { command: string; args: Record<string, unknown> }[];
       copied: string[];
       terminals: PodTerminalRequest[];
@@ -61,6 +65,8 @@ const callbacks = new Map<number, (message: unknown) => void>();
 let nextCallback = 1;
 let searchChannel = 0;
 let searchSent = 0;
+let streamChannel = 0;
+let streamSent = 0;
 state.calls = [];
 state.copied = [];
 state.terminals = [];
@@ -81,6 +87,13 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         searchSent = 0;
         return new Promise<void>((resolve) => {
           state.endSearch = resolve;
+        });
+      }
+      if (command === 'kube_log_stream') {
+        streamChannel = (onEvent as { id: number }).id;
+        streamSent = 0;
+        return new Promise<void>((resolve) => {
+          state.endStream = resolve;
         });
       }
       if (command === 'kube_log_cancel') return null;
@@ -138,6 +151,9 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
 
 state.emitSearch = (event) => {
   callbacks.get(searchChannel)?.({ message: event, index: searchSent++ });
+};
+state.emitStream = (event) => {
+  callbacks.get(streamChannel)?.({ message: event, index: streamSent++ });
 };
 
 // `lib/ipc` reads `isTauri` once when it loads, so the app code comes after the stub above.

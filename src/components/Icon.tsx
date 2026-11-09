@@ -52,8 +52,18 @@ export type IconName =
   | 'react'
   | 'gear'
   | 'flask'
-  | 'image';
+  | 'image'
+  | 'expand'
+  | 'collapse'
+  | 'pause'
+  | 'play'
+  | 'wrapLines';
 const paths: Record<IconName, string> = {
+  expand: 'M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5',
+  collapse: 'M9 4v5H4 M15 4v5h5 M9 20v-5H4 M15 20v-5h5',
+  pause: 'M8 5v14 M16 5v14',
+  play: 'M7 4l13 8-13 8z',
+  wrapLines: 'M3 6h18 M3 12h14a3 3 0 0 1 0 6h-4 M15 15l-3 3 3 3 M3 18h5',
   game: 'M7 7h10c3 0 4 3 4 7s-2 5-4 3l-2-2H9l-2 2c-2 2-4 1-4-3s1-7 4-7z M8 10v5 M5.5 12.5h5 M16 11h.01 M18 14h.01',
   server: 'M4 3h16v7H4z M4 14h16v7H4z M7 6.5h.01 M7 17.5h.01 M11 6.5h6 M11 17.5h6',
   folder: 'M3 7V5h6l2 2h10v13H3z',

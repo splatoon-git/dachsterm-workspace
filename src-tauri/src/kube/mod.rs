@@ -7,6 +7,7 @@ mod ingress_metrics;
 mod log_keywords;
 mod log_scheduler;
 mod log_search;
+mod log_stream;
 mod logs;
 mod metrics;
 mod probe;
@@ -26,6 +27,7 @@ use detect::{Detection, Source, detect};
 pub use log_keywords::Keywords;
 pub use log_search::LogSearches;
 use log_search::SearchRequest;
+use log_stream::StreamSource;
 use logs::{LogRequest, Logs};
 use metrics::{MetricsRead, MetricsTarget};
 use probe::ProbeRead;
@@ -257,6 +259,30 @@ pub async fn kube_log_search(
     let registered = searches.begin(search_id);
     let cancel = registered.cancel.clone();
     log_search::run(handle, kube, plan, on_event, cancel).await;
+    Ok(())
+}
+
+/// One SSH channel however many pods are followed, and no polling slot: it runs until cancelled.
+/// `kube_log_cancel` ends it, since a stream registers the same way a search does.
+#[tauri::command]
+pub async fn kube_log_stream(
+    state: State<'_, AppState>,
+    searches: State<'_, LogSearches>,
+    id: String,
+    kube: KubeSettings,
+    stream_id: String,
+    sources: Vec<StreamSource>,
+    on_event: Channel<log_stream::Event>,
+) -> Result<()> {
+    kube.validate()?;
+    if Uuid::parse_str(&stream_id).is_err() {
+        return Err("잘못된 스트림 ID".into());
+    }
+    log_stream::check(&sources)?;
+    let handle = state.connections.handle(&id)?;
+    let registered = searches.begin(stream_id);
+    let cancel = registered.cancel.clone();
+    log_stream::run(handle, kube, sources, on_event, cancel).await;
     Ok(())
 }
 

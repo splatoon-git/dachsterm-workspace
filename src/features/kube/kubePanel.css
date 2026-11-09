@@ -14,6 +14,25 @@
   flex: 1 1 0;
   min-width: 200px;
 }
+/* The handle gets its width from the grid track everywhere else; a flex row has to give it one. */
+.kube-split > .resize-handle {
+  flex: 0 0 6px;
+  margin-left: -3px;
+  margin-right: -3px;
+  background: transparent;
+}
+.kube-split > .resize-handle:hover,
+.kube-split > .resize-handle:focus-visible {
+  background: var(--color-action-primary);
+}
+.kube-split.expanded > .kube-tree,
+.kube-split.expanded > .resize-handle {
+  display: none;
+}
+.kube-split.expanded > .kube-panel {
+  flex: 1;
+  border-left: 0;
+}
 .kube-notice {
   display: flex;
   flex-shrink: 0;
@@ -141,10 +160,26 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+}
+.kube-log-line {
+  display: block;
+  /* A wrapped line hangs under its own start, so where each line begins stays visible. */
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+.kube-log-line.warn {
+  color: var(--terminal-yellow);
+}
+.kube-log-line.error {
+  background: color-mix(in srgb, var(--terminal-red) 14%, transparent);
+  color: var(--terminal-bright-red);
 }
 .kube-info,
 .kube-cause {
-  padding: var(--space-sm);
+  padding: var(--space-md);
+  font-variant-numeric: tabular-nums;
 }
 .kube-info h3,
 .kube-cause h3 {
@@ -193,14 +228,19 @@
 }
 .kube-table th,
 .kube-table td {
-  padding: 2px var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
   border-bottom: var(--border-width-default) solid var(--color-border-subtle);
   text-align: left;
   vertical-align: top;
 }
 .kube-table th {
+  background: var(--color-surface-header);
   color: var(--color-text-secondary);
   font-weight: 400;
+  white-space: nowrap;
+}
+.kube-table tr.warn td {
+  color: var(--color-status-warning);
 }
 .kube-wrap {
   overflow-wrap: anywhere;

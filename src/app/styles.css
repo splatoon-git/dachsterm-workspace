@@ -291,13 +291,26 @@ small {
 }
 
 /* Phase 1: token-based session editor and terminal workspace. */
+/* macOS draws a native select at its own fixed height and ignores ours, so the arrow is drawn here. */
 select {
+  appearance: none;
+  -webkit-appearance: none;
   font: inherit;
-  background: var(--color-surface-panel);
+  background-color: var(--color-surface-panel);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 13px) 50%,
+    calc(100% - 9px) 50%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
   color: var(--color-text-primary);
   border: var(--border-width-default) solid var(--color-border-input);
   border-radius: var(--radius-small);
   padding: var(--space-sm);
+  /* Important: screens set `padding` as a shorthand, and the text must never reach the arrow. */
+  padding-right: 24px !important;
   max-width: 100%;
 }
 .form-grid {

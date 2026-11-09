@@ -21,21 +21,26 @@ export const panelTabs = (problem: boolean) =>
 /** What "상세" opens: a problem pod goes straight to its cause. */
 export const detailTab = (problem: boolean): PodPanelTab => (problem ? 'cause' : 'overview');
 
-/** Same language as the tree's filter: spaces are AND and `!word` excludes. */
-export function filterLines(text: string, query: string): string[] {
+/** Same language as the tree's filter: spaces are AND and `!word` excludes. `null` keeps all. */
+export function lineMatcher(query: string): ((line: string) => boolean) | null {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const wanted = words.filter((word) => !word.startsWith('!'));
   const unwanted = words.filter((word) => word.startsWith('!') && word.length > 1);
-  const lines = text.split('\n');
-  if (lines.at(-1) === '') lines.pop();
-  if (!wanted.length && !unwanted.length) return lines;
-  return lines.filter((line) => {
+  if (!wanted.length && !unwanted.length) return null;
+  return (line) => {
     const lower = line.toLowerCase();
     return (
       wanted.every((word) => lower.includes(word)) &&
       !unwanted.some((word) => lower.includes(word.slice(1)))
     );
-  });
+  };
+}
+
+export function filterLines(text: string, query: string): string[] {
+  const lines = text.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  const matches = lineMatcher(query);
+  return matches ? lines.filter(matches) : lines;
 }
 
 export const formatTime = (iso: string) => {

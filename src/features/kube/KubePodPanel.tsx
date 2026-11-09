@@ -1,5 +1,7 @@
 import { useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { Icon } from '../../components/Icon';
 import type { KubeSettings } from '../../lib/ipc';
+import type { PodRef } from './detailTypes';
 import {
   EventsView,
   OverviewView,
@@ -29,6 +31,9 @@ export function KubePodPanel({
   close,
   openTerminal,
   style,
+  expanded = false,
+  toggleExpanded,
+  watchPod,
 }: {
   connectionId: string;
   kube: KubeSettings;
@@ -39,6 +44,10 @@ export function KubePodPanel({
   close: () => void;
   openTerminal: (request: PodTerminalRequest) => void;
   style?: CSSProperties;
+  /** Fills the screen instead of sharing it with the tree. Absent where there is no room to give. */
+  expanded?: boolean;
+  toggleExpanded?: () => void;
+  watchPod?: (pod: PodRef) => void;
 }) {
   const [tick, setTick] = useState(0);
   const pod = { namespace: target.namespace, name: target.name };
@@ -84,10 +93,19 @@ export function KubePodPanel({
         <strong title={target.name}>{target.name}</strong>
         <span className="kube-panel-namespace">{target.namespace}</span>
         <button aria-label="새로고침" title="새로고침" onClick={() => setTick((n) => n + 1)}>
-          ⟳
+          <Icon name="refresh" size={14} />
         </button>
+        {toggleExpanded && (
+          <button
+            aria-label={expanded ? '패널 원래 크기' : '패널 크게 보기'}
+            title={expanded ? '원래 크기' : '크게 보기'}
+            onClick={toggleExpanded}
+          >
+            <Icon name={expanded ? 'collapse' : 'expand'} size={14} />
+          </button>
+        )}
         <button aria-label="패널 닫기" title="닫기 (Esc)" onClick={close}>
-          ×
+          <Icon name="close" size={14} />
         </button>
       </div>
       <div className="kube-panel-tabs" role="tablist" aria-label="파드 상세">
@@ -111,6 +129,7 @@ export function KubePodPanel({
             session={session}
             tick={tick}
             openTerminal={openTerminal}
+            watchPod={watchPod}
           />
         )}
         {target.tab === 'cause' && overview && (

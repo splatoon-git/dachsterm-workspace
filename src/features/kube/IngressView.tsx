@@ -116,6 +116,7 @@ export function IngressView({
   setFilter,
   reveal,
   searchController,
+  openFlow,
 }: {
   data: IngressData;
   store: SnapshotStore;
@@ -123,6 +124,7 @@ export function IngressView({
   setFilter: Dispatch<SetStateAction<string>>;
   reveal: (target: TreeTarget) => void;
   searchController: (keyword: string) => void;
+  openFlow: (rows: PathRow[]) => void;
 }) {
   const [problemsOnly, setProblemsOnly] = useState(false);
   const [menu, setMenu] = useState<MenuRequest | null>(null);
@@ -149,6 +151,12 @@ export function IngressView({
         run: () => searchController(keyword),
       })),
   ];
+
+  const flowItem = (rows: PathRow[]): MenuItem => ({
+    label: '요청 흐름 실시간 보기',
+    disabled: !rows.some((row) => row.rule.service),
+    run: () => openFlow(rows),
+  });
 
   const podItems = (row: PathRow): MenuItem[] =>
     backendPods(row, store)
@@ -230,11 +238,21 @@ export function IngressView({
                   onClick={() => reveal(backendTarget(troubled(group), store))}
                   onMenu={(event) =>
                     openMenu(event, [
+                      flowItem(group.paths),
                       ...podItems(troubled(group)),
                       ...searchItems(group.host, group.paths),
                     ])
                   }
                 />
+                {group.paths.some((row) => row.rule.service) && (
+                  <button
+                    className="kube-ingress-flow"
+                    title="컨트롤러 로그와 뒤쪽 파드 로그를 함께 봅니다"
+                    onClick={() => openFlow(group.paths)}
+                  >
+                    요청 흐름
+                  </button>
+                )}
                 <ul>
                   {group.paths.map((row) => (
                     <li key={row.key}>
@@ -242,7 +260,11 @@ export function IngressView({
                         row={row}
                         onClick={() => reveal(backendTarget(row, store))}
                         onMenu={(event) =>
-                          openMenu(event, [...podItems(row), ...searchItems(group.host, [row])])
+                          openMenu(event, [
+                            flowItem([row]),
+                            ...podItems(row),
+                            ...searchItems(group.host, [row]),
+                          ])
                         }
                       />
                     </li>
