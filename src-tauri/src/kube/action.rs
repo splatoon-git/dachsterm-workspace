@@ -5,6 +5,7 @@
 //! and context a write goes to, come from the profile as it is stored at the moment of the write.
 use super::{
     Workspace,
+    home::{self, Home},
     runner::{Failed, Kubectl, Runner},
     settings::{KubeSettings, check_namespace, check_node, check_pod},
     state::server_refusal,
@@ -129,8 +130,16 @@ fn stored_settings(profile: Profile) -> Option<KubeSettings> {
     }
 }
 
-pub fn operate_mode(store: &Store, profile_id: &str) -> Result<OperateMode> {
-    Ok(match stored_settings(store.profile(profile_id)?) {
+/// What is stored for this tab, and only if it is a tab that keeps settings at all.
+fn stored_for(store: &Store, home: &Home) -> Result<Option<KubeSettings>> {
+    match home {
+        Home::Profile(id) => Ok(stored_settings(store.profile(id)?)),
+        Home::Local => home::read_local(store),
+    }
+}
+
+pub fn operate_mode(store: &Store, home: &Home) -> Result<OperateMode> {
+    Ok(match stored_for(store, home)? {
         Some(kube) if kube.operate => OperateMode::On,
         Some(_) => OperateMode::Off,
         None => OperateMode::Unavailable,
@@ -139,7 +148,15 @@ pub fn operate_mode(store: &Store, profile_id: &str) -> Result<OperateMode> {
 
 /// The one place that writes `operate`. `kube_save` and the session form keep the stored value, and
 /// importing a session file cannot set it (design §3.1).
-pub fn set_operate_mode(store: &Store, profile_id: &str, on: bool) -> Result<OperateMode> {
+pub fn set_operate_mode(store: &Store, home: &Home, on: bool) -> Result<OperateMode> {
+    let Home::Profile(profile_id) = home else {
+        let Some(mut kube) = home::read_local(store)? else {
+            return Err("클러스터 설정을 마친 뒤에 운영 모드를 바꿀 수 있습니다.".into());
+        };
+        kube.operate = on;
+        home::write_local(store, &kube)?;
+        return operate_mode(store, home);
+    };
     let mut profile = store.profile(profile_id)?;
     if profile.workspace != Workspace::Kubernetes {
         return Err("쿠버네티스 세션에서만 운영 모드를 바꿀 수 있습니다.".into());
@@ -150,23 +167,22 @@ pub fn set_operate_mode(store: &Store, profile_id: &str, on: bool) -> Result<Ope
     kube.operate = on;
     let secret = store.secret_ref(profile_id)?;
     store.save(profile, secret)?;
-    operate_mode(store, profile_id)
+    operate_mode(store, home)
 }
 
 /// The confirmation named a context, so a write must not land on another one: a second tab on the
 /// same session may have changed it since this screen opened. Anything unreadable refuses.
 pub fn permit(
     store: &Store,
-    profile_id: &str,
+    home: &Home,
     confirmed_context: &str,
     action: &Action,
 ) -> Result<KubeSettings> {
-    let kube = stored_settings(store.profile(profile_id)?)
-        .ok_or("쿠버네티스 세션에서만 제어할 수 있습니다.")?;
+    let kube = stored_for(store, home)?.ok_or("쿠버네티스 세션에서만 제어할 수 있습니다.")?;
     if !kube.operate {
         return Err("조회 모드에서는 제어할 수 없습니다. 운영 모드를 켜고 다시 시도하세요.".into());
     }
-    kube.validate()?;
+    home.check(&kube)?;
     if kube.context != confirmed_context {
         return Err(
             "이 세션의 클러스터 설정이 바뀌었습니다. 탭을 다시 열고 대상을 확인하세요.".into(),
@@ -338,19 +354,23 @@ mod tests {
     fn a_write_needs_operate_mode_in_the_stored_profile() {
         let (_dir, store) = store();
         let id = saved(&store, settings("a", "", false));
-        let refused = permit(&store, &id, "a", &delete("web")).unwrap_err();
+        let refused = permit(&store, &Home::Profile(id.clone()), "a", &delete("web")).unwrap_err();
         assert!(refused.contains("조회 모드"), "{refused}");
-        set_operate_mode(&store, &id, true).unwrap();
-        assert!(permit(&store, &id, "a", &delete("web")).unwrap().operate);
-        set_operate_mode(&store, &id, false).unwrap();
-        assert!(permit(&store, &id, "a", &delete("web")).is_err());
+        set_operate_mode(&store, &Home::Profile(id.clone()), true).unwrap();
+        assert!(
+            permit(&store, &Home::Profile(id.clone()), "a", &delete("web"))
+                .unwrap()
+                .operate
+        );
+        set_operate_mode(&store, &Home::Profile(id.clone()), false).unwrap();
+        assert!(permit(&store, &Home::Profile(id.clone()), "a", &delete("web")).is_err());
     }
 
     #[test]
     fn a_write_runs_with_the_stored_settings() {
         let (_dir, store) = store();
         let id = saved(&store, settings("a", "", true));
-        let kube = permit(&store, &id, "a", &delete("web")).unwrap();
+        let kube = permit(&store, &Home::Profile(id.clone()), "a", &delete("web")).unwrap();
         assert_eq!(kube.kubectl, "/k");
         assert_eq!(kube.kubeconfig, "/c");
     }
@@ -359,7 +379,8 @@ mod tests {
     fn a_write_is_refused_when_the_confirmed_context_is_not_the_stored_one() {
         let (_dir, store) = store();
         let id = saved(&store, settings("prod", "", true));
-        let refused = permit(&store, &id, "dev", &delete("web")).unwrap_err();
+        let refused =
+            permit(&store, &Home::Profile(id.clone()), "dev", &delete("web")).unwrap_err();
         assert!(refused.contains("바뀌었습니다"), "{refused}");
     }
 
@@ -367,10 +388,18 @@ mod tests {
     fn a_session_narrowed_to_a_namespace_writes_only_there_but_nodes_stay_reachable() {
         let (_dir, store) = store();
         let id = saved(&store, settings("a", "web", true));
-        assert!(permit(&store, &id, "a", &delete("web")).is_ok());
-        assert!(permit(&store, &id, "a", &delete("kube-system")).is_err());
+        assert!(permit(&store, &Home::Profile(id.clone()), "a", &delete("web")).is_ok());
+        assert!(
+            permit(
+                &store,
+                &Home::Profile(id.clone()),
+                "a",
+                &delete("kube-system")
+            )
+            .is_err()
+        );
         let cordon = Action::Cordon { node: "n1".into() };
-        assert!(permit(&store, &id, "a", &cordon).is_ok());
+        assert!(permit(&store, &Home::Profile(id.clone()), "a", &cordon).is_ok());
     }
 
     #[test]
@@ -379,9 +408,12 @@ mod tests {
         let mut p = profile();
         p.kube = Some(settings("a", "", true));
         let id = store.save(p, None).unwrap().id;
-        assert_eq!(operate_mode(&store, &id).unwrap(), OperateMode::Unavailable);
-        assert!(set_operate_mode(&store, &id, true).is_err());
-        assert!(permit(&store, &id, "a", &delete("web")).is_err());
+        assert_eq!(
+            operate_mode(&store, &Home::Profile(id.clone())).unwrap(),
+            OperateMode::Unavailable
+        );
+        assert!(set_operate_mode(&store, &Home::Profile(id.clone()), true).is_err());
+        assert!(permit(&store, &Home::Profile(id.clone()), "a", &delete("web")).is_err());
     }
 
     #[test]
@@ -390,14 +422,25 @@ mod tests {
         let mut p = profile();
         p.workspace = Workspace::Kubernetes;
         let id = store.save(p, None).unwrap().id;
-        assert_eq!(operate_mode(&store, &id).unwrap(), OperateMode::Unavailable);
-        assert!(set_operate_mode(&store, &id, true).is_err());
+        assert_eq!(
+            operate_mode(&store, &Home::Profile(id.clone())).unwrap(),
+            OperateMode::Unavailable
+        );
+        assert!(set_operate_mode(&store, &Home::Profile(id.clone()), true).is_err());
     }
 
     #[test]
     fn a_missing_profile_refuses() {
         let (_dir, store) = store();
-        assert!(permit(&store, "no-such-profile", "a", &delete("web")).is_err());
+        assert!(
+            permit(
+                &store,
+                &Home::Profile("no-such-profile".into()),
+                "a",
+                &delete("web")
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -405,7 +448,7 @@ mod tests {
         let (_dir, store) = store();
         let id = saved(&store, settings("a", "web", false));
         assert_eq!(
-            set_operate_mode(&store, &id, true).unwrap(),
+            set_operate_mode(&store, &Home::Profile(id.clone()), true).unwrap(),
             OperateMode::On
         );
         let stored = store.profile(&id).unwrap().kube.unwrap();

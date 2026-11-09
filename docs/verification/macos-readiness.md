@@ -86,6 +86,7 @@ M.2~M.4는 수정했고(`0fcf569`), 나머지는 미착수다. Mac 실기기에�
 | M.2 | `/etc`, `/tmp`, `/var`의 정확한 시스템 링크만 허용(`local_links.rs`) | 수정 전 macOS에서 `refuses_link_ancestor` 실패(실행 `42169858010`), 수정 후 통과. 사용자 링크는 계속 거부 | 실제 파일 전송(`npm run probe:phase1`) |
 | M.3 | 시작 시 로그인 셸의 `PATH` 적용. 3초 제한, 실패 시 Homebrew 경로 사용(`login_path.rs`). 로컬 PodTree는 선택한 Bash 유지(`podtree/launch.rs`) | zsh에서 `PATH` 읽기, 프로필 출력·시간 초과 처리, 명령 문자열. `exec "$BASH"`는 WSL Ubuntu에서 직접 확인 | Finder로 실행한 앱의 PodTree 실행, 앱 시작 지연 |
 | M.4 | 앱 번들 안의 CLI 탐색(`editor_location.rs`) | 탐색 로직만. 번들 내부 경로가 실제 설치본과 맞는지는 미확인 | Finder로 실행한 앱에서 VS Code, Cursor, Sublime 열기 |
+| M.24 | 중간 | 일부 확인 | KV.11 로컬 클러스터를 Mac 패키지 앱(`c2198f5` 기준 미커밋, 조작 스크립트를 주입한 임시 빌드, `open` 실행)과 kind로 확인했다. 탐지한 절대 경로의 kubectl 실행과 로그인 셸 `PATH`로 찾는 exec 인증 플러그인(대역) 포함. 실제 인증 플러그인과 사람의 직접 조작은 대기. [기록](kubernetes-workspace.md#kv11-로컬-kubeconfig-검증-2026-11-09) |
 
 로컬 PodTree는 Bash 4 이상이 필요하므로 Mac에서는 `brew install bash`가 전제다. 없으면 기존처럼 의존성 오류로 안내한다.
 

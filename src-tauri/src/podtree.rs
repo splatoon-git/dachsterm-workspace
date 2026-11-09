@@ -334,6 +334,7 @@ pub async fn kube_terminal_open(
         command,
         labels,
         staged,
+        local,
     } = match launch::prepare(&state, &launch).await {
         Ok(v) => v,
         Err(e) => {
@@ -357,18 +358,21 @@ pub async fn kube_terminal_open(
         )
         .await
     } else {
+        let process = match local {
+            Some(pod) => Ok(launch::pty_process(pod)),
+            None => bash_target(&state, &location, &command).map(|(p, a)| (p, a, vec![], None)),
+        };
         start_local(
             &state,
             id.clone(),
-            &location,
-            command,
+            process,
             cols,
             rows,
             on_event,
             rx,
             stopped,
             acked,
-            labels.title,
+            labels,
         )
         .await
     };
@@ -475,17 +479,16 @@ async fn start_ssh(
 async fn start_local(
     state: &AppState,
     id: String,
-    location: &Location,
-    command: String,
+    process: Result<launch::PtyProcess>,
     cols: u16,
     rows: u16,
     sink: Channel<Event>,
     mut rx: mpsc::Receiver<Input>,
     stop: watch::Receiver<bool>,
     ack: watch::Receiver<u64>,
-    title: String,
+    labels: Labels,
 ) -> Result<()> {
-    let (program, args) = bash_target(state, location, &command)?;
+    let (program, args, env, mut filter) = process?;
     let manager = state.podtrees.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let pair = portable_pty::native_pty_system()
@@ -507,6 +510,7 @@ async fn start_local(
         let mut cmd = portable_pty::CommandBuilder::new(program);
         cmd.args(args);
         cmd.env("TERM", "xterm-256color");
+        env.into_iter().for_each(|(key, value)| cmd.env(key, value));
         let mut child = pair
             .slave
             .spawn_command(cmd)
@@ -559,7 +563,7 @@ async fn start_local(
                 }
             }
         });
-        emit(&sink, "connected", &title);
+        emit(&sink, "connected", &labels.title);
         std::thread::spawn(move || {
             let mut bytes = [0u8; 32768];
             let mut seq = 0;
@@ -568,17 +572,14 @@ async fn start_local(
                 if n == 0 {
                     break;
                 }
-                if *stop.borrow() {
+                let data = filter
+                    .as_mut()
+                    .map_or_else(|| bytes[..n].to_vec(), |f| f.push(&bytes[..n]));
+                if *stop.borrow() || data.is_empty() {
                     continue;
                 }
                 seq += 1;
-                if sink
-                    .send(Event::Data {
-                        seq,
-                        bytes: bytes[..n].to_vec(),
-                    })
-                    .is_err()
-                {
+                if sink.send(Event::Data { seq, bytes: data }).is_err() {
                     failed = true;
                     break;
                 }
@@ -604,15 +605,12 @@ async fn start_local(
                 let _ = c.stop.send(true);
             }
             manager.entries.lock().unwrap().remove(&id);
-            emit(
-                &sink,
-                if failed { "error" } else { "closed" },
-                if failed {
-                    "PodTree 프로세스 실패 또는 출력 시간 초과 · 터미널 안내를 확인하세요."
-                } else {
-                    "PodTree 종료"
-                },
-            );
+            let (status, text) = if failed {
+                ("error", labels.failed)
+            } else {
+                ("closed", labels.closed)
+            };
+            emit(&sink, status, text);
         });
         Ok(())
     })

@@ -1,11 +1,15 @@
 //! Builds kubectl command lines and runs scripts where the cluster's kubectl lives.
-use super::state::{KubeState, classify};
+use super::{
+    local_run,
+    settings::KubeSettings,
+    state::{KubeState, classify},
+};
 use crate::{
     remote_exec::{self, Limits, Output, Refusable, Streamed, quote},
     ssh::Host,
 };
 use russh::client;
-use std::{ops::ControlFlow, time::Duration};
+use std::{ops::ControlFlow, sync::Arc, time::Duration};
 
 /// Longer than `--request-timeout`, which retries turn into about 36 seconds when an API server
 /// does not answer (KV.0). Closing the channel at this limit is what actually ends the wait.
@@ -14,9 +18,38 @@ const KUBECTL: Limits = Limits {
     max_output: 1024 * 1024,
 };
 
-/// `Local` joins this in KV.11.
+/// Where a tab's kubectl runs. A local cluster's tab has no connection to hand over.
+#[derive(Clone)]
+pub enum Link {
+    Ssh(Arc<client::Handle<Host>>),
+    Local,
+}
+impl Link {
+    pub fn runner<'a>(&'a self, kube: &'a KubeSettings) -> Runner<'a> {
+        self.runner_for(&kube.kubectl)
+    }
+    /// For detection, which does not know kubectl's path when it starts.
+    pub fn runner_for<'a>(&'a self, kubectl: &'a str) -> Runner<'a> {
+        match self {
+            Link::Ssh(handle) => Runner::Ssh(handle),
+            Link::Local => Runner::Local { kubectl },
+        }
+    }
+    /// The settings came from the screen, and what they may hold depends on where they will run.
+    pub fn check(&self, kube: &KubeSettings) -> crate::storage::Result<()> {
+        match self {
+            Link::Ssh(_) => kube.validate(),
+            Link::Local => kube.validate_local(),
+        }
+    }
+}
+
 pub enum Runner<'a> {
     Ssh(&'a client::Handle<Host>),
+    /// `kubectl` is the path in the settings, not found again here (rules §11).
+    Local {
+        kubectl: &'a str,
+    },
 }
 
 pub struct Kubectl<'a> {
@@ -71,15 +104,37 @@ impl Failed {
     }
 }
 
+fn refused_or_failed(failure: Refusable) -> Failed {
+    match failure {
+        Refusable::ChannelRefused => Failed::ChannelLimit,
+        Refusable::Failure(failure) => Failed::Stopped(failure),
+    }
+}
+
 impl Runner<'_> {
+    /// A local runner takes one `Kubectl` command line. Its callers branch on `is_local` wherever
+    /// a server would have run a pipeline, because the filtering policy is different (design KV.11).
     pub async fn script(&self, script: &str, limits: Limits) -> Result<Output, Failed> {
-        let Runner::Ssh(handle) = self;
-        remote_exec::run_refusable(handle, script, limits)
-            .await
-            .map_err(|failure| match failure {
-                Refusable::ChannelRefused => Failed::ChannelLimit,
-                Refusable::Failure(failure) => Failed::Stopped(failure),
-            })
+        match self {
+            Runner::Ssh(handle) => remote_exec::run_refusable(handle, script, limits)
+                .await
+                .map_err(refused_or_failed),
+            Runner::Local { kubectl } => local_run::run(kubectl, script, limits)
+                .await
+                .map_err(Failed::Stopped),
+        }
+    }
+
+    pub fn is_local(&self) -> bool {
+        matches!(self, Runner::Local { .. })
+    }
+
+    /// The same runner with kubectl's path now known.
+    pub fn with_kubectl<'b>(&'b self, path: &'b str) -> Runner<'b> {
+        match self {
+            Runner::Ssh(handle) => Runner::Ssh(handle),
+            Runner::Local { .. } => Runner::Local { kubectl: path },
+        }
     }
 
     /// For output too long to hold, such as a log search: stdout reaches `on_stdout` as it arrives.
@@ -89,13 +144,14 @@ impl Runner<'_> {
         limits: Limits,
         on_stdout: impl FnMut(&[u8]) -> ControlFlow<()>,
     ) -> Result<Streamed, Failed> {
-        let Runner::Ssh(handle) = self;
-        remote_exec::stream_refusable(handle, script, limits, on_stdout)
-            .await
-            .map_err(|failure| match failure {
-                Refusable::ChannelRefused => Failed::ChannelLimit,
-                Refusable::Failure(failure) => Failed::Stopped(failure),
-            })
+        match self {
+            Runner::Ssh(handle) => remote_exec::stream_refusable(handle, script, limits, on_stdout)
+                .await
+                .map_err(refused_or_failed),
+            Runner::Local { kubectl } => local_run::stream(kubectl, script, limits, on_stdout)
+                .await
+                .map_err(Failed::Stopped),
+        }
     }
 
     /// Runs a setup check. It lists almost nothing, so running out of time means no API server.

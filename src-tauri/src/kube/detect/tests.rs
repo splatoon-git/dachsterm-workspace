@@ -3,6 +3,7 @@ use super::*;
 fn search(primary: &[&str], known: &[&str], scanning: bool) -> Search {
     let list = |items: &[&str]| items.iter().map(|s| s.to_string()).collect();
     Search {
+        separator: ':',
         primary: list(primary),
         known: list(known),
         scanning,

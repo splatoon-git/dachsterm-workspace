@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { blankProfile, type Group, type Profile } from '../lib/ipc';
-import { connectionSections, readFolded, RECENT_LIMIT, writeFolded } from './connectionSections';
+import {
+  connectionSections,
+  LOCAL_CLUSTER,
+  localClusterOf,
+  localTabProfile,
+  readFolded,
+  RECENT_LIMIT,
+  writeFolded,
+} from './connectionSections';
 
 const profile = (name: string, extra: Partial<Profile> = {}): Profile => ({
   ...blankProfile(),
@@ -16,6 +24,24 @@ const groups: Group[] = [
   { id: 'web', name: '웹', parentId: 'prod' },
   { id: 'empty', name: '빈 그룹' },
 ];
+
+describe('local cluster tab', () => {
+  const shell = { id: 'zsh', name: 'zsh' };
+
+  it('keeps a plain local shell as a terminal', () => {
+    const profile = localTabProfile(shell);
+    expect(profile).toMatchObject({ id: 'zsh', name: 'zsh', host: 'localhost' });
+    expect(profile.workspace ?? 'terminal').toBe('terminal');
+    expect(localClusterOf(profile)).toBeUndefined();
+  });
+
+  it('opens the workspace over the shell and splits into another of the same', () => {
+    const profile = localTabProfile(shell, LOCAL_CLUSTER);
+    expect(profile).toMatchObject({ id: 'local-cluster', workspace: 'kubernetes' });
+    expect(profile.name).toBe(LOCAL_CLUSTER.name);
+    expect(localClusterOf(profile)).toBe(LOCAL_CLUSTER);
+  });
+});
 
 describe('connectionSections', () => {
   it('nests groups and keeps ungrouped connections at the top level', () => {
