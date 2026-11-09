@@ -1,11 +1,12 @@
-//! Dedicated Kubernetes PTYs. Never members of the shell broadcast or snippet targets.
+//! Pod shell and log tabs. Never members of the shell broadcast or snippet targets.
 mod launch;
 use crate::{
     AppState,
     ssh::{Event, Input},
     storage::Result,
 };
-use serde::{Deserialize, Serialize};
+pub use launch::Launch;
+use launch::{Labels, LocalPod};
 use std::{
     collections::HashMap,
     io::{Read, Write},
@@ -16,38 +17,18 @@ use std::{
     time::Duration,
 };
 use tauri::{State, ipc::Channel};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::{mpsc, watch},
-};
-const SCRIPT: &str = include_str!("../assets/podtree/podtree.sh");
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Location {
-    pub kind: String,
-    pub id: String,
-}
-pub use launch::Launch;
-use launch::{Labels, ScriptLaunch};
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Inspection {
-    contexts: Vec<String>,
-    current: String,
-    namespaces: Vec<String>,
-    warning: String,
-}
+use tokio::sync::{mpsc, watch};
 struct Control {
     input: mpsc::Sender<Input>,
     stop: watch::Sender<bool>,
     ack: watch::Sender<u64>,
 }
 #[derive(Default)]
-pub struct PodTrees {
+pub struct Terminals {
     entries: Mutex<HashMap<String, Arc<Control>>>,
     closing: AtomicBool,
 }
-impl PodTrees {
+impl Terminals {
     pub fn is_empty(&self) -> bool {
         self.entries.lock().unwrap().is_empty()
     }
@@ -64,61 +45,6 @@ impl PodTrees {
             .get(id)
             .cloned()
             .ok_or("쿠버네티스 터미널 탭이 종료되었습니다.".into())
-    }
-}
-use crate::remote_exec::quote;
-fn name(s: &str, empty: bool) -> Result<()> {
-    if (!empty && s.is_empty())
-        || s.len() > 253
-        || s.starts_with('-')
-        || s.chars().any(char::is_control)
-    {
-        Err("context/namespace 이름이 올바르지 않습니다.".into())
-    } else {
-        Ok(())
-    }
-}
-fn bash_target(
-    state: &AppState,
-    location: &Location,
-    script: &str,
-) -> Result<(std::path::PathBuf, Vec<String>)> {
-    if location.kind != "local" {
-        return Err("실행 위치 오류".into());
-    }
-    let target = state.locals.target(&location.id)?;
-    if target.kind == "wsl" {
-        let mut args = target.args;
-        args.extend([
-            "--exec".into(),
-            "bash".into(),
-            "--noprofile".into(),
-            "--norc".into(),
-            "-c".into(),
-            script.into(),
-        ]);
-        Ok((target.program, args))
-    } else {
-        #[cfg(windows)]
-        {
-            Err("Windows에서는 WSL 배포판을 선택하세요.".into())
-        }
-        #[cfg(not(windows))]
-        {
-            Ok((
-                ["/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash"]
-                    .into_iter()
-                    .map(std::path::PathBuf::from)
-                    .find(|p| p.is_file())
-                    .ok_or("Bash를 찾지 못했습니다.")?,
-                vec![
-                    "--noprofile".into(),
-                    "--norc".into(),
-                    "-c".into(),
-                    script.into(),
-                ],
-            ))
-        }
     }
 }
 // Closing on drop also covers cancellation/timeouts before the PTY task is installed.
@@ -144,151 +70,6 @@ impl Drop for RemoteChannel {
         }
     }
 }
-async fn execute(
-    state: &AppState,
-    location: &Location,
-    script: &str,
-    input: &[u8],
-) -> Result<String> {
-    let work = async {
-        if location.kind == "ssh" {
-            let handle = state.connections.handle(&location.id)?;
-            let mut c = RemoteChannel(Some(
-                handle
-                    .channel_open_session()
-                    .await
-                    .map_err(|_| "PodTree 검사 채널 생성 실패")?,
-            ));
-            c.exec(
-                true,
-                format!("bash --noprofile --norc -c {}", quote(script)),
-            )
-            .await
-            .map_err(|_| "Bash 실행 실패")?;
-            c.data(input).await.map_err(|_| "PodTree 자산 전송 실패")?;
-            c.eof().await.map_err(|_| "PodTree 채널 EOF 실패")?;
-            let mut out = Vec::new();
-            let mut code = None;
-            while let Some(m) = c.wait().await {
-                match m {
-                    russh::ChannelMsg::Data { data } => {
-                        out.extend_from_slice(&data);
-                        if out.len() > 131072 {
-                            let _ = c.close().await;
-                            return Err("PodTree 검사 출력 상한 초과".into());
-                        }
-                    }
-                    russh::ChannelMsg::ExitStatus { exit_status } => code = Some(exit_status),
-                    _ => {}
-                }
-            }
-            if code != Some(0) {
-                return Err("Bash 4+·kubectl·awk·sort·mktemp·ps·base64와 실행 권한을 확인하세요. 검사 명령이 실패했습니다.".into());
-            }
-            String::from_utf8(out).map_err(|_| "검사 출력 인코딩 오류".into())
-        } else {
-            let (program, args) = bash_target(state, location, script)?;
-            let mut command = tokio::process::Command::new(program);
-            command
-                .args(args)
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
-                .kill_on_drop(true);
-            #[cfg(windows)]
-            command.creation_flags(0x08000000);
-            let mut child = command.spawn().map_err(|_| "WSL/Bash 실행 실패")?;
-            let mut stdin = child.stdin.take().unwrap();
-            stdin
-                .write_all(input)
-                .await
-                .map_err(|_| "PodTree 자산 전송 실패")?;
-            drop(stdin);
-            let mut out = Vec::new();
-            child
-                .stdout
-                .take()
-                .unwrap()
-                .take(131073)
-                .read_to_end(&mut out)
-                .await
-                .map_err(|_| "PodTree 검사 읽기 실패")?;
-            if out.len() > 131072 {
-                return Err("PodTree 검사 출력 상한 초과".into());
-            }
-            if !child
-                .wait()
-                .await
-                .map_err(|_| "PodTree 검사 종료 실패")?
-                .success()
-            {
-                return Err("Bash 4+·kubectl·awk·sort·mktemp·ps·base64와 실행 권한을 확인하세요. 검사 명령이 실패했습니다.".into());
-            }
-            String::from_utf8(out).map_err(|_| "검사 출력 인코딩 오류".into())
-        }
-    };
-    tokio::time::timeout(Duration::from_secs(20), work)
-        .await
-        .map_err(|_| "PodTree 준비 시간 초과")?
-}
-const DEPS: &str = "((BASH_VERSINFO[0]>=4)) || exit 10; for d in kubectl awk sort mktemp ps base64; do command -v \"$d\" >/dev/null || exit 11; done; ";
-#[tauri::command]
-pub async fn kube_terminal_inspect(
-    state: State<'_, AppState>,
-    location: Location,
-    context: Option<String>,
-) -> Result<Inspection> {
-    let context = context.unwrap_or_default();
-    name(&context, true)?;
-    let script = format!(
-        "{DEPS} printf 'DACHSTERM_CONTEXTS\\n'; kubectl config get-contexts -o name 2>/dev/null || exit 12; printf 'DACHSTERM_CURRENT\\n'; kubectl config current-context 2>/dev/null || :; printf 'DACHSTERM_NAMESPACES\\n'; {}",
-        if context.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "kubectl --context {} --request-timeout=8s get namespaces -o 'jsonpath={{range .items[*]}}{{.metadata.name}}{{\"\\n\"}}{{end}}' 2>/dev/null || printf 'DACHSTERM_NAMESPACE_DENIED\\n'",
-                quote(&context)
-            )
-        }
-    );
-    let out = execute(&state, &location, &script, &[]).await?;
-    let mut mode = "";
-    let mut result = Inspection {
-        contexts: vec![],
-        current: String::new(),
-        namespaces: vec![],
-        warning: String::new(),
-    };
-    for line in out.lines() {
-        match line {"DACHSTERM_CONTEXTS"|"DACHSTERM_CURRENT"|"DACHSTERM_NAMESPACES"=>mode=line,"DACHSTERM_NAMESPACE_DENIED"=>result.warning="namespace 목록 권한이 없거나 클러스터에 연결할 수 없습니다. 허용된 namespace를 직접 입력할 수 있습니다.".into(),s if name(s,false).is_ok()=>match mode {"DACHSTERM_CONTEXTS"=>result.contexts.push(s.into()),"DACHSTERM_CURRENT"=>result.current=s.into(),"DACHSTERM_NAMESPACES"=>result.namespaces.push(s.into()),_=>{}},_=>{}}
-    }
-    Ok(result)
-}
-async fn stage(state: &AppState, launch: &ScriptLaunch) -> Result<(String, String)> {
-    name(&launch.context, false)?;
-    name(&launch.namespace, true)?;
-    // stdin contains only a bundled public script, never kubeconfig or authentication material.
-    let script = format!(
-        "{DEPS} kubectl config get-contexts -o name 2>/dev/null | grep -Fx -- {} >/dev/null || exit 12; umask 077; d=$(mktemp -d \"${{TMPDIR:-/tmp}}/dachsterm-podtree.XXXXXXXX\") || exit; trap 'rm -f -- \"$d/podtree.sh\"; rmdir -- \"$d\"' EXIT; cat >\"$d/podtree.sh\" || exit; chmod 600 \"$d/podtree.sh\" || exit; printf '%s\\n' \"$d\"; trap - EXIT",
-        quote(&launch.context)
-    );
-    let path = execute(state, &launch.location, &script, SCRIPT.as_bytes())
-        .await?
-        .trim()
-        .to_string();
-    if !path.starts_with('/')
-        || !path
-            .rsplit('/')
-            .next()
-            .unwrap_or_default()
-            .starts_with("dachsterm-podtree.")
-        || path.chars().any(char::is_control)
-    {
-        return Err("PodTree 임시 경로 확인 실패".into());
-    }
-    let command = launch::start_command(launch, &path);
-    Ok((path, command))
-}
 fn emit(sink: &Channel<Event>, status: &str, message: &str) {
     let _ = sink.send(Event::State {
         status: status.into(),
@@ -311,7 +92,7 @@ pub async fn kube_terminal_open(
     let (tx, rx) = mpsc::channel(32);
     let (stop, stopped) = watch::channel(false);
     let (ack, acked) = watch::channel(0);
-    let manager = state.podtrees.clone();
+    let manager = state.kube_terminals.clone();
     {
         let mut entries = manager.entries.lock().unwrap();
         if manager.closing.load(Ordering::SeqCst)
@@ -330,10 +111,9 @@ pub async fn kube_terminal_open(
         );
     }
     let launch::Prepared {
-        location,
+        connection,
         command,
         labels,
-        staged,
         local,
     } = match launch::prepare(&state, &launch).await {
         Ok(v) => v,
@@ -342,46 +122,41 @@ pub async fn kube_terminal_open(
             return Err(e);
         }
     };
-    let result = if location.kind == "ssh" {
-        start_ssh(
-            &state,
-            id.clone(),
-            &location,
-            command,
-            cols,
-            rows,
-            on_event,
-            rx,
-            stopped,
-            acked,
-            labels,
-        )
-        .await
-    } else {
-        let process = match local {
-            Some(pod) => Ok(launch::pty_process(pod)),
-            None => bash_target(&state, &location, &command).map(|(p, a)| (p, a, vec![], None)),
-        };
-        start_local(
-            &state,
-            id.clone(),
-            process,
-            cols,
-            rows,
-            on_event,
-            rx,
-            stopped,
-            acked,
-            labels,
-        )
-        .await
+    let result = match local {
+        Some(pod) => {
+            start_local(
+                &state,
+                id.clone(),
+                pod,
+                cols,
+                rows,
+                on_event,
+                rx,
+                stopped,
+                acked,
+                labels,
+            )
+            .await
+        }
+        None => {
+            start_ssh(
+                &state,
+                id.clone(),
+                &connection,
+                command,
+                cols,
+                rows,
+                on_event,
+                rx,
+                stopped,
+                acked,
+                labels,
+            )
+            .await
+        }
     };
     if result.is_err() {
         manager.entries.lock().unwrap().remove(&id);
-        if let Some(path) = staged {
-            let cleanup = format!("rm -f -- {0}/podtree.sh; rmdir -- {0}", quote(&path));
-            let _ = execute(&state, &location, &cleanup, &[]).await;
-        }
     }
     result
 }
@@ -389,7 +164,7 @@ pub async fn kube_terminal_open(
 async fn start_ssh(
     state: &AppState,
     id: String,
-    location: &Location,
+    connection: &str,
     command: String,
     cols: u16,
     rows: u16,
@@ -399,8 +174,8 @@ async fn start_ssh(
     mut ack: watch::Receiver<u64>,
     labels: Labels,
 ) -> Result<()> {
-    let handle = state.connections.handle(&location.id)?;
-    let mut parent = state.connections.control(&location.id)?.stop.subscribe();
+    let handle = state.connections.handle(connection)?;
+    let mut parent = state.connections.control(connection)?.stop.subscribe();
     let channel = tokio::time::timeout(Duration::from_secs(15), async {
         let mut c = RemoteChannel(Some(handle.channel_open_session().await?));
         c.request_pty(true, "xterm-256color", cols.into(), rows.into(), 0, 0, &[])
@@ -414,7 +189,7 @@ async fn start_ssh(
         russh::Error::ChannelOpenFailure(_) => "서버의 동시 세션 한도(MaxSessions)에 걸려 터미널을 열 수 없습니다. 다른 탭이나 파일 전송을 줄이고 다시 시도하세요.",
         _ => "터미널을 열지 못했습니다.",
     })?;
-    let manager = state.podtrees.clone();
+    let manager = state.kube_terminals.clone();
     tokio::spawn(async move {
         let (mut reader, writer) = channel.split();
         emit(&sink, "connected", &labels.title);
@@ -461,7 +236,7 @@ async fn start_ssh(
         };
         let result = tokio::select! {biased;_ = stop.changed()=>Ok(()),_ = parent.changed()=>Ok(()),r=output=>r,r=input=>r};
         let _ = writer.signal(russh::Sig::TERM).await;
-        // Give EXIT/HUP handlers time to stop log collectors and remove owned temporary files.
+        // Give the remote kubectl time to act on the signal before the channel goes.
         let _ = tokio::time::timeout(Duration::from_secs(2), async {
             while reader.wait().await.is_some() {}
         })
@@ -479,7 +254,7 @@ async fn start_ssh(
 async fn start_local(
     state: &AppState,
     id: String,
-    process: Result<launch::PtyProcess>,
+    pod: LocalPod,
     cols: u16,
     rows: u16,
     sink: Channel<Event>,
@@ -488,8 +263,8 @@ async fn start_local(
     ack: watch::Receiver<u64>,
     labels: Labels,
 ) -> Result<()> {
-    let (program, args, env, mut filter) = process?;
-    let manager = state.podtrees.clone();
+    let (program, args, env, mut filter) = launch::pty_process(pod);
+    let manager = state.kube_terminals.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let pair = portable_pty::native_pty_system()
             .openpty(portable_pty::PtySize {
@@ -498,15 +273,15 @@ async fn start_local(
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|_| "PodTree 로컬 PTY 생성 실패")?;
+            .map_err(|_| "터미널 PTY 생성 실패")?;
         let mut reader = pair
             .master
             .try_clone_reader()
-            .map_err(|_| "PodTree 읽기 생성 실패")?;
+            .map_err(|_| "터미널 읽기 생성 실패")?;
         let mut writer = pair
             .master
             .take_writer()
-            .map_err(|_| "PodTree 입력 생성 실패")?;
+            .map_err(|_| "터미널 입력 생성 실패")?;
         let mut cmd = portable_pty::CommandBuilder::new(program);
         cmd.args(args);
         cmd.env("TERM", "xterm-256color");
@@ -514,7 +289,7 @@ async fn start_local(
         let mut child = pair
             .slave
             .spawn_command(cmd)
-            .map_err(|_| "PodTree WSL/Bash 실행 실패")?;
+            .map_err(|_| "kubectl 실행 실패")?;
         drop(pair.slave);
         let mut killer = child.clone_killer();
         let finished = Arc::new(AtomicBool::new(false));
@@ -615,7 +390,7 @@ async fn start_local(
         Ok(())
     })
     .await
-    .map_err(|_| "PodTree PTY 작업 실패")?
+    .map_err(|_| "터미널 PTY 작업 실패")?
 }
 #[tauri::command]
 pub fn kube_terminal_input(state: State<AppState>, id: String, data: String) -> Result<()> {
@@ -623,7 +398,7 @@ pub fn kube_terminal_input(state: State<AppState>, id: String, data: String) -> 
         return Err("터미널 입력 상한 초과".into());
     }
     state
-        .podtrees
+        .kube_terminals
         .control(&id)?
         .input
         .try_send(Input::Data(data.into_bytes()))
@@ -640,7 +415,7 @@ pub fn kube_terminal_resize(
         return Err("PTY 크기 오류".into());
     }
     state
-        .podtrees
+        .kube_terminals
         .control(&id)?
         .input
         .try_send(Input::Resize(cols.into(), rows.into()))
@@ -648,7 +423,7 @@ pub fn kube_terminal_resize(
 }
 #[tauri::command]
 pub fn kube_terminal_ack(state: State<AppState>, id: String, seq: u64) -> Result<()> {
-    let c = state.podtrees.control(&id)?;
+    let c = state.kube_terminals.control(&id)?;
     if seq == *c.ack.borrow() + 1 {
         let _ = c.ack.send(seq);
     }
@@ -656,29 +431,7 @@ pub fn kube_terminal_ack(state: State<AppState>, id: String, seq: u64) -> Result
 }
 #[tauri::command]
 pub fn kube_terminal_close(state: State<AppState>, id: String) {
-    if let Ok(c) = state.podtrees.control(&id) {
+    if let Ok(c) = state.kube_terminals.control(&id) {
         let _ = c.stop.send(true);
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn quoting_and_scope() {
-        assert_eq!(quote("a'b"), "'a'\\''b'");
-        assert!(name("x\n", false).is_err());
-        assert!(name("--context=evil", false).is_err());
-        assert!(name("prod/context", false).is_ok());
-        assert!(name("", false).is_err());
-    }
-    #[test]
-    fn pinned_asset() {
-        use sha2::{Digest, Sha256};
-        let manifest: serde_json::Value =
-            serde_json::from_str(include_str!("../assets/podtree/provenance.json")).unwrap();
-        assert_eq!(
-            format!("{:x}", Sha256::digest(SCRIPT)),
-            manifest["embeddedSha256"].as_str().unwrap()
-        );
     }
 }

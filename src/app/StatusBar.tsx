@@ -14,7 +14,7 @@ function where(session: TerminalSession) {
   switch (sessionKind(session)) {
     case 'local':
       return session.localTarget?.kind === 'wsl' ? 'WSL' : '로컬 셸';
-    case 'podtree':
+    case 'pod':
       return profile.host;
     case 'ftp':
       return `${profile.protocol === 'ftp' ? 'FTP · TLS 없음' : 'FTPS · TLS 인증서 검증'} · ${profile.username}@${profile.host}:${profile.port}`;

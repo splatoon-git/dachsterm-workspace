@@ -55,7 +55,7 @@ export function SnippetRun({
   duplicate: () => void;
   remove: () => void;
 }) {
-  const candidates = sessions.filter((s) => !s.podtree && s.profile.protocol === 'ssh');
+  const candidates = sessions.filter((s) => !s.podTerminal && s.profile.protocol === 'ssh');
   const [values, setValues] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string[]>(() =>
     candidates.some((s) => s.tabId === active) ? [active!] : [],

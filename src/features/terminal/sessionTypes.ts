@@ -1,17 +1,7 @@
 import type { AuthPrompt, HostKeyRequest } from '../../components/ConnectionCards';
 import type { DirectoryHookStatus } from './directoryHook';
 import type { GuideProgram } from './guideData';
-import type { PodTerminalLaunch } from '../../lib/ipc';
 
-export type KubeLaunch =
-  | {
-      kind: 'script';
-      location: { kind: 'ssh' | 'local'; id: string };
-      context: string;
-      namespace: string;
-      operational: boolean;
-    }
-  | PodTerminalLaunch;
 export type LocalTarget = {
   id: string;
   name: string;

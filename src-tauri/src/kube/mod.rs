@@ -25,6 +25,7 @@ mod slots;
 mod snapshot;
 mod state;
 mod templates;
+pub mod terminal;
 use crate::{
     AppState,
     storage::{Result, Store},

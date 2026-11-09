@@ -9,6 +9,7 @@ import {
   useState,
   type Dispatch,
   type KeyboardEvent,
+  type RefObject,
   type SetStateAction,
 } from 'react';
 import { anchorBelow, isMenuKey, type MenuPoint } from '../../components/ContextMenu';
@@ -32,6 +33,7 @@ import { visibleRange } from './treeFormat';
 import { foldable, leavesFilter, parentIndex, treeKeyAction } from './treeKeys';
 import { filterActive, matches, parseFilter, podViews, type PodView } from './treePods';
 import { readTreePrefs, writeTreePrefs } from './treePrefs';
+import type { ShownTree } from './treeText';
 import { planReveal } from './treeReveal';
 
 const ROW_HEIGHT = 26;
@@ -51,6 +53,7 @@ export const KubeTree = memo(function KubeTree({
   closePanel,
   focusPod,
   focusSignal,
+  shown,
 }: {
   store: SnapshotStore;
   /** Which session this tree's folding and grouping are saved under. */
@@ -67,6 +70,8 @@ export const KubeTree = memo(function KubeTree({
   focusPod: PodRef | null;
   /** Bumped when something beside the tree closes and focus should come back. */
   focusSignal: number;
+  /** Filled when a row's menu opens, for the menu's "copy the tree". */
+  shown: RefObject<ShownTree | null>;
 }) {
   const [{ grouping, collapsed }, setPrefs] = useState(() => {
     const saved = readTreePrefs(session);
@@ -231,6 +236,7 @@ export const KubeTree = memo(function KubeTree({
 
   const rowMenu = (row: TreeRow, index: number, at?: MenuPoint) => {
     select(index);
+    shown.current = { rows, metrics, grouping, collectedAt: pods.collectedAt ?? 0 };
     if (row.type === 'pod') onPod('menu', row.view, at);
     else onRow(row, at);
   };

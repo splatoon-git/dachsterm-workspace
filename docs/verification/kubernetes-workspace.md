@@ -636,3 +636,50 @@ Windows 대상 컴파일은 이 Mac에 `x86_64-pc-windows-msvc` 타깃이 없어
 - 실제 인증 플러그인(aws, gke-gcloud-auth-plugin, kubelogin 등). 이 Mac에 설치돼 있지 않아 대역으로 검사했다.
 - 로그인 셸의 `KUBECONFIG` 가져오기는 단위 테스트로만 확인했다. 패키지 앱 실행에서는 `open --env`로 전달했다.
 - Mac 릴리스 빌드와 사람이 직접 하는 조작.
+
+## KV.12 터미널 UI 제거 검증 (2026-11-09)
+
+대상: `feat/kv12-kube-cleanup`, `ed799a4` 기준 미커밋 트리. 환경: MacBook Apple Silicon(Darwin 25.5.0), Apple Git 2.50.1, Rust 1.99.1, Docker 29.8.0, kind `kv12`(검사 후 삭제).
+
+### 자동 게이트 (`PATH=/opt/homebrew/opt/rustup/bin:$PATH bash scripts/verify-macos.sh --package`)
+
+| 항목 | 결과 |
+|---|---|
+| `npm run typecheck`, `lint`, `format:check`, `build` | 통과 |
+| `npm test` | 1299/1299 통과(106개 파일) |
+| `npm run test:ui -- --workers=2` | 513 통과 |
+| `cargo fmt --all --check`, `clippy --workspace --all-targets --locked -D warnings` | 통과 |
+| `cargo test --workspace --locked --no-fail-fast` | **lib 595 통과, 1 실패, 2 무시.** 나머지 대상 통과 |
+| `npm audit --audit-level=low` | 0건 |
+| `npm run tauri -- build --debug --bundles app` | 통과. `Contents/Resources`에 `icon.icns`, `THIRD_PARTY_NOTICES.txt`만 있고 PodTree 파일 없음 |
+
+- 실패 1건은 `git_graph::tests::a_repositorys_signature_program_does_not_run`이다. 픽스처의 전제("일반 `git log`가 `gpg.program`을 실행한다")가 이 Mac의 Apple Git 2.50.1에서 성립하지 않아 `tests.rs:494`에서 멈춘다. `git_graph`는 이 작업에서 바꾸지 않았고 KV.10 기록에도 같은 실패가 있다. 원인은 확인하지 않았다. 이 실패에서 `verify-macos.sh`가 멈추므로 뒤 단계(감사, 패키지)는 따로 실행했다.
+
+### 실제 SSH·클러스터
+
+| 명령 | 결과 |
+|---|---|
+| `npm run probe` | 통과 |
+| `npm run probe:phase1` | **실패.** 마지막 PASS는 `product bad authentication`, 다음은 인증정보 저장 단계. `ed799a4`의 깨끗한 worktree에서도 같은 지점에서 실패해 이 변경의 결과가 아니다. 로그인 키체인은 잠겨 있지 않았고 실제 원인은 확인하지 않았다 |
+| `DACHSTERM_KUBE_FIXTURE=kv12 npm run test:kube-actions` | 통과(삭제, 롤아웃 재시작, Cordon·Uncordon, RBAC 거부) |
+| `DACHSTERM_KUBE_FIXTURE=kv12 npm run test:kube-stream` | 통과 |
+
+### Mac 패키지 앱 (`open -n`, 데이터 폴더 격리)
+
+프런트엔드 산출물에 조작 스크립트를 주입하고 CSP에 결과 보고용 루프백만 더한 **임시 빌드**다. Rust와 앱 소스는 위 미커밋 트리 그대로이고, 검사 뒤 정상 패키지로 다시 빌드했다. 클릭은 DOM에 합성 이벤트를 보낸 것이고 화면 모양은 보지 못했다.
+
+| 항목 | SSH(실제 OpenSSH → kind) | 로컬 클러스터(`/usr/local/bin/kubectl`) |
+|---|---|---|
+| 세션에서 작업 화면 열기, 트리 표시 | 통과(`/opt/kube/bin/kubectl`) | 통과 |
+| `kube_terminal_inspect` 호출 | 거부(명령 없음) | 거부(명령 없음) |
+| `kind: script` 실행 | 거부(`unknown variant`) | 거부(`unknown variant`) |
+| 우클릭 **보이는 트리 복사** → `pbpaste` | 머리글과 전체 행 일치 | 머리글 일치(행은 SSH와 같은 코드) |
+| 메뉴 **셸** → 명령 출력 → `exit` → 트리의 같은 파드로 복귀 | 통과 | 통과 |
+| **따라가기** 로그 탭 출력과 닫기 | 통과 | 통과 |
+| 부모 SSH 연결을 끊으면 파드 탭 종료 | 통과 | 해당 없음 |
+
+### 미검증
+
+- Windows 빌드와 실행, CI(`main` 미반영).
+- `scripts/test-session-log-native.mjs`: PodTree 단계를 지우고 이름을 바꿨으며 문법 검사와 eslint만 통과했다. Windows 전용이라 실행하지 못했다. TW.9 이후 PodTree 단계에 막혀 있던 세션 로그 단계가 이제 돌 수 있는지는 Windows에서 확인해야 한다.
+- 사람이 직접 하는 화면 확인, 릴리스 빌드.

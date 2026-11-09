@@ -11,7 +11,6 @@ fn main() {
             "log_action",
             "log_auto",
             "log_auto_get",
-            "kube_terminal_inspect",
             "kube_terminal_open",
             "kube_terminal_input",
             "kube_terminal_resize",

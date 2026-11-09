@@ -24,5 +24,5 @@ export function SidebarFiles({
         <button onClick={showConnections}>연결 목록 보기</button>
       </div>
     );
-  return <FilePanel session={session?.podtree ? undefined : session} />;
+  return <FilePanel session={session?.podTerminal ? undefined : session} />;
 }

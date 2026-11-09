@@ -34,12 +34,12 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 
 - 같은 로직을 두 번째로 복사하게 되면 공용화를 먼저 검토한다. 세 번째 복사는 하지 않는다.
 - 비슷해 보여도 정책이 다르면 합치지 않는다. 분리를 유지하는 이유를 주석으로 남긴다.
-- 파일은 작업 Phase가 아니라 기능 이름으로 짓는다(`test-phase63-67-native.mjs` 같은 이름 금지).
+- 파일은 작업 Phase가 아니라 기능 이름으로 짓는다(`run-phase1.mjs` 같은 이름 금지).
 - 제품 코드가 호출하지 않는 명령과 함수를 남기지 않는다. 테스트 전용 코드는 테스트 영역에 둔다.
 - 파일 크기 상한은 TS/TSX 400줄, Rust 600줄이다(테스트 제외, 게임 엔진 포함). 넘으면 분리한다.
 - 아래 파일은 이미 상한을 넘었으므로 **순증 없이** 수정한다. 새 기능은 새 파일로 분리한다.
   - `App.tsx`, `FilePanel.tsx`, `TunnelPanel.tsx`
-  - `transfer_queue.rs`, `session_transfer.rs`, `ssh.rs`, `session_log.rs`, `podtree.rs`, `ftp.rs`
+  - `transfer_queue.rs`, `session_transfer.rs`, `ssh.rs`, `session_log.rs`, `ftp.rs`
   - `SurvivorGame.tsx`, `AdventureGame.tsx`, `adventureEngine.ts`, `AdventureWorld.tsx`, `GamePane.tsx`, `survivor/scenery.ts`
 
 ## 5. IPC 명령 추가·변경
@@ -66,7 +66,7 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 - 락을 쥔 채 콜백, 네트워크, 파일, keyring, KDF, 외부 프로세스를 호출하지 않는다. 값을 복사하고 락을 푼 뒤 호출한다.
 - `Store`의 내부 연결을 다른 모듈에서 직접 잠가 SQL을 쓰지 않는다. `storage.rs`에 메서드를 추가한다.
 - 새 태스크와 스레드에는 소유자와 종료 경로가 있어야 한다. 무한 루프만 있는 `spawn`을 추가하지 않는다.
-- 터미널 동작(ACK, 입력 상한, 크기 검증)을 바꿀 때는 `ssh.rs`, `local.rs`, `podtree.rs`를 함께 확인한다.
+- 터미널 동작(ACK, 입력 상한, 크기 검증)을 바꿀 때는 `ssh.rs`, `local.rs`, `kube/terminal.rs`를 함께 확인한다.
 - 전송·파일 작업을 바꿀 때는 SFTP와 FTP를 함께 확인하고, 오류 문구도 실제 프로토콜에 맞춘다.
 - 오류 문자열 내용으로 제어 흐름을 분기하지 않는다. enum이나 전용 타입을 쓴다.
 - 손상된 저장 데이터를 빈 값으로 삼키지 않고 오류로 올린다.
@@ -78,7 +78,7 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 - 의존 방향은 `app → features → components·lib·themes`다. `components`, `lib`, `themes`는 `features`를 import하지 않는다.
 - 기능 간 직접 import를 새로 추가하지 않는다. 공유할 코드는 아래 계층으로 내린다.
 - 탭 배치는 `app/useWorkspaceLayout.ts`를 거치고, 연산은 `app/workspaceLayout.ts`의 순수 함수에 둔다. 셀은 `WorkspaceGrid`의 평탄한 목록으로 렌더링해 칸을 옮겨도 다시 마운트되지 않게 한다.
-- 새 탭 종류나 연결 종류를 `this.podtree ? … : this.localTarget ? …` 분기로 늘리지 않는다.
+- 새 탭 종류나 연결 종류를 `this.podTerminal ? … : this.localTarget ? …` 분기로 늘리지 않는다.
 - 여러 상태를 인코딩한 문자열(`'discard:id'`) 대신 판별 유니온을 쓴다.
 - 순수 로직은 컴포넌트 밖 `.ts`로 빼고 단위 테스트한다.
 - 사용자에게 보여줄 프런트엔드 오류는 `lib/ipc.ts`의 `UserError`로 던진다. 일반 `Error`의 메시지는 `errorText`가 표시하지 않는다.

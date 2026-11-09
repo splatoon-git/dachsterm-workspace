@@ -40,7 +40,6 @@ import {
 } from '../lib/ipc';
 import { SessionForm } from '../features/sessions/SessionForm';
 import { TerminalSession, type LocalCatalog, type LocalTarget } from '../features/terminal/session';
-import { PodTreeDialog } from '../features/terminal/PodTreeDialog';
 import { CommandPanel } from '../features/terminal/CommandPanel';
 import { SessionPane } from './SessionPane';
 import { useInputPanes } from './inputPanes';
@@ -81,7 +80,6 @@ export function App() {
   const [localCatalog, setLocalCatalog] = useState<LocalCatalog>({ targets: [], warning: null });
   const [localLoading, setLocalLoading] = useState(desktop);
   const [localOpen, setLocalOpen] = useState(false);
-  const [podtreeOpen, setPodtreeOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const tree = useFolded();
@@ -272,9 +270,8 @@ export function App() {
   };
   useAppShortcuts(keptByFile, runShortcut);
   function requestConnect(profile: Profile, existing?: TerminalSession, opening?: Opening) {
-    if (existing?.podtree) {
-      if (existing.podtree.kind === 'script') setPodtreeOpen(true);
-      else void kubeTabs.reconnect(existing);
+    if (existing?.podTerminal) {
+      void kubeTabs.reconnect(existing);
       return;
     }
     if (existing?.localTarget) {
@@ -646,19 +643,6 @@ export function App() {
           close={() => setCommandsOpen(false)}
         />
       )}
-      {podtreeOpen && (
-        <PodTreeDialog
-          sessions={tabs}
-          locals={localCatalog.targets}
-          close={() => setPodtreeOpen(false)}
-          open={(launch, title) => {
-            if (launch.kind !== 'script') return;
-            void kubeTabs.start(launch, `PodTree · ${launch.context}`, title).connect(null);
-            setPodtreeOpen(false);
-            closeDrawer();
-          }}
-        />
-      )}
       {localOpen && (
         <Dialog
           title="로컬 터미널 열기"
@@ -710,7 +694,7 @@ export function App() {
       )}
       {tunnelsOpen && (
         <TunnelPanel
-          session={selected?.podtree || selected?.localTarget ? undefined : selected}
+          session={selected?.podTerminal || selected?.localTarget ? undefined : selected}
           sessions={tabs}
           profiles={snapshot.profiles}
           close={() => setTunnelsOpen(false)}
