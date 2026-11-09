@@ -231,9 +231,11 @@ test('the dashboard asks the cluster for nothing extra', async ({ page }) => {
   await expect(region(page, '전체 자원')).toContainText('n1');
   expect(await snapshotCalls(page)).toBe(before);
   const commands = await page.evaluate(() =>
-    window.__kube.calls.filter((c) => c.command !== 'kube_detect').map((c) => c.command),
+    window.__kube.calls
+      .filter((c) => !['kube_detect', 'kube_operate_mode'].includes(c.command))
+      .map((c) => c.command),
   );
-  // The ingress poll is this screen's own (design KV.8); no worker is watched, so nothing else.
+  // `kube_operate_mode` reads the app's own database. The ingress poll is this screen's own (design KV.8); no worker is watched, so nothing else.
   expect(new Set(commands)).toEqual(new Set(['kube_snapshot', 'kube_ingress']));
 });
 

@@ -1,5 +1,8 @@
 //! Backend of the Kubernetes workspace (docs/design/kubernetes-workspace.md). Commands validate and
 //! delegate; the work is in the modules below.
+mod action;
+#[cfg(all(test, unix))]
+mod action_cluster_test;
 mod detail;
 mod detect;
 mod ingress;
@@ -22,6 +25,7 @@ use crate::{
     AppState,
     storage::{Result, Store},
 };
+use action::{Action, OperateMode};
 use detail::{Detail, DetailKind, PodTarget};
 use detect::{Detection, Source, detect};
 pub use log_keywords::Keywords;
@@ -364,6 +368,58 @@ pub async fn kube_probe(
         &container,
     )
     .await)
+}
+
+/// Reads the stored mode. The screen uses it only to draw; `kube_action` reads it again.
+#[tauri::command]
+pub async fn kube_operate_mode(app: AppHandle, id: String) -> Result<OperateMode> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let profile_id = state.connections.control(&id)?.profile.id.clone();
+        action::operate_mode(&state.store, &profile_id)
+    })
+    .await
+    .map_err(|_| "운영 모드를 읽지 못했습니다.".to_string())?
+}
+
+#[tauri::command]
+pub async fn kube_set_operate_mode(app: AppHandle, id: String, on: bool) -> Result<OperateMode> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let profile_id = state.connections.control(&id)?.profile.id.clone();
+        let _guard = state.mutation.lock().unwrap();
+        action::set_operate_mode(&state.store, &profile_id, on)
+    })
+    .await
+    .map_err(|_| "운영 모드를 바꾸지 못했습니다.".to_string())?
+}
+
+/// Takes no settings: `permit` uses what the profile stores. `context` is only what the user saw
+/// when confirming, and a mismatch refuses.
+#[tauri::command]
+pub async fn kube_action(
+    state: State<'_, AppState>,
+    slots: State<'_, Slots>,
+    id: String,
+    context: String,
+    action: Action,
+) -> Result<()> {
+    check_context(&context)?;
+    action.check()?;
+    let handle = state.connections.handle(&id)?;
+    let profile_id = state.connections.control(&id)?.profile.id.clone();
+    let store = state.store.clone();
+    let (kube, action) = tauri::async_runtime::spawn_blocking(move || {
+        action::permit(&store, &profile_id, &context, &action).map(|kube| (kube, action))
+    })
+    .await
+    .map_err(|_| "운영 모드를 확인하지 못했습니다.".to_string())??;
+    let slot = slots.for_connection(&id);
+    let _turn = slot
+        .acquire_owned()
+        .await
+        .map_err(|_| "실행을 시작하지 못했습니다.".to_string())?;
+    action::run(&Runner::Ssh(&handle), &kube, &action).await
 }
 
 #[cfg(test)]

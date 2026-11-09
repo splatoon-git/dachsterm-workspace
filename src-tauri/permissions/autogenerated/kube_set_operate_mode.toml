@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kube-set-operate-mode"
+description = "Enables the kube_set_operate_mode command without any pre-configured scope."
+commands.allow = ["kube_set_operate_mode"]
+
+[[permission]]
+identifier = "deny-kube-set-operate-mode"
+description = "Denies the kube_set_operate_mode command without any pre-configured scope."
+commands.deny = ["kube_set_operate_mode"]

@@ -400,6 +400,13 @@ enum Action { DeletePod { .. }, RolloutRestart { .. }, Cordon { .. }, Uncordon {
 - 확인창에 context, namespace, 대상, 예상 영향(소유 워크로드가 있으면 다시 생성됨, 없으면 복구되지 않음)을 표시한다. 기본 선택은 취소다. 결과는 트리 갱신으로 확인하고, 조회 모드에서는 버튼을 숨기지 않고 비활성화해 이유를 알린다.
 - 실제 권한은 RBAC가 결정한다. `auth can-i` 사전 조회 없이 서버 오류를 그대로 보여준다.
 - 포트 포워딩은 `kubectl port-forward`와 SSH 터널을 묶어야 하므로 AT.6 이후 별도로 추가한다.
+- **구현에서 정한 것(2026-11-09):**
+  - 설계에 운영 모드를 켜는 경로가 없어 추가했다. 헤더의 모드 표시를 눌러 바꾸며, 켤 때만 확인창을 띄우고 끌 때는 바로 끈다. 저장은 `kube_set_operate_mode`만 한다. 탭 메뉴로 연 터미널 세션과 설정 전 세션은 저장할 곳이 없어 조회 전용이다.
+  - `kube_action`은 설정을 인자로 받지 않는다. kubectl, kubeconfig, context, `operate`는 실행 직전 저장된 프로필에서 읽는다. 화면이 보낸 `context`는 사용자가 확인창에서 본 값이고, 저장값과 다르면 거부한다. 같은 세션의 다른 탭이 context를 바꾼 경우를 막기 위해서다. namespace를 좁힌 세션은 그 밖의 파드·워크로드를 거부한다. 노드는 namespace가 없어 허용한다.
+  - 삭제는 `--wait=false`로 유예 시간을 기다리지 않는다. 시간 초과처럼 명령이 이미 나갔을 수 있는 실패는 적용 여부를 모른다고 표시한다. 재시도는 사용자가 정한다.
+  - 메뉴: 파드 → **파드 삭제**, Deployment·StatefulSet·DaemonSet 그룹 → **롤아웃 재시작**, 노드 행과 노드별 묶기의 노드 그룹 → 상태에 맞는 **Cordon** 또는 **Uncordon**. 비활성 이유는 호버 없이 보이도록 항목 아래에 쓴다.
+  - 정적 파드(소유자 Node)는 미러 파드만 지워지고 kubelet이 다시 만든다고 안내한다. kind에서 컨테이너가 유지되는 것을 확인했다.
+- **파일:** `kube/action.rs`, `kube/action_cluster_test.rs`(`npm run test:kube-actions`), `features/kube/actionModel.ts`, `treeRowMenu.ts`, `KubeActionDialog.tsx`, `OperateModeControl.tsx`, `useOperateMode.ts`, `kubeActions.css`, `tests/ui/kube-actions.spec.ts`.
 
 ### KV.7 — 문제 목록과 변화 기록
 
@@ -544,7 +551,8 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이며 �
 | `kube_terminal_*` | §3.3 | 기존 `podtree_*` 이름 변경, 셸을 열기 전 확인하는 `kube_terminal_probe` 추가 | KV.4 |
 | `kube_log_search`, `kube_log_cancel` | 연결 ID, 범위, 시간, 키워드, 결과 Channel | 검색과 취소 | KV.5 |
 | `kube_log_stream` | 연결 ID, 스트림 ID, 소스 목록, 결과 Channel | 여러 파드 로그 따라가기. 취소는 `kube_log_cancel` | KV.13 |
-| `kube_action` | 연결 ID, 동작 | 운영 모드 확인 후 실행 | KV.6 |
+| `kube_action` | 연결 ID, 확인한 context, 동작 | 저장된 프로필로 운영 모드·context를 재확인하고 실행 | KV.6 |
+| `kube_operate_mode`, `kube_set_operate_mode` | 연결 ID, 켜기 여부 | 저장된 운영 모드 읽기와 변경 | KV.6 |
 | `kube_ingress` | 연결 ID | 구성 점검, 컨트롤러 메트릭 | KV.8 |
 | `kube_probe` | 연결 ID, 파드, 컨테이너 | 런타임 정보 | KV.9 |
 | `kube_metrics` | 연결 ID, 대상 | 앱 워커, vLLM·GPU 메트릭 | KV.9, KV.10 |

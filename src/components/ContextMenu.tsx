@@ -8,6 +8,8 @@ export type MenuItem = {
   label: string;
   run: () => void;
   disabled?: boolean;
+  /** Written under the label, for why it is disabled. A tooltip would need hovering. */
+  hint?: string;
   /** Shown on the right, for the key that does the same thing. */
   shortcut?: string;
   /** Draws a line above the item, to group related items. */
@@ -123,7 +125,10 @@ export function ContextMenu({
               item.run();
             }}
           >
-            <span>{item.label}</span>
+            <span>
+              {item.label}
+              {item.hint && <small className="context-menu-hint">{item.hint}</small>}
+            </span>
             {item.shortcut && <kbd>{item.shortcut}</kbd>}
           </button>
         </Fragment>
