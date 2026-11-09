@@ -1,4 +1,4 @@
-// Preserve the complete audit and fail on every finding reachable in the Windows graph.
+// Preserve the complete audit and fail on every finding reachable in a released platform's graph.
 import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -16,20 +16,22 @@ function cargo(args) {
     timeout: 180000,
   });
 }
-const metadata = cargo([
-  'metadata',
-  '--locked',
-  '--format-version',
-  '1',
-  '--filter-platform',
-  'x86_64-pc-windows-msvc',
-]);
-if (metadata.status !== 0) throw new Error('Windows dependency graph unavailable');
-const graph = JSON.parse(metadata.stdout);
-const ids = new Set(graph.resolve.nodes.map((n) => n.id));
-const packages = new Set(
-  graph.packages.filter((p) => ids.has(p.id)).map((p) => `${p.name}@${p.version}`),
-);
+const targets = ['x86_64-pc-windows-msvc', 'aarch64-apple-darwin'];
+const packages = new Set();
+for (const target of targets) {
+  const metadata = cargo([
+    'metadata',
+    '--locked',
+    '--format-version',
+    '1',
+    '--filter-platform',
+    target,
+  ]);
+  if (metadata.status !== 0) throw new Error(`Dependency graph unavailable for ${target}`);
+  const graph = JSON.parse(metadata.stdout);
+  const ids = new Set(graph.resolve.nodes.map((n) => n.id));
+  for (const p of graph.packages) if (ids.has(p.id)) packages.add(`${p.name}@${p.version}`);
+}
 const result = cargo(['audit', '--json']);
 let report;
 try {
@@ -47,16 +49,16 @@ const alerts = all.map((a) => ({
   title: a.advisory.title,
   kind: a.kind ?? 'vulnerability',
 }));
-const windows = alerts.filter((a) => packages.has(`${a.package}@${a.version}`));
+const blocking = alerts.filter((a) => packages.has(`${a.package}@${a.version}`));
 const excluded = alerts.filter((a) => !packages.has(`${a.package}@${a.version}`));
 await mkdir('target/verification', { recursive: true });
 await writeFile('target/verification/cargo-audit-all.json', JSON.stringify(report, null, 2));
 await writeFile(
-  'target/verification/windows-audit.json',
-  JSON.stringify({ target: 'x86_64-pc-windows-msvc', windows, excluded }, null, 2),
+  'target/verification/dependency-audit.json',
+  JSON.stringify({ targets, blocking, excluded }, null, 2),
 );
-for (const a of windows) console.log(`BLOCK ${a.id}: ${a.package}@${a.version} (${a.kind})`);
+for (const a of blocking) console.log(`BLOCK ${a.id}: ${a.package}@${a.version} (${a.kind})`);
 console.log(
-  `Windows audit: ${windows.length} findings; ${excluded.length} outside the target graph (retained in report)`,
+  `Dependency audit: ${blocking.length} findings; ${excluded.length} outside the target graphs (retained in report)`,
 );
-if (windows.length) process.exitCode = 1;
+if (blocking.length) process.exitCode = 1;

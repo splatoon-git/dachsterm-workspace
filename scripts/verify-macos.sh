@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI and local macOS gate. Mirrors verify-windows.ps1, without the Windows-only dependency audit and notices.
+# CI and local macOS gate. Mirrors verify-windows.ps1.
 set -euo pipefail
 
 package=0
@@ -26,6 +26,8 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 npm audit --audit-level=low
+node scripts/audit-dependencies.mjs
+node scripts/generate-notices.mjs
 
 if [ "$package" -eq 1 ]; then
   npm run tauri -- build --debug --bundles app
