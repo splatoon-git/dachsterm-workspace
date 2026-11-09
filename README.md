@@ -56,7 +56,7 @@ DachsTerm은 Tauri 2와 Rust로 만든 SSH 클라이언트다. 별도 서버, �
 
 - Local, Remote, SOCKS5 터널(루프백 전용)
 - 서버에 아무것도 설치하지 않는 Linux CPU·RAM·NET·DISK 모니터링
-- Kubernetes 터미널 UI [PodTree](docs/user-guide.md#podtree) 내장. 기본은 쓰기를 차단한 조회 모드
+- [쿠버네티스 작업 화면](docs/user-guide.md#쿠버네티스-작업-화면): 트리·대시보드·로그·파드 셸·간단 제어. 기본은 쓰기를 막은 조회 모드
 
 **그 밖에**
 

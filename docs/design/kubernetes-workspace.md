@@ -109,7 +109,7 @@ kube?: {              // 첫 접속의 탐지가 채운다. 없으면 탭 안에
 | 파일 | 역할 |
 |---|---|
 | `src-tauri/src/kube/mod.rs` | 명령 등록과 입력 검증 |
-| `kube/runner.rs` | `kubectl` 호출 구성. `Ssh`만 먼저 구현하고 `Local`(KV.11)을 넣을 자리를 둔다 |
+| `kube/runner.rs` | `kubectl` 호출 구성과 `Ssh`·`Local` 실행 분기. 로컬 실행은 `kube/local_run.rs` |
 | `kube/detect.rs` | `kubectl`, kubeconfig, context 탐지 |
 | `kube/state.rs`, `kube/settings.rs` | 상태 enum과 kubectl 출력 분류, 세션에 저장하는 값과 검증 |
 | `kube/snapshot.rs`, `kube/templates.rs` | go-template 정의, 파서, 트리와 대시보드 원본 데이터 |
@@ -503,7 +503,7 @@ exec 없이 스레드 수를 얻는 경로(`get --raw /api/v1/nodes/<노드>/pro
 
 **구현에서 정한 것(KV.9):**
 
-- **파일:** 백엔드는 `kube/metrics.rs`, `kube/probe.rs`, 판정 문구는 `kube/state.rs`의 `classify_proxy`. 프런트는 `workers.ts`(판정·표본·요약), `workerSchedule.ts`(읽을 대상과 일정), `workerPrefs.ts`(세션별 저장), `useWorkerWatch.ts`(조회), `runtimeModel.ts`(프로세스 묶기·메트릭 목록), `PodRuntimeView.tsx`와 `PodMetricsView.tsx`(런타임 탭), `WorkerPanel.tsx`(대시보드), `kubeWorkers.css`. §3.2의 `WorkerView.tsx`는 이 파일들로 나뉘었다.
+- **파일:** 백엔드는 `kube/metrics.rs`, `kube/probe.rs`, 판정 문구는 `kube/state.rs`의 `classify_proxy`. 프런트는 `workers.ts`(판정·표본·요약), `workerSchedule.ts`(읽을 대상과 일정), `workerPrefs.ts`(세션별 저장), `useWorkerWatch.ts`(조회), `runtimeModel.ts`(프로세스 묶기·메트릭 목록), `PodRuntimeView.tsx`, `RuntimeSections.tsx`, `PodMetricsView.tsx`, `kubeRuntime.css`(런타임 탭), `WorkerPanel.tsx`와 `kubeWorkers.css`(대시보드). §3.2의 `WorkerView.tsx`는 이 파일들로 나뉘었다.
 - **동시 실행:** `kube_metrics`, `kube_probe`는 연결당 4개인 `WatchSlots`를 쓴다. 트리 조회의 3개와 나눠, 파드 50개를 도는 동안에도 트리 조회가 밀리지 않게 했다.
 - **허용 경로:** `/`로 시작하고 각 구간이 영문·숫자·`.`·`_`·`-`이며 `..`이 없고 마지막 구간에 `metrics`나 `prometheus`가 들어간 128자 이내 경로만 쓴다. 쿼리는 넣을 수 없다.
 - **후보 확인:** `only: []`로 읽어 지표 수만 받는다. 감시 조회는 지정한 이름만 받아 웹뷰로 넘기는 양을 줄인다. 선언·annotation 후보는 최대 8개이고 동시에 4개씩 확인한다.
@@ -538,11 +538,33 @@ SSH 없이 내 PC의 kubeconfig로 접속한다. Mac 판매에 필요할 가능�
 - 인증 플러그인(`exec` credential)이 PATH를 요구할 수 있어 패키지된 앱으로 직접 검증한다.
 - 로그 검색의 서버 측 `grep`은 쓸 수 없으므로 앱에서 거른다. 정책이 달라 러너에서 분기한다.
 
+구현 결정(2026-11-09):
+
+- **탭 구조:** 로컬 클러스터 탭은 이 컴퓨터의 셸 하나 위에 작업 화면을 얹은 것이다. SSH 세션과 같이 숨은 터미널을 두므로 **로컬 터미널** 전환, 분할, 탭 수명을 그대로 쓴다. 명령의 연결 ID가 로컬 PTY이면 `Link::Local`, `Home::Local`이 된다(`kube/mod.rs`). 새 IPC 명령은 없다.
+- **셸을 쓰지 않는다.** Windows에 기댈 셸이 없으므로 `Kubectl`이 만든 명령 줄을 `local_run::parse`가 인자로 되돌려 직접 실행한다. 셸이 해석할 문자가 따옴표 밖에 있으면 실행을 거부한다. 프로그램 경로는 설정값과 글자 그대로 비교한다. 공백 있는 경로(`/Applications/Rancher Desktop.app/...`)를 나누지 않기 위해서다.
+- **셸·파이프를 쓰던 곳의 분기:** 로그 검색(`LineReader.unfiltered`, 일치한 줄만 상한에 센다), 실시간 로그(`log_stream/local.rs`, 소스별 kubectl), 인그레스 메트릭(`WantedLines`), 로그 따라가기 탭(`LineFilter`, PTY 출력을 줄 단위로 거른다), 파드 셸(PTY에서 kubectl을 직접 실행).
+- **경로와 환경:** kubectl은 항상 절대 경로이고, 화면에서 오는 값이므로 파일 이름이 `kubectl`로 시작해야 한다(`check_local_kubectl`). macOS의 Finder 실행은 `login_path`가 로그인 셸의 `PATH`와 `KUBECONFIG`를 가져온다. kubectl이 있는 폴더도 `PATH`에 더해 함께 설치된 인증 플러그인을 찾게 한다.
+- **인증 플러그인 실패:** `getting credentials:` 문구를 `AuthPluginFailed`로 분류해 "연결 불가"로 오인하지 않게 했다. 실측 문구로 테스트를 고정했다.
+- **설정 저장:** 저장된 세션이 없으므로 `settings` 표의 `kubeLocalCluster`에 하나만 둔다. 로컬 항목 하나로 kubeconfig의 모든 클러스터에 닿으므로 **context를 바꾸면 운영 모드가 꺼진다**(설계에 없던 판단. SSH 세션은 유지).
+
 ### KV.12 — 터미널 UI 제거와 문서
 
 - **KV.4까지 쓸 수 있어도 기존 터미널 UI 코드는 바로 없애지 않는다.** 도구 메뉴의 **PodTree 열기**는 TW.9에서 이미 숨겼으므로, 그동안 화면에서 여는 경로는 없다.
 - 기능 비교표를 만들어 패킷 캡처, 네트워크 2초 화면, 여러 파드 로그, 트리 저장을 옮길지 뺄지 정한다. 사용자가 확인하면 스크립트와 `Script` 경로를 제거한다.
 - 사용 안내서, 전체 회귀, Mac 실기기 검증을 진행한다. 화면 문구에는 외부 제품명을 쓰지 않는다(규칙 §3).
+
+**기능 비교표(2026-11-09, 사용자가 제안대로 확인).** 기준: `podtree.sh` 2.4.0-dachsterm.1과 `ed799a4`의 앱 코드. 스크립트 진입점은 TW.9에서 숨겨 지금도 열 수 없다(`setPodtreeOpen`은 만들 수 없는 `script` 탭의 재접속에서만 호출).
+
+| 기능 | 스크립트 | 앱 | 제안 |
+|---|---|---|---|
+| 패킷 캡처 (`T`) | tcpdump를 로컬·컨테이너 exec·`kubectl debug`·노드 ssh 중 가능한 방법으로 실행. 필터 6종, 기본 200개, SYN/RST 요약, 저장 | 없음 | **뺀다.** `kubectl` 일상 작업 기준(§1) 밖이고, 임시 컨테이너는 파드에서 지울 수 없으며, 노드 ssh·sudo는 1차 제외(§9). 이미지에 tcpdump가 있으면 파드 셸에서 실행 |
+| 네트워크 2초 화면 (`N`) | 2초마다 누적: TCP 상태, LISTEN 큐, SYN 넘침·드롭·재전송 증감, conntrack, FD, cgroup CPU·메모리, NIC rx/tx, 상위 연결 IP. 파드·이 서버·노드(ssh) 대상 | 일부(KV.9 런타임 탭): TCP 상태, LISTEN 큐, SYN 넘침·드롭·재전송, 프로세스별 FD·스레드. 버튼으로 수집하고 직전 대비 증가만 표시. 파드 대상만. NIC·conntrack·상위 IP·연속 기록 없음 | **뺀다.** 런타임 탭으로 대체하고, 연속 관찰이 필요해지면 런타임 탭 자동 수집을 별도 작업으로 |
+| 여러 파드 로그 (`L`, `M`) | 파드당 kubectl로 한 화면, `--tail=500`, 전 컨테이너, 패턴 필터, `S`로 서버 홈에 저장 | 있음(KV.13 실시간 로그 보드, KV.5 로그 검색): 소스 20개 상한, 초기 200줄, AND·제외 필터, 경고·오류만, 시간순 합치기. 보드에 저장·복사 없음 | **옮김 완료로 처리.** 저장은 추가하지 않는다 |
+| 트리 저장 (`S`) | 보이는 행을 `~/podtree-tree-<시각>.txt`로 서버에 저장 | 없음 | **작게 옮긴다.** 트리 우클릭 **보이는 트리 복사**(클립보드, context·namespace·필터 머리글 포함) |
+
+표 밖에서 함께 사라지는 기능: 포트 포워드(`P`, §9 후속), vLLM·GPU 화면(`V`, KV.10 미병합), 선택 항목의 kubectl 명령 보기(`K`). 사용자 결정: KV.10 병합을 기다리지 않고 제거한다.
+
+**구현 결과.** `podtree.rs`와 `podtree/launch.rs`를 `kube/terminal.rs`, `kube/terminal/launch.rs`로 옮기고 스크립트 전달·검사(`execute`, `stage`, `bash_target`, `kube_terminal_inspect`)를 지웠다. 파드 탭만 남아 분기는 `local` 유무 하나다. 내장 스크립트, 출처 파일, 고지, 앱 번들 항목, RBAC 픽스처를 지웠다. 프런트의 `session.podtree`는 `podTerminal`, 탭 종류 `podtree`는 `pod`로 바꿨다. 파드 탭을 쓰지 않는 세션 로그 단계만 남겨 네이티브 검사를 `test-session-log-native.mjs`로 바꾸고 `verify-windows.ps1 -Native`에 연결했다. **보이는 트리 복사**(`treeText.ts`)는 접히지 않은 전체 행을 복사하며, 행 셀 계산은 `treeCells.ts`로 나눠 화면과 같은 값을 쓴다.
 
 ### KV.13 — 실시간 로그 보드와 화면 개선
 

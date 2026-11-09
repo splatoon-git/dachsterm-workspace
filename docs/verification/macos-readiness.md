@@ -63,6 +63,7 @@ M.2~M.4는 수정했고(`0fcf569`), 나머지는 미착수다. Mac 실기기에�
 | M.21 | 중간 | 구현, 실기기 대기 | TL.3 SSH 키 만들기는 Windows 실제 앱과 Docker OpenSSH로 확인했다. Mac 분기(`0600`, `~/.ssh` `0700`, `/bin/hostname`)는 실행하지 않았다. | 패키지된 앱에서 도구 → SSH 키 만들기로 Passphrase 있음·없음 키 생성, `ls -l`로 `0600`, `~/.ssh`가 없을 때 `0700`으로 생성, 기본 주석(Finder 실행), 폴더 창, `ssh -i`로 실제 로그인, 세션 폼 **새 키…** |
 | M.22 | 중간 | 구현, 실기기 대기 | TL.6~TL.9 네트워크 도구를 Windows 실제 앱과 Docker OpenSSH로만 실행했다. Mac 분기는 실행하지 않았다. 코드상 차이: `/usr/sbin/lsof -nP -F`(포트 사용 여부), `/usr/sbin/traceroute`의 TCP(`-P tcp -p`) 시도 후 UDP로 넘어가기(경로 추적), `rustls_native_certs`의 Keychain 읽기(서비스 연결의 신뢰 결과). | 패키지된 앱을 Finder로 실행해 확인: ① 도구 → 포트 사용 여부의 로컬 목록과 프로세스 이름, 다른 계정 소켓의 표시, ② 서비스 연결의 HTTPS 공인 인증서 `신뢰 OK`와 자체 서명 표시, ③ 경로 추적이 일반 권한에서 TCP로 되는지, 안 되면 UDP(참고용)로 넘어가는지, 표시되는 안내, 취소 뒤 `traceroute` 프로세스가 남지 않는지, ④ 로컬 네트워크 권한(M.6) 프롬프트와 사내망 대상, ⑤ 결과 행 우클릭(두 손가락 클릭·Control+클릭)과 `서비스 연결로 보기` |
 | M.23 | 중간 | 일부 확인 | KV.13 실시간 로그·요청 흐름·서버 `kubectl` 정리와 KV.9 런타임 탭을 Mac 패키지 앱(`e56215c`, 검사 스크립트를 주입한 임시 빌드)과 실제 OpenSSH·kind로 통과했다. [기록](kubernetes-workspace.md#kv13kv9-mac-실기기-검증-2026-11-09). 합성 이벤트로 조작했고 화면 모양은 보지 못했다. 이때 찾은 스트림 재개 중복 표시는 수정했고 앱 재실행은 하지 않았다. | 대시보드 판정·권한 없음 계정·프로브 단독 감시를 실기기에서 확인한다 |
+| M.25 | 중간 | 일부 확인 | KV.12 파드 터미널(`kube/terminal.rs`)과 **보이는 트리 복사**를 Mac 패키지 앱(`ed799a4` 기준 미커밋, 조작 스크립트를 주입한 임시 빌드, `open` 실행)과 실제 OpenSSH·kind, 로컬 클러스터로 확인했다. 합성 이벤트로 조작했고 화면 모양은 보지 못했다. [기록](kubernetes-workspace.md#kv12-터미널-ui-제거-검증-2026-11-09) | 사람의 직접 조작 |
 | M.5 | 중간 | 확인 | macOS의 로컬 파일 이름은 NFD 한글일 수 있는데, 업로드 이름을 NFC로 정규화하는 코드가 없다. 서버에 자모가 분리된 이름으로 저장될 수 있다. | 업로드 시 이름 정규화. 기존 원격 이름과의 충돌 비교도 함께 정한다 |
 | M.6 | 중간 | 확인(구성) / 추정(영향) | `tauri.conf.json`에 `bundle.macOS`가 없고 `NSLocalNetworkUsageDescription`도 없다. macOS의 로컬 네트워크 개인정보 보호는 사내망 SSH 접속에 적용되며, 코드 서명으로 앱을 식별하므로 ad hoc 서명에서는 불안정할 수 있다. 재빌드 시 서명이 바뀌면 Keychain 승인을 다시 요청할 수도 있다. | `Info.plist` 문구, `signingIdentity`, `minimumSystemVersion` 지정. LAN 서버 접속으로 확인한다 |
 | M.12 | 중간 | 구현, 실기기 대기 | F.1의 로컬 파일 트리와 경로 따라가기는 Mac에서 실행한 적이 없다. 기본 셸이 Bash·Zsh이면 첫 프롬프트에 경로 알림을 입력하고 에코를 숨기는 경로를 쓴다. 코드는 실제 OpenSSH로 검증한 SSH 경로와 같지만 macOS PTY와 Zsh 프롬프트(`PROMPT_SP`, 오른쪽 프롬프트)는 확인되지 않았다. | 패키지된 앱에서 로컬 탭을 열어 입력 잔상 없이 `cd`를 따라가는지, 파일 트리와 복사·삭제가 동작하는지 확인한다 |
@@ -86,8 +87,9 @@ M.2~M.4는 수정했고(`0fcf569`), 나머지는 미착수다. Mac 실기기에�
 | M.2 | `/etc`, `/tmp`, `/var`의 정확한 시스템 링크만 허용(`local_links.rs`) | 수정 전 macOS에서 `refuses_link_ancestor` 실패(실행 `42169858010`), 수정 후 통과. 사용자 링크는 계속 거부 | 실제 파일 전송(`npm run probe:phase1`) |
 | M.3 | 시작 시 로그인 셸의 `PATH` 적용. 3초 제한, 실패 시 Homebrew 경로 사용(`login_path.rs`). 로컬 PodTree는 선택한 Bash 유지(`podtree/launch.rs`) | zsh에서 `PATH` 읽기, 프로필 출력·시간 초과 처리, 명령 문자열. `exec "$BASH"`는 WSL Ubuntu에서 직접 확인 | Finder로 실행한 앱의 PodTree 실행, 앱 시작 지연 |
 | M.4 | 앱 번들 안의 CLI 탐색(`editor_location.rs`) | 탐색 로직만. 번들 내부 경로가 실제 설치본과 맞는지는 미확인 | Finder로 실행한 앱에서 VS Code, Cursor, Sublime 열기 |
+| M.24 | 중간 | 일부 확인 | KV.11 로컬 클러스터를 Mac 패키지 앱(`c2198f5` 기준 미커밋, 조작 스크립트를 주입한 임시 빌드, `open` 실행)과 kind로 확인했다. 탐지한 절대 경로의 kubectl 실행과 로그인 셸 `PATH`로 찾는 exec 인증 플러그인(대역) 포함. 실제 인증 플러그인과 사람의 직접 조작은 대기. [기록](kubernetes-workspace.md#kv11-로컬-kubeconfig-검증-2026-11-09) |
 
-로컬 PodTree는 Bash 4 이상이 필요하므로 Mac에서는 `brew install bash`가 전제다. 없으면 기존처럼 의존성 오류로 안내한다.
+로컬 PodTree와 이 Bash 4 전제는 KV.12에서 스크립트와 함께 제거했다. M.3의 PATH 적용은 쿠버네티스 작업 화면의 `kubectl` 탐지와 편집기 실행에 계속 쓴다.
 
 ## 결정 사항 (2026-11-06 사용자 확인)
 

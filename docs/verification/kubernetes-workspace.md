@@ -611,3 +611,105 @@ KST 시각. 입력 감시(아래 "실제 입력과 겹침")는 런타임 단계�
 `docs/progress.md` 상단에 있던 내용을 옮긴 것이다. "미커밋", "현재" 표현은 병합 전 시점 기준이다.
 
 **KV.13 실시간 로그 보드·화면 개선: 프런트엔드 구현·Playwright 통과 / Rust 컴파일·실제 클러스터·Mac 실기기 미검증** — 브랜치 `feat/kv13-kube-workbench`(`b343613` 기준 미커밋), [설계안](design/kubernetes-workspace.md#kv13--실시간-로그-보드와-화면-개선). 사용자 요청: 상세 패널 마우스 리사이즈, 로그 크게 보기, 여러 파드 동시 보기, 인그레스→서비스 파드 로그 동시 보기, UI 품질. **원인과 수정:** 패널 리사이즈가 안 된 것은 `.resize-handle`이 그리드 칸에서 폭을 받는데 쿠버네티스 분할은 flex라 폭이 0px이었기 때문이다(측정값 0, 로그 검색의 분할도 같은 원인). 새 화면 **실시간 로그**: 서비스·워크로드·노드·파드·인그레스 컨트롤러를 골라 파드별로 나눠 보거나 시간순으로 합쳐 보고, 칸 크게 보기, 글자 크기, 줄바꿈, 일시정지, 필터, 경고·오류만을 제공한다. 인그레스 호스트 행의 **요청 흐름**은 컨트롤러 로그(upstream으로 좁힘)를 위에, 서비스 파드를 아래에 연다. 롤아웃으로 파드가 바뀌면 스트림을 교체해 마지막 시각부터 잇는다. 파드 패널에 크게 보기와 오류 색, 트리 메뉴에 진입점을 넣었고 헤더·트리·대시보드·인그레스를 다듬었다(`문제만` 글자 세로 깨짐 수정). 명령 `kube_log_stream` 추가(취소는 `kube_log_cancel` 공용, SSH 채널 하나에 최대 20개). 파일: `src-tauri/src/kube/log_stream.rs`, `src/features/kube/LogBoard.tsx`, `LogLines.tsx`, `LogBoardPicker.tsx`, `logBoardModel.ts`, `useLogBoard.ts`, `logBoard.css`, `tests/ui/kube-board.spec.ts`. 실제 클러스터 검사에서 **mawk가 파이프 입력을 블록으로 모아 읽어 조용한 파드의 로그가 나오지 않는 버그**를 찾아 고쳤다(`-W interactive` 선택, 한 줄 한 번에 쓰기). `scripts/kube-fixture.sh`는 호스트의 kubectl 대신 kind 노드의 Linux kubectl을 넣게 고쳐 Mac에서도 동작한다(WSL 경로 재실행은 안 함). 검사 `npm run test:kube-stream`(fixture 필요, `--ignored`) 추가. 결과(미커밋 트리, 이 MacBook, Rust 1.99.1): `verify-macos.sh`의 단계를 나눠 실행해 typecheck·lint·`npm test` 1229/1229·`npm run build`·`cargo fmt --check`·`cargo clippy --workspace --all-targets -D warnings`·`npm audit` 0건 통과. 실제 kind(`test:kube-stream`, `docker exec -i`로 서버 셸 실행): 여러 파드 수신, 서버 필터, 없는 파드의 오류 보고, stdin 종료 시 kubectl 0개 통과. mawk에서 3KB 줄 8만 개 동시 쓰기 깨짐 0. **게이트 실패 3건, 모두 이번 변경 밖:** ① `format:check` 경고 `scripts/test-phase63-67-native.mjs`(`origin/dev`와 동일, 이 때문에 스크립트가 중단돼 나눠 실행). ② Playwright 479 통과 1 실패 `session-form.spec.ts:45`(Mac에서 행 배치, 수정 전 `b343613`에서도 동일 실패). ③ `cargo test --workspace` 538 통과 1 실패 `git_graph::tests::a_repositorys_signature_program_does_not_run`(Apple Git 2.50.1, 건드리지 않은 모듈이며 기준 커밋 재실행은 안 함). **미검증:** 실제 SSH 채널 위의 스트림과 취소(`docker exec`로 대체해 스크립트까지만 확인), 앱 화면과 실제 백엔드의 연결(Playwright는 백엔드 대역), 패키지된 앱의 화면 동작(`npm run tauri -- build --debug --bundles app` 종료 0, `open`으로 프로세스와 창 생성까지 확인, 화면 기록 권한이 없어 창 내용은 못 봄), Mac WKWebView, Windows 앱, CI, 사용 안내서. 사용자 실기기 지적 후속(같은 브랜치, 미커밋): ① 글꼴 스택에 Mac 글꼴 추가(`foundations.ts`, M.7). ② `select`를 `appearance: none`으로 직접 그려 Mac에서 입력칸보다 납작하던 문제 수정(`styles.css`). ③ 새 연결의 `접속 후 화면`을 전체 폭으로 수정(`WorkspaceField.tsx`), 위 게이트 실패 ②의 원인이었고 `session-form.spec.ts:45`는 Chromium·WebKit 모두 통과. 결과: Chromium의 `session-form`·`terminal-font`·`themes`·`kube-board`·`kube-ingress` 42/42, `npm test` 1229/1229, `.app` 재빌드 종료 0. 전체 Playwright를 수정 ②까지 적용해 WebKit으로 돌린 결과는 462 통과 18 실패다: Tab 포커스(Safari 기본 동작) 10건은 `layout`·`session-manager`·`themes`·`session-form:71`, 나머지는 `games` 3건, `port-tools` 클립보드 권한 1건, `layout:45`, `themes:92`, `workspace:87`이며 ③의 대상이던 `session-form:45`는 위와 같이 해결했다. `layout:45`, `themes:92`, `workspace:87`, `games`는 원인을 확인하지 않았다. WebKit 결과는 WKWebView 실기기 결과가 아니다. ④ 사용자 캡처: Mac 앱의 SSH 키 만들기 창에서 본문이 접혀 제목과 버튼만 보였다. Playwright WebKit(27.2)에서는 재현되지 않았고, `.dialog-body`의 `flex: 1`(0% 기준)을 `flex: 1 1 auto`로 바꿨다(사용자가 Mac 앱에서 정상 표시를 확인). 재발 방지로 `ssh-key.spec.ts`에 기준값 검사를 넣었다. 결과: `ssh-key`·`session-form`·`agent-launch`·`tools`·`themes` 32/32(Chromium), 두 엔진에서 새 연결·설정·SSH 키 창 크기 유지, `.app` 재빌드 후 실행. ⑤ WebKit 실패 분석: `layout:45`는 재실행 통과(일시적), `workspace:87`은 앱 시작 전에 값을 쓰는 테스트 타이밍(대기 후 두 엔진 동일). 실제 버그 2건 수정: 게임 일시정지가 WebKit에서 바로 재개되던 문제(`games/shared.tsx`, 클릭해도 버튼에 포커스가 가지 않아 게임판 blur가 먼저 일시정지), 저장소 쓰기 실패 시 앱이 사라지던 문제(`App.tsx` 효과 2곳, 새 `lib/saveSetting.ts`). WebKit에서 `games`·`themes:92` 재실행 6/6 통과. ⑥ 쿠버 UI: 대시보드 순서를 현황·재시작·미달 워크로드 먼저로 변경, 표본 2개 전에는 추세 차트 숨김, 노드 행 폭, 상세 탭 여백·표 머리·이벤트 경고색. 결과(미커밋 트리): lint·typecheck 오류 출력 없음, `npm test` 1229/1229, Playwright Chromium 전체 480/480, `.app` 재빌드·재실행. WebKit Tab 포커스 10건은 미수정(기본 동작으로 판단, Mac 전체 키보드 접근 설정의 실기기 확인은 안 함). 로그 검색 화면은 구조 변경 없음. 사용자 확인(2026-11-09, 이 MacBook의 디버그 `.app`, kind `kv13`에 실제 SSH 접속): 쿠버네티스 화면이 "잘 보인다"고 확인했다. 화면별 세부 항목(요청 흐름의 스트림, 중지 시 서버 kubectl 정리)은 따로 확인하지 않았다. 다음 첫 행동: 사용자 요청 시 커밋하고 `dev`에 병합한다. 이어서 SSH 세션의 실시간 로그와 요청 흐름을 확인한다.
+
+## KV.11 로컬 kubeconfig 검증 (2026-11-09)
+
+대상: `feat/kv11-kube-local` 미커밋(`c2198f5` 기준), worktree `../dachsterm-kv11`. macOS 26.5 arm64, kubectl 1.36.1, kind 0.32.0.
+
+### 자동 게이트 (최종 소스, 미커밋)
+
+| 단계 | 결과 |
+|---|---|
+| `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과 |
+| `cargo test --workspace --locked` | **598 통과 1 실패 2 무시.** 실패는 `git_graph::tests::a_repositorys_signature_program_does_not_run`으로 KV.11 변경 밖이며 KV.13 기록과 같다. 이 실패로 `dachsterm` 뒤 크레이트의 테스트는 실행되지 않았다 |
+| `npm run typecheck`, `npm run lint` | 통과 |
+| `npm run format:check` | **실패**: `scripts/test-phase63-67-native.mjs` 경고(변경 밖, 기존과 같음) |
+| `npm test` | 1293/1293 |
+| `npx playwright test --workers=4` | 512/512 (Chromium) |
+
+Windows 대상 컴파일은 이 Mac에 `x86_64-pc-windows-msvc` 타깃이 없어 **미실행**이다.
+
+### 패키지된 앱 실기기
+
+- **빌드:** `npm run tauri -- build --debug --bundles app`. 프런트엔드 산출물에 조작 스크립트 하나를 주입하고 CSP에 결과 보고용 루프백만 더한 **임시 빌드**다. Rust와 앱 소스는 위 미커밋 상태 그대로이고 임시 빌드는 삭제했다.
+- **실행:** `open -n --env KUBECONFIG=<검사용> --env DACHSTERM_TEST_DATA_DIR=<격리>`. Finder와 같은 launchd 환경이다. 실행 중인 앱의 환경에 `TERM`이 없고 `PATH`에 로그인 셸의 `~/.local/bin`이 있음을 `ps`로 확인했다.
+- **클러스터:** 이번 검사용 kind `kv11`(별도 kubeconfig로 만들어 `~/.kube/config`를 건드리지 않음, 검사 후 삭제). 기존 `kind-mesim-*`에는 접근하지 않았다.
+- **인증 플러그인:** kubeconfig에 `exec.command: dachsterm-kv11-auth`를 **이름만** 적었다. 플러그인은 `~/.local/bin`에만 두었고(로그인 셸 `PATH`에만 있는 폴더) 호출마다 자신의 `PATH`를 기록하게 했다. 인증서를 돌려주는 대역이며 검사 후 지웠다.
+- **조작:** 연결 목록의 **로컬 클러스터** 클릭, 설정 화면 확인, 화면 탭 전환은 DOM 합성 클릭이고, 나머지는 화면이 쓰는 IPC 명령을 같은 인자로 직접 호출했다. 실제 마우스 조작과 눈으로 본 화면 검사는 아니다.
+
+| 항목 | 결과 |
+|---|---|
+| 대조: 플러그인이 있는 config를 launchd `PATH`로 kubectl 직접 실행 | `getting credentials: exec: executable dachsterm-kv11-auth not found` |
+| 대조: 같은 config를 로그인 `PATH`로 실행 | 파드 목록 정상 |
+| **패키지 앱의 플러그인 실행** | 최종 실행에서 플러그인 53회 호출, 기록된 `PATH`는 1종이고 `~/.local/bin`이 맨 앞 |
+| 탐지 | kubectl `/usr/local/bin/kubectl`(절대 경로), kubeconfig 검사용 경로, context `kind-kv11`, 헤더 **로컬 터미널** |
+| 트리 | 트리 탭에 kind 파드와 워크로드 행 표시 |
+| 조회 | `kube_snapshot` 8종, `kube_detail` 4종, `kube_logs`, `kube_terminal_probe`, `kube_probe` 모두 ready |
+| 인그레스 메트릭 | 가짜 컨트롤러(`/metrics`, 버킷 줄 포함)에서 정상 41, 5xx 2, 지연 합·수 일치 |
+| 로그 검색(앱 필터) | `needle !quiet` 26건, 모두 일치, 작업 ready, 종료 `done` |
+| 실시간 로그 | 파드 2개, 필터 줄만 수신, 취소 후 `finished` |
+| KV.6 | 조회 모드에서 거부 → 운영 모드 켬 → 파드 삭제(클러스터에서 사라짐 확인), 롤아웃 재시작(`restartedAt` 확인), Cordon(외부 관찰 3초 `unschedulable=true`)·Uncordon → 끔 |
+| 파드 셸 PTY | `echo DACHS$((40+2)); exit` 결과 `DACHS42`, `connected → closed` |
+| 로그 따라가기 PTY 필터 | `needle !quiet`, 모든 줄 일치 |
+| 음성: 없는 플러그인 kubeconfig | 설정 화면 제목 **인증 플러그인을 실행하지 못했습니다**, kubectl 메시지 포함 |
+| 수정 확인: 문제 목록 체크박스 | 너비 12px, 글자 높이 15px (WKWebView) |
+
+### 실행 중 발견해 고친 것
+
+- 문제 목록의 알림 체크박스(KV.7)가 전역 `input { width: 100% }`를 받아 문구가 한 글자씩 세로로 쌓였다. 사용자가 실제 화면에서 발견했다. `kubeIssues.css`에 예외를 넣고 재현 테스트를 추가했다(수정 전 실패 확인).
+- `classify`가 플러그인 실패를 "클러스터 연결 불가"로 분류했다. 실측 문구로 `AuthPluginFailed`를 추가했다.
+
+### 미확인
+
+- **KV.10 `kube_ai`의 Local 동작:** 아직 `dev`에 없다(`feat/kv10-kube-vllm` 미커밋). 해당 코드에 적용하지 못했다.
+- Windows 빌드와 실행, Windows 패키지 앱, CI.
+- 실제 인증 플러그인(aws, gke-gcloud-auth-plugin, kubelogin 등). 이 Mac에 설치돼 있지 않아 대역으로 검사했다.
+- 로그인 셸의 `KUBECONFIG` 가져오기는 단위 테스트로만 확인했다. 패키지 앱 실행에서는 `open --env`로 전달했다.
+- Mac 릴리스 빌드와 사람이 직접 하는 조작.
+
+## KV.12 터미널 UI 제거 검증 (2026-11-09)
+
+대상: `feat/kv12-kube-cleanup`, `ed799a4` 기준 미커밋 트리. 환경: MacBook Apple Silicon(Darwin 25.5.0), Apple Git 2.50.1, Rust 1.99.1, Docker 29.8.0, kind `kv12`(검사 후 삭제).
+
+### 자동 게이트 (`PATH=/opt/homebrew/opt/rustup/bin:$PATH bash scripts/verify-macos.sh --package`)
+
+| 항목 | 결과 |
+|---|---|
+| `npm run typecheck`, `lint`, `format:check`, `build` | 통과 |
+| `npm test` | 1299/1299 통과(106개 파일) |
+| `npm run test:ui -- --workers=2` | 513 통과 |
+| `cargo fmt --all --check`, `clippy --workspace --all-targets --locked -D warnings` | 통과 |
+| `cargo test --workspace --locked --no-fail-fast` | **lib 595 통과, 1 실패, 2 무시.** 나머지 대상 통과 |
+| `npm audit --audit-level=low` | 0건 |
+| `npm run tauri -- build --debug --bundles app` | 통과. `Contents/Resources`에 `icon.icns`, `THIRD_PARTY_NOTICES.txt`만 있고 PodTree 파일 없음 |
+
+- 실패 1건은 `git_graph::tests::a_repositorys_signature_program_does_not_run`이다. 픽스처의 전제("일반 `git log`가 `gpg.program`을 실행한다")가 이 Mac의 Apple Git 2.50.1에서 성립하지 않아 `tests.rs:494`에서 멈춘다. `git_graph`는 이 작업에서 바꾸지 않았고 KV.10 기록에도 같은 실패가 있다. 원인은 확인하지 않았다. 이 실패에서 `verify-macos.sh`가 멈추므로 뒤 단계(감사, 패키지)는 따로 실행했다.
+
+### 실제 SSH·클러스터
+
+| 명령 | 결과 |
+|---|---|
+| `npm run probe` | 통과 |
+| `npm run probe:phase1` | **실패.** 마지막 PASS는 `product bad authentication`, 다음은 인증정보 저장 단계. `ed799a4`의 깨끗한 worktree에서도 같은 지점에서 실패해 이 변경의 결과가 아니다. 로그인 키체인은 잠겨 있지 않았고 실제 원인은 확인하지 않았다 |
+| `DACHSTERM_KUBE_FIXTURE=kv12 npm run test:kube-actions` | 통과(삭제, 롤아웃 재시작, Cordon·Uncordon, RBAC 거부) |
+| `DACHSTERM_KUBE_FIXTURE=kv12 npm run test:kube-stream` | 통과 |
+
+### Mac 패키지 앱 (`open -n`, 데이터 폴더 격리)
+
+프런트엔드 산출물에 조작 스크립트를 주입하고 CSP에 결과 보고용 루프백만 더한 **임시 빌드**다. Rust와 앱 소스는 위 미커밋 트리 그대로이고, 검사 뒤 정상 패키지로 다시 빌드했다. 클릭은 DOM에 합성 이벤트를 보낸 것이고 화면 모양은 보지 못했다.
+
+| 항목 | SSH(실제 OpenSSH → kind) | 로컬 클러스터(`/usr/local/bin/kubectl`) |
+|---|---|---|
+| 세션에서 작업 화면 열기, 트리 표시 | 통과(`/opt/kube/bin/kubectl`) | 통과 |
+| `kube_terminal_inspect` 호출 | 거부(명령 없음) | 거부(명령 없음) |
+| `kind: script` 실행 | 거부(`unknown variant`) | 거부(`unknown variant`) |
+| 우클릭 **보이는 트리 복사** → `pbpaste` | 머리글과 전체 행 일치 | 머리글 일치(행은 SSH와 같은 코드) |
+| 메뉴 **셸** → 명령 출력 → `exit` → 트리의 같은 파드로 복귀 | 통과 | 통과 |
+| **따라가기** 로그 탭 출력과 닫기 | 통과 | 통과 |
+| 부모 SSH 연결을 끊으면 파드 탭 종료 | 통과 | 해당 없음 |
+
+### 미검증
+
+- Windows 빌드와 실행, CI(`main` 미반영).
+- `scripts/test-session-log-native.mjs`: PodTree 단계를 지우고 이름을 바꿨으며 문법 검사와 eslint만 통과했다. Windows 전용이라 실행하지 못했다. TW.9 이후 PodTree 단계에 막혀 있던 세션 로그 단계가 이제 돌 수 있는지는 Windows에서 확인해야 한다.
+- 사람이 직접 하는 화면 확인, 릴리스 빌드.

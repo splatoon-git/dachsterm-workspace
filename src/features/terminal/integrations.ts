@@ -11,7 +11,7 @@ type IntegrationHost = {
   windowsPaths: boolean;
   directory(path: string): void;
   program(program: GuideProgram | null): void;
-  /** Absent on tabs that do not take agent signals, such as PodTree. */
+  /** Absent on tabs that do not take agent signals, such as a pod tab. */
   agent?: {
     keyboard: KittyKeyboard;
     status: ProgramStatus;

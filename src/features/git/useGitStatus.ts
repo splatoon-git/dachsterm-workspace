@@ -128,7 +128,7 @@ class GitStatusStore {
 
 const stores = new WeakMap<TerminalSession, GitStatusStore>();
 
-/** Tabs with a shell folder. FTP and PodTree have none. */
+/** Tabs with a shell folder. FTP and pod tabs have none. */
 export function gitStatusOf(session: TerminalSession | undefined) {
   const kind = session && sessionKind(session);
   if (!session || (kind !== 'ssh' && kind !== 'local')) return null;

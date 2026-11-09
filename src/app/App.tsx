@@ -40,7 +40,6 @@ import {
 } from '../lib/ipc';
 import { SessionForm } from '../features/sessions/SessionForm';
 import { TerminalSession, type LocalCatalog, type LocalTarget } from '../features/terminal/session';
-import { PodTreeDialog } from '../features/terminal/PodTreeDialog';
 import { CommandPanel } from '../features/terminal/CommandPanel';
 import { SessionPane } from './SessionPane';
 import { useInputPanes } from './inputPanes';
@@ -63,6 +62,7 @@ import { Dialog } from '../components/Dialog';
 import { TitleBar } from './TitleBar';
 import { SidebarTabs, type SidebarView } from './SidebarTabs';
 import { ConnectionTree, useFolded } from './ConnectionTree';
+import { localClusterOf, localTabProfile, type LocalClusterProfile } from './connectionSections';
 import { HeaderActions, HeaderMenus } from './HeaderTools';
 import { modKey } from '../lib/platform';
 import { saveSetting } from '../lib/saveSetting';
@@ -80,7 +80,6 @@ export function App() {
   const [localCatalog, setLocalCatalog] = useState<LocalCatalog>({ targets: [], warning: null });
   const [localLoading, setLocalLoading] = useState(desktop);
   const [localOpen, setLocalOpen] = useState(false);
-  const [podtreeOpen, setPodtreeOpen] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const tree = useFolded();
@@ -219,9 +218,8 @@ export function App() {
     agent.connect(session, value, remember, opening.launch);
   }
   const agent = useAgentLaunch((p, launch) => requestConnect(p, undefined, { launch }));
-  function openLocal(target: LocalTarget, beside?: Beside) {
-    const profile = { ...blankProfile(), id: target.id, name: target.name, host: 'localhost' };
-    const session = new TerminalSession(profile, theme, () => {}, target);
+  function openLocal(target: LocalTarget, beside?: Beside, cluster?: LocalClusterProfile) {
+    const session = new TerminalSession(localTabProfile(target, cluster), theme, () => {}, target);
     setTabs((previous) => [...previous, session]);
     workspace.open(sessionRef(session), beside);
     setLocalOpen(false);
@@ -272,9 +270,8 @@ export function App() {
   };
   useAppShortcuts(keptByFile, runShortcut);
   function requestConnect(profile: Profile, existing?: TerminalSession, opening?: Opening) {
-    if (existing?.podtree) {
-      if (existing.podtree.kind === 'script') setPodtreeOpen(true);
-      else void kubeTabs.reconnect(existing);
+    if (existing?.podTerminal) {
+      void kubeTabs.reconnect(existing);
       return;
     }
     if (existing?.localTarget) {
@@ -319,7 +316,7 @@ export function App() {
   };
   const splitTab = (t: TerminalSession, beside: Beside) =>
     t.localTarget
-      ? openLocal(t.localTarget, beside)
+      ? openLocal(t.localTarget, beside, localClusterOf(t.profile))
       : requestConnect(savedProfile(t), undefined, { beside });
   const kubeTabs = useKubeTabs({ workspace, theme, tabs, setTabs, closeTab });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
@@ -547,7 +544,7 @@ export function App() {
                     setForm({ ...blankProfile(), groupId: groupId ?? null }),
                   newGroup: (parentId) => setGroup({ id: '', name: '', parentId }),
                   editGroup: setGroup,
-                  openLocal: (target) => openLocal(target),
+                  openLocal: (target, cluster) => openLocal(target, undefined, cluster),
                   pickLocal: () => setLocalOpen(true),
                   refreshLocal: () => void refreshLocal(),
                 }}
@@ -646,19 +643,6 @@ export function App() {
           close={() => setCommandsOpen(false)}
         />
       )}
-      {podtreeOpen && (
-        <PodTreeDialog
-          sessions={tabs}
-          locals={localCatalog.targets}
-          close={() => setPodtreeOpen(false)}
-          open={(launch, title) => {
-            if (launch.kind !== 'script') return;
-            void kubeTabs.start(launch, `PodTree · ${launch.context}`, title).connect(null);
-            setPodtreeOpen(false);
-            closeDrawer();
-          }}
-        />
-      )}
       {localOpen && (
         <Dialog
           title="로컬 터미널 열기"
@@ -710,7 +694,7 @@ export function App() {
       )}
       {tunnelsOpen && (
         <TunnelPanel
-          session={selected?.podtree || selected?.localTarget ? undefined : selected}
+          session={selected?.podTerminal || selected?.localTarget ? undefined : selected}
           sessions={tabs}
           profiles={snapshot.profiles}
           close={() => setTunnelsOpen(false)}

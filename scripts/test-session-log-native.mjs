@@ -13,8 +13,8 @@ import {
   showSidebarView,
 } from './native-workspace.mjs';
 const binary = process.env.DACHSTERM_TEST_BINARY ?? path.resolve('target/debug/dachsterm.exe');
-const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-phase63-67-'));
-const fixture = `dachsterm-podtree-${randomUUID()}`;
+const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-session-log-'));
+const fixture = `dachsterm-session-log-${randomUUID()}`;
 const docker = (args) => {
   const r = spawnSync('docker', args, { encoding: 'utf8', windowsHide: true, timeout: 60000 });
   if (r.status !== 0) throw Error('Fixture operation failed');
@@ -35,7 +35,7 @@ try {
     '--name',
     fixture,
     '--label',
-    'app.dachsterm.purpose=podtree-log-verification',
+    'app.dachsterm.purpose=session-log-verification',
     '-p',
     '127.0.0.1::22',
     '--tmpfs',
@@ -62,26 +62,6 @@ try {
   const fingerprint = docker(['exec', fixture, 'ssh-keygen', '-lf', '/run/probe/host.pub']).split(
     /\s+/,
   )[1];
-  const wsl = (command) => {
-    const r = spawnSync('wsl', ['-d', 'Ubuntu', '--', 'bash', '-lc', command], {
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 60000,
-    });
-    if (r.status !== 0) throw Error('WSL fixture failed');
-    return r.stdout.trim();
-  };
-  docker(['network', 'connect', 'kind', fixture]);
-  wsl(
-    `docker cp -L /usr/local/bin/kubectl ${fixture}:/usr/local/bin/kubectl && docker cp /tmp/dachsterm-podtree-check.config ${fixture}:/home/probe/fixture.config`,
-  );
-  docker([
-    'exec',
-    fixture,
-    'bash',
-    '-c',
-    'mkdir -p /home/probe/.kube; mv /home/probe/fixture.config /home/probe/.kube/config; kubectl --kubeconfig /home/probe/.kube/config config set-cluster kind-dachsterm-podtree-check --server=https://dachsterm-podtree-check-control-plane:6443 --tls-server-name=127.0.0.1 >/dev/null; chown -R probe:probe /home/probe/.kube; chmod 600 /home/probe/.kube/config',
-  ]);
   const server = net.createServer();
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
@@ -91,8 +71,6 @@ try {
     windowsHide: true,
     env: {
       ...process.env,
-      KUBECONFIG: '/tmp/dachsterm-podtree-check.config',
-      WSLENV: [process.env.WSLENV, 'KUBECONFIG'].filter(Boolean).join(':'),
       DACHSTERM_TEST_DATA_DIR: directory,
       DACHSTERM_TEST_CDP_PORT: String(port),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
@@ -190,7 +168,7 @@ try {
   stage = 'ssh-connect';
   await openNewConnectionForm(page);
   const form = page.getByRole('dialog');
-  await form.getByLabel('이름', { exact: true }).fill('로그 PodTree 검사');
+  await form.getByLabel('이름', { exact: true }).fill('세션 로그 검사');
   await form.getByLabel('호스트', { exact: true }).fill('127.0.0.1');
   await form.getByLabel('포트', { exact: true }).fill(sshPort);
   await form.getByLabel('사용자', { exact: true }).fill('probe');
@@ -199,7 +177,7 @@ try {
   await form.getByRole('button', { name: '저장 후 연결', exact: true }).click();
   await expect(page.locator('.trust-card code')).toHaveText(fingerprint);
   await page.getByRole('button', { name: '지문 확인 · 신뢰하고 연결', exact: true }).click();
-  const ssh = page.getByRole('region', { name: '로그 PodTree 검사 터미널', exact: true });
+  const ssh = page.getByRole('region', { name: '세션 로그 검사 터미널', exact: true });
   await expect(ssh.locator('.connection-message')).toContainText('연결됨');
   const sshId = await ssh.getAttribute('data-connection-id');
   await paste(ssh, 'stty -echo');
@@ -217,226 +195,8 @@ try {
   expect(text).not.toContain('MASK_FIXTURE');
   expect(text).not.toContain('\x1b');
   result.checks.push('Actual OpenSSH: output order, fragmented mask/ANSI, UTF-8, flush');
-  for (const location of [
-    { kind: 'ssh', id: sshId },
-    { kind: 'local', id: 'wsl:Ubuntu' },
-  ]) {
-    const context = location.kind === 'ssh' ? 'kind-dachsterm-podtree-check' : 'dachsterm-viewer';
-    stage = `podtree-${location.kind}-inspect`;
-    const inspection = await invoke('kube_terminal_inspect', {
-      location,
-      context,
-    });
-    expect(inspection.contexts).toContain('kind-dachsterm-podtree-check');
-    if (context === 'dachsterm-viewer') expect(inspection.warning).toBeTruthy();
-    else expect(inspection.namespaces).toContain('dachsterm-check');
-    stage = `podtree-${location.kind}-open`;
-    await page
-      .locator('summary')
-      .filter({ hasText: /^도구$/ })
-      .click();
-    await page.getByRole('button', { name: 'PodTree 열기', exact: true }).click();
-    dialog = page.getByRole('dialog', { name: 'PodTree 열기' });
-    await dialog.getByLabel('실행 위치').selectOption(`${location.kind}:${location.id}`);
-    await dialog.getByRole('button', { name: '의존성·context 확인', exact: true }).click();
-    await expect(dialog.getByLabel('context')).toBeVisible();
-    await dialog.getByLabel('context').selectOption(context);
-    await expect(dialog.getByLabel('context')).toBeEnabled();
-    await dialog.getByLabel('namespace (비우면 전체)').fill('dachsterm-check');
-    await dialog.getByRole('button', { name: '전용 탭 열기 · 조회', exact: true }).click();
-    const pod = page
-      .getByRole('region', { name: `PodTree · ${context} 터미널`, exact: true })
-      .last();
-    await expect(pod.locator('.connection-message')).toContainText('조회 모드');
-    const podId = await pod.getAttribute('data-connection-id');
-    await expect(pod.locator('.xterm-accessibility-tree')).toContainText('log-demo', {
-      timeout: 25000,
-    });
-    const message = await pod.locator('.connection-message').textContent();
-    const temporary = message.match(/임시 경로 (\/[^\s]+)/)?.[1];
-    expect(temporary).toBeTruthy();
-    const group = await invoke('broadcast_status');
-    expect(group.targets.map((t) => t.id)).not.toContain(podId);
-    await page.waitForTimeout(1800);
-    stage = `podtree-${location.kind}-read-only`;
-    await pod.locator('.xterm-helper-textarea').focus();
-    for (const key of ['s', 'P', 'T', 'N', 'Delete', 'R', 'X', 'V']) {
-      stage = `podtree-${location.kind}-readonly-${key}`;
-      await invoke('kube_terminal_input', { id: podId, data: key === 'Delete' ? '\u001b[3~' : key });
-
-      await expect(pod.locator('.xterm-accessibility-tree')).toContainText(/읽기 전용|read-only/);
-    }
-    stage = `podtree-${location.kind}-logs`;
-    await pod.locator('.xterm-helper-textarea').focus();
-    await invoke('kube_terminal_input', { id: podId, data: '\u001b[F' });
-    await expect(pod.locator('.xterm-accessibility-tree')).toContainText(
-      'dachsterm-check/log-demo',
-    );
-    await invoke('kube_terminal_input', { id: podId, data: '\r' });
-    await expect(pod.locator('.xterm-accessibility-tree')).toContainText('DACHSTERM_POD_LOG');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-    await page.keyboard.press('Escape');
-    stage = `podtree-${location.kind}-resize`;
-    await invoke('kube_terminal_resize', { id: podId, cols: 95, rows: 28 });
-    await page.screenshot({ path: `target/verification/podtree-${location.kind}.png` });
-    stage = `podtree-${location.kind}-close`;
-    await chooseTabMenu(page, '연결 종료', pod);
-    await expect(pod.locator('.connection-message')).toContainText('PodTree 종료', {
-      timeout: 10000,
-    });
-    if (location.kind === 'ssh')
-      await expect
-        .poll(
-          () =>
-            spawnSync('docker', ['exec', fixture, 'test', '!', '-e', temporary], {
-              windowsHide: true,
-            }).status,
-        )
-        .toBe(0);
-    else
-      await expect
-        .poll(
-          () =>
-            spawnSync('wsl', ['-d', 'Ubuntu', '--', 'test', '!', '-e', temporary], {
-              windowsHide: true,
-            }).status,
-        )
-        .toBe(0);
-    await page
-      .getByRole('button', { name: `PodTree · ${context} 탭 닫기`, exact: true })
-      .last()
-      .click();
-    result.checks.push(
-      `Actual Kubernetes via ${location.kind}: context/namespace/tree/logs, read-only guards, broadcast exclusion, resize, close/stage cleanup`,
-    );
-  }
-
-  async function extraPod(namespace, operational) {
-    await page
-      .locator('summary')
-      .filter({ hasText: /^도구$/ })
-      .click();
-    await page.getByRole('button', { name: 'PodTree 열기', exact: true }).click();
-    const d = page.getByRole('dialog', { name: 'PodTree 열기' });
-    await d.getByLabel('실행 위치').selectOption(`ssh:${sshId}`);
-    await d.getByRole('button', { name: '의존성·context 확인', exact: true }).click();
-    await expect(d.getByLabel('context')).toBeEnabled();
-    await d.getByLabel('namespace (비우면 전체)').fill(namespace);
-    if (operational) await d.getByLabel('운영 모드 사용', { exact: true }).check();
-    await d
-      .getByRole('button', { name: `전용 탭 열기 · ${operational ? '운영' : '조회'}`, exact: true })
-      .click();
-    const pane = page
-      .getByRole('region', { name: 'PodTree · kind-dachsterm-podtree-check 터미널', exact: true })
-      .last();
-    await expect(pane.locator('.connection-message')).toContainText('임시 경로');
-    const id = await pane.getAttribute('data-connection-id');
-    const temp = (await pane.locator('.connection-message').textContent()).match(
-      /임시 경로 (\/[^\s]+)/,
-    )[1];
-    return { pane, id, temp };
-  }
-  async function closeExtra({ pane, temp }) {
-    await chooseTabMenu(page, '연결 종료', pane);
-    await expect(pane.locator('.connection-message')).toContainText('PodTree 종료', {
-      timeout: 10000,
-    });
-    await expect
-      .poll(
-        () =>
-          spawnSync('docker', ['exec', fixture, 'test', '!', '-e', temp], { windowsHide: true })
-            .status,
-      )
-      .toBe(0);
-    await page
-      .getByRole('button', { name: 'PodTree · kind-dachsterm-podtree-check 탭 닫기', exact: true })
-      .last()
-      .click();
-  }
-  stage = 'podtree-empty';
-  const empty = await extraPod('dachsterm-empty', false);
-  await expect(empty.pane.locator('.xterm-accessibility-tree')).toContainText(/0 파드|파드 없음/, {
-    timeout: 25000,
-  });
-  await closeExtra(empty);
-  stage = 'podtree-operations';
-  const operation = await extraPod('dachsterm-check', true);
-  await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText('log-demo', {
-    timeout: 25000,
-  });
-  await page.waitForTimeout(1800);
-  await invoke('kube_terminal_input', { id: operation.id, data: '\u001b[F' });
-  await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
-    'dachsterm-check/log-demo',
-  );
-  stage = 'podtree-events';
-  await invoke('kube_terminal_input', { id: operation.id, data: 'e' });
-  await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
-    /Scheduled|Created|Started/,
-  );
-  await invoke('kube_terminal_input', { id: operation.id, data: '\r' });
-  await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
-    'ctx:kind-dachsterm-podtree-check',
-  );
-  stage = 'podtree-forward-confirm';
-  await invoke('kube_terminal_input', { id: operation.id, data: 'P' });
-  await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
-    'local port-forward:',
-  );
-  await invoke('kube_terminal_input', { id: operation.id, data: 'y' });
-  await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
-    /local:remote|로컬:원격/,
-  );
-  await invoke('kube_terminal_input', { id: operation.id, data: '43187:80\r' });
-  await expect(operation.pane.locator('.xterm-accessibility-tree')).toContainText(
-    'Forwarding from',
-  );
-  stage = 'podtree-forward-close';
-  await closeExtra(operation);
-  expect(
-    spawnSync('docker', ['exec', fixture, 'pgrep', '-f', 'kubectl.*port-forward'], {
-      windowsHide: true,
-    }).status,
-  ).toBe(1);
-  result.checks.push(
-    'Actual Kubernetes: empty namespace, events, operational target confirmation, port-forward stream terminated on tab close',
-  );
-  stage = 'podtree-missing-tool';
-  docker([
-    'exec',
-    fixture,
-    'mv',
-    '/usr/local/bin/kubectl',
-    '/usr/local/bin/kubectl.dachsterm-check',
-  ]);
-  try {
-    await expect(
-      invoke('kube_terminal_inspect', { location: { kind: 'ssh', id: sshId }, context: null }),
-    ).rejects.toBeTruthy();
-  } finally {
-    docker([
-      'exec',
-      fixture,
-      'mv',
-      '/usr/local/bin/kubectl.dachsterm-check',
-      '/usr/local/bin/kubectl',
-    ]);
-  }
-  result.checks.push('Actual SSH missing kubectl is reported; no automatic install');
-  stage = 'podtree-unsupported';
-  await expect(
-    invoke('kube_terminal_inspect', { location: { kind: 'local', id: 'powershell' }, context: null }),
-  ).rejects.toBeTruthy();
-  result.checks.push(
-    'PowerShell rejected as a Bash execution target; restricted RBAC context namespace listing denial surfaced',
-  );
   stage = 'ssh-bulk-rotation';
-  await page
-    .locator('.tab-strip')
-    .getByRole('tab')
-    .filter({ hasText: '로그 PodTree 검사' })
-    .click();
+  await page.locator('.tab-strip').getByRole('tab').filter({ hasText: '세션 로그 검사' }).click();
   await invoke('log_start', { id: sshId, options, masks: [] });
   await paste(
     ssh,
@@ -497,17 +257,8 @@ try {
   );
   await invoke('log_auto', { key: 'local:wsl:Ubuntu', options: null });
   result.checks.push('Actual WSL PTY: explicit auto-record, UTF-8, disconnect flush');
-  stage = 'podtree-dependent';
-  const dependent = await extraPod('dachsterm-check', false);
-  await expect(dependent.pane.locator('.xterm-accessibility-tree')).toContainText('log-demo', {
-    timeout: 25000,
-  });
   stage = 'ssh-detach-log';
-  await page
-    .locator('.tab-strip')
-    .getByRole('tab')
-    .filter({ hasText: '로그 PodTree 검사' })
-    .click();
+  await page.locator('.tab-strip').getByRole('tab').filter({ hasText: '세션 로그 검사' }).click();
   await invoke('log_start', { id: sshId, options, masks: [] });
   await paste(ssh, 'for i in $(seq 1 30); do printf "DETACH_%03d\\n" "$i"; sleep .1; done');
   await chooseTabMenu(page, '새 창으로 분리', ssh);
@@ -520,30 +271,6 @@ try {
     Array.from({ length: 30 }, (_, i) => `DETACH_${String(i + 1).padStart(3, '0')}`),
   );
   result.checks.push('Actual SSH window handoff: 30 ordered lines recorded exactly once');
-  stage = 'podtree-parent-close';
-  await invoke('disconnect', { id: sshId });
-  await page
-    .locator('.tab-strip')
-    .getByRole('tab')
-    .filter({ hasText: 'PodTree · kind-dachsterm-podtree-check' })
-    .click();
-  await expect(dependent.pane.locator('.connection-message')).toContainText(/종료|실패/, {
-    timeout: 10000,
-  });
-  await expect
-    .poll(
-      () =>
-        spawnSync('docker', ['exec', fixture, 'test', '!', '-e', dependent.temp], {
-          windowsHide: true,
-        }).status,
-    )
-    .toBe(0);
-  expect(
-    wsl('kubectl --kubeconfig /tmp/dachsterm-podtree-check.config config current-context'),
-  ).toBe('kind-dachsterm-podtree-check');
-  result.checks.push(
-    'Closing SSH parent terminates its PodTree and removes staging; global current-context unchanged',
-  );
   for (const p of browser
     .contexts()
     .flatMap((c) => c.pages())
@@ -645,15 +372,14 @@ try {
   result.normalExit = app.exitCode;
   expect(result.errors).toEqual([]);
   await mkdir('target/verification', { recursive: true });
-  await writeFile('target/verification/phase63-67-native.json', JSON.stringify(result, null, 2));
+  await writeFile('target/verification/session-log-native.json', JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
-} catch (error) {
-  if (stage.startsWith('podtree-')) console.error(String(error));
-  console.error(`Phase 6.3/6.7 failed at ${stage}`);
+} catch {
+  console.error(`Session log check failed at ${stage}`);
   process.exitCode = 1;
   if (page && !['ssh-connect', 'cp949-connect', 'fixture'].includes(stage)) {
     await mkdir('target/verification', { recursive: true });
-    await page.screenshot({ path: 'target/verification/phase63-67-failure.png' }).catch(() => {});
+    await page.screenshot({ path: 'target/verification/session-log-failure.png' }).catch(() => {});
     console.error(
       JSON.stringify(
         await page

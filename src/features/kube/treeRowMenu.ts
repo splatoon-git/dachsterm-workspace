@@ -33,6 +33,7 @@ export type RowMenuContext = {
   ask: (plan: ActionPlan) => void;
   watchLogs: (scope: BoardScope) => void;
   searchLogs: (scope: SearchScope) => void;
+  copyTree: () => void;
 };
 
 /** What a row other than a pod offers. Pods have the longer menu in `KubeTreeScreen`. */
@@ -40,9 +41,10 @@ export function treeRowMenu(
   row: TreeRow,
   context: RowMenuContext,
 ): { label: string; items: MenuItem[] } | null {
-  const { nodes, blocked, ask, watchLogs, searchLogs } = context;
+  const { nodes, blocked, ask, watchLogs, searchLogs, copyTree } = context;
+  const copy = { label: '보이는 트리 복사', run: copyTree };
   if (row.type === 'node')
-    return { label: '노드 메뉴', items: [actionItem(planNode(row.view.node), blocked, ask)] };
+    return { label: '노드 메뉴', items: [copy, actionItem(planNode(row.view.node), blocked, ask)] };
   if (row.type !== 'group') return null;
 
   const { group } = row;
@@ -52,9 +54,10 @@ export function treeRowMenu(
     ...(watch ? [{ label: '실시간 로그 보기', run: () => watchLogs(watch) }] : []),
     ...(search ? [{ label: '로그 검색', run: () => searchLogs(search) }] : []),
   ];
+  items.push({ ...copy, separated: items.length > 0 });
   const rollout = rolloutOfGroup(group.id);
   if (rollout) items.push(actionItem(planRollout(rollout, group.count), blocked, ask));
   const node = nodes?.find((item) => item.name === nodeNameOfGroup(group.id));
   if (node) items.push(actionItem(planNode(node), blocked, ask));
-  return items.length ? { label: '그룹 메뉴', items } : null;
+  return { label: '그룹 메뉴', items };
 }

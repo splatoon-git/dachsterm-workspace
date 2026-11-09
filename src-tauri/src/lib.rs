@@ -36,7 +36,6 @@ mod login_path;
 mod maintenance;
 pub mod monitoring;
 pub mod net_tools;
-pub mod podtree;
 mod prompt_files;
 mod remote_exec;
 mod remote_ports;
@@ -72,7 +71,7 @@ use tauri::Manager;
 pub struct AppState {
     pub instance_lock: std::fs::File,
     pub locals: Arc<local::Locals>,
-    pub podtrees: Arc<podtree::PodTrees>,
+    pub kube_terminals: Arc<kube::terminal::Terminals>,
     pub file_clipboard: std::sync::Mutex<Option<file_ops::Clipboard>>,
     pub broadcast: broadcast::Broadcast,
     pub vault: Arc<vault::Vault>,
@@ -172,7 +171,7 @@ pub fn run() {
             app.manage(AppState {
                 instance_lock,
                 locals: Arc::default(),
-                podtrees: Arc::default(),
+                kube_terminals: Arc::default(),
                 file_clipboard: Default::default(),
                 broadcast: Default::default(),
                 vault,
@@ -202,12 +201,11 @@ pub fn run() {
             maintenance::recovery_create,
             maintenance::recovery_restore,
             maintenance::diagnostics_export,
-            podtree::kube_terminal_inspect,
-            podtree::kube_terminal_open,
-            podtree::kube_terminal_input,
-            podtree::kube_terminal_resize,
-            podtree::kube_terminal_ack,
-            podtree::kube_terminal_close,
+            kube::terminal::kube_terminal_open,
+            kube::terminal::kube_terminal_input,
+            kube::terminal::kube_terminal_resize,
+            kube::terminal::kube_terminal_ack,
+            kube::terminal::kube_terminal_close,
             local::local_targets,
             local::local_open,
             local::local_input,
@@ -387,15 +385,15 @@ pub fn run() {
             let state = app.state::<AppState>();
             if !state.closing.swap(true, Ordering::SeqCst) {
                 api.prevent_exit();
-                state.podtrees.shutdown();
+                state.kube_terminals.shutdown();
                 state.locals.shutdown();
                 state.connections.shutdown();
                 let connections = state.connections.clone();
-                let podtrees = state.podtrees.clone();
+                let kube_terminals = state.kube_terminals.clone();
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
                     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-                        while !connections.entries.lock().unwrap().is_empty() || !podtrees.is_empty() {
+                        while !connections.entries.lock().unwrap().is_empty() || !kube_terminals.is_empty() {
                             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
                         }
                     })

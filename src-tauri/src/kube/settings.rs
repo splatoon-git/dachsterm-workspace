@@ -36,6 +36,14 @@ impl KubeSettings {
         check_kubectl(&self.kubectl)?;
         check_kubeconfig(&self.kubeconfig)
     }
+
+    /// A local cluster's kubectl runs on this computer, with no shell in the way.
+    pub fn validate_local(&self) -> Result<()> {
+        check_context(&self.context)?;
+        check_namespace(&self.namespace)?;
+        check_local_kubectl(&self.kubectl)?;
+        check_local_kubeconfig(&self.kubeconfig)
+    }
 }
 
 pub const MAX_NAME: usize = 512;
@@ -141,9 +149,73 @@ pub fn check_kubeconfig(path: &str) -> Result<()> {
     Ok(())
 }
 
+/// An absolute path to something named kubectl: the path decides what runs on this computer, and
+/// it comes from the screen with every call. Spaces are fine, because no shell reads it.
+pub fn check_local_kubectl(path: &str) -> Result<()> {
+    let bad = || "kubectl 실행 파일의 절대 경로를 넣으세요.".to_string();
+    let file = std::path::Path::new(path);
+    if path.len() > 4096 || path.chars().any(char::is_control) || !file.is_absolute() {
+        return Err(bad());
+    }
+    let name = file
+        .file_name()
+        .map(|name| name.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if name.starts_with("kubectl") {
+        Ok(())
+    } else {
+        Err(bad())
+    }
+}
+
+pub const LOCAL_CONFIG_SEPARATOR: char = if cfg!(windows) { ';' } else { ':' };
+
+/// Empty, or absolute paths joined the way this computer's `KUBECONFIG` joins them.
+pub fn check_local_kubeconfig(paths: &str) -> Result<()> {
+    if paths.len() > 4096
+        || paths.chars().any(char::is_control)
+        || !paths
+            .split(LOCAL_CONFIG_SEPARATOR)
+            .all(|entry| paths.is_empty() || std::path::Path::new(entry).is_absolute())
+    {
+        return Err("kubeconfig는 이 컴퓨터의 절대 경로로 넣으세요.".into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_local_kubectl_is_an_absolute_path_to_kubectl() {
+        let good = if cfg!(windows) {
+            vec![r"C:\Program Files\Docker\kubectl.exe", r"C:\k\kubectl.exe"]
+        } else {
+            vec![
+                "/usr/local/bin/kubectl",
+                "/Applications/Rancher Desktop.app/bin/kubectl",
+            ]
+        };
+        for path in good {
+            assert!(check_local_kubectl(path).is_ok(), "{path}");
+        }
+        for path in ["kubectl", "bin/kubectl", "/usr/bin/python3", "/k\n", ""] {
+            assert!(check_local_kubectl(path).is_err(), "{path:?}");
+        }
+    }
+
+    #[test]
+    fn a_local_kubeconfig_is_empty_or_absolute() {
+        assert!(check_local_kubeconfig("").is_ok());
+        assert!(check_local_kubeconfig("relative").is_err());
+        if cfg!(windows) {
+            assert!(check_local_kubeconfig(r"C:\config;D:").is_ok());
+        } else {
+            assert!(check_local_kubeconfig("/a b/c:/d").is_ok());
+            assert!(check_local_kubeconfig("/a:relative").is_err());
+        }
+    }
 
     #[test]
     fn kubectl_takes_a_path_or_two_plain_words() {

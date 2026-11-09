@@ -11,7 +11,7 @@ import {
   type ShellLookup,
 } from '../features/kube/podShell';
 import type { Snapshot } from '../features/kube/snapshotTypes';
-import { TerminalSession, type KubeLaunch } from '../features/terminal/session';
+import { TerminalSession } from '../features/terminal/session';
 import type { ThemeDefinition } from '../themes/contract';
 import type { Workspace } from './useWorkspaceLayout';
 import { tabKey, type TabRef } from './workspaceLayout';
@@ -55,7 +55,7 @@ export function useKubeTabs({
       if (!tabs.some((tab) => tab.tabId === tabId)) shells.current.delete(tabId);
   });
 
-  function start(launch: KubeLaunch, name: string, host: string) {
+  function start(launch: PodTerminalLaunch, name: string, host: string) {
     const profile = { ...blankProfile(), name, host };
     const session = new TerminalSession(profile, theme, () => {}, undefined, launch);
     setTabs((previous) => [...previous, session]);
@@ -67,9 +67,9 @@ export function useKubeTabs({
   function backToTree(session: TerminalSession, shell: ShellTab) {
     const { workspace: now, closeTab: close } = latest.current;
     const showing = now.focusedGroup.active === tabKey(refOf(session));
-    const launch = session.podtree;
+    const launch = session.podTerminal;
     close(session);
-    if (!showing || !launch || launch.kind === 'script') return;
+    if (!showing || !launch) return;
     if (!latest.current.tabs.includes(shell.parent)) return;
     now.open(refOf(shell.parent));
     shell.parent.view.set({
@@ -100,7 +100,7 @@ export function useKubeTabs({
   }
 
   async function settle(session: TerminalSession, shell: ShellTab, status: 'closed' | 'error') {
-    const launch = session.podtree;
+    const launch = session.podTerminal;
     if (!launch || launch.kind !== 'podShell') return;
     const ranMs = shell.connectedAt ? Date.now() - shell.connectedAt : 0;
     const detail = await askPod(launch);
@@ -173,8 +173,8 @@ export function useKubeTabs({
 
   /** Never runs anything in the new shell: `reconnect` only says so on screen. */
   async function reconnect(session: TerminalSession) {
-    const launch = session.podtree;
-    if (!launch || launch.kind === 'script') return;
+    const launch = session.podTerminal;
+    if (!launch) return;
     const shell = shells.current.get(session.tabId);
     if (!shell || launch.kind !== 'podShell') {
       void session.reconnect(null, session.profile);
@@ -196,7 +196,7 @@ export function useKubeTabs({
         target.overview?.containers.find((c) => c.name === launch.container)?.name ??
         target.overview?.containers[0]?.name ??
         launch.container;
-      session.podtree = { ...here, pod: target.pod, container };
+      session.podTerminal = { ...here, pod: target.pod, container };
       shell.overview = target.overview;
       shell.container = container;
       shell.connectedAt = 0;

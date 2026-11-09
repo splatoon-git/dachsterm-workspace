@@ -26,7 +26,7 @@ export function usePromptAttachments(
   useEffect(() => {
     visible.current = active;
   }, [active]);
-  const attachable = !session.podtree && session.profile.protocol === 'ssh';
+  const attachable = !session.podTerminal && session.profile.protocol === 'ssh';
 
   /** The tab or connection may have changed during the upload. Then the path is only reported. */
   const type = useCallback(

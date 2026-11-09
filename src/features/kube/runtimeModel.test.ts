@@ -4,11 +4,15 @@ import {
   formatAgeSeconds,
   formatMetric,
   groupProcesses,
+  isNearLimit,
   metricRows,
   parsePort,
+  percentOf,
+  processStateLabel,
+  runtimeGrowth,
   shownMetricRows,
 } from './runtimeModel';
-import type { ProbeProcess } from './runtimeTypes';
+import type { ProbeProcess, Runtime } from './runtimeTypes';
 
 const process = (over: Partial<ProbeProcess>): ProbeProcess => ({
   pid: 1,
@@ -34,14 +38,76 @@ describe('process groups', () => {
       ['nginx: worker', 2],
       ['nginx: master', 1],
     ]);
-    expect(groups[0]).toMatchObject({ threads: 8, fds: 30, fdLimit: 512, oldestSeconds: 50 });
+    expect(groups[0]).toMatchObject({
+      threads: 8,
+      fds: 30,
+      fullest: { fds: 20, limit: 512 },
+      oldestSeconds: 50,
+    });
   });
 
   it('keeps an unreadable count apart from zero', () => {
     const [group] = groupProcesses([process({ fds: null, fdLimit: null, ageSeconds: null })]);
-    expect(group).toMatchObject({ fds: null, fdLimit: null, oldestSeconds: null });
+    expect(group).toMatchObject({ fds: null, fullest: null, oldestSeconds: null });
     const [mixed] = groupProcesses([process({ fds: null }), process({ pid: 2, fds: 3 })]);
     expect(mixed.fds).toBe(3);
+  });
+});
+
+describe('runtime warnings', () => {
+  const runtime = (closeWait: number, overflows: number | null): Runtime => ({
+    processes: [],
+    truncated: false,
+    tcp: {
+      established: 0,
+      synSent: 0,
+      synRecv: 0,
+      finWait1: 0,
+      finWait2: 0,
+      timeWait: 0,
+      close: 0,
+      closeWait,
+      lastAck: 0,
+      listen: 0,
+      closing: 0,
+    },
+    listen: [],
+    counters: { listenOverflows: overflows, listenDrops: 0, retransmitted: 0 },
+  });
+
+  it('judges descriptors per process, so a large pool is not over its limit by adding up', () => {
+    const [group] = groupProcesses([
+      process({ pid: 1, fds: 600, fdLimit: 1024 }),
+      process({ pid: 2, fds: 700, fdLimit: 1024 }),
+    ]);
+    expect(group.fds).toBe(1300);
+    expect(group.fullest).toEqual({ fds: 700, limit: 1024 });
+    expect(isNearLimit(700, 1024)).toBe(false);
+    expect(percentOf(700, 1024)).toBe('68%');
+  });
+
+  it('calls a limit near from four fifths and never for a missing limit', () => {
+    expect(isNearLimit(79, 100)).toBe(false);
+    expect(isNearLimit(80, 100)).toBe(true);
+    expect(isNearLimit(5, 0)).toBe(false);
+  });
+
+  it('counts only what rose since the last collection', () => {
+    expect(runtimeGrowth(runtime(9, 12), runtime(4, 10))).toMatchObject({
+      closeWait: 5,
+      listenOverflows: 2,
+    });
+    expect(runtimeGrowth(runtime(9, 12), null).closeWait).toBe(0);
+    expect(runtimeGrowth(runtime(1, 0), runtime(4, 10))).toMatchObject({
+      closeWait: 0,
+      listenOverflows: 0,
+    });
+    expect(runtimeGrowth(runtime(1, null), runtime(1, 10)).listenOverflows).toBe(0);
+  });
+
+  it('names the process states and keeps a letter it does not know', () => {
+    expect(processStateLabel('Z')).toBe('좀비');
+    expect(processStateLabel('X')).toBe('X');
   });
 });
 

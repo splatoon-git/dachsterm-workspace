@@ -166,6 +166,8 @@ pub async fn run_refusable(
 /// What a streamed run leaves once stdout has gone to the caller.
 pub struct Streamed {
     pub stderr: Vec<u8>,
+    /// `None` when the caller stopped it. A pipeline's status is its last command's.
+    pub exit: Option<u32>,
 }
 
 /// Like `run_refusable`, for output too long to hold or wanted as it arrives. `on_stdout` gets each
@@ -181,6 +183,7 @@ pub async fn stream_refusable(
         let (mut open, marker) = start(handle, script).await?;
         let channel = open.0.as_mut().unwrap();
         let (mut before, mut stderr) = (Some(Vec::new()), Vec::new());
+        let mut exit = None;
         while let Some(message) = channel.wait().await {
             match message {
                 ChannelMsg::Data { data } => {
@@ -202,7 +205,7 @@ pub async fn stream_refusable(
                         }
                     };
                     if on_stdout(&piece).is_break() {
-                        return Ok(Streamed { stderr });
+                        return Ok(Streamed { stderr, exit: None });
                     }
                 }
                 ChannelMsg::ExtendedData { data, .. } => {
@@ -211,6 +214,7 @@ pub async fn stream_refusable(
                         return Err(Refusable::Failure(Failure::TooLarge));
                     }
                 }
+                ChannelMsg::ExitStatus { exit_status } => exit = Some(exit_status),
                 ChannelMsg::Failure => return Err(other("서버가 원격 명령을 거부했습니다.")),
                 _ => {}
             }
@@ -221,7 +225,7 @@ pub async fn stream_refusable(
         {
             return Err(other("이 서버에서는 원격 명령을 실행할 수 없습니다."));
         }
-        Ok(Streamed { stderr })
+        Ok(Streamed { stderr, exit })
     };
     tokio::time::timeout(limits.timeout, work)
         .await

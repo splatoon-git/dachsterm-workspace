@@ -53,9 +53,9 @@ test('a snippet goes once to each chosen terminal and never to an excluded one',
   await page.goto('/tests/ui/fixtures/assistant.html');
   const dialog = page.getByRole('dialog', { name: '명령', exact: true });
   const targets = dialog.getByRole('region', { name: '보낼 터미널' });
-  // The active terminal starts chosen; PodTree is never offered.
+  // The active terminal starts chosen; a pod tab is never offered.
   await expect(targets.getByRole('checkbox', { name: /테스트 SSH/ })).toBeChecked();
-  await expect(targets.getByText('PodTree', { exact: true })).toHaveCount(0);
+  await expect(targets.getByText('파드 탭', { exact: true })).toHaveCount(0);
   await targets.getByRole('checkbox', { name: /테스트 SSH/ }).uncheck();
   await expect(dialog.getByRole('button', { name: '실행', exact: true })).toBeDisabled();
   await targets.getByRole('checkbox', { name: /테스트 SSH/ }).check();

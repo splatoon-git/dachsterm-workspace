@@ -73,9 +73,53 @@ impl Keywords {
     }
 }
 
+/// A PTY cannot run grep on Windows, so a local followed log is filtered here, a line at a time.
+#[derive(Debug)]
+pub struct LineFilter {
+    keywords: Keywords,
+    pending: Vec<u8>,
+}
+/// A line longer than this is dropped rather than held forever.
+const MAX_PENDING: usize = 1024 * 1024;
+impl LineFilter {
+    pub fn new(keywords: Keywords) -> Self {
+        Self {
+            keywords,
+            pending: Vec::new(),
+        }
+    }
+
+    /// The whole lines of `piece` that match, with their line endings as they came.
+    pub fn push(&mut self, piece: &[u8]) -> Vec<u8> {
+        self.pending.extend_from_slice(piece);
+        let Some(last) = self.pending.iter().rposition(|byte| *byte == b'\n') else {
+            if self.pending.len() > MAX_PENDING {
+                self.pending.clear();
+            }
+            return Vec::new();
+        };
+        let rest = self.pending.split_off(last + 1);
+        let complete = std::mem::replace(&mut self.pending, rest);
+        complete
+            .split_inclusive(|byte| *byte == b'\n')
+            .filter(|line| self.keywords.matches(&String::from_utf8_lossy(line)))
+            .flatten()
+            .copied()
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_line_filter_keeps_only_whole_matching_lines() {
+        let mut filter = LineFilter::new(Keywords::parse("error !debug").unwrap());
+        assert_eq!(filter.push(b"Error one\r\nfine\r\nerr"), b"Error one\r\n");
+        assert_eq!(filter.push(b"or two\r\nerror debug\r\n"), b"error two\r\n");
+        assert_eq!(filter.push(b"no newline yet"), b"");
+    }
 
     #[test]
     fn spaces_are_and_and_a_bang_excludes() {

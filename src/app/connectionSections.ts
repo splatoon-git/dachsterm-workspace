@@ -1,5 +1,32 @@
 import { matchesSession } from '../features/sessions/model';
-import type { Group, Profile } from '../lib/ipc';
+import { blankProfile, type Group, type Profile } from '../lib/ipc';
+
+/**
+ * A local cluster is one of this computer's shells showing the Kubernetes workspace, the way an
+ * SSH session does. It is not a saved session: `kube_save` keeps its one choice in the settings.
+ */
+export const LOCAL_CLUSTER = {
+  id: 'local-cluster',
+  name: '로컬 클러스터',
+  workspace: 'kubernetes',
+} as const;
+export type LocalClusterProfile = typeof LOCAL_CLUSTER;
+
+/** What a new tab on this computer's shell starts from. */
+export const localTabProfile = (
+  target: { id: string; name: string },
+  cluster?: LocalClusterProfile,
+): Profile => ({
+  ...blankProfile(),
+  id: target.id,
+  name: target.name,
+  host: 'localhost',
+  ...cluster,
+});
+
+/** Splitting a local cluster's tab opens another of the same. */
+export const localClusterOf = (profile: { workspace?: Profile['workspace'] }) =>
+  profile.workspace === 'kubernetes' ? LOCAL_CLUSTER : undefined;
 
 /** A group as a folder: its own subgroups and the connections saved directly in it. */
 export type TreeFolder = { group: Group; folders: TreeFolder[]; profiles: Profile[] };

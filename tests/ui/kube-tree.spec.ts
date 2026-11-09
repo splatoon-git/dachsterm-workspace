@@ -172,6 +172,29 @@ test('a group row still folds on Enter and only pods have the menu', async ({ pa
   await page.keyboard.press('Escape');
 });
 
+test('copies the rows the tree is showing, with its cluster and filter', async ({ page }) => {
+  await open(page);
+  await page.getByLabel('파드 필터').fill('api');
+  await expect(row(page, 'crash-1')).toHaveCount(0);
+  await row(page, 'api-1').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '보이는 트리 복사' }).click();
+  await expect(page.getByRole('alert')).toContainText('보이는 트리를 복사했습니다.');
+  const copied = await page.evaluate(
+    () => window.__kube.calls.find((c) => c.command === 'clipboard_write_text')?.args.text,
+  );
+  expect(copied).toContain('필터 api');
+  expect(copied).toContain('api-1');
+  expect(copied).not.toContain('crash-1');
+
+  await row(page, 'Deployment/api').click({ button: 'right' });
+  await expect(
+    page
+      .getByRole('menu', { name: '그룹 메뉴' })
+      .getByRole('menuitem', { name: '보이는 트리 복사' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+});
+
 test('the log panel filters by keyword and says when there is no previous instance', async ({
   page,
 }) => {

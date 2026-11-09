@@ -1,6 +1,7 @@
 //! KV.6 against a real OpenSSH server and a real kind cluster: the app's own connection, profile
 //! re-read and command lines, with the cluster's state read separately through `docker exec`.
 //! Never print the fixture's passwords or the limited account's token.
+use super::home::Home;
 use super::{
     action::{self, Action, RolloutKind, permit},
     runner::Runner,
@@ -278,14 +279,20 @@ async fn real_cluster_actions_reach_the_cluster_only_in_operate_mode() {
         namespace: NAMESPACE.into(),
         pod: before[0].clone(),
     };
-    let refused = permit(&store, &session, &context, &delete_web).unwrap_err();
+    let refused = permit(
+        &store,
+        &Home::Profile(session.clone()),
+        &context,
+        &delete_web,
+    )
+    .unwrap_err();
     assert!(refused.contains("조회 모드"), "{refused}");
     assert_eq!(cluster.pods("app=web"), before);
     println!("PASS read-only mode refuses from the stored profile; pods unchanged");
 
-    action::set_operate_mode(&store, &session, true).unwrap();
+    action::set_operate_mode(&store, &Home::Profile(session.clone()), true).unwrap();
     let run = |action: Action| {
-        let kube = permit(&store, &session, &context, &action).unwrap();
+        let kube = permit(&store, &Home::Profile(session.clone()), &context, &action).unwrap();
         let runner = &runner;
         async move { action::run(runner, &kube, &action).await }
     };
@@ -453,7 +460,13 @@ async fn real_cluster_actions_reach_the_cluster_only_in_operate_mode() {
         namespace: NAMESPACE.into(),
         pod: survivor.clone(),
     };
-    let kube = permit(&store, &limited, &context, &forbidden).unwrap();
+    let kube = permit(
+        &store,
+        &Home::Profile(limited.clone()),
+        &context,
+        &forbidden,
+    )
+    .unwrap();
     let error = action::run(&runner, &kube, &forbidden).await.unwrap_err();
     assert!(
         error.contains("forbidden") && error.contains("kv6-limited"),

@@ -25,7 +25,7 @@ export function SidebarFiles({
   });
   const session = props.session;
   const remote =
-    !!session && !session.localTarget && !session.podtree && session.profile.protocol === 'ssh';
+    !!session && !session.localTarget && !session.podTerminal && session.profile.protocol === 'ssh';
   const decorations = useMemo<FileDecorations | null>(
     () =>
       remote

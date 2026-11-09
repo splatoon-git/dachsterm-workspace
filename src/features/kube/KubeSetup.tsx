@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { setupGuide, setupStep, type DetectRequest, type Detection } from './kubeModel';
+import { useLocalCluster } from './localCluster';
 
 /** The first connection's detection, permission guidance and context choice, inside the tab. */
 export function KubeSetup({
@@ -22,8 +23,9 @@ export function KubeSetup({
   start: (context: string, namespace: string) => void;
   copy: (command: string) => void;
 }) {
-  const step = setupStep(detection);
-  const guide = setupGuide(detection.state);
+  const local = useLocalCluster();
+  const step = setupStep(detection, local);
+  const guide = setupGuide(detection.state, local);
   return (
     <div className="kube-setup">
       <div className="kube-setup-card">
@@ -159,6 +161,7 @@ function ManualForm({
   busy: boolean;
   recheck: (request: DetectRequest) => void;
 }) {
+  const local = useLocalCluster();
   const [kubectl, setKubectl] = useState(detection.kubectl);
   const [kubeconfig, setKubeconfig] = useState(detection.kubeconfig);
   return (
@@ -176,7 +179,9 @@ function ManualForm({
           required
           value={kubectl}
           maxLength={4096}
-          placeholder="/usr/local/bin/kubectl 또는 microk8s kubectl"
+          placeholder={
+            local ? 'kubectl 실행 파일의 전체 경로' : '/usr/local/bin/kubectl 또는 microk8s kubectl'
+          }
           onChange={(event) => setKubectl(event.target.value)}
         />
       </label>

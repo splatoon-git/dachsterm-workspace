@@ -155,7 +155,6 @@
     "allow-log-action",
     "allow-log-auto",
     "allow-log-auto-get",
-    "allow-kube-terminal-inspect",
     "allow-kube-terminal-open",
     "allow-kube-terminal-input",
     "allow-kube-terminal-resize",

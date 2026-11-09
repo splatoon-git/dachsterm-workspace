@@ -9,6 +9,10 @@ pub enum KubeState {
     ConfigMissing,
     ConfigUnreadable,
     AuthFailed,
+    /// The kubeconfig's `exec` credential plugin would not run, usually because it is not on PATH.
+    AuthPluginFailed {
+        message: String,
+    },
     Forbidden,
     ContextMissing,
     Unreachable,
@@ -27,6 +31,7 @@ pub enum KubeState {
 }
 
 const MAX_MESSAGE: usize = 300;
+const CREDENTIALS_FAILED: &str = "getting credentials: ";
 
 /// `E1108 12:02:11.123456 ...`: klog repeats these before the one line that means anything.
 fn is_klog(line: &str) -> bool {
@@ -62,6 +67,14 @@ pub fn classify(exit: Option<u32>, stderr: &[u8]) -> KubeState {
         return KubeState::KubectlMissing;
     }
     let text = String::from_utf8_lossy(stderr);
+    // client-go adds an install hint after this line, so it is not the last one, and klog has
+    // said the same thing earlier with a URL in front. Measured with kubectl 1.36 (KV.11).
+    if let Some(at) = text.rfind(CREDENTIALS_FAILED) {
+        let reason = text[at..].lines().next().unwrap_or_default();
+        return KubeState::AuthPluginFailed {
+            message: reason.chars().take(MAX_MESSAGE).collect(),
+        };
+    }
     let line = last_line(&text);
     let has = |needle: &str| line.contains(needle);
     if has("You must be logged in to the server") {
@@ -192,6 +205,25 @@ fn unknown_text(line: &str, exit: Option<u32>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_exec_plugin_that_will_not_run_is_named_for_what_it_is() {
+        let stderr = concat!(
+            "E1109 13:57:29.014232   65129 memcache.go:265] \"Unhandled Error\" err=<\n",
+            "\tcouldn't get current server API group list: Get \"https://127.0.0.1:1/api\": ",
+            "getting credentials: exec: executable aws not found\n >\n",
+            "Unable to connect to the server: getting credentials: exec: executable aws not found\n",
+            "\nIt looks like you are trying to use a client-go credential plugin that is not installed.\n",
+            "\nTo learn more about this feature, consult the documentation available at:\n",
+            "      https://kubernetes.io/docs/reference/access-authn-authz/authentication/\n",
+        );
+        assert_eq!(
+            classify(Some(1), stderr.as_bytes()),
+            KubeState::AuthPluginFailed {
+                message: "getting credentials: exec: executable aws not found".into()
+            }
+        );
+    }
 
     /// Every line here is what real kubectl printed in KV.0 (docs/verification/kubernetes-workspace.md).
     #[test]

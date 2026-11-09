@@ -28,6 +28,7 @@
     "test:network-base": "node scripts/test-network-base-native.mjs",
     "test:port-tools": "node scripts/test-port-tools-native.mjs",
     "test:service-tools": "node scripts/test-port-tools-native.mjs --service-only",
+    "test:session-log": "node scripts/test-session-log-native.mjs",
     "test:ui": "playwright test",
     "test:editor-trial": "node scripts/test-editor-native.mjs",
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",

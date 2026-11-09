@@ -16,7 +16,14 @@ import { Icon, type IconName } from '../components/Icon';
 import type { LocalCatalog, LocalTarget } from '../features/terminal/sessionTypes';
 import { desktop, type Group, type Profile } from '../lib/ipc';
 import { modKey } from '../lib/platform';
-import { connectionSections, readFolded, writeFolded, type TreeFolder } from './connectionSections';
+import {
+  connectionSections,
+  LOCAL_CLUSTER,
+  readFolded,
+  writeFolded,
+  type LocalClusterProfile,
+  type TreeFolder,
+} from './connectionSections';
 import './connectionTree.css';
 
 export type TreeActions = {
@@ -31,7 +38,7 @@ export type TreeActions = {
   newConnection: (groupId?: string) => void;
   newGroup: (parentId?: string) => void;
   editGroup: (group: Group) => void;
-  openLocal: (target: LocalTarget) => void;
+  openLocal: (target: LocalTarget, cluster?: LocalClusterProfile) => void;
   /** The dialog that lists every local shell with its description. */
   pickLocal: () => void;
   refreshLocal: () => void;
@@ -220,8 +227,21 @@ export function ConnectionTree({
     </div>
   );
 
+  const clusterShell = local.targets[0];
+  const showCluster = clusterShell && LOCAL_CLUSTER.name.toLocaleLowerCase().includes(term);
   const localRows = (
     <div className="local-targets">
+      {showCluster && (
+        <button
+          className="nav-item local-target"
+          style={indent(1)}
+          onClick={() => actions.openLocal(clusterShell, LOCAL_CLUSTER)}
+          title="이 컴퓨터의 kubeconfig로 클러스터 열기"
+        >
+          <Icon name="kube" size={14} />
+          <span>{LOCAL_CLUSTER.name}</span>
+        </button>
+      )}
       {locals.map((target) => (
         <button
           key={target.id}
@@ -254,9 +274,9 @@ export function ConnectionTree({
     <div className="conn-tree">
       {searching ? (
         <section className="tree-section" aria-label="검색 결과">
-          {locals.length > 0 && localRows}
+          {(locals.length > 0 || showCluster) && localRows}
           {sections.matches.map((p) => row(p, 1, 'match'))}
-          {!locals.length && !sections.matches.length && (
+          {!locals.length && !showCluster && !sections.matches.length && (
             <p className="tree-empty">검색 결과가 없습니다.</p>
           )}
         </section>

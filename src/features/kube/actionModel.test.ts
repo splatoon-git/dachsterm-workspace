@@ -104,6 +104,7 @@ describe('blocked writes', () => {
     ask: vi.fn(),
     watchLogs: vi.fn(),
     searchLogs: vi.fn(),
+    copyTree: vi.fn(),
   });
   const group = (id: string) => ({ type: 'group', group: { id, count: 2 } }) as unknown as TreeRow;
 
@@ -124,7 +125,11 @@ describe('blocked writes', () => {
 
   it('uses the node list, so a node group offers what its state allows', () => {
     const menu = treeRowMenu(group(nodeGroupId('n1')), context(''));
-    expect(menu?.items.map((entry) => entry.label)).toEqual(['실시간 로그 보기', 'Uncordon']);
+    expect(menu?.items.map((entry) => entry.label)).toEqual([
+      '실시간 로그 보기',
+      '보이는 트리 복사',
+      'Uncordon',
+    ]);
   });
 
   it('gives a node row its own menu, and the section row none', () => {
@@ -132,7 +137,7 @@ describe('blocked writes', () => {
       type: 'node',
       view: { node: { name: 'n1', unschedulable: false } },
     } as unknown as TreeRow;
-    expect(treeRowMenu(node, context(''))?.items[0].label).toBe('Cordon');
+    expect(treeRowMenu(node, context(''))?.items.map((item) => item.label)).toContain('Cordon');
     expect(treeRowMenu({ type: 'nodes' } as unknown as TreeRow, context(''))).toBeNull();
   });
 });

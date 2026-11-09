@@ -1,5 +1,7 @@
 //! Finds kubectl and a kubeconfig once, then checks them. Nothing here reads a kubeconfig's
 //! contents, and every check runs as the account that logged in.
+mod local;
+
 use super::{
     runner::{Failed, Kubectl, Runner},
     settings::{KubeSettings, check_context, check_kubectl, check_namespace},
@@ -134,6 +136,8 @@ struct Search {
     primary: Vec<String>,
     known: Vec<String>,
     scanning: bool,
+    /// What joins several files in `KUBECONFIG` where kubectl will run.
+    separator: char,
 }
 impl Search {
     fn paths(&self) -> Vec<String> {
@@ -167,7 +171,7 @@ fn choose(search: &Search, text: &str) -> Choice {
     if !readable.is_empty() {
         return Choice {
             state: KubeState::Ready,
-            kubeconfig: readable.join(":"),
+            kubeconfig: readable.join(&search.separator.to_string()),
         };
     }
     let fallback = if search.scanning {
@@ -275,6 +279,9 @@ struct Located {
 }
 
 async fn locate(runner: &Runner<'_>, source: &Source) -> Result<Located, KubeState> {
+    if runner.is_local() {
+        return Ok(local::locate(source));
+    }
     let text = lines(runner, REPORT)
         .await?
         .ok_or_else(|| KubeState::Unknown {
@@ -288,6 +295,7 @@ async fn locate(runner: &Runner<'_>, source: &Source) -> Result<Located, KubeSta
             primary: split_config(kubeconfig),
             known: known.clone(),
             scanning: false,
+            separator: ':',
         },
     };
     match source {
@@ -322,6 +330,7 @@ async fn locate(runner: &Runner<'_>, source: &Source) -> Result<Located, KubeSta
                     primary: split_config(&env),
                     known,
                     scanning: true,
+                    separator: ':',
                 },
             })
         }
@@ -353,18 +362,26 @@ async fn fill(
     let without_config = located.search.primary.is_empty()
         && matches!(source, Source::Manual { kubeconfig, .. } if kubeconfig.is_empty());
     if !without_config {
-        let text = lines(runner, &access_script(&located.search.paths()))
-            .await?
-            .ok_or_else(|| KubeState::Unknown {
-                message: "kubeconfig를 확인하지 못했습니다.".into(),
-            })?;
+        let text = if runner.is_local() {
+            local::access_report(&located.search.paths())
+        } else {
+            lines(runner, &access_script(&located.search.paths()))
+                .await?
+                .ok_or_else(|| KubeState::Unknown {
+                    message: "kubeconfig를 확인하지 못했습니다.".into(),
+                })?
+        };
         let choice = choose(&located.search, &text);
         found.kubeconfig = choice.kubeconfig;
-        found.copy_command = copy_source(&located.search, &text).map(|path| copy_command(&path));
+        // The copy is typed into a server's terminal and uses sudo. Nothing like it applies here.
+        found.copy_command = copy_source(&located.search, &text)
+            .filter(|_| !runner.is_local())
+            .map(|path| copy_command(&path));
         if choice.state != KubeState::Ready {
             return Err(choice.state);
         }
     }
+    let runner = &runner.with_kubectl(&found.kubectl);
     let kubectl = Kubectl {
         command: &found.kubectl,
         kubeconfig: &found.kubeconfig,

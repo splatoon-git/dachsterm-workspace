@@ -8,6 +8,7 @@ export type KubeState =
   | { kind: 'configMissing' }
   | { kind: 'configUnreadable' }
   | { kind: 'authFailed' }
+  | { kind: 'authPluginFailed'; message: string }
   | { kind: 'forbidden' }
   | { kind: 'contextMissing' }
   | { kind: 'unreachable' }
@@ -36,19 +37,22 @@ export type DetectRequest =
 /** What the tab shows while a session has no working settings yet. */
 export type SetupStep = 'choose' | 'copy' | 'manual' | 'retry';
 
-export function setupStep(detection: Detection): SetupStep {
+export function setupStep(detection: Detection, local = false): SetupStep {
   switch (detection.state.kind) {
     case 'ready':
     case 'forbidden':
     case 'unreachable':
     case 'contextMissing':
       return detection.contexts.length ? 'choose' : 'manual';
+    // Making a copy with sudo is for a server. Here the user can only point at another file.
     case 'configUnreadable':
+      return local ? 'manual' : 'copy';
     case 'authFailed':
-      return 'copy';
+      return local ? 'retry' : 'copy';
     case 'kubectlMissing':
     case 'configMissing':
       return 'manual';
+    case 'authPluginFailed':
     case 'channelLimit':
     case 'notFound':
     case 'metricsMissing':
@@ -72,29 +76,42 @@ export const finishesAfterRecheck = (detection: Detection) =>
 
 export type Guide = { title: string; body: string };
 
-export function setupGuide(state: KubeState): Guide | null {
+export function setupGuide(state: KubeState, local = false): Guide | null {
   switch (state.kind) {
     case 'ready':
       return null;
     case 'kubectlMissing':
       return {
         title: 'kubectl을 찾을 수 없습니다',
-        body: '셸 환경과 잘 알려진 위치에서 찾지 못했습니다. 이 서버에서 실행할 명령을 직접 입력하세요.',
+        body: local
+          ? 'PATH와 잘 알려진 위치에서 찾지 못했습니다. kubectl 실행 파일의 전체 경로를 입력하세요.'
+          : '셸 환경과 잘 알려진 위치에서 찾지 못했습니다. 이 서버에서 실행할 명령을 직접 입력하세요.',
       };
     case 'configMissing':
       return {
         title: '쿠버네티스 설정 파일을 찾을 수 없습니다',
-        body: 'kubeconfig의 서버 경로를 입력하세요. 내용은 앱으로 가져오지 않습니다.',
+        body: local
+          ? '이 컴퓨터의 kubeconfig 경로를 입력하세요. 내용은 앱으로 가져오지 않습니다.'
+          : 'kubeconfig의 서버 경로를 입력하세요. 내용은 앱으로 가져오지 않습니다.',
       };
     case 'configUnreadable':
       return {
         title: '이 계정은 쿠버네티스 설정을 읽을 수 없습니다',
-        body: '터미널에서 이 계정이 쓸 복사본을 만듭니다. sudo 암호는 터미널에 직접 입력하며 앱은 받거나 저장하지 않습니다. root로 접속하는 세션을 쓰는 방법도 있습니다.',
+        body: local
+          ? '파일 권한을 확인하거나 읽을 수 있는 다른 kubeconfig 경로를 입력하세요.'
+          : '터미널에서 이 계정이 쓸 복사본을 만듭니다. sudo 암호는 터미널에 직접 입력하며 앱은 받거나 저장하지 않습니다. root로 접속하는 세션을 쓰는 방법도 있습니다.',
       };
     case 'authFailed':
       return {
         title: '클러스터 인증에 실패했습니다',
-        body: '설정 복사본이 낡았을 수 있습니다. 인증서를 갱신했거나 클러스터를 다시 설치했다면 복사본을 다시 만드세요.',
+        body: local
+          ? 'kubeconfig의 인증 정보가 만료됐을 수 있습니다. 터미널에서 다시 로그인한 뒤 다시 확인하세요.'
+          : '설정 복사본이 낡았을 수 있습니다. 인증서를 갱신했거나 클러스터를 다시 설치했다면 복사본을 다시 만드세요.',
+      };
+    case 'authPluginFailed':
+      return {
+        title: '인증 플러그인을 실행하지 못했습니다',
+        body: `kubeconfig가 부르는 인증 프로그램이 설치되어 있고 터미널의 PATH에 있는지 확인하세요. kubectl 메시지: ${state.message}`,
       };
     case 'forbidden':
       return {
@@ -109,7 +126,7 @@ export function setupGuide(state: KubeState): Guide | null {
     case 'unreachable':
       return {
         title: '클러스터에 연결할 수 없습니다',
-        body: '이 서버에서 API 서버에 연결하지 못했습니다. 클러스터가 켜져 있는지 확인하세요.',
+        body: `${local ? '이 컴퓨터' : '이 서버'}에서 API 서버에 연결하지 못했습니다. 클러스터가 켜져 있는지 확인하세요.`,
       };
     case 'channelLimit':
       return {

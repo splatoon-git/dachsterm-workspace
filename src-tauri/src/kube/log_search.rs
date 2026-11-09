@@ -5,16 +5,14 @@ use super::{
     log_keywords::Keywords,
     log_scheduler::{Finish, JobEnd, Note, Outcome, Schedule, run_jobs},
     logs::clean,
-    runner::{Failed, Kubectl, Runner},
+    runner::{Failed, Kubectl, Link, Runner},
     settings::{KubeSettings, check_container, check_namespace, check_pod, is_log_time},
     state::{KubeState, classify, no_previous_logs},
 };
 use crate::{
     remote_exec::{Limits, quote},
-    ssh::Host,
     storage::Result,
 };
-use russh::client;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -177,12 +175,8 @@ pub fn plan(request: SearchRequest) -> Result<Plan> {
     })
 }
 
-/// A pipeline's exit status is `head`'s, so kubectl's is written after its stderr, on a line of its
-/// own. With no PTY nothing tells kubectl that the channel closed, so a small watcher reads this
-/// channel's stdin, which ends at that moment, and stops kubectl. Without it a cancelled search
-/// would keep reading logs on the server until kubectl finished by itself.
-fn job_script(kube: &KubeSettings, source: &Source, since: &str, keywords: &Keywords) -> String {
-    let logs = Kubectl {
+fn logs_line(kube: &KubeSettings, source: &Source, since: &str) -> String {
+    Kubectl {
         command: &kube.kubectl,
         kubeconfig: &kube.kubeconfig,
     }
@@ -196,7 +190,15 @@ fn job_script(kube: &KubeSettings, source: &Source, since: &str, keywords: &Keyw
             quote(since),
             if source.previous { " --previous" } else { "" },
         ),
-    );
+    )
+}
+
+/// A pipeline's exit status is `head`'s, so kubectl's is written after its stderr, on a line of its
+/// own. With no PTY nothing tells kubectl that the channel closed, so a small watcher reads this
+/// channel's stdin, which ends at that moment, and stops kubectl. Without it a cancelled search
+/// would keep reading logs on the server until kubectl finished by itself.
+fn job_script(kube: &KubeSettings, source: &Source, since: &str, keywords: &Keywords) -> String {
+    let logs = logs_line(kube, source, since);
     format!(
         "exec 3<&0\n{{ {logs} & k=$!; ( cat <&3 >/dev/null 2>&1; kill \"$k\" 2>/dev/null ) \
          >/dev/null 2>&1 & w=$!; wait \"$k\"; s=$?; kill \"$w\" 2>/dev/null; \
@@ -222,6 +224,11 @@ pub(super) fn kubectl_status(stderr: &[u8]) -> (Option<u32>, &[u8]) {
 
 fn job_state(stderr: &[u8]) -> KubeState {
     let (status, rest) = kubectl_status(stderr);
+    exit_state(status, rest)
+}
+
+/// What kubectl's own status and stderr mean, however they were learned.
+fn exit_state(status: Option<u32>, rest: &[u8]) -> KubeState {
     if no_previous_logs(status, b"", rest) {
         return KubeState::Ready;
     }
@@ -259,13 +266,17 @@ fn parse_hit(line: &[u8], keywords: &Keywords) -> Option<Hit> {
     })
 }
 
-/// Turns one job's stdout into hits. `head` already caps the line count and this says it did.
+/// Turns one job's stdout into hits. On a server `head` already capped the line count and this
+/// says it did. A local job has no grep in front of it, so its whole log passes through here and
+/// only the lines that match count (design KV.11).
 #[derive(Default)]
 struct LineReader {
     pending: Vec<u8>,
     lines: usize,
     bytes: usize,
     truncated: bool,
+    /// Every log line arrives, not only those grep passed.
+    unfiltered: bool,
 }
 impl LineReader {
     fn hits(&mut self, complete: &[u8], keywords: &Keywords) -> Vec<Hit> {
@@ -274,18 +285,23 @@ impl LineReader {
             if line.is_empty() {
                 continue;
             }
+            let hit = parse_hit(line, keywords);
+            if self.unfiltered && hit.is_none() {
+                continue;
+            }
             self.lines += 1;
             if self.lines > MAX_LINES_PER_JOB {
                 self.truncated = true;
                 break;
             }
-            hits.extend(parse_hit(line, keywords));
+            hits.extend(hit);
         }
         hits
     }
     fn push(&mut self, piece: &[u8], keywords: &Keywords) -> Vec<Hit> {
         self.bytes += piece.len();
-        if self.bytes > MAX_JOB_BYTES {
+        // Unfiltered bytes are read and let go, so only an endless line could add up.
+        if (!self.unfiltered && self.bytes > MAX_JOB_BYTES) || self.pending.len() > MAX_JOB_BYTES {
             self.truncated = true;
         }
         self.pending.extend_from_slice(piece);
@@ -338,7 +354,7 @@ impl Sink {
 }
 
 struct Shared {
-    handle: Arc<client::Handle<Host>>,
+    link: Link,
     kube: KubeSettings,
     since: String,
     keywords: Keywords,
@@ -346,11 +362,20 @@ struct Shared {
 }
 
 async fn search_one(shared: Arc<Shared>, source: Source, refusals: u32) -> JobEnd<Source> {
-    let script = job_script(&shared.kube, &source, &shared.since, &shared.keywords);
-    let mut reader = LineReader::default();
+    let runner: Runner<'_> = shared.link.runner(&shared.kube);
+    let local = runner.is_local();
+    let script = if local {
+        logs_line(&shared.kube, &source, &shared.since)
+    } else {
+        job_script(&shared.kube, &source, &shared.since, &shared.keywords)
+    };
+    let mut reader = LineReader {
+        unfiltered: local,
+        ..LineReader::default()
+    };
     let mut matched = 0;
     let mut stopped = false;
-    let result = Runner::Ssh(&shared.handle)
+    let result = runner
         .stream(&script, JOB_LIMITS, |piece| {
             matched += shared
                 .sink
@@ -370,7 +395,11 @@ async fn search_one(shared: Arc<Shared>, source: Source, refusals: u32) -> JobEn
             matched += shared
                 .sink
                 .deliver(&source, reader.finish(&shared.keywords));
-            job_state(&done.stderr)
+            if local {
+                exit_state(done.exit, &done.stderr)
+            } else {
+                job_state(&done.stderr)
+            }
         }
     };
     shared.sink.send(Event::JobDone {
@@ -383,7 +412,7 @@ async fn search_one(shared: Arc<Shared>, source: Source, refusals: u32) -> JobEn
 }
 
 pub async fn run(
-    handle: Arc<client::Handle<Host>>,
+    link: Link,
     kube: KubeSettings,
     plan: Plan,
     channel: Channel<Event>,
@@ -396,7 +425,7 @@ pub async fn run(
         keywords,
     } = plan;
     let shared = Arc::new(Shared {
-        handle,
+        link,
         kube,
         since,
         keywords,
@@ -529,6 +558,69 @@ mod tests {
         assert!(!script.contains("request-timeout"), "{script}");
         assert!(script.contains("cat <&3"), "{script}");
         assert!(script.contains("kill \"$k\""), "{script}");
+    }
+
+    #[test]
+    fn a_local_job_is_one_kubectl_command_with_no_grep() {
+        let line = logs_line(&settings(), &source(false), "15m");
+        assert!(!line.contains("grep") && !line.contains('|'), "{line}");
+        let run = crate::kube::local_run::parse(&line, "/opt/kubectl").unwrap();
+        assert!(run.args.contains(&"--timestamps".to_string()));
+    }
+
+    #[test]
+    fn a_local_reader_counts_only_matches_and_stops_after_the_limit() {
+        let words = keywords("hit");
+        let mut reader = LineReader {
+            unfiltered: true,
+            ..LineReader::default()
+        };
+        let noise = format!("{STAMP} nothing here\n").repeat(MAX_LINES_PER_JOB * 2);
+        assert!(reader.push(noise.as_bytes(), &words).is_empty());
+        assert!(!reader.truncated);
+        let matches = format!("{STAMP} hit\n").repeat(MAX_LINES_PER_JOB + 1);
+        assert_eq!(
+            reader.push(matches.as_bytes(), &words).len(),
+            MAX_LINES_PER_JOB
+        );
+        assert!(reader.truncated);
+    }
+
+    #[test]
+    fn a_local_reader_may_read_more_than_a_server_would_send() {
+        let words = keywords("hit");
+        let mut reader = LineReader {
+            unfiltered: true,
+            ..LineReader::default()
+        };
+        let line = format!("{STAMP} {}\n", "x".repeat(1024));
+        let log = line.repeat((MAX_JOB_BYTES / line.len()) + 2);
+        assert!(reader.push(log.as_bytes(), &words).is_empty());
+        assert!(!reader.truncated);
+    }
+
+    #[test]
+    fn a_local_reader_gives_up_on_a_line_that_never_ends() {
+        let mut reader = LineReader {
+            unfiltered: true,
+            ..LineReader::default()
+        };
+        reader.push(&vec![b'x'; MAX_JOB_BYTES + 1], &keywords("hit"));
+        reader.push(b"more", &keywords("hit"));
+        assert!(reader.truncated);
+    }
+
+    #[test]
+    fn a_local_job_reads_kubectls_status_directly() {
+        assert_eq!(exit_state(Some(0), b""), KubeState::Ready);
+        assert_eq!(
+            exit_state(
+                Some(1),
+                b"Error from server (NotFound): pods \"x\" not found\n"
+            ),
+            KubeState::NotFound
+        );
+        assert_eq!(exit_state(Some(127), b""), KubeState::KubectlMissing);
     }
 
     #[test]
