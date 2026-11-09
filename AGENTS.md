@@ -98,7 +98,7 @@ cargo test -p dachsterm --lib --locked hostkeys        모듈명·테스트명�
 npm run probe                  Phase 0 실증
 npm run probe:phase1           제품 엔진을 실제 OpenSSH로 검사. 이름과 달리 Phase 2~4 포함
 npm run test:native            Windows 전용. 앱 빌드 후 WebView2 UI로 실제 SSH 접속
-npm run probe:ftp              FTP/FTPS/CP949. 현재 Windows 전용
+npm run probe:ftp              FTP/FTPS/CP949. Python 환경 .tools/ftp-fixture 필요(scripts/ftp-fixture-requirements.txt). --native 계열은 Windows 전용
 node scripts/test-<기능>-native.mjs    Windows 전용 개별 검사. target/debug/dachsterm.exe가 먼저 필요
 npm run kube:fixture -- <클러스터> [up|down|status]    kind와 SSH 서버 검사 환경. WSL Ubuntu-24.04의 ~/.local/bin/kind 필요
 npm run test:kube-detect       앱 빌드 후 KV.1 합격 시나리오. 위 환경을 자동으로 올리고 내린다(--keep로 유지)
@@ -150,7 +150,6 @@ Tauri 2 앱이다. React는 화면과 터미널 렌더링만 맡고, SSH 연결�
 | `session_transfer.rs` | 파일 전송이 아니라 세션 설정 이관 |
 | `sftp_list`, `features/sftp/` | FTP/FTPS도 처리 |
 | `run-phase1.mjs`, `probe:phase1` | Phase 2~4 검사 포함 |
-| `audit-windows.mjs`, `generate-notices.mjs` | Windows 의존성 그래프만 검사·고지 (macOS 미포함) |
 | roadmap §6 모듈 구성 | 계획이며 실제 구조와 다름 (`commands/`, `ssh/` 폴더 없음) |
 
 ### 수정에 주의할 외부 유래 코드

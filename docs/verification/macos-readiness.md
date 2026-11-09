@@ -64,20 +64,20 @@ M.2~M.4는 수정했고(`0fcf569`), 나머지는 미착수다. Mac 실기기에�
 | M.22 | 중간 | 구현, 실기기 대기 | TL.6~TL.9 네트워크 도구를 Windows 실제 앱과 Docker OpenSSH로만 실행했다. Mac 분기는 실행하지 않았다. 코드상 차이: `/usr/sbin/lsof -nP -F`(포트 사용 여부), `/usr/sbin/traceroute`의 TCP(`-P tcp -p`) 시도 후 UDP로 넘어가기(경로 추적), `rustls_native_certs`의 Keychain 읽기(서비스 연결의 신뢰 결과). | 패키지된 앱을 Finder로 실행해 확인: ① 도구 → 포트 사용 여부의 로컬 목록과 프로세스 이름, 다른 계정 소켓의 표시, ② 서비스 연결의 HTTPS 공인 인증서 `신뢰 OK`와 자체 서명 표시, ③ 경로 추적이 일반 권한에서 TCP로 되는지, 안 되면 UDP(참고용)로 넘어가는지, 표시되는 안내, 취소 뒤 `traceroute` 프로세스가 남지 않는지, ④ 로컬 네트워크 권한(M.6) 프롬프트와 사내망 대상, ⑤ 결과 행 우클릭(두 손가락 클릭·Control+클릭)과 `서비스 연결로 보기` |
 | M.23 | 중간 | 일부 확인 | KV.13 실시간 로그·요청 흐름·서버 `kubectl` 정리와 KV.9 런타임 탭을 Mac 패키지 앱(`e56215c`, 검사 스크립트를 주입한 임시 빌드)과 실제 OpenSSH·kind로 통과했다. [기록](kubernetes-workspace.md#kv13kv9-mac-실기기-검증-2026-11-09). 합성 이벤트로 조작했고 화면 모양은 보지 못했다. 이때 찾은 스트림 재개 중복 표시는 수정했고 앱 재실행은 하지 않았다. | 대시보드 판정·권한 없음 계정·프로브 단독 감시를 실기기에서 확인한다 |
 | M.25 | 중간 | 일부 확인 | KV.12 파드 터미널(`kube/terminal.rs`)과 **보이는 트리 복사**를 Mac 패키지 앱(`ed799a4` 기준 미커밋, 조작 스크립트를 주입한 임시 빌드, `open` 실행)과 실제 OpenSSH·kind, 로컬 클러스터로 확인했다. 합성 이벤트로 조작했고 화면 모양은 보지 못했다. [기록](kubernetes-workspace.md#kv12-터미널-ui-제거-검증-2026-11-09) | 사람의 직접 조작 |
-| M.5 | 중간 | 확인 | macOS의 로컬 파일 이름은 NFD 한글일 수 있는데, 업로드 이름을 NFC로 정규화하는 코드가 없다. 서버에 자모가 분리된 이름으로 저장될 수 있다. | 업로드 시 이름 정규화. 기존 원격 이름과의 충돌 비교도 함께 정한다 |
-| M.6 | 중간 | 확인(구성) / 추정(영향) | `tauri.conf.json`에 `bundle.macOS`가 없고 `NSLocalNetworkUsageDescription`도 없다. macOS의 로컬 네트워크 개인정보 보호는 사내망 SSH 접속에 적용되며, 코드 서명으로 앱을 식별하므로 ad hoc 서명에서는 불안정할 수 있다. 재빌드 시 서명이 바뀌면 Keychain 승인을 다시 요청할 수도 있다. | `Info.plist` 문구, `signingIdentity`, `minimumSystemVersion` 지정. LAN 서버 접속으로 확인한다 |
+| M.5 | 중간 | 수정, 실기기 대기 | 업로드할 때 서버 쪽 이름만 NFC로 만든다(`remote_name.rs`). 로컬 경로는 OS가 준 그대로 읽는다. 큐 검사로 실제 FTP/FTPS·OpenSSH에 NFC로 저장됨을 Mac에서 확인했다. 파일 대화상자와 Finder 드롭으로 받은 이름은 실기기 확인이 남았다. | 패키지된 앱에서 Finder 한글 파일을 드롭·선택해 업로드하고 서버에서 이름 확인 |
+| M.6 | 중간 | 구현, 실기기 대기 | `src-tauri/Info.plist`의 `NSLocalNetworkUsageDescription`, `tauri.macos.conf.json`의 `minimumSystemVersion` 13.1과 ad hoc 서명(`-`)을 넣었다. 빌드한 `.app`의 plist와 `codesign`(`Signature=adhoc`)은 확인했다. 권한 창과 LAN 접속은 실행하지 않았다. ad hoc 서명은 빌드마다 달라져 Keychain 승인을 다시 물을 수 있다. | LAN 서버 접속으로 권한 창과 연결을 확인한다. Developer ID는 Apple 등록 뒤 구성한다 |
 | M.12 | 중간 | 구현, 실기기 대기 | F.1의 로컬 파일 트리와 경로 따라가기는 Mac에서 실행한 적이 없다. 기본 셸이 Bash·Zsh이면 첫 프롬프트에 경로 알림을 입력하고 에코를 숨기는 경로를 쓴다. 코드는 실제 OpenSSH로 검증한 SSH 경로와 같지만 macOS PTY와 Zsh 프롬프트(`PROMPT_SP`, 오른쪽 프롬프트)는 확인되지 않았다. | 패키지된 앱에서 로컬 탭을 열어 입력 잔상 없이 `cd`를 따라가는지, 파일 트리와 복사·삭제가 동작하는지 확인한다 |
 | M.13 | 중간 | 구현, 실기기 대기 | AT.5·AT.6·DX.3을 Windows에서만 실행했다. Mac에서는 `arboard`의 `image-data` 기능(새 macOS 의존성), Cmd+V의 `paste` 이벤트, WKWebView 드롭 좌표, Finder 실행 앱의 첨부, 임시 터널 뒤 브라우저 열기를 확인하지 않았다 | `mac-verify`로 확인 |
 | M.14 | 중간 | 구현, 실기기 대기 | TW.4·TW.8을 Windows에서만 실행했다. `tauri.macos.conf.json`과 독립 창 빌더에 `titleBarStyle: Overlay`, `hiddenTitle`을 넣고 왼쪽 78px를 비웠다. 신호등 버튼이 36px 제목 줄의 세로 가운데에 오는지와 앱 이름·보기 메뉴와 겹치지 않는지, 빈 곳 끌기·더블클릭 확대, 전체화면 전환 후 복귀, 독립 창도 같은지 확인하지 않았다. 신호등 위치(`trafficLightPosition`)는 정하지 않았다. 탭·연결 카드의 두 손가락 클릭과 Control+클릭 메뉴, `Cmd+Option+방향키`, WKWebView 포인터 캡처(탭 드래그), 상태바 팝오버도 미확인이다. TW.5~TW.7(Windows에서만 실행): 상태바 입력 범위 라디오와 탭 바 체크, `Cmd+Shift+M`·`Cmd+Shift+\`, IME 조합 중 상태바 변경, macOS 로컬 기본 셸(Zsh)과 `/bin/bash` 3.2에 입력해 넣는 조작표 훅(Bash 3.2는 Docker `bash:3.2`에서만 확인), 전체 화면 프로그램 일반 안내. 일반 안내는 Mac에서 선택 키를 표시하지 않는다. xterm은 Mac에서 `Shift+드래그`로 강제 선택하지 않으므로 터미널 설정의 `Shift+드래그` 안내 문구도 실기기에서 확인한다 | 패키지된 앱(`.app`)에서 `mac-verify`로 확인. 신호등이 어긋나면 `trafficLightPosition`을 정한다 |
 | M.7 | 낮음 | 구현, 실기기 대기 | 터미널 글꼴이 `'Cascadia Code', 'SFMono-Regular', Consolas, monospace`라 WebKit에서 Courier로 떨어졌다. `foundations.ts`에 `ui-monospace`, `Menlo`와 한글 대체 글꼴을 넣었다. Playwright WebKit에서 터미널 글꼴 표시까지 확인했고 실제 앱은 사용자 확인 대기다. | 실기기에서 확인한다 |
-| M.8 | 낮음 | 추정 | xterm에 `macOptionIsMeta`를 지정하지 않아 Option 조합이 Meta로 전달되지 않는다. Command 복사·붙여넣기와 파일 패널의 `Ctrl+C` 표기도 Mac 관례와 맞는지 확인이 필요하다. | 실기기에서 확인 후 설정 추가 |
+| M.8 | 낮음 | 구현, 실기기 대기 | **Option 키를 Meta로 사용** 설정(기본 꺼짐)은 AT.1에서 구현됐다. 파일 패널 메뉴의 복사·잘라내기·붙여넣기 표기는 Mac에서 `⌘C`로 나온다. | 실기기에서 Option 조합과 Command 복사·붙여넣기 확인 |
 
 ### 검증 도구
 
 | ID | 영향 | 상태 | 내용 | 조치 |
 |---|---|---|---|---|
-| M.9 | 중간 | 확인 | `*-native.mjs`는 WebView2 CDP에 의존한다. WKWebView에는 이 경로가 없어 실제 앱 UI는 Mac에서 수동으로 검증해야 한다. `run-ftp.mjs`는 `python.exe`, `ftp_probe.exe`를 하드코딩해 `probe:ftp`도 Mac에서 실행되지 않는다. | `run-ftp.mjs`의 플랫폼 분기. UI는 수동 체크리스트 유지 |
-| M.10 | 중간 | 확인 | `audit-windows.mjs`와 `generate-notices.mjs`는 `x86_64-pc-windows-msvc` 의존성만 본다. Mac 전용 크레이트의 보안 권고는 게이트를 막지 않고, 번들의 제3자 고지에서도 빠진다. | 대상 플랫폼을 인자로 받거나 두 플랫폼을 합쳐 처리한다 |
+| M.9 | 중간 | `probe:ftp` 수정·Mac 통과 / UI 수동 | `*-native.mjs`는 WebView2 CDP에 의존하므로 실제 앱 UI는 Mac에서 수동으로 검증한다. `run-ftp.mjs`는 플랫폼별로 분기하고 `--native` 계열은 Mac에서 이유를 밝히고 멈춘다. | UI는 수동 체크리스트 유지 |
+| M.10 | 중간 | 수정, CI 대기 | `audit-dependencies.mjs`(옛 `audit-windows.mjs`)와 `generate-notices.mjs`가 Windows·macOS 그래프를 합쳐 본다. `verify-macos.sh`와 `macos.yml`에 연결했다. 이 Mac에서 감사 0건(대상 밖 5건), 고지 505개, 검토 필요 0건이다. | Windows에서 바뀐 스크립트 실행 확인(CI) |
 | M.11 | 낮음 | 제안 | Playwright는 Chromium만 실행한다. WebKit 프로젝트를 추가하면 Windows에서도 WKWebView 차이를 일부 미리 잡을 수 있다. WKWebView 결과를 대신하지는 않는다. | 첫 CI 결과 후 판단 |
 
 ## M.2~M.4 수정 범위 (`0fcf569`)
@@ -96,10 +96,28 @@ M.2~M.4는 수정했고(`0fcf569`), 나머지는 미착수다. Mac 실기기에�
 - **Apple Silicon만 지원한다.** Intel Mac 빌드와 검증은 하지 않는다.
 - **배포**: 지금은 본인만 사용하므로 로컬 빌드로 충분하다. 이후 Apple Developer 프로그램에 등록할 예정이며, 그때 Developer ID 서명과 공증을 구성한다. 등록 전까지 M.6의 서명 항목은 ad hoc 기준으로 확인한다.
 
+## M.5·M.6·M.8·M.9·M.10 수정 결과 (2026-11-09, 미커밋 트리)
+
+결정:
+- **NFD 충돌 비교는 하지 않는다.** 서버는 이름을 바이트로 비교하므로 NFD와 NFC는 다른 파일이다. 서버에 NFD 이름이 이미 있으면 NFC 파일이 따로 생기고, 앱이 쓰지 않은 이름을 덮어쓰지 않는다.
+- 한 폴더의 두 항목이 같은 NFC 이름이 되면 업로드를 거부한다. APFS에서는 생기지 않고 NTFS·ext4에서만 가능하다.
+- 정규화는 두 OS에 똑같이 적용한다. 다운로드 이름은 바꾸지 않는다.
+- **최소 macOS는 13.1**이다. 코드가 쓰는 `color-mix`에 Safari 16.2가 필요하기 때문이다. 실행 확인은 macOS 26.5뿐이다.
+
+| 명령 | 결과 |
+|---|---|
+| `bash scripts/verify-macos.sh --package` | 종료 0. Vitest 1322, Playwright 519, Rust 637(무시 3)+1, `npm audit` 0, 의존성 감사 0(대상 밖 5), 고지 505개·검토 필요 0, debug `.app` |
+| `npm run probe:ftp` | 종료 0. FTP, FTPS, EUC-KR, 큐, `NFD local name arrives as NFC` |
+| 위 NFD 검사, 정규화를 임시로 끈 코드 | 실패(재현 확인) 후 원복 |
+| `npm run probe:phase1` | **종료 1.** 큐·NFD·SFTP·터널·모니터링·Git·tmux 단계는 통과. 인증정보 저장 단계에서 실패. [`ed799a4`의 깨끗한 트리에서도 같은 지점](kubernetes-workspace.md)이고 `credentials.rs`와 검사 코드는 바꾸지 않았다. 원인은 미확인이며 뒤 단계는 실행되지 않았다 |
+| `plutil`, `codesign --verify --deep --strict` | `NSLocalNetworkUsageDescription`, `LSMinimumSystemVersion` 13.1, `Signature=adhoc`, 검증 종료 0 |
+
+미실행: Windows 게이트와 CI, LAN 권한 창, 앱 화면 조작.
+
 ## 다음 첫 행동
 
 1. MacBook에서 `mac-verify` 스킬로 실기기 검증을 시작한다. M.2~M.4의 위 표부터 확인한다.
-2. 남은 항목 중 영향이 큰 M.5(NFD 한글 파일명), M.6(로컬 네트워크 권한·서명 설정)을 처리한다.
+2. M.5(Finder 드롭·파일 선택의 한글 이름), M.6(LAN 접속과 권한 창)을 패키지된 앱에서 확인한다.
 3. GE는 M.16 시험 앱의 한글 입력을 먼저 확인해 편집기 부품을 확정하고, 이어서 패키지된 앱으로 M.18(한글 입력·저장), M.17(Finder 끌기), M.19, M.20을 확인한다. GE.1 저장 확인 카드는 M.4의 외부 편집기 실행과 함께 패키지된 앱에서 카드와 OS 알림까지 본다.
 
 ## 참고
