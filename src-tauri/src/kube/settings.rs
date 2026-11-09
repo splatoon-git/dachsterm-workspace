@@ -210,7 +210,7 @@ mod tests {
         assert!(check_local_kubeconfig("").is_ok());
         assert!(check_local_kubeconfig("relative").is_err());
         if cfg!(windows) {
-            assert!(check_local_kubeconfig(r"C:\config;D:").is_ok());
+            assert!(check_local_kubeconfig(r"C:\a\config;D:\b").is_ok());
         } else {
             assert!(check_local_kubeconfig("/a b/c:/d").is_ok());
             assert!(check_local_kubeconfig("/a:relative").is_err());
