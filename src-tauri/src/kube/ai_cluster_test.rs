@@ -4,11 +4,12 @@
 use super::{
     action_cluster_test::{Cluster, connect},
     ai_collect::{self, AiTargets, ScrapeStatus},
+    runner::Link,
     settings::KubeSettings,
     state::KubeState,
 };
 use crate::storage::Store;
-use std::{sync::Arc, time::Duration};
+use std::{process::Command, sync::Arc, time::Duration};
 use tokio::sync::Semaphore;
 
 const NAMESPACE: &str = "kv10-ai";
@@ -141,7 +142,14 @@ async fn real_cluster_ai_reads_only_detected_endpoints() {
         let (handle, kube) = (handle.clone(), settings(namespace, kubeconfig));
         let registry = AiTargets::default();
         async move {
-            ai_collect::collect(&registry, handle, Arc::new(Semaphore::new(4)), key, &kube).await
+            ai_collect::collect(
+                &registry,
+                Link::Ssh(handle),
+                Arc::new(Semaphore::new(4)),
+                key,
+                &kube,
+            )
+            .await
         }
     };
 
@@ -217,6 +225,40 @@ async fn real_cluster_ai_reads_only_detected_endpoints() {
     );
     assert!(limited.gpu_restricted());
     println!("PASS no pods/proxy reads as forbidden, and no cluster-wide list as restricted GPU");
+
+    // The same read from this computer's kubectl, with no connection at all (KV.11).
+    let config = dir.path().join("local-kubeconfig");
+    let written = Command::new("kind")
+        .args(["get", "kubeconfig", "--name", &cluster.name])
+        .output()
+        .unwrap();
+    assert!(written.status.success(), "kind wrote no kubeconfig");
+    std::fs::write(&config, written.stdout).unwrap();
+    let found = Command::new("sh")
+        .args(["-c", "command -v kubectl"])
+        .output()
+        .unwrap();
+    let local = KubeSettings {
+        context: context.clone(),
+        namespace: String::new(),
+        kubectl: String::from_utf8_lossy(&found.stdout).trim().into(),
+        kubeconfig: config.to_string_lossy().into_owned(),
+        operate: false,
+    };
+    local.validate_local().unwrap();
+    let registry = AiTargets::default();
+    let semaphore = Arc::new(Semaphore::new(4));
+    let read = ai_collect::collect(&registry, Link::Local, semaphore, "local", &local).await;
+    assert_eq!(read.state(), &KubeState::Ready);
+    assert!(read.pod_named("annotated").unwrap().has_sample());
+    assert_eq!(
+        read.pod_named("bad-path").unwrap().status(),
+        ScrapeStatus::InvalidTarget
+    );
+    assert_eq!(read.exporters_ok(), 1);
+    let log = cluster.kube(&format!("-n {NAMESPACE} logs bad-path"));
+    assert!(!log.contains("/admin/delete"), "the path was requested");
+    println!("PASS a local kubeconfig detects and reads the same targets without a connection");
 
     cluster.kube(&format!(
         "delete namespace {NAMESPACE} {GPU_NAMESPACE} --ignore-not-found --wait=false"

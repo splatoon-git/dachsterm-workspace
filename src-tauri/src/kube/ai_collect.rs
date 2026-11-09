@@ -5,16 +5,12 @@ use super::{
     ai_detect::{AiKind, AiTarget, detect},
     ai_parse::{GpuDevice, VllmSeries, parse_gpu, parse_vllm},
     metrics::pod_proxy_path,
-    runner::{Kubectl, Runner},
+    runner::{Kubectl, Link, Runner},
     settings::KubeSettings,
     state::{KubeState, ProxyRead, classify_proxy},
     templates,
 };
-use crate::{
-    remote_exec::{Limits, quote},
-    ssh::Host,
-};
-use russh::client;
+use crate::remote_exec::{Limits, quote};
 use serde::Serialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -299,20 +295,20 @@ async fn scrape(runner: &Runner<'_>, kube: &KubeSettings, target: &AiTarget) -> 
 
 /// Four at a time per connection, shared with the worker watch (KV.9).
 async fn scrape_all(
-    handle: Arc<client::Handle<Host>>,
+    link: Link,
     slot: Arc<Semaphore>,
     kube: KubeSettings,
     targets: Arc<Vec<AiTarget>>,
 ) -> Vec<Scraped> {
     let mut running = JoinSet::new();
     for index in 0..targets.len() {
-        let (handle, slot, kube, targets) =
-            (handle.clone(), slot.clone(), kube.clone(), targets.clone());
+        let (link, slot, kube, targets) =
+            (link.clone(), slot.clone(), kube.clone(), targets.clone());
         running.spawn(async move {
             let _turn = slot.acquire_owned().await;
             (
                 index,
-                scrape(&Runner::Ssh(&handle), &kube, &targets[index]).await,
+                scrape(&link.runner(&kube), &kube, &targets[index]).await,
             )
         });
     }
@@ -393,7 +389,7 @@ fn failed(state: KubeState, elapsed_ms: u64) -> AiRead {
 
 pub async fn collect(
     registry: &AiTargets,
-    handle: Arc<client::Handle<Host>>,
+    link: Link,
     slot: Arc<Semaphore>,
     id: &str,
     kube: &KubeSettings,
@@ -405,7 +401,7 @@ pub async fn collect(
         None => {
             let listed = {
                 let _turn = slot.clone().acquire_owned().await;
-                discover(&Runner::Ssh(&handle), kube).await
+                discover(&link.runner(kube), kube).await
             };
             match listed {
                 Ok(detected) => {
@@ -417,7 +413,7 @@ pub async fn collect(
             }
         }
     };
-    let scraped = scrape_all(handle, slot, kube.clone(), detected.targets.clone()).await;
+    let scraped = scrape_all(link, slot, kube.clone(), detected.targets.clone()).await;
     assemble(&detected, scraped, elapsed(started))
 }
 

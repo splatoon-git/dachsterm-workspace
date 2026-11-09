@@ -402,10 +402,10 @@ pub async fn kube_ai(
     id: String,
     kube: KubeSettings,
 ) -> Result<AiRead> {
-    kube.validate()?;
-    let handle = state.connections.handle(&id)?;
+    let link = link_of(&state, &id)?;
+    link.check(&kube)?;
     let slot = slots.0.for_connection(&id);
-    Ok(ai_collect::collect(&targets, handle, slot, &id, &kube).await)
+    Ok(ai_collect::collect(&targets, link, slot, &id, &kube).await)
 }
 
 /// Runs the app's fixed read-only script in a container. There is no path for any other command.
