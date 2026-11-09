@@ -1,4 +1,10 @@
-import type { MetricCandidate, MetricSeries, ProbeProcess, TcpStates } from './runtimeTypes';
+import type {
+  MetricCandidate,
+  MetricSeries,
+  ProbeProcess,
+  Runtime,
+  TcpStates,
+} from './runtimeTypes';
 import { seriesSelector } from './workers';
 
 const MAX_SHOWN_SERIES = 200;
@@ -9,8 +15,8 @@ export type ProcessGroup = {
   threads: number;
   /** Sum of the descriptors this account could read; `null` when it could read none. */
   fds: number | null;
-  /** The tightest limit among them. */
-  fdLimit: number | null;
+  /** The one process closest to its own limit; the limit applies per process, not to the sum. */
+  fullest: { fds: number; limit: number } | null;
   oldestSeconds: number | null;
 };
 
@@ -23,19 +29,53 @@ export function groupProcesses(processes: ProbeProcess[]): ProcessGroup[] {
       count: 0,
       threads: 0,
       fds: null,
-      fdLimit: null,
+      fullest: null,
       oldestSeconds: null,
     };
     group.count += 1;
     group.threads += item.threads;
     if (item.fds !== null) group.fds = (group.fds ?? 0) + item.fds;
-    if (item.fdLimit !== null)
-      group.fdLimit = group.fdLimit === null ? item.fdLimit : Math.min(group.fdLimit, item.fdLimit);
+    if (item.fds !== null && item.fdLimit !== null && item.fdLimit > 0) {
+      const { fullest } = group;
+      if (!fullest || item.fds / item.fdLimit > fullest.fds / fullest.limit)
+        group.fullest = { fds: item.fds, limit: item.fdLimit };
+    }
     if (item.ageSeconds !== null)
       group.oldestSeconds = Math.max(group.oldestSeconds ?? 0, item.ageSeconds);
     groups.set(item.name, group);
   }
   return [...groups.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+const NEAR_LIMIT = 0.8;
+
+/** A process's descriptors or a listen queue close enough to its limit to point out. */
+export const isNearLimit = (used: number, limit: number) => limit > 0 && used / limit >= NEAR_LIMIT;
+
+export const percentOf = (used: number, limit: number) => `${Math.round((used / limit) * 100)}%`;
+
+const STATE_LABELS: Record<string, string> = {
+  R: '실행',
+  S: '대기',
+  D: 'I/O 대기',
+  Z: '좀비',
+  T: '정지',
+  I: '유휴',
+};
+
+/** Linux's one-letter process state in words; a letter we do not know is shown as it came. */
+export const processStateLabel = (state: string) => STATE_LABELS[state] ?? state;
+
+const rise = (now: number | null, before: number | null | undefined) =>
+  now === null || before === null || before === undefined ? 0 : Math.max(0, now - before);
+
+/** What got worse since the last collection. A restart resets the counters, which is not growth. */
+export function runtimeGrowth(current: Runtime, previous: Runtime | null) {
+  return {
+    closeWait: rise(current.tcp.closeWait, previous?.tcp.closeWait),
+    listenOverflows: rise(current.counters.listenOverflows, previous?.counters.listenOverflows),
+    listenDrops: rise(current.counters.listenDrops, previous?.counters.listenDrops),
+  };
 }
 
 export const tcpRows = (tcp: TcpStates): [string, number][] => [

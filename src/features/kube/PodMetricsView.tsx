@@ -8,6 +8,7 @@ import {
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
 import type { PodOverview, PodRef } from './detailTypes';
 import { stateNote } from './polling';
+import { RuntimePanel } from './RuntimeSections';
 import {
   candidateLabel,
   formatMetric,
@@ -200,145 +201,155 @@ export function PodMetricsView({
   };
 
   return (
-    <section className="kube-metrics" aria-label="앱 메트릭">
-      <h3>앱 메트릭</h3>
-      {checked === null && !listNote && <p className="kube-panel-note">후보를 확인하는 중…</p>}
-      {listNote && <p className="kube-panel-note">{listNote}</p>}
-      {checked?.length === 0 && !listNote && (
-        <p className="kube-panel-note">선언된 포트가 없습니다. 아래에 직접 입력하세요.</p>
-      )}
-      {checked && checked.length > 0 && (
-        <ul className="kube-metrics-candidates" aria-label="메트릭 후보">
-          {checked.map(({ candidate, note, count }) => {
-            const label = candidateLabel(candidate);
-            const status = count !== null ? `지표 ${count}개` : note || '확인 중…';
-            return (
-              <li key={label}>
-                <button
-                  aria-pressed={sameSource(source, candidate)}
-                  disabled={count === null}
-                  onClick={() => read(candidate)}
-                >
-                  {label}
-                </button>
-                <span>{status}</span>
-                {candidate.annotated && <small>annotation</small>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <form className="kube-panel-tools" onSubmit={submitManual}>
-        <input
-          aria-label="메트릭 포트"
-          inputMode="numeric"
-          placeholder="포트"
-          value={port}
-          onChange={(event) => setPort(event.target.value)}
-        />
-        <input
-          aria-label="메트릭 경로"
-          value={path}
-          onChange={(event) => setPath(event.target.value)}
-        />
-        <button type="submit" disabled={reading}>
-          읽기
-        </button>
-      </form>
-      {reading && <p className="kube-panel-note">메트릭을 읽는 중…</p>}
-      {readNote && (
-        <p className="kube-panel-note" role="status">
-          {readNote}
-        </p>
-      )}
-      {shown && (
-        <>
-          <div className="kube-panel-tools">
+    <>
+      <RuntimePanel
+        label="앱 메트릭"
+        tools={shown && <span className="kube-rt-at">전체 {total}개</span>}
+      >
+        {checked === null && !listNote && <p className="kube-rt-note">후보를 확인하는 중…</p>}
+        {listNote && <p className="kube-rt-note">{listNote}</p>}
+        {checked?.length === 0 && !listNote && (
+          <p className="kube-rt-note">선언된 포트가 없습니다. 아래에 직접 입력하세요.</p>
+        )}
+        {checked && checked.length > 0 && (
+          <ul className="kube-rt-sources" aria-label="메트릭 후보">
+            {checked.map(({ candidate, note, count }) => {
+              const label = candidateLabel(candidate);
+              return (
+                <li key={label}>
+                  <button
+                    aria-pressed={sameSource(source, candidate)}
+                    disabled={count === null}
+                    onClick={() => read(candidate)}
+                  >
+                    <b>{label}</b>
+                    <span>{count !== null ? `지표 ${count}개` : note || '확인 중…'}</span>
+                    {candidate.annotated && <small>annotation</small>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <form className="kube-rt-form" onSubmit={submitManual}>
+          <span className="kube-rt-label">직접 입력</span>
+          <input
+            className="port"
+            aria-label="메트릭 포트"
+            inputMode="numeric"
+            placeholder="포트"
+            value={port}
+            onChange={(event) => setPort(event.target.value)}
+          />
+          <input
+            className="path"
+            aria-label="메트릭 경로"
+            value={path}
+            onChange={(event) => setPath(event.target.value)}
+          />
+          <button type="submit" disabled={reading}>
+            읽기
+          </button>
+        </form>
+        {reading && <p className="kube-rt-note">메트릭을 읽는 중…</p>}
+        {readNote && (
+          <p className="kube-rt-note" role="status">
+            {readNote}
+          </p>
+        )}
+        {shown && (
+          <>
             <input
+              className="kube-rt-filter"
               type="search"
               aria-label="메트릭 필터"
               placeholder="필터: 공백은 AND, !단어는 제외"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <span className="kube-panel-note">전체 {total}개</span>
-          </div>
-          <ul className="kube-metrics-list" aria-label="메트릭 목록">
-            {shown.rows.map((row) => (
-              <li key={row.selector}>
-                <button
-                  title={row.selector}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    openMenu(row, { x: event.clientX, y: event.clientY });
-                  }}
-                  onKeyDown={(event) => {
-                    if (!isMenuKey(event)) return;
-                    event.preventDefault();
-                    openMenu(row, anchorBelow(event.currentTarget));
-                  }}
-                >
-                  <span>
-                    {pins.includes(row.selector) && '★ '}
-                    {row.name}
-                    {row.labels && <small>{`{${row.labels}}`}</small>}
-                    {row.series > 1 && <small> 합계 · {row.series}개</small>}
-                  </span>
-                  <span>{formatMetric(row.value)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {shown.more > 0 && (
-            <p className="kube-panel-note">외 {shown.more}개는 필터로 좁혀서 보세요.</p>
-          )}
-          <p className="kube-panel-note">우클릭으로 사용 중, 전체, 완료 수를 지정합니다.</p>
-        </>
-      )}
-      <h3>워커 감시</h3>
-      {!owner && <p className="kube-panel-note">워크로드에 속한 파드만 감시할 수 있습니다.</p>}
-      {owner && (
-        <>
-          <dl className="kube-facts">
-            {roleNames.map((role) => (
-              <div key={role} className="kube-metrics-role">
-                <dt>{roleLabels[role]}</dt>
-                <dd className="kube-wrap">{roles[role] ?? '지정 안 됨'}</dd>
-              </div>
-            ))}
-          </dl>
-          <div className="kube-panel-tools">
-            <label>
-              기준{' '}
-              <input
-                aria-label="판정 기준(분)"
-                type="number"
-                min={MIN_MINUTES}
-                max={MAX_MINUTES}
-                value={minutes}
-                onChange={(event) => setMinutes(event.target.value)}
-              />
-              분
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={repeatProbe}
-                onChange={(event) => setRepeatProbe(event.target.checked)}
-              />
-              프로브도 30초마다 반복
-            </label>
-            <button className="primary" disabled={!canWatch} onClick={startWatch}>
-              {watch ? '감시 설정 저장' : '워커 감시 켜기'}
-            </button>
-            {watch && <button onClick={() => workers.removeWatch(workloadKey)}>감시 끄기</button>}
-          </div>
-          <p className="kube-panel-note">
-            사용 중·전체·완료 수를 지정하면 반환 판정이 켜집니다. 메트릭이 없으면 프로브만으로도
-            감시할 수 있습니다.
-          </p>
-        </>
-      )}
+            <ul className="kube-rt-series" aria-label="메트릭 목록">
+              {shown.rows.map((row) => (
+                <li key={row.selector}>
+                  <button
+                    title={row.selector}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      openMenu(row, { x: event.clientX, y: event.clientY });
+                    }}
+                    onKeyDown={(event) => {
+                      if (!isMenuKey(event)) return;
+                      event.preventDefault();
+                      openMenu(row, anchorBelow(event.currentTarget));
+                    }}
+                  >
+                    <span>
+                      {pins.includes(row.selector) && '★ '}
+                      {row.name}
+                      {row.labels && <small>{`{${row.labels}}`}</small>}
+                      {row.series > 1 && <small> 합계 {row.series}개</small>}
+                    </span>
+                    <span>{formatMetric(row.value)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {shown.more > 0 && (
+              <p className="kube-rt-note">외 {shown.more}개는 필터로 좁혀서 보세요.</p>
+            )}
+            <p className="kube-rt-note">우클릭으로 사용 중, 전체, 완료 수를 지정합니다.</p>
+          </>
+        )}
+      </RuntimePanel>
+      <RuntimePanel label="워커 감시">
+        {!owner && <p className="kube-rt-note">워크로드에 속한 파드만 감시할 수 있습니다.</p>}
+        {owner && (
+          <>
+            <dl className="kube-rt-roles">
+              {roleNames.map((role) => (
+                <div key={role}>
+                  <dt>{roleLabels[role]}</dt>
+                  <dd className={roles[role] ? undefined : 'unset'}>
+                    {roles[role] ?? '지정 안 됨'}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className="kube-rt-note">
+              사용 중·전체·완료 수를 지정하면 반환 판정이 켜집니다. 메트릭이 없으면 프로브만으로도
+              감시할 수 있습니다.
+            </p>
+            <div className="kube-rt-form">
+              <label className="kube-rt-check">
+                기준
+                <input
+                  className="minutes"
+                  aria-label="판정 기준(분)"
+                  type="number"
+                  min={MIN_MINUTES}
+                  max={MAX_MINUTES}
+                  value={minutes}
+                  onChange={(event) => setMinutes(event.target.value)}
+                />
+                분
+              </label>
+              <label className="kube-rt-check">
+                <input
+                  type="checkbox"
+                  checked={repeatProbe}
+                  onChange={(event) => setRepeatProbe(event.target.checked)}
+                />
+                프로브도 30초마다 반복
+              </label>
+            </div>
+            <div className="kube-rt-form">
+              <button className="primary" disabled={!canWatch} onClick={startWatch}>
+                {watch ? '감시 설정 저장' : '워커 감시 켜기'}
+              </button>
+              {watch && <button onClick={() => workers.removeWatch(workloadKey)}>감시 끄기</button>}
+            </div>
+          </>
+        )}
+      </RuntimePanel>
       {menu && (
         <ContextMenu
           label="메트릭 메뉴"
@@ -347,6 +358,6 @@ export function PodMetricsView({
           close={() => setMenu(null)}
         />
       )}
-    </section>
+    </>
   );
 }

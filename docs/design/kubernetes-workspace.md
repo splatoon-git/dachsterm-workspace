@@ -503,7 +503,7 @@ exec 없이 스레드 수를 얻는 경로(`get --raw /api/v1/nodes/<노드>/pro
 
 **구현에서 정한 것(KV.9):**
 
-- **파일:** 백엔드는 `kube/metrics.rs`, `kube/probe.rs`, 판정 문구는 `kube/state.rs`의 `classify_proxy`. 프런트는 `workers.ts`(판정·표본·요약), `workerSchedule.ts`(읽을 대상과 일정), `workerPrefs.ts`(세션별 저장), `useWorkerWatch.ts`(조회), `runtimeModel.ts`(프로세스 묶기·메트릭 목록), `PodRuntimeView.tsx`와 `PodMetricsView.tsx`(런타임 탭), `WorkerPanel.tsx`(대시보드), `kubeWorkers.css`. §3.2의 `WorkerView.tsx`는 이 파일들로 나뉘었다.
+- **파일:** 백엔드는 `kube/metrics.rs`, `kube/probe.rs`, 판정 문구는 `kube/state.rs`의 `classify_proxy`. 프런트는 `workers.ts`(판정·표본·요약), `workerSchedule.ts`(읽을 대상과 일정), `workerPrefs.ts`(세션별 저장), `useWorkerWatch.ts`(조회), `runtimeModel.ts`(프로세스 묶기·메트릭 목록), `PodRuntimeView.tsx`, `RuntimeSections.tsx`, `PodMetricsView.tsx`, `kubeRuntime.css`(런타임 탭), `WorkerPanel.tsx`와 `kubeWorkers.css`(대시보드). §3.2의 `WorkerView.tsx`는 이 파일들로 나뉘었다.
 - **동시 실행:** `kube_metrics`, `kube_probe`는 연결당 4개인 `WatchSlots`를 쓴다. 트리 조회의 3개와 나눠, 파드 50개를 도는 동안에도 트리 조회가 밀리지 않게 했다.
 - **허용 경로:** `/`로 시작하고 각 구간이 영문·숫자·`.`·`_`·`-`이며 `..`이 없고 마지막 구간에 `metrics`나 `prometheus`가 들어간 128자 이내 경로만 쓴다. 쿼리는 넣을 수 없다.
 - **후보 확인:** `only: []`로 읽어 지표 수만 받는다. 감시 조회는 지정한 이름만 받아 웹뷰로 넘기는 양을 줄인다. 선언·annotation 후보는 최대 8개이고 동시에 4개씩 확인한다.
