@@ -76,7 +76,8 @@ dialog.dialog-large {
 }
 
 .dialog-body {
-  flex: 1;
+  /* Not `flex: 1`: its 0% basis collapsed the body in WKWebView when the dialog has no set height. */
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   padding: var(--space-lg) 20px;

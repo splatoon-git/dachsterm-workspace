@@ -9,7 +9,7 @@ export function WorkspaceField({
   field: (key: 'workspace', value: NonNullable<Profile['workspace']>) => void;
 }) {
   return (
-    <label>
+    <label className="wide">
       접속 후 화면
       <select
         aria-label="접속 후 화면"

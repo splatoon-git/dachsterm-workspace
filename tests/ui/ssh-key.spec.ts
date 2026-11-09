@@ -24,6 +24,8 @@ test('the tools menu opens the key dialog', async ({ page }) => {
     .click();
   const dialog = page.getByRole('dialog', { name: 'SSH 키 만들기', exact: true });
   await expect(dialog).toBeVisible();
+  // A percent basis left only the title and buttons in WKWebView, which this browser does not show.
+  await expect(dialog.locator('.dialog-body')).toHaveCSS('flex-basis', 'auto');
   await expect(page.locator('.toolbar-menu')).not.toHaveAttribute('open');
   await expect(dialog.getByLabel('파일 이름', { exact: true })).toHaveValue('id_ed25519');
   // Without the desktop app the defaults cannot be read, and the reason is shown.
