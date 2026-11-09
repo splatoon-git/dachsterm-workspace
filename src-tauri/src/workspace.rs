@@ -55,7 +55,8 @@ pub async fn transfer_pick(
         return Ok(None);
     };
     let remote = if upload {
-        format!("{}/{}", path.trim_end_matches('/'), file.file_name())
+        let name = crate::remote_name::upload_name(&file.file_name())?;
+        format!("{}/{name}", path.trim_end_matches('/'))
     } else {
         path
     };
@@ -101,9 +102,9 @@ pub async fn transfer_batch(
                 .unwrap_or_default()
                 .into_iter()
                 .map(|f| {
-                    crate::transfer_queue::component(&f.file_name())?;
+                    let name = crate::remote_name::upload_name(&f.file_name())?;
                     Ok((
-                        format!("{}/{}", path.trim_end_matches('/'), f.file_name()),
+                        format!("{}/{name}", path.trim_end_matches('/')),
                         f.path().to_path_buf(),
                     ))
                 })
@@ -117,7 +118,7 @@ pub async fn transfer_batch(
                     .file_name()
                     .and_then(|s| s.to_str())
                     .ok_or("파일 이름 오류")?;
-                crate::transfer_queue::component(name)?;
+                let name = crate::remote_name::upload_name(name)?;
                 Ok((format!("{}/{name}", path.trim_end_matches('/')), p))
             })
             .collect::<Result<Vec<_>>>()?,

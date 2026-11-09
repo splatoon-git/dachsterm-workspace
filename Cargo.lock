@@ -1072,6 +1072,7 @@ dependencies = [
  "drag",
  "encoding_rs",
  "hmac 0.12.1",
+ "icu_normalizer",
  "keyring",
  "open",
  "pkcs1",

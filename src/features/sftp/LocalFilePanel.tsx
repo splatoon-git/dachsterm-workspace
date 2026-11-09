@@ -4,7 +4,7 @@ import { useFileDrop } from '../../lib/fileDrop';
 import { useFileDragOut } from './dragOut';
 import { savedEditor, savedEditorArgs } from '../../lib/externalEdit';
 import { revealItem } from '../../lib/revealItem';
-import { copyPathsItem } from './fileMenuItems';
+import { copyPathsItem, fileKeys } from './fileMenuItems';
 import type { LocalTarget, TerminalSession } from '../terminal/session';
 import { childPath, selectionAfterClick, withoutNested, type FileEntry } from './fileList';
 import { ContextMenu, type MenuPoint } from '../../components/ContextMenu';
@@ -350,14 +350,14 @@ export function LocalFilePanel({
             },
             {
               label: '복사',
-              shortcut: 'Ctrl+C',
+              shortcut: fileKeys.copy,
               separated: true,
               run: () => remember('copy'),
             },
-            { label: '잘라내기', shortcut: 'Ctrl+X', run: () => remember('move') },
+            { label: '잘라내기', shortcut: fileKeys.cut, run: () => remember('move') },
             {
               label: '붙여넣기',
-              shortcut: 'Ctrl+V',
+              shortcut: fileKeys.paste,
               disabled: !clipboard,
               run: () => void paste(),
             },

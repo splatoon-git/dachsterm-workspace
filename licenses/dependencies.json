@@ -1,5 +1,8 @@
 {
-  "platform": "x86_64-pc-windows-msvc",
+  "platforms": [
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin"
+  ],
   "components": [
     {
       "ecosystem": "cargo",
@@ -140,6 +143,14 @@
     {
       "ecosystem": "cargo",
       "name": "base64",
+      "version": "0.21.7",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/marshallpierce/rust-base64",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "base64",
       "version": "0.22.1",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/marshallpierce/rust-base64",
@@ -240,6 +251,14 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/utils",
       "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "block2",
+      "version": "0.6.2",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
     },
     {
       "ecosystem": "cargo",
@@ -371,6 +390,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "cfg_aliases",
+      "version": "0.2.2",
+      "license": "MIT",
+      "repository": "https://github.com/katharostech/cfg_aliases",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "cfg-if",
       "version": "1.0.5",
       "license": "MIT OR Apache-2.0",
@@ -440,6 +467,46 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/SergioBenitez/cookie-rs",
       "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "core-foundation-sys",
+      "version": "0.8.7",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/core-foundation-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "core-foundation",
+      "version": "0.10.1",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/core-foundation-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "core-graphics-types",
+      "version": "0.2.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/core-foundation-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "core-graphics",
+      "version": "0.24.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/core-foundation-rs",
+      "licenseTextsFound": 3
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "core-graphics",
+      "version": "0.25.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/core-foundation-rs",
+      "licenseTextsFound": 3
     },
     {
       "ecosystem": "cargo",
@@ -739,6 +806,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "dispatch2",
+      "version": "0.3.1",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "displaydoc",
       "version": "0.2.7",
       "license": "MIT OR Apache-2.0",
@@ -843,6 +918,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "embed_plist",
+      "version": "1.2.2",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/nvzqz/embed-plist-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "embed-resource",
       "version": "3.0.12",
       "license": "MIT",
@@ -879,6 +962,14 @@
       "version": "0.4.11",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/erased-serde",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "errno",
+      "version": "0.3.14",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/lambda-fairy/rust-errno",
       "licenseTextsFound": 2
     },
     {
@@ -984,6 +1075,30 @@
       "license": "Zlib",
       "repository": "https://github.com/orlp/foldhash",
       "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "foreign-types-macros",
+      "version": "0.2.4",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/sfackler/foreign-types",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "foreign-types-shared",
+      "version": "0.3.1",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/sfackler/foreign-types",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "foreign-types",
+      "version": "0.5.0",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/sfackler/foreign-types",
+      "licenseTextsFound": 2
     },
     {
       "ecosystem": "cargo",
@@ -1255,6 +1370,14 @@
       "version": "0.4.15",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hybrid-array",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "iana-time-zone",
+      "version": "0.1.65",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/strawlab/iana-time-zone",
       "licenseTextsFound": 2
     },
     {
@@ -1563,6 +1686,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "mac-notification-sys",
+      "version": "0.6.15",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/h4llow3En/mac-notification-sys",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "markup5ever",
       "version": "0.39.0",
       "license": "MIT OR Apache-2.0",
@@ -1667,6 +1798,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "nix",
+      "version": "0.31.3",
+      "license": "MIT",
+      "repository": "https://github.com/nix-rust/nix",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "notify-rust",
       "version": "4.18.2",
       "license": "MIT OR Apache-2.0",
@@ -1707,6 +1846,126 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "objc2-app-kit",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-cloud-kit",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-core-data",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-core-foundation",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-core-graphics",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-core-image",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-core-text",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-core-video",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-encode",
+      "version": "4.1.0",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-exception-helper",
+      "version": "0.1.1",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-foundation",
+      "version": "0.3.2",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-io-surface",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-quartz-core",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2-web-kit",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "objc2",
+      "version": "0.6.5",
+      "license": "MIT",
+      "repository": "https://github.com/madsmtm/objc2",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
       "name": "once_cell",
       "version": "1.21.4",
       "license": "MIT OR Apache-2.0",
@@ -1727,6 +1986,14 @@
       "version": "5.3.3",
       "license": "MIT",
       "repository": "https://github.com/Byron/open-rs",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "openssl-sys",
+      "version": "0.9.118",
+      "license": "MIT",
+      "repository": "https://github.com/rust-openssl/rust-openssl",
       "licenseTextsFound": 1
     },
     {
@@ -1799,6 +2066,14 @@
       "version": "0.6.1",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/traits",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pathdiff",
+      "version": "0.2.3",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/Manishearth/pathdiff",
       "licenseTextsFound": 2
     },
     {
@@ -2211,6 +2486,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "rustix",
+      "version": "1.1.6",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/bytecodealliance/rustix",
+      "licenseTextsFound": 4
+    },
+    {
+      "ecosystem": "cargo",
       "name": "rustls-native-certs",
       "version": "0.8.5",
       "license": "Apache-2.0 OR ISC OR MIT",
@@ -2327,6 +2610,22 @@
       "version": "0.8.1",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "security-framework-sys",
+      "version": "2.17.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/kornelski/rust-security-framework",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "security-framework",
+      "version": "3.7.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/kornelski/rust-security-framework",
       "licenseTextsFound": 2
     },
     {
@@ -2547,6 +2846,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "signal-hook-registry",
+      "version": "1.4.8",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/vorner/signal-hook",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "signature",
       "version": "3.0.0",
       "license": "Apache-2.0 OR MIT",
@@ -2703,6 +3010,14 @@
       "version": "12.2.1",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/veeso/suppaftp",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "swift-rs",
+      "version": "1.0.9",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/Brendonovich/swift-rs",
       "licenseTextsFound": 2
     },
     {

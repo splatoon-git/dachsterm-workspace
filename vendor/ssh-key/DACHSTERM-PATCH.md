@@ -23,7 +23,7 @@ russh verifies host keys through ssh-key; disabling RSA alone would also
 remove compatibility with RSA-only SSH servers.
 
 Validation: actual OpenSSH RSA host negotiation and key authentication in
-src-tauri/examples/phase1_probe.rs; Windows audit via scripts/audit-windows.mjs.
+src-tauri/examples/phase1_probe.rs; dependency audit via scripts/audit-dependencies.mjs.
 Rebase/review this small patch whenever ssh-key is upgraded. Do not replace
 it with an upstream build until an equivalent safe RSA verifier is available.
 

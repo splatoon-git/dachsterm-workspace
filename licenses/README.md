@@ -1,6 +1,6 @@
 # Third-party notices
 
-`node scripts/generate-notices.mjs` rebuilds the Windows dependency inventory and license texts from Cargo.lock/package-lock.json and installed packages. `--fetch-missing` can retrieve missing texts from each crate's declared upstream repository at its recorded source commit; the results are pinned in `upstream/` for offline regeneration.
+`node scripts/generate-notices.mjs` rebuilds the Windows and macOS dependency inventory and license texts from Cargo.lock/package-lock.json and installed packages. `--fetch-missing` can retrieve missing texts from each crate's declared upstream repository at its recorded source commit; the results are pinned in `upstream/` for offline regeneration.
 
 The selectors crate supplies an MPL-2.0 declaration in its package metadata and source headers, with a link to Mozilla's license, but no standalone license file. Its pinned record includes that original header and the official MPL-2.0 text. Do not replace missing project-specific copyright notices with invented notices.
 

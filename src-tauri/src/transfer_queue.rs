@@ -1157,13 +1157,11 @@ impl Transfers {
                 if nodes.len() + stack.len() + children.len() > MAX_NODES {
                     return Err("폴더 탐색 항목 상한 10,000".into());
                 }
-                let mut children = children;
-                children.sort();
-                for name in children.into_iter().rev() {
-                    component(&name)?;
+                let named = crate::remote_name::child_names(r.root.upload, children)?;
+                for (name, sent) in named.into_iter().rev() {
                     stack.push((
                         local.join(&name),
-                        format!("{}/{name}", remote.trim_end_matches('/')),
+                        format!("{}/{sent}", remote.trim_end_matches('/')),
                         depth + 1,
                     ));
                 }
