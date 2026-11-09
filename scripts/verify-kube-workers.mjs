@@ -212,7 +212,7 @@ try {
     pass('the annotated port is found, roles are assigned by the row menu, and the tree row fills');
 
     stage = 'container threads from the kubelet';
-    const threadsTable = panel().locator('h3:has-text("컨테이너 스레드") + table');
+    const threadsTable = panel().getByRole('region', { name: '컨테이너 스레드' });
     await expect(threadsTable).toContainText('app', { timeout: 30_000 });
     pass("container_threads reads the named container from the pod's own node");
 
@@ -234,7 +234,7 @@ try {
 
     stage = 'the dashboard shows the same';
     await header().getByRole('tab', { name: '대시보드', exact: true }).click();
-    const board = pane().getByRole('region', { name: '워커' });
+    const board = pane().getByRole('region', { name: '워커', exact: true });
     await expect(board).toContainText('Deployment/stuck');
     await expect(board).toContainText('반환 안 됨 의심');
     await expect(board).toContainText('워커 포화 의심');

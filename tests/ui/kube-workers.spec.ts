@@ -271,17 +271,23 @@ test('a probe asks once per workload, and says plainly when it cannot run', asyn
   });
   await openRuntime(page);
   const panel = panelOf(page);
-  await expect(panel.locator('table').first()).toContainText('12');
+  await expect(panel.getByRole('region', { name: '컨테이너 스레드' })).toContainText('12');
   await panel.getByRole('button', { name: '수집', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '런타임 읽기' });
   await expect(dialog).toContainText('파드 안에서 읽기 명령을 실행합니다');
   await dialog.getByRole('button', { name: '실행', exact: true }).click();
   await expect(panel.getByRole('cell', { name: 'gunicorn', exact: true }).first()).toBeVisible();
-  await expect(panel).toContainText('CLOSE_WAIT 2');
-  await expect(panel).toContainText('8080 (대기 0/128)');
+  const closeWait = panel.locator('.kube-rt-stat', { hasText: 'CLOSE_WAIT' });
+  await expect(closeWait).toContainText('2');
+  await expect(panel.getByRole('row', { name: '8080 0 / 128' })).toBeVisible();
 
+  await page.evaluate(() => {
+    const probe = window.__kube.runtime?.probe;
+    if (probe?.kind === 'ready') probe.runtime.tcp.closeWait = 5;
+  });
   await panel.getByRole('button', { name: '수집', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(closeWait).toContainText('+3');
 
   await page.evaluate(() => {
     window.__kube.runtime = { ...window.__kube.runtime, probe: { kind: 'noShell' } };
