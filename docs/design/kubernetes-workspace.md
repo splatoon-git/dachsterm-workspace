@@ -521,6 +521,15 @@ exec 없이 스레드 수를 얻는 경로(`get --raw /api/v1/nodes/<노드>/pro
 - 수집 경로는 `get --raw /api/v1/namespaces/<ns>/pods/<파드>:<포트>/proxy/<경로>`이다. 경로는 탐지 대상의 메트릭 경로로만 제한하고 GET만 쓴다. **조건을 만족하면 조회 모드에서 허용**한다.
 - 후보 탐지와 수집 동시성은 원본(동시 4개)을 따른다. 대상이 없으면 메뉴를 표시하지 않는다. 처리 정지는 KV.9의 판정과 합친다.
 
+**구현에서 정한 것(KV.10):**
+
+- **파일:** 백엔드는 `kube/ai_detect.rs`(탐지 규칙), `kube/ai_parse.rs`(vLLM·DCGM 파서), `kube/ai_collect.rs`(`kube_ai`, 수집). 프런트는 `aiValues.ts`(증가량·집계), `aiModel.ts`(표, 판정, 요약), `aiFormat.ts`, `useKubeAi.ts`, `KubeAi.tsx`, `kubeAi.css`.
+- **proxy 범위:** `kube_ai`는 연결 ID와 kube 설정만 받는다. 포트와 경로는 웹뷰에서 넘어오지 않고, 탐지 결과(`AiTargets`, 연결별 목록)에 있는 파드만 `get --raw`로 읽는다. annotation의 경로는 KV.9의 `is_metrics_path`를 통과해야 하며, 통과하지 못하면 요청 자체를 보내지 않고 "허용되지 않는 메트릭 포트·경로"로 표시한다. 원본은 `^/[a-zA-Z0-9_./-]+$`만 검사했지만, 클러스터의 annotation이 proxy 대상을 정하게 두지 않으려고 더 좁혔다. HTTPS 엔드포인트는 원본과 같이 지원하지 않는다.
+- **처리 정지:** KV.9의 `metricVerdicts`를 그대로 쓴다. 파드·모델별로 `사용 중 = vllm:num_requests_running`, `완료 수 = vllm:generation_tokens_total`을 넣고 종류만 `stalled`(**처리 정지 의심**)로 한다. 요청 완료 수를 쓰면 긴 생성이 끝나기 전까지 멈춘 것으로 오판한다. 원본은 두 표본 연속으로 판정했지만 KV.9 기준(기본 5분, 표본 간격 150초 초과 시 지속 불인정)으로 맞췄다. KV.10 화면에는 분 설정이 없고 `DEFAULT_MINUTES`를 쓴다. 결과는 `WorkerSummary`로 합쳐 트리 행과 대시보드 워커 영역에 표시한다.
+- **수집 시점:** 작업 화면이 보이는 동안 10초(이 화면을 연 동안 5초), 응답이 느리면 소요 시간의 3배로 늘린다. 탭 표시 여부와 처리 정지 판정 때문에 다른 화면에서도 돈다. 탐지(파드 목록 조회)는 30초, 대상이 없으면 120초 동안 재사용하므로, vLLM·GPU가 없는 클러스터의 추가 비용은 2분에 목록 조회 한 번이다.
+- **표시:** 증가량은 원본처럼 파드 교체, 프로세스 재시작, 계열 증감, 감소가 있으면 `-`로 둔다. 응답 없는 파드는 마지막 모델, 같은 워크로드의 모델 순으로 그 아래에 둔다. 원본의 CPU·메모리 열과 변화 기록(`V` 화면 하단)은 이번 범위에 넣지 않았다.
+- **원본 규칙의 한계:** 이미지·명령줄에 `vllm`이 들어가면 대상이 되므로, vLLM을 호출하기만 하는 파드도 "지원하는 메트릭 없음" 행으로 나타날 수 있다. `podtree.io/monitor=off`로 뺄 수 있다.
+
 ### KV.11 — 로컬 kubeconfig
 
 SSH 없이 내 PC의 kubeconfig로 접속한다. Mac 판매에 필요할 가능성이 크다.
@@ -566,7 +575,8 @@ engineering-rules §5의 네 곳에 함께 등록한다. 모두 `async`이며 �
 | `kube_operate_mode`, `kube_set_operate_mode` | 연결 ID, 켜기 여부 | 저장된 운영 모드 읽기와 변경 | KV.6 |
 | `kube_ingress` | 연결 ID | 구성 점검, 컨트롤러 메트릭 | KV.8 |
 | `kube_probe` | 연결 ID, 파드, 컨테이너 | 런타임 정보 | KV.9 |
-| `kube_metrics` | 연결 ID, 대상 | 앱 워커, vLLM·GPU 메트릭 | KV.9, KV.10 |
+| `kube_metrics` | 연결 ID, 대상 | 앱 워커 메트릭 | KV.9 |
+| `kube_ai` | 연결 ID, kube 설정 | vLLM·GPU 탐지와 메트릭. 경로 인자 없음 | KV.10 |
 
 새 크레이트와 차트 라이브러리는 추가하지 않는다. 추세는 기존 모니터링 차트 코드를 먼저 확인해 재사용한다.
 

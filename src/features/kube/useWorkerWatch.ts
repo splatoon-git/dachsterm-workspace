@@ -3,6 +3,8 @@ import { call, errorText, type KubeSettings } from '../../lib/ipc';
 import type { KubeState } from './kubeModel';
 import type { MetricsRead, ProbeRead } from './runtimeTypes';
 import type { KubePod } from './snapshotTypes';
+import { mergeAiSummaries } from './aiModel';
+import { useKubeAi } from './useKubeAi';
 import { useDocumentVisible } from './useKubeSnapshots';
 import type { Workers } from './workerContext';
 import {
@@ -148,12 +150,16 @@ export function useWorkerWatch(
     };
   }, [id, kube, polling]);
 
+  const ai = useKubeAi(id, kube, polling, pods);
   const summaries = useMemo(
     () =>
-      prefs.watches.map((watch) =>
-        summarize(watch, targets.podsByWatch.get(watch.key) ?? [], states),
+      mergeAiSummaries(
+        prefs.watches.map((watch) =>
+          summarize(watch, targets.podsByWatch.get(watch.key) ?? [], states),
+        ),
+        ai.summaries,
       ),
-    [prefs.watches, targets, states],
+    [prefs.watches, targets, states, ai.summaries],
   );
   const cells = useMemo(() => workerCells(summaries), [summaries]);
 
@@ -180,7 +186,8 @@ export function useWorkerWatch(
       togglePin,
       hasConsent: (key) => prefs.consent.includes(key),
       grantConsent,
+      ai,
     }),
-    [summaries, cells, targets.capped, prefs, setWatch, removeWatch, togglePin, grantConsent],
+    [summaries, cells, targets.capped, prefs, setWatch, removeWatch, togglePin, grantConsent, ai],
   );
 }

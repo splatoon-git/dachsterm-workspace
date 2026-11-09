@@ -82,14 +82,14 @@ roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: view }
 subjects: [{ kind: ServiceAccount, name: kv6-limited, namespace: kv6-control }]
 "#;
 
-struct Cluster {
-    name: String,
-    ssh: String,
+pub(super) struct Cluster {
+    pub(super) name: String,
+    pub(super) ssh: String,
     kubectl: String,
 }
 
 impl Cluster {
-    fn from_env() -> Self {
+    pub(super) fn from_env() -> Self {
         let name = std::env::var("DACHSTERM_KUBE_FIXTURE").unwrap_or_else(|_| "kv6".into());
         Self {
             ssh: format!("{name}-ssh"),
@@ -101,7 +101,7 @@ impl Cluster {
     }
 
     /// As root in the server container, for setting up and for looking at the result.
-    fn shell(&self, script: &str) -> String {
+    pub(super) fn shell(&self, script: &str) -> String {
         let output = Command::new("docker")
             .args(["exec", &self.ssh, "sh", "-c", script])
             .output()
@@ -109,11 +109,11 @@ impl Cluster {
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 
-    fn kube(&self, args: &str) -> String {
+    pub(super) fn kube(&self, args: &str) -> String {
         self.shell(&format!("{} {args}", self.kubectl))
     }
 
-    fn apply(&self, yaml: &str) {
+    pub(super) fn apply(&self, yaml: &str) {
         let script = format!(
             "cat > /tmp/kv6.yaml <<'YAML'\n{yaml}\nYAML\n{} apply -f /tmp/kv6.yaml >/dev/null 2>&1; echo $?",
             self.kubectl
@@ -165,7 +165,7 @@ fn settle(what: &str, limit: Duration, mut done: impl FnMut() -> bool) {
 }
 
 /// The app's real connection path, to the fixture's real OpenSSH server.
-async fn connect(
+pub(super) async fn connect(
     store: &Arc<Store>,
     known_hosts: std::path::PathBuf,
     cluster: &Cluster,

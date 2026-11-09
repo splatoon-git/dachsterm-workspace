@@ -1,0 +1,97 @@
+/* The vLLM·GPU screen. */
+.kube-ai {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-md);
+  font-variant-numeric: tabular-nums;
+}
+.kube-ai-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-lg);
+  margin-bottom: var(--space-sm);
+}
+.kube-ai-hint {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+.kube-ai-table th:not(:first-child),
+.kube-ai-table td:not(:first-child) {
+  text-align: right;
+  white-space: nowrap;
+}
+.kube-ai-table td.kube-wrap {
+  text-align: left;
+  white-space: normal;
+}
+.kube-ai-table td.kube-ai-failed {
+  color: var(--color-status-error);
+  text-align: left;
+  white-space: normal;
+}
+.kube-ai-table td.warn {
+  color: var(--color-status-warning);
+}
+.kube-ai-name {
+  max-width: 320px;
+}
+.kube-ai-name button {
+  overflow: hidden;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kube-ai-name em {
+  color: var(--color-status-warning);
+  font-style: normal;
+  font-weight: 600;
+}
+.kube-ai-model td {
+  background: var(--color-surface-panel);
+  font-weight: 600;
+}
+.kube-ai-pod,
+.kube-ai-device {
+  margin-left: var(--space-md);
+}
+.kube-ai-pod:hover,
+.kube-ai-name button:focus-visible {
+  text-decoration: underline;
+}
+.kube-ai-count {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+.kube-ai-short {
+  color: var(--color-status-error);
+}
+.kube-ai-trend-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.kube-ai h3 {
+  margin: var(--space-md) 0 var(--space-xs);
+  font-size: var(--font-small);
+  font-weight: 600;
+}
+.kube-ai-trend-head h3 {
+  margin: 0;
+}
+.kube-ai-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}

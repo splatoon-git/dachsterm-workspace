@@ -43,7 +43,8 @@
     "test:kube-workers": "node scripts/verify-kube-workers.mjs",
     "test:kube-ingress": "node scripts/verify-kube-ingress.mjs",
     "test:kube-actions": "cargo test -p dachsterm --lib --locked real_cluster_actions -- --ignored --nocapture",
-    "test:kube-stream": "cargo test -p dachsterm --lib --locked real_cluster_streams -- --ignored --nocapture"
+    "test:kube-stream": "cargo test -p dachsterm --lib --locked real_cluster_streams -- --ignored --nocapture",
+    "test:kube-ai": "cargo test -p dachsterm --lib --locked real_cluster_ai -- --ignored --nocapture"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

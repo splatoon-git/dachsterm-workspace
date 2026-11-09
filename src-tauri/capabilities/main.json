@@ -114,6 +114,7 @@
     "allow-kube-log-cancel",
     "allow-kube-metrics",
     "allow-kube-probe",
+    "allow-kube-ai",
     "allow-kube-operate-mode",
     "allow-kube-set-operate-mode",
     "allow-kube-action",

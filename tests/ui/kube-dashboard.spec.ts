@@ -235,8 +235,8 @@ test('the dashboard asks the cluster for nothing extra', async ({ page }) => {
       .filter((c) => !['kube_detect', 'kube_operate_mode'].includes(c.command))
       .map((c) => c.command),
   );
-  // `kube_operate_mode` reads the app's own database. The ingress poll is this screen's own (design KV.8); no worker is watched, so nothing else.
-  expect(new Set(commands)).toEqual(new Set(['kube_snapshot', 'kube_ingress']));
+  // `kube_operate_mode` reads the app's own database. The ingress poll is this screen's own (design KV.8). `kube_ai` runs for the whole workspace: without it the vLLM·GPU tab and the stall verdict have nothing to go on (KV.10). No worker is watched, so nothing else.
+  expect(new Set(commands)).toEqual(new Set(['kube_snapshot', 'kube_ingress', 'kube_ai']));
 });
 
 test('a failed poll keeps the data and says it is old', async ({ page }) => {

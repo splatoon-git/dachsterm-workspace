@@ -90,17 +90,18 @@ export function probePoint(runtime: Runtime, at: number): ProbePoint {
   };
 }
 
-export type VerdictKind = 'stuck' | 'saturated' | 'connections' | 'leak';
+export type VerdictKind = 'stuck' | 'stalled' | 'saturated' | 'connections' | 'leak';
 export type Verdict = { kind: VerdictKind; since: number };
 
 /** Every one says "suspected": metrics alone cannot prove the cause (design KV.9). */
 export const verdictLabels: Record<VerdictKind, string> = {
   stuck: '반환 안 됨 의심',
+  stalled: '처리 정지 의심',
   saturated: '워커 포화 의심',
   connections: '연결 미반환 의심',
   leak: '누수 의심',
 };
-const verdictOrder: VerdictKind[] = ['stuck', 'saturated', 'connections', 'leak'];
+const verdictOrder: VerdictKind[] = ['stuck', 'stalled', 'saturated', 'connections', 'leak'];
 
 /** How long `holds` has been true, counting back from the newest point. */
 function holdingSince<T extends { at: number }>(
@@ -118,7 +119,16 @@ function holdingSince<T extends { at: number }>(
   return since;
 }
 
-export function metricVerdicts(points: MetricPoint[], minutes: number): Verdict[] {
+/**
+ * Busy with nothing moving. vLLM passes its generated tokens as `completed` and asks for `stalled`:
+ * a long answer finishes no request for minutes while its tokens keep coming, and that is not a
+ * stall (design KV.10).
+ */
+export function metricVerdicts(
+  points: MetricPoint[],
+  minutes: number,
+  notMoving: 'stuck' | 'stalled' = 'stuck',
+): Verdict[] {
   const newest = points.at(-1);
   if (!newest) return [];
   const window = minutes * 60_000;
@@ -128,7 +138,8 @@ export function metricVerdicts(points: MetricPoint[], minutes: number): Verdict[
     (point, last) =>
       point.busy > 0 && point.completed !== null && point.completed === last.completed,
   );
-  if (stuck !== null && newest.at - stuck >= window) verdicts.push({ kind: 'stuck', since: stuck });
+  if (stuck !== null && newest.at - stuck >= window)
+    verdicts.push({ kind: notMoving, since: stuck });
   const saturated = holdingSince(
     points,
     (point) => point.total !== null && point.total > 0 && point.busy >= point.total,
@@ -319,7 +330,7 @@ export function summarize(
 
 export const verdictLine = (verdict: Verdict, now: number) => {
   const minutes = Math.floor((now - verdict.since) / 60_000);
-  const lasting = verdict.kind === 'stuck' || verdict.kind === 'saturated';
+  const lasting = ['stuck', 'stalled', 'saturated'].includes(verdict.kind);
   return lasting && minutes >= 1
     ? `${verdictLabels[verdict.kind]} · ${minutes}분째`
     : verdictLabels[verdict.kind];

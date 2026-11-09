@@ -1,4 +1,6 @@
 import { createContext, useContext } from 'react';
+import type { KubeAiData } from './useKubeAi';
+import { NO_AI } from './aiModel';
 import type { WorkerCell, WorkerSummary, WorkerWatch } from './workers';
 
 /**
@@ -17,6 +19,8 @@ export type Workers = {
   togglePin: (key: string, selector: string) => void;
   hasConsent: (key: string) => boolean;
   grantConsent: (key: string) => void;
+  /** vLLM and GPU detection and readings. Its stall verdicts are already in `summaries`. */
+  ai: KubeAiData;
 };
 
 const nobody: Workers = {
@@ -30,6 +34,7 @@ const nobody: Workers = {
   togglePin: () => undefined,
   hasConsent: () => false,
   grantConsent: () => undefined,
+  ai: NO_AI,
 };
 
 export const WorkersContext = createContext<Workers>(nobody);
