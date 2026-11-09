@@ -60,6 +60,11 @@
   border-radius: 50%;
   background: var(--color-status-success);
 }
+.kube-header-count {
+  margin-left: var(--space-xs);
+  color: var(--color-status-warning);
+  font-variant-numeric: tabular-nums;
+}
 .kube-header-divider {
   flex-shrink: 0;
   width: var(--border-width-default);

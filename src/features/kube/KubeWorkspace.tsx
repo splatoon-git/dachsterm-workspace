@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
 import type { PodRef } from './detailTypes';
 import { IngressView } from './IngressView';
+import { KubeChanges } from './KubeChanges';
 import { KubeDashboard } from './KubeDashboard';
+import { KubeHeader } from './KubeHeader';
+import { KubeProblems } from './KubeProblems';
 import { KubeSetup } from './KubeSetup';
 import { KubeTreeScreen, type PanelState } from './KubeTreeScreen';
 import { LogBoard } from './LogBoard';
@@ -13,6 +16,7 @@ import type { SearchScope } from './logSearchModel';
 import type { PathRow } from './ingressModel';
 import type { PodTerminalRequest } from './podShell';
 import { freshness } from './polling';
+import { problemCount, problemSections } from './problems';
 import { readLastScreen, writeLastScreen } from './screenPref';
 import { initialTreeView } from './tree';
 import type { TreeTarget } from './treeReveal';
@@ -21,11 +25,11 @@ import { useKubeSnapshots } from './useKubeSnapshots';
 import { useLogBoard } from './useLogBoard';
 import { useLogSearch } from './useLogSearch';
 import { useOperateMode } from './useOperateMode';
+import { useAlertPref, useProblemAlerts } from './useProblemAlerts';
 import { useWorkerWatch } from './useWorkerWatch';
 import { WorkersContext } from './workerContext';
 import {
   finishesAfterRecheck,
-  kubeScreens,
   opensDirectly,
   settingsFrom,
   type DetectRequest,
@@ -52,6 +56,7 @@ export function KubeWorkspace({
   connectionId,
   persist,
   session,
+  sessionName,
   visible,
   focused,
   display,
@@ -66,6 +71,8 @@ export function KubeWorkspace({
   persist: boolean;
   /** The profile this tab belongs to, for the tree's saved folding. */
   session: string;
+  /** Its name, for the title of an alert. The app owns this text and a cluster cannot change it. */
+  sessionName: string;
   /** The tab is on screen; a split pane in a background tab is not. */
   visible: boolean;
   focused: boolean;
@@ -222,19 +229,27 @@ export function KubeWorkspace({
   const detection = phase.name === 'setup' ? phase.detection : null;
   const settingUp = phase.name !== 'open';
   const operate = useOperateMode(connectionId, phase.name === 'open');
-  const opened = phase.name === 'open' ? phase.settings : null;
-  const shownNow = visible && display === 'workspace';
-  const { store, history, now } = useKubeSnapshots(connectionId, opened, shownNow);
-  const workers = useWorkerWatch(connectionId, opened, shownNow, store.pods.data, session);
+  const settings = phase.name === 'open' ? phase.settings : null;
+  const onScreen = visible && display === 'workspace';
+  const [alerts, setAlerts] = useAlertPref(session);
+  const { store, history, issues, now } = useKubeSnapshots(
+    connectionId,
+    settings,
+    onScreen,
+    alerts,
+  );
+  const alertError = useProblemAlerts(issues, alerts, sessionName, onScreen);
+  const sections = useMemo(() => problemSections(store), [store]);
+  const workers = useWorkerWatch(connectionId, settings, onScreen, store.pods.data, session);
   // Only the screens that use it: the costliest poll here (KV.8). The board needs controller names.
   const ingress = useKubeIngress(
     connectionId,
-    opened,
-    shownNow && (screen === 'ingress' || screen === 'dashboard' || screen === 'board'),
+    settings,
+    onScreen && (screen === 'ingress' || screen === 'dashboard' || screen === 'board'),
   );
   const board = useLogBoard(
     connectionId,
-    opened,
+    settings,
     store.pods.data,
     store.services.data,
     ingress.controllers,
@@ -259,43 +274,19 @@ export function KubeWorkspace({
     fresh.warning ?? (phase.name === 'open' && phase.offline ? '클러스터 연결 불가' : null);
   return (
     <div className={`kube-workspace ${display === 'terminal' ? 'on-terminal' : ''}`}>
-      <div className="kube-header" role="tablist" aria-label="쿠버네티스 화면">
-        {kubeScreens.map(({ id, label }) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={display === 'workspace' && screen === id}
-            onClick={() => openScreen(id)}
-          >
-            {label}
-            {id === 'board' && board.phase === 'live' && (
-              <i className="kube-header-live" title="로그를 받는 중" aria-hidden="true" />
-            )}
-          </button>
-        ))}
-        <span className="kube-header-divider" aria-hidden="true" />
-        <button role="tab" aria-selected={display === 'terminal'} onClick={showTerminal}>
-          서버 터미널
-        </button>
-        <span className="kube-status">
-          {phase.name === 'open' && (
-            <>
-              <strong>{phase.settings.context}</strong> · {phase.settings.namespace || '전체'} ·
-              <OperateModeControl control={operate} context={phase.settings.context} />
-              {fresh.age && ` · ${fresh.age}`}
-              {warning && <em> · {warning}</em>}
-            </>
-          )}
-          {display === 'terminal' && settingUp && (
-            <>
-              {note && <span className="kube-status-note">{note}</span>}
-              <button disabled={busy} onClick={() => recheck({ mode: 'scan' })}>
-                다시 확인
-              </button>
-            </>
-          )}
-        </span>
-      </div>
+      <KubeHeader
+        screen={screen}
+        display={display}
+        openScreen={openScreen}
+        showTerminal={showTerminal}
+        settings={settings}
+        mode={settings && <OperateModeControl control={operate} context={settings.context} />}
+        age={fresh.age}
+        warning={warning}
+        liveLogs={board.phase === 'live'}
+        problems={problemCount(sections)}
+        setup={settingUp ? { note, busy, recheck: () => recheck({ mode: 'scan' }) } : null}
+      />
       {display === 'workspace' && (
         <WorkersContext.Provider value={workers}>
           <div className="kube-body">
@@ -361,6 +352,19 @@ export function KubeWorkspace({
                 ingress={ingress}
                 openIngress={openIngress}
               />
+            )}
+            {phase.name === 'open' && screen === 'problems' && (
+              <KubeProblems
+                sections={sections}
+                store={store}
+                reveal={reveal}
+                alerts={alerts}
+                setAlerts={setAlerts}
+                alertError={alertError}
+              />
+            )}
+            {phase.name === 'open' && screen === 'changes' && (
+              <KubeChanges changes={issues.changes} reveal={reveal} />
             )}
             {phase.name === 'open' && screen === 'logs' && (
               <LogSearch

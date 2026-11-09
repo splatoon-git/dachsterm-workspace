@@ -58,6 +58,7 @@ function KubeOrTerminal({ openPodTerminal, ...props }: KubeProps) {
           connectionId={session.connectionId}
           persist={session.profile.workspace === 'kubernetes'}
           session={session.profile.id}
+          sessionName={session.profile.name}
           visible={active}
           focused={focused ?? false}
           display={display}

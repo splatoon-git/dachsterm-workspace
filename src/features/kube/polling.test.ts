@@ -10,7 +10,9 @@ import {
   kindNotes,
   newSchedule,
   nextWakeIn,
+  overviewKinds,
   pollPeriods,
+  problemKinds,
   resumed,
   snapshotKinds,
   started,
@@ -44,6 +46,9 @@ describe('schedule', () => {
       podUsage: 15000,
       nodeUsage: 15000,
       events: 15000,
+      pvcs: 30000,
+      jobs: 30000,
+      hpas: 30000,
     });
   });
 
@@ -170,5 +175,23 @@ describe('what the user is told', () => {
     expect(stateNote({ kind: 'tooLarge' })).toContain('namespace를 좁히세요');
     expect(stateNote({ kind: 'timedOut' })).toContain('namespace를 좁히세요');
     expect(stateNote({ kind: 'unknown', message: '그대로' })).toBe('그대로');
+  });
+});
+
+describe('which kinds each screen uses', () => {
+  it('leaves the problem-only kinds out of what the tree and dashboard report', () => {
+    expect(overviewKinds).not.toEqual(expect.arrayContaining(['pvcs']));
+    let store = emptySnapshots();
+    store = applySnapshot(store, 'pvcs', result({ kind: 'forbidden' }));
+    expect(kindNotes(store)).toEqual([]);
+  });
+
+  it('polls only the given kinds when told to', () => {
+    const schedule = newSchedule(0);
+    expect(dueKinds(schedule, 0, problemKinds)).toEqual([...problemKinds]);
+    expect(dueKinds(schedule, 0, problemKinds)).not.toContain('events');
+    const later = finished(started(schedule, 'pods'), 'pods', 0, result(ready, { elapsedMs: 1 }));
+    expect(nextWakeIn(later, 0, ['pods'])).toBe(5000);
+    expect(nextWakeIn(started(schedule, 'pods'), 0, ['pods'])).toBeNull();
   });
 });

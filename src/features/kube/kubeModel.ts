@@ -163,6 +163,8 @@ export const kubeMenu = (workspace: 'terminal' | 'kubernetes' | undefined, opene
 export const kubeScreens = [
   { id: 'tree', label: '트리' },
   { id: 'dashboard', label: '대시보드' },
+  { id: 'problems', label: '문제 목록' },
+  { id: 'changes', label: '변화 기록' },
   { id: 'ingress', label: '인그레스' },
   { id: 'board', label: '실시간 로그' },
   { id: 'logs', label: '로그 검색' },
