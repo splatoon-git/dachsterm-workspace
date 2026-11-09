@@ -45,6 +45,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Audit tool
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit@0.22.2
       - name: Automated macOS gates and app bundle
         run: bash scripts/verify-macos.sh --package
       - name: Test reports

@@ -27,8 +27,8 @@
 .file-type-icon[data-glyph]::before {
   content: attr(data-glyph);
   font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  line-height: 16px;
+  font-size: var(--font-tiny);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--font-tracking-tight);
+  line-height: var(--space-lg);
 }

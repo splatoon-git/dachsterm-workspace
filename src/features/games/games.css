@@ -2,11 +2,11 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 20px 24px;
+  padding: var(--space-lg-plus) var(--space-xl);
   background: var(--terminal-background);
   color: var(--terminal-foreground);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--font-small);
   container-type: inline-size;
   --game-line: color-mix(in srgb, var(--terminal-foreground) 35%, var(--terminal-background));
 }
@@ -17,9 +17,9 @@
   font: inherit;
   color: var(--terminal-foreground);
   background: transparent;
-  border: 1px solid var(--game-line);
+  border: var(--border-width-default) solid var(--game-line);
   border-radius: 0;
-  padding: 6px 10px;
+  padding: var(--space-xs-plus) var(--space-sm-plus);
 }
 .game-terminal button:hover:enabled,
 .game-terminal button[aria-pressed='true'] {
@@ -28,27 +28,27 @@
 }
 .game-terminal :focus-visible {
   outline-color: var(--terminal-foreground);
-  outline-offset: 2px;
+  outline-offset: var(--border-width-focus);
 }
 .game-terminal-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--game-line);
+  gap: var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: var(--border-width-default) solid var(--game-line);
 }
 .game-terminal-heading small {
   font: inherit;
 }
 .game-terminal-heading button {
   border-color: transparent;
-  padding: 4px 0;
+  padding: var(--space-xs) 0;
 }
 .game-terminal kbd {
   font: inherit;
-  margin-left: 8px;
+  margin-left: var(--space-sm);
 }
 .game-play {
   max-width: 620px;
@@ -78,9 +78,9 @@
   fill: currentColor;
 }
 .dachs-help {
-  font-size: 12px;
-  line-height: 1.8;
-  margin: 12px 0;
+  font-size: var(--font-small);
+  line-height: var(--font-leading-loose);
+  margin: var(--space-md) 0;
 }
 .dachs-touch-controls button {
   min-width: 70px;
@@ -90,48 +90,48 @@
 .game-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
-  margin: 18px 0;
+  gap: var(--space-sm) var(--space-xl);
+  margin: var(--space-lg) 0;
 }
 .game-stats > div {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: baseline;
 }
 .game-stats strong {
-  font-size: 13px;
-  font-weight: 400;
+  font-size: var(--font-small);
+  font-weight: var(--font-weight-normal);
   font-variant-numeric: tabular-nums;
 }
 .game-stage {
   display: flex;
   align-items: flex-start;
-  gap: 28px;
+  gap: var(--space-xl);
 }
 .game-board {
   display: grid;
   flex-shrink: 0;
-  padding: 5px;
-  border: 1px solid var(--game-line);
+  padding: var(--space-xs);
+  border: var(--border-width-default) solid var(--game-line);
 }
 .game-guide {
   width: 180px;
   min-width: 0;
-  font-size: 12px;
-  line-height: 1.8;
+  font-size: var(--font-small);
+  line-height: var(--font-leading-loose);
 }
 .game-guide h3 {
   margin: 0;
   font-size: inherit;
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .game-guide p {
-  margin: 12px 0;
+  margin: var(--space-md) 0;
 }
 .blocks-board {
   width: 192px;
   grid-template-columns: repeat(10, 1fr);
-  gap: 1px;
+  gap: var(--space-hair);
 }
 .block-cell {
   aspect-ratio: 1;
@@ -150,25 +150,25 @@
   box-shadow: inset 0 0 0 1px var(--terminal-background);
 }
 .block--1 {
-  border: 1px dotted var(--game-line);
+  border: var(--border-width-default) dotted var(--game-line);
 }
 .next-block {
   display: grid;
   grid-template-columns: repeat(var(--columns), 16px);
-  gap: 1px;
-  margin-top: 12px;
+  gap: var(--space-hair);
+  margin-top: var(--space-md);
 }
 .snake-board {
   width: 272px;
   grid-template-columns: repeat(16, 1fr);
-  gap: 1px;
+  gap: var(--space-hair);
 }
 .snake-cell {
   aspect-ratio: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 13px;
+  font-size: var(--font-small);
 }
 .snake-body {
   background: var(--terminal-foreground);
@@ -183,15 +183,15 @@
 .tiles-board {
   width: 272px;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1px;
+  gap: var(--space-hair);
 }
 .number-tile {
   aspect-ratio: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  border: 1px solid var(--game-line);
-  font-size: 20px;
+  border: var(--border-width-default) solid var(--game-line);
+  font-size: var(--font-large);
   font-variant-numeric: tabular-nums;
 }
 .tile-0 {
@@ -199,19 +199,19 @@
 }
 .tile-3,
 .tile-4 {
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .mines-board {
   width: 272px;
   grid-template-columns: repeat(9, minmax(0, 1fr));
-  gap: 2px;
+  gap: var(--space-xxs);
 }
 .game-terminal .mine-cell {
   padding: 0;
   min-width: 0;
   min-height: 0;
   aspect-ratio: 1;
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .game-terminal .mine-cell.opened {
   border-color: transparent;
@@ -224,15 +224,16 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  margin: 12px 0;
+  gap: var(--space-xs);
+  margin: var(--space-md) 0;
 }
 .game-direction-pad > button {
-  margin-left: 36px;
+  --game-pad-offset: 36px;
+  margin-left: var(--game-pad-offset);
 }
 .game-direction-pad > div {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 .game-direction-pad button {
   width: 32px;
@@ -242,28 +243,28 @@
 .game-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 .game-status {
-  font-size: 12px;
+  font-size: var(--font-small);
   min-height: 20px;
-  margin: 16px 0 8px;
+  margin: var(--space-lg) 0 var(--space-sm);
 }
 .games-footnote {
-  margin: 24px 0 0;
-  font-size: 11px;
-  line-height: 1.8;
+  margin: var(--space-xl) 0 0;
+  font-size: var(--font-caption);
+  line-height: var(--font-leading-loose);
 }
 @container (max-width: 510px) {
   .game-stage {
     flex-wrap: wrap;
-    gap: 16px;
+    gap: var(--space-lg);
   }
   .game-guide {
     width: 100%;
   }
   .game-guide p {
-    margin: 6px 0;
+    margin: var(--space-xs-plus) 0;
   }
   .game-direction-pad {
     display: none;
@@ -279,7 +280,7 @@
 }
 @media (max-width: 700px) {
   .game-terminal {
-    padding: 12px;
+    padding: var(--space-md);
   }
 }
 
@@ -291,9 +292,9 @@
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 20px;
-  font-size: 12px;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg-plus);
+  font-size: var(--font-small);
   opacity: 0.7;
 }
 .adventure-board {
@@ -307,7 +308,7 @@
 .adventure-board text {
   font-family: var(--font-mono);
   fill: currentColor;
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .adventure-scenery {
   fill: currentColor;
@@ -404,11 +405,11 @@
   stroke: var(--game-line);
 }
 .adventure-overlay .adventure-overlay-title {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: var(--font-large);
+  font-weight: var(--font-weight-semibold);
 }
 .adventure-controls {
-  gap: 6px;
+  gap: var(--space-xs-plus);
 }
 .adventure-controls button {
   flex: 1;
@@ -529,8 +530,8 @@
 }
 .adventure-enemy text {
   stroke: none;
-  font-size: 22px;
-  font-weight: bold;
+  font-size: var(--font-display);
+  font-weight: var(--font-weight-bold);
 }
 .adventure-stomp-trail {
   stroke: var(--adventure-accent);
@@ -543,30 +544,30 @@
   stroke-width: 3;
 }
 .adventure-map-options {
-  margin: 12px 0;
-  border-bottom: 1px solid var(--game-line);
-  padding-bottom: 10px;
-  font-size: 12px;
+  margin: var(--space-md) 0;
+  border-bottom: var(--border-width-default) solid var(--game-line);
+  padding-bottom: var(--space-sm-plus);
+  font-size: var(--font-small);
 }
 .adventure-map-options summary {
   cursor: pointer;
 }
 .adventure-map-options p {
-  line-height: 1.7;
+  line-height: var(--font-leading-relaxed);
 }
 .adventure-map-options form {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm-plus);
   align-items: center;
 }
 .adventure-map-options input {
   width: 130px;
   color: var(--terminal-foreground);
   background: var(--terminal-background);
-  border: 1px solid var(--game-line);
-  padding: 6px;
+  border: var(--border-width-default) solid var(--game-line);
+  padding: var(--space-xs-plus);
   font: inherit;
 }
 .adventure-map-options button {
@@ -577,7 +578,7 @@
   max-width: 150px;
 }
 .adventure-next {
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-md);
 }
 .adventure-clouds {
   fill: var(--terminal-background);
@@ -691,7 +692,7 @@
   stroke-width: 3;
 }
 .adventure-effect text {
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   paint-order: stroke;
   stroke: var(--terminal-background);
   stroke-width: 3;
@@ -724,8 +725,8 @@
 }
 .adventure-arena .arena-name {
   stroke: none;
-  letter-spacing: 3px;
-  font-size: 18px;
+  letter-spacing: var(--font-tracking-wider);
+  font-size: var(--font-large);
   opacity: 0.35;
 }
 .adventure-boss {
@@ -767,7 +768,7 @@
   stroke-dasharray: 12 8;
 }
 .adventure-boss .boss-warning {
-  font-size: 30px;
+  font-size: var(--font-title);
   fill: var(--terminal-red);
   stroke: var(--terminal-background);
   paint-order: stroke;
@@ -790,11 +791,11 @@
   fill: var(--terminal-red);
 }
 .adventure-boss-hud text {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .adventure-sound {
-  margin: 0 0 12px 8px;
-  font-size: 11px;
+  margin: 0 0 var(--space-md) var(--space-sm);
+  font-size: var(--font-caption);
 }
 @media (prefers-reduced-motion: reduce) {
   .adventure-weather {

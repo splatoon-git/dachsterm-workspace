@@ -1,7 +1,7 @@
 /* Worker watching: the tree's worker cell and the dashboard rows. */
 .kube-worker-cell b {
   color: var(--color-status-warning);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-dash-row.worker {
   grid-template-columns: minmax(0, 2fr) max-content minmax(0, 2fr);

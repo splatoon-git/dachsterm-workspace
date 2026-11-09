@@ -25,7 +25,7 @@
   flex-direction: row;
   align-items: center;
   gap: var(--space-sm);
-  padding: 6px var(--space-md);
+  padding: var(--space-xs-plus) var(--space-md);
   font-size: var(--font-small);
 }
 .manager-rows > label + label {
@@ -39,7 +39,7 @@
 .manager-rows small {
   overflow: hidden;
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: var(--font-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -106,7 +106,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
-  padding: 4px 0;
+  padding: var(--space-xs) 0;
 }
 .manager-apply {
   display: flex;

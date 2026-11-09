@@ -204,7 +204,7 @@
   padding: 0 var(--space-xs);
   background: none;
   color: inherit;
-  font-size: 10px;
+  font-size: var(--font-tiny);
   cursor: pointer;
 }
 .status-file button.status-tag:hover {

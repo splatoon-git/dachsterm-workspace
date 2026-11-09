@@ -1,6 +1,6 @@
 .survivor-game {
   max-width: 1120px;
-  line-height: 1.65;
+  line-height: var(--font-leading-relaxed);
   overflow-wrap: anywhere;
 }
 .survivor-game button {
@@ -13,22 +13,22 @@
 }
 .survivor-intro {
   max-width: 760px;
-  padding: 16px 0;
+  padding: var(--space-lg) 0;
 }
 .survivor-hud {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  padding: 18px 0;
+  gap: var(--space-md);
+  padding: var(--space-lg) 0;
 }
 .survivor-hud > div {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 .survivor-hud strong {
-  font-size: 19px;
+  font-size: var(--font-large);
 }
 .survivor-game progress {
   display: block;
@@ -41,7 +41,7 @@
 }
 .survivor-field {
   position: relative;
-  border: 1px solid var(--game-line);
+  border: var(--border-width-default) solid var(--game-line);
   border-radius: var(--radius-medium);
 }
 .survivor-field canvas {
@@ -59,26 +59,26 @@
   right: 20%;
   text-align: center;
   background: var(--terminal-background);
-  padding: 6px 10px;
-  border: 1px solid var(--terminal-red);
+  padding: var(--space-xs-plus) var(--space-sm-plus);
+  border: var(--border-width-default) solid var(--terminal-red);
 }
 .survivor-boss progress {
   accent-color: var(--terminal-red);
 }
 .survivor-panel {
   position: absolute;
-  z-index: 1;
+  z-index: var(--layer-raised);
   inset: 0;
   margin: auto;
   width: min(500px, calc(100% - 24px));
   height: fit-content;
   max-height: calc(100% - 20px);
   box-sizing: border-box;
-  border: 1px solid var(--game-line);
+  border: var(--border-width-default) solid var(--game-line);
   border-radius: var(--radius-medium);
   background: var(--terminal-background);
   box-shadow: 0 4px 24px color-mix(in srgb, var(--terminal-foreground) 20%, transparent);
-  padding: 20px;
+  padding: var(--space-lg-plus);
   overflow: auto;
   scroll-margin: 12px;
 }
@@ -86,17 +86,17 @@
   pointer-events: none;
 }
 .survivor-panel h2 {
-  margin: 0 0 8px;
-  font-size: 20px;
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-large);
 }
 .survivor-panel > button {
-  margin: 4px 8px 4px 0;
+  margin: var(--space-xs) var(--space-sm) var(--space-xs) 0;
 }
 .survivor-choice {
   inset: auto 0 clamp(8px, 2cqw, 20px);
   width: min(680px, calc(100% - 32px));
-  padding: 12px 16px;
-  line-height: 1.4;
+  padding: var(--space-md) var(--space-lg);
+  line-height: var(--font-leading-tight);
   overscroll-behavior: contain;
 }
 .survivor-choice-heading,
@@ -105,15 +105,15 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: var(--space-xs) var(--space-md);
 }
 .survivor-choice-heading h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--font-large);
 }
 .survivor-choice-heading > span,
 .survivor-choice-footer {
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .survivor-choice-footer small {
   display: block;
@@ -121,21 +121,21 @@
 .survivor-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin: 10px 0;
+  gap: var(--space-sm);
+  margin: var(--space-sm-plus) 0;
 }
 .survivor-cards .survivor-card {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: 3px;
+  gap: var(--space-xxs);
   text-align: left;
-  padding: 9px 12px;
+  padding: var(--space-sm) var(--space-md);
   --card-ink: var(--terminal-blue);
   background: color-mix(in srgb, var(--card-ink) 5%, var(--terminal-background));
-  border: 1px solid var(--game-line);
-  border-top: 3px solid var(--card-ink);
+  border: var(--border-width-default) solid var(--game-line);
+  border-top: var(--border-width-focus) solid var(--card-ink);
 }
 .survivor-card[data-kind='ability'] {
   --card-ink: var(--terminal-green);
@@ -146,61 +146,61 @@
 }
 .survivor-card small {
   color: var(--card-ink);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .survivor-card kbd {
-  margin: 0 3px 0 0;
-  padding: 0 4px;
-  border: 1px solid currentColor;
-  border-radius: 3px;
+  margin: 0 var(--space-xxs) 0 0;
+  padding: 0 var(--space-xs);
+  border: var(--border-width-default) solid currentColor;
+  border-radius: var(--radius-xs);
 }
 .survivor-card-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 10px;
-  margin-top: 3px;
-  font-size: 12px;
+  gap: var(--space-xxs) var(--space-sm-plus);
+  margin-top: var(--space-xxs);
+  font-size: var(--font-small);
   font-variant-numeric: tabular-nums;
 }
 .survivor-card-stats b {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   white-space: nowrap;
 }
 .survivor-card strong {
-  font-size: 18px;
+  font-size: var(--font-large);
 }
 .survivor-card:focus-visible {
-  outline: 3px solid var(--terminal-blue);
-  outline-offset: 2px;
+  outline: var(--border-width-focus) solid var(--terminal-blue);
+  outline-offset: var(--border-width-focus);
 }
 .survivor-loadout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin: 16px 0;
+  gap: var(--space-lg);
+  margin: var(--space-lg) 0;
 }
 .survivor-loadout > div {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 .survivor-loadout span {
-  border: 1px solid var(--game-line);
-  padding: 4px 8px;
-  font-size: 12px;
+  border: var(--border-width-default) solid var(--game-line);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-small);
 }
 .survivor-controls {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 24px;
-  padding: 8px 0 16px;
+  gap: var(--space-xl);
+  padding: var(--space-sm) 0 var(--space-lg);
 }
 .survivor-pad {
   display: grid;
   grid-template-columns: repeat(3, 44px);
-  gap: 4px;
+  gap: var(--space-xs);
   flex: none;
 }
 .survivor-pad button {
@@ -211,9 +211,9 @@
   user-select: none;
 }
 .survivor-save-error {
-  border: 1px solid var(--terminal-red);
-  padding: 12px;
-  margin: 12px 0;
+  border: var(--border-width-default) solid var(--terminal-red);
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
 }
 @container (max-width: 760px) {
   .survivor-choice {
@@ -232,7 +232,7 @@
     grid-template-columns: 1fr;
   }
   .survivor-panel {
-    padding: 12px;
+    padding: var(--space-md);
   }
   /* A short 16:9 field still shows the scene above the sheet. Long card
      descriptions scroll inside it, without pushing the field or HUD. */
@@ -242,14 +242,14 @@
     max-height: min(50dvh, 360px);
   }
   .survivor-hud {
-    font-size: 12px;
-    gap: 8px;
+    font-size: var(--font-small);
+    gap: var(--space-sm);
   }
   .survivor-boss,
   .survivor-warning {
     left: 5%;
     right: 5%;
-    font-size: 11px;
-    padding: 2px 6px;
+    font-size: var(--font-caption);
+    padding: var(--space-xxs) var(--space-xs-plus);
   }
 }

@@ -7,16 +7,21 @@ const env = {
   ...process.env,
   PATH: `${path.join(homedir(), '.cargo', 'bin')}${path.delimiter}${process.env.PATH}`,
 };
-const metadata = spawnSync(
-  'cargo',
-  ['metadata', '--locked', '--format-version', '1', '--filter-platform', 'x86_64-pc-windows-msvc'],
-  { env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, windowsHide: true },
-);
-if (metadata.status !== 0) throw new Error('Cargo metadata failed; no notices generated');
-const cargo = JSON.parse(metadata.stdout);
-const reachable = new Set(cargo.resolve.nodes.map((n) => n.id));
-const items = cargo.packages
-  .filter((p) => (p.source || p.name === 'ssh-key') && reachable.has(p.id))
+const platforms = ['x86_64-pc-windows-msvc', 'aarch64-apple-darwin'];
+const packages = new Map();
+for (const platform of platforms) {
+  const metadata = spawnSync(
+    'cargo',
+    ['metadata', '--locked', '--format-version', '1', '--filter-platform', platform],
+    { env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, windowsHide: true },
+  );
+  if (metadata.status !== 0) throw new Error('Cargo metadata failed; no notices generated');
+  const cargo = JSON.parse(metadata.stdout);
+  const reachable = new Set(cargo.resolve.nodes.map((n) => n.id));
+  for (const p of cargo.packages) if (reachable.has(p.id)) packages.set(p.id, p);
+}
+const items = [...packages.values()]
+  .filter((p) => p.source || p.name === 'ssh-key')
   .map((p) => ({
     ecosystem: 'cargo',
     name: p.name,
@@ -44,7 +49,7 @@ items.sort((a, b) =>
 const records = [];
 const notices = [
   'DachsTerm third-party notices',
-  'Generated from locked Windows dependency metadata. Includes build dependencies; inclusion does not imply every component is shipped.',
+  'Generated from locked Windows and macOS dependency metadata. Includes build dependencies; inclusion does not imply every component is shipped.',
   'Project branding and application licensing are managed separately.',
   '',
 ];
@@ -136,11 +141,7 @@ for (const item of items) {
 await mkdir('licenses', { recursive: true });
 await writeFile(
   'licenses/dependencies.json',
-  JSON.stringify(
-    { platform: 'x86_64-pc-windows-msvc', components: records, missingLicenseTexts: missing },
-    null,
-    2,
-  ) + '\n',
+  JSON.stringify({ platforms, components: records, missingLicenseTexts: missing }, null, 2) + '\n',
 );
 await writeFile('licenses/THIRD_PARTY_NOTICES.txt', notices.join('\n'));
 console.log(

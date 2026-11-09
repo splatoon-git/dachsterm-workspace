@@ -20,7 +20,7 @@ description: MacBook에서 DachsTerm을 빌드·실행·검증하고 결과를 �
 
 ## 3. 실제 SSH 엔진
 
-Docker가 있으면 `npm run probe`와 `npm run probe:phase1`을 실행한다. Docker가 없으면 대기로 기록한다. `npm run test:native`, `probe:ftp`, `test-*-native.mjs`는 Windows 전용이므로 실행하지 않는다.
+Docker가 있으면 `npm run probe`와 `npm run probe:phase1`을 실행한다. Docker가 없으면 대기로 기록한다. `npm run probe:ftp`는 `.tools/ftp-fixture` Python 환경이 있으면 실행한다. `npm run test:native`, `test-*-native.mjs`, `probe:ftp --native`는 Windows 전용이므로 실행하지 않는다.
 
 ## 4. 앱 실기기 확인
 

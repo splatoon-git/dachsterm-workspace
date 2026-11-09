@@ -38,6 +38,7 @@ pub mod monitoring;
 pub mod net_tools;
 mod prompt_files;
 mod remote_exec;
+mod remote_name;
 mod remote_ports;
 pub mod routes;
 mod rsa_auth;

@@ -40,24 +40,24 @@ dialog.dialog-large {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-md);
-  padding: var(--space-lg) var(--space-md) var(--space-md) 20px;
+  padding: var(--space-lg) var(--space-md) var(--space-md) var(--space-lg-plus);
   border-bottom: var(--border-width-default) solid var(--color-border-subtle);
 }
 .dialog-title {
   min-width: 0;
-  padding-top: 2px;
+  padding-top: var(--space-xxs);
 }
 .dialog-title h2 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22px;
+  font-size: var(--font-heading);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--space-lg-plus);
 }
 .dialog-title p {
-  margin: 2px 0 0;
+  margin: var(--space-xxs) 0 0;
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  line-height: 1.5;
+  line-height: var(--font-leading-normal);
 }
 .dialog-close {
   flex-shrink: 0;
@@ -80,7 +80,7 @@ dialog.dialog-large {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-lg) 20px;
+  padding: var(--space-lg) var(--space-lg-plus);
 }
 .dialog-body > :first-child,
 .dialog-body > form > :first-child {
@@ -93,11 +93,11 @@ dialog.dialog-large {
 }
 .dialog-body > p {
   margin: 0 0 var(--space-md);
-  line-height: 1.6;
+  line-height: var(--font-leading-relaxed);
 }
 .dialog-body > form > p {
   margin: 0;
-  line-height: 1.6;
+  line-height: var(--font-leading-relaxed);
 }
 
 /* The trailing action row is the footer: pinned under the scrolling content. A nested dialog
@@ -113,10 +113,10 @@ dialog.dialog-large {
 .dialog-body > .form-actions:last-child,
 .dialog-body > form:last-of-type > .form-actions:last-child {
   position: sticky;
-  z-index: 1;
+  z-index: var(--layer-raised);
   bottom: calc(-1 * var(--space-lg));
-  margin: var(--space-lg) -20px calc(-1 * var(--space-lg));
-  padding: var(--space-md) 20px;
+  margin: var(--space-lg) calc(-1 * var(--space-lg-plus)) calc(-1 * var(--space-lg));
+  padding: var(--space-md) var(--space-lg-plus);
   border-top: var(--border-width-default) solid var(--color-border-subtle);
   background: var(--color-surface-panel);
 }
@@ -125,9 +125,9 @@ dialog.dialog-large {
 }
 .form-actions > button {
   min-height: var(--control-height);
-  padding: 5px 14px;
+  padding: var(--space-xs) var(--space-md);
   font-size: var(--font-small);
-  line-height: 20px;
+  line-height: var(--space-lg-plus);
 }
 /* Only the footer's buttons: a context menu item also uses .danger, for red text alone. */
 .form-actions > button.danger {
@@ -151,9 +151,9 @@ dialog.dialog-large {
 dialog input:not([type='checkbox']):not([type='radio']),
 dialog select {
   min-height: var(--control-height);
-  padding: 5px 8px;
+  padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-small);
-  line-height: 20px;
+  line-height: var(--space-lg-plus);
 }
 dialog label {
   min-width: 0;
@@ -164,8 +164,8 @@ dialog select {
 .field-help {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--font-caption);
+  line-height: var(--font-leading-normal);
 }
 
 /* Messages: an error is a banner, a status line is quiet text. */
@@ -178,7 +178,7 @@ dialog select {
   background: color-mix(in srgb, var(--color-status-error) 8%, var(--color-surface-panel));
   color: var(--color-status-error);
   font-size: var(--font-small);
-  line-height: 1.5;
+  line-height: var(--font-leading-normal);
   overflow-wrap: anywhere;
 }
 .dialog-body p[role='status'] {
@@ -189,20 +189,20 @@ dialog select {
 
 /* A section inside a long dialog: a title, an optional line under it, then its content. */
 .dialog-section + .dialog-section {
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: var(--space-lg-plus);
+  padding-top: var(--space-lg-plus);
   border-top: var(--border-width-default) solid var(--color-border-subtle);
 }
 .dialog-section > h3 {
   margin: 0 0 var(--space-xs);
   font-size: var(--font-body);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .dialog-section > h3 + p {
   margin: 0 0 var(--space-md);
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  line-height: 1.5;
+  line-height: var(--font-leading-normal);
 }
 
 /* Nothing to show yet: an icon, one line, and the action that fills it. */

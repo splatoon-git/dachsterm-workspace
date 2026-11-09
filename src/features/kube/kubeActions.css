@@ -1,7 +1,7 @@
 .kube-mode.operating {
   border-color: var(--color-status-warning);
   color: var(--color-status-warning);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-action-facts {
   display: grid;
@@ -15,7 +15,7 @@
 }
 .kube-action-facts dd {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
 }
 .kube-action-impact {
@@ -23,5 +23,5 @@
 }
 .kube-action-impact.permanent {
   color: var(--color-status-error);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }

@@ -24,6 +24,8 @@ rustls-native-certs = "=0.8.5"
 # The service check reads the certificate a server presents (TL.8).
 x509-cert = "=0.3.0"
 encoding_rs = "=0.8.35"
+# NFC upload names. Already in the graph through url; pinned to the locked version.
+icu_normalizer = { version = "=2.4.0", default-features = false, features = ["compiled_data"] }
 sha2 = "0.10"
 argon2 = { version = "=0.5.3", features = ["zeroize"] }
 aes-gcm = { version = "=0.10.3", features = ["zeroize"] }

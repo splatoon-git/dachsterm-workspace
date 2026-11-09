@@ -6,11 +6,11 @@
 .session-advanced > summary {
   cursor: pointer;
   font-size: var(--font-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .session-advanced > summary small {
   margin-left: var(--space-sm);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .session-advanced[open] > summary {
   margin-bottom: var(--space-md);
@@ -31,7 +31,7 @@
 .session-advanced legend {
   padding-inline: var(--space-xs);
   font-size: var(--font-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .session-advanced fieldset ol {
   margin: 0;

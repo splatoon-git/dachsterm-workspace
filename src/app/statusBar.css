@@ -10,7 +10,7 @@
   border-top: var(--border-width-default) solid var(--color-border-default);
   background: var(--color-surface-panel);
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: var(--font-caption);
   white-space: nowrap;
 }
 .status-bar.input-sending {
@@ -22,7 +22,7 @@
 .status-bar select {
   min-height: 20px;
   padding: 0 var(--space-sm);
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .status-left,
 .status-right {
@@ -58,7 +58,7 @@
 }
 .status-target strong {
   color: var(--color-text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .status-target .status-message {
   flex-shrink: 1;
@@ -77,11 +77,11 @@
   padding: 0 var(--space-xs);
   border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-small);
-  font-size: 10px;
+  font-size: var(--font-tiny);
 }
 .status-rec {
   color: var(--color-status-error);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .status-alert {
   color: var(--color-status-error);

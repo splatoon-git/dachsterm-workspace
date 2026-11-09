@@ -88,6 +88,25 @@ pub async fn run(
     compare_tree(&source, &out);
     println!("PASS queue nested/empty/Korean/space/same-name/24-small-files exact roundtrip");
 
+    // A separate folder: on file systems that keep both forms the source name no longer matches.
+    let nfd_source = local.path().join("nfd");
+    std::fs::create_dir(&nfd_source)?;
+    std::fs::write(
+        nfd_source.join("\u{1112}\u{1161}\u{11ab}\u{1100}\u{1173}\u{11af}.txt"),
+        b"composed on the server",
+    )?;
+    let nfd_remote = format!("{remote}-nfd");
+    let nfd_up = start(&q, nfd_remote.clone(), nfd_source, true, "skip")?;
+    completed(&q, &nfd_up).await?;
+    let nfd_out = local.path().join("nfd-down");
+    let nfd_down = start(&q, nfd_remote, nfd_out.clone(), false, "skip")?;
+    completed(&q, &nfd_down).await?;
+    let names = std::fs::read_dir(&nfd_out)?
+        .map(|e| Ok(e?.file_name()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    assert_eq!(names, ["\u{d55c}\u{ae00}.txt"]);
+    println!("PASS queue NFD local name arrives as NFC on the server");
+
     std::fs::write(source.join("같은 이름.txt"), b"explicit overwrite revision")?;
     let skip = start(&q, remote.clone(), source.clone(), true, "skip")?;
     completed(&q, &skip).await?;

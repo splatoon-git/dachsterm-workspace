@@ -7,12 +7,69 @@ export type StateTokens = {
   focus: string;
 };
 export type Foundations = {
-  space: { xs: string; sm: string; md: string; lg: string; xl: string; xxl: string };
-  font: { ui: string; mono: string; small: string; body: string; title: string };
-  radius: { small: string; medium: string; large: string };
+  space: {
+    hair: string;
+    xxs: string;
+    xs: string;
+    xsPlus: string;
+    sm: string;
+    smPlus: string;
+    md: string;
+    lg: string;
+    lgPlus: string;
+    xl: string;
+    xxl: string;
+    xxxl: string;
+  };
+  font: {
+    ui: string;
+    mono: string;
+    micro: string;
+    tiny: string;
+    caption: string;
+    small: string;
+    body: string;
+    heading: string;
+    large: string;
+    display: string;
+    title: string;
+    hero: string;
+    weightNormal: string;
+    weightMedium: string;
+    weightSemibold: string;
+    weightBold: string;
+    leadingNone: string;
+    leadingTight: string;
+    leadingNormal: string;
+    leadingRelaxed: string;
+    leadingLoose: string;
+    trackingTighter: string;
+    trackingTight: string;
+    trackingWide: string;
+    trackingWider: string;
+  };
+  radius: { xs: string; small: string; medium: string; large: string; full: string };
   borderWidth: { default: string; focus: string };
   shadow: { panel: string; popup: string };
   motion: { fast: string };
+  // Stacking order, lowest first. The names say what sits on what; only the order matters.
+  layer: {
+    raised: string;
+    handle: string;
+    divider: string;
+    dropPreview: string;
+    paneOverlay: string;
+    paneSearch: string;
+    paneFlash: string;
+    skipLink: string;
+    drawerBackdrop: string;
+    drawer: string;
+    dropdown: string;
+    popover: string;
+    hoverCard: string;
+    contextMenu: string;
+    tooltip: string;
+  };
 };
 export type ThemeDefinition = {
   id: string;

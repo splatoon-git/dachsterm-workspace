@@ -1,6 +1,6 @@
 .ended-card {
   position: absolute;
-  z-index: 5;
+  z-index: var(--layer-pane-overlay);
   right: var(--space-lg);
   bottom: var(--space-lg);
   display: grid;

@@ -33,13 +33,13 @@
   padding: 0 var(--space-md) var(--space-sm);
   border-bottom: var(--border-width-default) solid var(--color-border-subtle);
   font-size: var(--font-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-dash-panel h4 {
   margin: 0 0 var(--space-xs);
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-dash-empty,
 .kube-dash-note,
@@ -55,19 +55,19 @@
   min-height: 22px;
 }
 .kube-dash-total strong {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .kube-dash-meter {
   position: relative;
   display: block;
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-subtle);
 }
 .kube-dash-meter-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--chart-series-1);
 }
 .kube-dash-meter-mark {
@@ -75,7 +75,7 @@
   top: -2px;
   bottom: -2px;
   width: 2px;
-  margin-left: -1px;
+  margin-left: calc(-1 * var(--space-hair));
   background: var(--color-text-primary);
 }
 .kube-dash-trend {
