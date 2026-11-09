@@ -1,18 +1,27 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
+const windows = process.platform === 'win32';
+const nativeRequested = ['--native', '--native-only', '--queue-native-only'].some((flag) =>
+  process.argv.includes(flag),
+);
+// The native steps drive the app through WebView2's debugging port, which macOS does not have.
+if (nativeRequested && !windows)
+  throw new Error('FTP native checks need WebView2 and run on Windows only');
+const executable = (name) => (windows ? `${name}.exe` : name);
 const root = await mkdtemp(path.join(tmpdir(), 'dachsterm-ftp-'));
 const targetRoot = path.resolve(process.env.CARGO_TARGET_DIR ?? 'target');
 const python =
-  process.env.DACHSTERM_FTP_PYTHON || path.resolve('.tools/ftp-fixture/Scripts/python.exe');
+  process.env.DACHSTERM_FTP_PYTHON ||
+  path.resolve(windows ? '.tools/ftp-fixture/Scripts/python.exe' : '.tools/ftp-fixture/bin/python');
 const env = {
   ...process.env,
-  PATH: `${process.env.USERPROFILE}\\.cargo\\bin;${process.env.PATH}`,
+  PATH: `${path.join(homedir(), '.cargo', 'bin')}${path.delimiter}${process.env.PATH}`,
   DACHSTERM_FTP_ROOT: root,
   DACHSTERM_TEST_BINARY:
-    process.env.DACHSTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', 'dachsterm.exe'),
+    process.env.DACHSTERM_TEST_BINARY ?? path.join(targetRoot, 'debug', executable('dachsterm')),
   DACHSTERM_FTP_PASSWORD: randomBytes(32).toString('base64url'),
 };
 let fixture;
@@ -81,7 +90,7 @@ try {
     DACHSTERM_FTP_CA: info.ca,
   };
   if (!process.argv.includes('--native-only') && !process.argv.includes('--queue-native-only'))
-    await run(path.join(targetRoot, 'debug/examples/ftp_probe.exe'), [], connectionEnv);
+    await run(path.join(targetRoot, 'debug/examples', executable('ftp_probe')), [], connectionEnv);
   if (process.argv.includes('--queue-native-only'))
     await run(process.execPath, ['scripts/test-transfer-queue-native.mjs'], connectionEnv);
   if (process.argv.includes('--native') || process.argv.includes('--native-only'))
