@@ -9,15 +9,18 @@ import {
 import { ContextMenu, type MenuPoint, type MenuRequest } from '../../components/ContextMenu';
 import { ResizeHandle } from '../../components/ResizeHandle';
 import type { KubeSettings } from '../../lib/ipc';
+import { planDelete, blockedReason, type ActionPlan } from './actionModel';
+import { KubeActionDialog } from './KubeActionDialog';
 import { KubePodPanel } from './KubePodPanel';
 import { KubeTree, type PodAction } from './KubeTree';
 import type { PodRef } from './detailTypes';
-import { boardScopeOfGroup, type BoardScope } from './logBoardModel';
-import { scopeOfGroup, type SearchScope } from './logSearchModel';
+import type { BoardScope } from './logBoardModel';
+import type { SearchScope } from './logSearchModel';
 import { detailTab, type PodPanelTarget } from './podPanel';
 import type { PodTerminalRequest } from './podShell';
 import type { SnapshotStore } from './polling';
-import type { TreeGroup, TreeView } from './tree';
+import type { TreeRow, TreeView } from './tree';
+import { actionItem, treeRowMenu } from './treeRowMenu';
 import type { PodView } from './treePods';
 import {
   PANEL_DEFAULT_WIDTH,
@@ -26,6 +29,7 @@ import {
   panelWidthStyle,
   usePanelWidth,
 } from './usePanelWidth';
+import type { OperateControl } from './useOperateMode';
 import { usePodShell } from './usePodShell';
 
 export type PanelState = (PodPanelTarget & { problem: boolean }) | null;
@@ -39,6 +43,7 @@ export function KubeTreeScreen({
   setView,
   connectionId,
   kube,
+  operate,
   panel,
   setPanel,
   focusPod,
@@ -53,6 +58,7 @@ export function KubeTreeScreen({
   setView: Dispatch<SetStateAction<TreeView>>;
   connectionId: string;
   kube: KubeSettings;
+  operate: OperateControl;
   panel: PanelState;
   setPanel: Dispatch<SetStateAction<PanelState>>;
   focusPod: PodRef | null;
@@ -63,6 +69,7 @@ export function KubeTreeScreen({
   const [notice, setNotice] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [menu, setMenu] = useState<(MenuRequest & { label?: string }) | null>(null);
+  const [plan, setPlan] = useState<ActionPlan | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const { width, change } = usePanelWidth();
   const openShell = usePodShell({
@@ -73,6 +80,8 @@ export function KubeTreeScreen({
     notify: setNotice,
     openMenu: setMenu,
   });
+
+  const blocked = blockedReason(operate.mode);
 
   const showPanel = (item: PodView, tab: PodPanelTarget['tab']) => {
     setNotice('');
@@ -109,35 +118,26 @@ export function KubeTreeScreen({
               run: () =>
                 searchLogs({ kind: 'pod', value: `${item.pod.namespace}/${item.pod.name}` }),
             },
+            actionItem(planDelete(item.pod), blocked, setPlan),
           ],
         });
     }
   };
+  const rowMenu = (row: TreeRow, at?: MenuPoint): void => {
+    const nodes = store.nodes.data;
+    const found = treeRowMenu(row, { nodes, blocked, ask: setPlan, watchLogs, searchLogs });
+    if (found) setMenu({ ...found, at: at ?? { x: 0, y: 0 } });
+  };
   // The tree is memoized and redraws only for new data, so it gets one function for its lifetime.
-  const latest = useRef(handle);
+  const latest = useRef({ handle, rowMenu });
   useLayoutEffect(() => {
-    latest.current = handle;
+    latest.current = { handle, rowMenu };
   });
   const onPod = useCallback(
-    (action: PodAction, item: PodView, at?: MenuPoint) => latest.current(action, item, at),
+    (action: PodAction, item: PodView, at?: MenuPoint) => latest.current.handle(action, item, at),
     [],
   );
-  const onGroup = useCallback(
-    (group: TreeGroup, at?: MenuPoint) => {
-      const watch = boardScopeOfGroup(group.id);
-      const search = scopeOfGroup(group.id);
-      if (watch)
-        setMenu({
-          at: at ?? { x: 0, y: 0 },
-          label: '그룹 메뉴',
-          items: [
-            { label: '실시간 로그 보기', run: () => watchLogs(watch) },
-            ...(search ? [{ label: '로그 검색', run: () => searchLogs(search) }] : []),
-          ],
-        });
-    },
-    [searchLogs, watchLogs],
-  );
+  const onRow = useCallback((row: TreeRow, at?: MenuPoint) => latest.current.rowMenu(row, at), []);
   const closePanel = useCallback(() => {
     setPanel(null);
     setExpanded(false);
@@ -162,7 +162,7 @@ export function KubeTreeScreen({
           view={view}
           setView={setView}
           onPod={onPod}
-          onGroup={onGroup}
+          onRow={onRow}
           panelOpen={panel !== null}
           closePanel={closePanel}
           focusPod={focusPod}
@@ -203,6 +203,22 @@ export function KubeTreeScreen({
           at={menu.at}
           items={menu.items}
           close={() => setMenu(null)}
+        />
+      )}
+      {plan && (
+        <KubeActionDialog
+          plan={plan}
+          connectionId={connectionId}
+          context={kube.context}
+          close={() => {
+            setPlan(null);
+            operate.reload();
+          }}
+          done={(finished) => {
+            setPlan(null);
+            setNotice(finished.done);
+            operate.reload();
+          }}
         />
       )}
     </div>

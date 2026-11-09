@@ -37,6 +37,13 @@
 .context-menu button.danger:not(:disabled) {
   color: var(--color-status-error);
 }
+.context-menu-hint {
+  display: block;
+  padding-bottom: var(--space-xs);
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  white-space: normal;
+}
 .context-menu kbd {
   color: var(--color-text-secondary);
   font-size: 10px;

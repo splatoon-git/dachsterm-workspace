@@ -37,6 +37,22 @@ fn is_klog(line: &str) -> bool {
         && bytes[5] == b' '
 }
 
+fn last_line(text: &str) -> &str {
+    text.lines()
+        .map(str::trim)
+        .rfind(|line| !line.is_empty() && !is_klog(line))
+        .unwrap_or_default()
+}
+
+/// Why a write failed, in the server's own words. RBAC decides what is allowed (design KV.6), so a
+/// refusal is shown as it came rather than turned into one of the states below.
+pub fn server_refusal(exit: Option<u32>, stderr: &[u8]) -> String {
+    if matches!(exit, Some(126 | 127)) {
+        return "kubectl을 실행할 수 없습니다.".into();
+    }
+    unknown_text(last_line(&String::from_utf8_lossy(stderr)), exit)
+}
+
 /// kubectl exits 1 for nearly everything, so the last line that is not klog's decides.
 pub fn classify(exit: Option<u32>, stderr: &[u8]) -> KubeState {
     if exit == Some(0) {
@@ -46,11 +62,7 @@ pub fn classify(exit: Option<u32>, stderr: &[u8]) -> KubeState {
         return KubeState::KubectlMissing;
     }
     let text = String::from_utf8_lossy(stderr);
-    let line = text
-        .lines()
-        .map(str::trim)
-        .rfind(|line| !line.is_empty() && !is_klog(line))
-        .unwrap_or_default();
+    let line = last_line(&text);
     let has = |needle: &str| line.contains(needle);
     if has("You must be logged in to the server") {
         KubeState::AuthFailed

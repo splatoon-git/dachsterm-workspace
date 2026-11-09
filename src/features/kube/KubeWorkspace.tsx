@@ -8,6 +8,7 @@ import { KubeTreeScreen, type PanelState } from './KubeTreeScreen';
 import { LogBoard } from './LogBoard';
 import { flowEntries, scopeEntry, type BoardScope } from './logBoardModel';
 import { LogSearch } from './LogSearch';
+import { OperateModeControl } from './OperateModeControl';
 import type { SearchScope } from './logSearchModel';
 import type { PathRow } from './ingressModel';
 import type { PodTerminalRequest } from './podShell';
@@ -19,6 +20,7 @@ import { useKubeIngress } from './useKubeIngress';
 import { useKubeSnapshots } from './useKubeSnapshots';
 import { useLogBoard } from './useLogBoard';
 import { useLogSearch } from './useLogSearch';
+import { useOperateMode } from './useOperateMode';
 import { useWorkerWatch } from './useWorkerWatch';
 import { WorkersContext } from './workerContext';
 import {
@@ -219,29 +221,20 @@ export function KubeWorkspace({
 
   const detection = phase.name === 'setup' ? phase.detection : null;
   const settingUp = phase.name !== 'open';
-  const { store, history, now } = useKubeSnapshots(
-    connectionId,
-    phase.name === 'open' ? phase.settings : null,
-    visible && display === 'workspace',
-  );
-  const workers = useWorkerWatch(
-    connectionId,
-    phase.name === 'open' ? phase.settings : null,
-    visible && display === 'workspace',
-    store.pods.data,
-    session,
-  );
+  const operate = useOperateMode(connectionId, phase.name === 'open');
+  const opened = phase.name === 'open' ? phase.settings : null;
+  const shownNow = visible && display === 'workspace';
+  const { store, history, now } = useKubeSnapshots(connectionId, opened, shownNow);
+  const workers = useWorkerWatch(connectionId, opened, shownNow, store.pods.data, session);
   // Only the screens that use it: the costliest poll here (KV.8). The board needs controller names.
   const ingress = useKubeIngress(
     connectionId,
-    phase.name === 'open' ? phase.settings : null,
-    visible &&
-      display === 'workspace' &&
-      (screen === 'ingress' || screen === 'dashboard' || screen === 'board'),
+    opened,
+    shownNow && (screen === 'ingress' || screen === 'dashboard' || screen === 'board'),
   );
   const board = useLogBoard(
     connectionId,
-    phase.name === 'open' ? phase.settings : null,
+    opened,
     store.pods.data,
     store.services.data,
     ingress.controllers,
@@ -288,7 +281,7 @@ export function KubeWorkspace({
           {phase.name === 'open' && (
             <>
               <strong>{phase.settings.context}</strong> · {phase.settings.namespace || '전체'} ·
-              조회 모드
+              <OperateModeControl control={operate} context={phase.settings.context} />
               {fresh.age && ` · ${fresh.age}`}
               {warning && <em> · {warning}</em>}
             </>
@@ -345,6 +338,7 @@ export function KubeWorkspace({
                 setView={setTreeView}
                 connectionId={connectionId}
                 kube={phase.settings}
+                operate={operate}
                 panel={panel}
                 setPanel={setPanel}
                 focusPod={focusPod}

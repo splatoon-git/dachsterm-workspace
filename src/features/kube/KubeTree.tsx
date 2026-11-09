@@ -25,7 +25,6 @@ import {
   treeRows,
   type Grouping,
   type SortColumn,
-  type TreeGroup,
   type TreeRow,
   type TreeView,
 } from './tree';
@@ -47,7 +46,7 @@ export const KubeTree = memo(function KubeTree({
   view,
   setView,
   onPod,
-  onGroup,
+  onRow,
   panelOpen,
   closePanel,
   focusPod,
@@ -61,7 +60,7 @@ export const KubeTree = memo(function KubeTree({
   view: TreeView;
   setView: Dispatch<SetStateAction<TreeView>>;
   onPod: (action: PodAction, view: PodView, at?: MenuPoint) => void;
-  onGroup: (group: TreeGroup, at?: MenuPoint) => void;
+  onRow: (row: TreeRow, at?: MenuPoint) => void;
   panelOpen: boolean;
   closePanel: () => void;
   /** A pod shell ended: put the cursor back on its pod. A new object asks again. */
@@ -233,7 +232,7 @@ export const KubeTree = memo(function KubeTree({
   const rowMenu = (row: TreeRow, index: number, at?: MenuPoint) => {
     select(index);
     if (row.type === 'pod') onPod('menu', row.view, at);
-    else if (row.type === 'group') onGroup(row.group, at);
+    else onRow(row, at);
   };
 
   const rowAnchor = () => {
@@ -243,7 +242,7 @@ export const KubeTree = memo(function KubeTree({
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (isMenuKey(event)) {
-      if (active?.type !== 'pod' && active?.type !== 'group') return;
+      if (!active || active.type === 'nodes') return;
       event.preventDefault();
       rowMenu(active, activeIndex, rowAnchor());
       return;

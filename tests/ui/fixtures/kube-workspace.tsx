@@ -27,6 +27,10 @@ declare global {
       /** What the terminal says when a command is typed. */
       copyResult: KubeCopyResult;
       persist: boolean;
+      /** The stored operate mode. Absent means read-only. */
+      operate?: 'on' | 'off' | 'unavailable';
+      /** What `kube_action` is refused with. Absent means it succeeds. */
+      actionError?: string;
       /** Answers to `kube_snapshot` by kind. A kind that is absent has an unreachable cluster. */
       snapshots?: Partial<Record<SnapshotKind, Snapshot>>;
       /** The answer to `kube_ingress`. Absent means an unreachable cluster. */
@@ -97,6 +101,15 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         });
       }
       if (command === 'kube_log_cancel') return null;
+      if (command === 'kube_operate_mode') return state.operate ?? 'off';
+      if (command === 'kube_set_operate_mode') {
+        state.operate = args.on ? 'on' : 'off';
+        return state.operate;
+      }
+      if (command === 'kube_action') {
+        if (state.actionError) throw state.actionError;
+        return null;
+      }
       if (command === 'kube_detect') {
         const detections = state.detections;
         return structuredClone(detections.length > 1 ? detections.shift() : detections[0]);

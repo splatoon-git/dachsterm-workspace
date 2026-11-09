@@ -443,3 +443,38 @@ KV.8과 합친 트리(`dev` 병합 전). `cargo fmt --all --check`, `cargo clipp
 - KV.8과 합친 뒤의 실제 앱 실행, 메트릭 HTTPS 후보(`prometheus.io/scheme: https`), 실제 운영 앱의 워커 메트릭, 파드 50개 상한, nginx master·worker 구분의 실제 파드 확인은 실행하지 않았다.
 - `verify-kube-detail.mjs`의 파드 메뉴 기대값을 고쳤으나 재실행하지 않았다.
 - Mac 실기기(`mac-verify`), CI(`main` 미반영), 전체 Rust·Playwright·네이티브 회귀는 실행하지 않았다.
+
+## KV.6 간단 제어 검증 (2026-11-09)
+
+대상: 브랜치 `feat/kv6-kube-control`, `e56215c` 기준 미커밋 트리. 환경: macOS(Apple Silicon)의 Docker, kind 전용 클러스터 `dachsterm-kv6`, `tests/openssh` 기반 OpenSSH 컨테이너(`scripts/kube-fixture.sh`).
+
+### 실제 SSH·kind
+
+`DACHSTERM_KUBE_FIXTURE=dachsterm-kv6 npm run test:kube-actions` 통과(`#[ignore]` 1건, 46초). 앱의 `Connections`로 실제 OpenSSH에 접속하고, 프로필 재확인(`permit`)과 `action::run`을 지나 kubectl이 실행된다. 결과는 `docker exec`로 따로 읽었다.
+
+| 항목 | 확인한 결과 |
+|---|---|
+| 조회 모드 | 저장된 프로필이 `operate: false`면 서버에 가기 전 거부. 파드 변화 없음 |
+| 소유 파드 삭제 | 30초 유예 파드인데 10초 안에 반환. Deployment가 새 파드로 교체 |
+| 단독 파드 삭제 | 사라진 뒤 돌아오지 않음 |
+| 정적 파드 삭제 | 미러 파드 UID가 바뀌어 약 1분 뒤 돌아옴. 컨테이너 ID 유지 |
+| 롤아웃 재시작 | Deployment, StatefulSet, DaemonSet 모두 `restartedAt` 기록, 모든 파드 UID 교체 |
+| Cordon | `spec.unschedulable=true`, 실행 중 파드 유지, 새 파드 Pending |
+| Uncordon | 필드 해제, Pending 파드 배치 |
+| RBAC 거부 | `view` 권한 계정에서 `Error from server (Forbidden): pods "..." is forbidden: User "system:serviceaccount:kv6-control:kv6-limited" cannot delete resource "pods" ...`를 그대로 반환. 파드 유지 |
+| 없는 대상 | `Error from server (NotFound): pods "no-such-pod" not found`를 그대로 반환 |
+
+첫 실행에서 정적 파드 복귀 대기(60초)가 실패했다. 유예 30초 뒤 약 1분이 걸리는 실제 동작이어서 대기를 180초로 늘리고, 컨테이너 ID가 다시 보고된 뒤 비교하도록 고쳤다.
+
+### 단위·UI·게이트
+
+- `cargo test -p dachsterm --lib --locked kube::action` 포함 전체 `cargo test --workspace --locked`: lib 551 통과, 1 실패, 2 무시. 실패한 `git_graph::tests::a_repositorys_signature_program_does_not_run`은 변경 없는 `e56215c`(worktree `dachsterm-verify-kv13`)에서도 같은 실패가 나며 KV.6과 무관하다.
+- `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `npm run typecheck`, `npm run lint`, `npm run build`, `npm audit --audit-level=low` 통과.
+- `npm test`: 100파일 1242건 통과.
+- `npm run test:ui -- --workers=2`: 502 통과, 1 실패. 실패는 새 명령이 `kube-dashboard`의 "추가 요청 없음" 목록에 걸린 것으로, 테스트를 고친 뒤 해당 스펙과 `kube-actions`를 다시 실행해 통과했다(아래). 전체 재실행은 하지 않았다.
+- `npm run format:check`: `scripts/test-phase63-67-native.mjs` 한 파일이 실패한다. 이 작업에서 바꾸지 않은 파일이고 `e56215c`에서도 같다. 그 때문에 `bash scripts/verify-macos.sh`는 이 단계에서 멈추므로, 나머지 단계를 위 명령으로 각각 실행했다.
+
+### 미확인
+
+- **실제 앱 화면으로 kind를 조작하는 검사.** 이 Mac에는 WKWebView 자동화 경로가 없다. 메뉴·확인창은 Playwright 픽스처, 백엔드는 위 실제 검사로 나눠 확인했고, 둘을 이은 앱 전체 동작은 사람이 보지 않았다. Windows `*-native.mjs` 검사도 작성·실행하지 않았다.
+- Mac 실기기 항목(`mac-verify`), CI.

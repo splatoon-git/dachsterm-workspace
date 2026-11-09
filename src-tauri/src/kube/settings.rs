@@ -25,7 +25,7 @@ pub struct KubeSettings {
     pub kubectl: String,
     /// A path on the server. Empty leaves kubectl to its own default.
     pub kubeconfig: String,
-    /// Only `kube_action` will read this (KV.6). Saving from the setup screen keeps the stored value.
+    /// `kube_action` reads the stored value (KV.6). Only `kube_set_operate_mode` changes it.
     #[serde(default)]
     pub operate: bool,
 }
