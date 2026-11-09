@@ -18,7 +18,7 @@ export const retroLightTheme = createTheme({
   status: ['#556D45', '#396F6D', '#885D17', '#B1412E'],
   terminalBackground: '#FFFCF5',
   ansi: [
-    '#000000',
+    '#49382F',
     '#B5432F',
     '#637C52',
     '#8C6017',
@@ -90,7 +90,7 @@ export const retroBlueLightTheme = createTheme({
   status: ['#446C51', '#2C6A7E', '#845B19', '#A44538'],
   terminalBackground: '#FFFCF5',
   ansi: [
-    '#000000',
+    '#33495B',
     '#AD493B',
     '#567E5F',
     '#8B601A',

@@ -121,3 +121,16 @@
 실행 결과(macOS, `b343613` 기준 미커밋 트리): `npm run typecheck`, 바꾼 파일 eslint·Prettier 종료 0, `npx vitest run` 1204/1204(98개 파일). 새 테스트 Chromium 16/16, Playwright WebKit 16/16. Chromium 전체 Playwright 484 통과·1 실패. 실패 `session-form.spec.ts:45`는 제품 코드를 고치기 전 실행에서도 같은 값으로 실패했으며 원인은 확인하지 않았다. 포트 1420을 다른 세션의 개발 서버가 쓰고 있어 worktree 전용 서버(1431)로 실행했다.
 
 미실행: 실제 앱 화면(이 경로에는 WKWebView 자동 검사가 없다), Windows, CI. WebKit 결과는 WKWebView 실기기 결과가 아니다. 256색 이상과 트루컬러 글자도 같은 보정을 받지만 별도로 측정하지 않았다.
+
+## T.7 프롬프트 띠 색과 Powerline 화살표 (2026-11-09)
+
+사용자가 크림 테마에서 agnoster 프롬프트의 검은 칸과 네모로 끊긴 칸을 다시 지적했다. T.5는 글자 대비만 고쳤고 띠는 그대로였다. 원인은 두 가지다.
+
+- 색: 라이트 테마 6종의 ANSI black이 `#000000`이었다. 각 테마의 `text.primary`로 바꿨다. 이 값이 `#000000`이었던 이유는 `theme.test.ts`의 "ANSI black이 green·blue·cyan 위에서 4.5:1" 계약이다. 라이트 테마의 잉크색은 이 계약을 만족하지 못하므로, 다크 테마에만 팔레트 검사를 남기고 라이트 테마는 `tests/ui/terminal-contrast.spec.ts`에서 xterm이 실제로 그린 색의 대비를 재도록 옮겼다.
+- 화살표: 테마 글꼴 목록에 U+E0B0을 가진 글꼴이 없어 WebKit이 빈칸으로 그렸다. `terminalFontFamily`가 테마 글꼴 뒤에 Powerline 글꼴 이름을 붙인다. 테마 글꼴에 없는 글리프만 이 글꼴에서 오므로 영문·한글 모양은 바뀌지 않는다. 터미널과 미리보기에만 적용했고 `foundations.font.mono`는 바꾸지 않았다. 지정한 글꼴이 설치되지 않은 PC에서는 전과 같이 빈칸이다.
+
+실행 결과(macOS, `428a3ff` 기준 미커밋 트리, 포트 1420을 다른 세션 개발 서버가 쓰고 있어 임시 설정으로 1477에서 실행): `npm run typecheck`, 바꾼 파일 eslint·Prettier 종료 0, `npx vitest run` 1323/1323(107개 파일), Playwright Chromium 전체 519/519, `terminal-contrast.spec.ts` WebKit 16/16.
+
+화살표는 저장소 밖 Swift 스크립트로 실제 WKWebView에서 스냅샷을 찍어 확인했다. 기존 글꼴 목록은 빈칸, 뒤에 `JetBrainsMono Nerd Font Mono`를 붙인 목록은 화살표가 그려졌다. 패키지 앱 화면이 아니라 같은 웹뷰의 단독 페이지 결과다.
+
+미실행: 패키지 앱 화면, Windows, CI.
