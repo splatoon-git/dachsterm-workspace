@@ -502,3 +502,82 @@ MacBook(darwin, Apple Silicon), 브랜치 `feat/kv7-kube-issues`를 KV.6이 합�
 - `kube-tree`의 "polling stops" 기대값을 종류 수 증가에 맞춰 7에서 10으로 고쳤다.
 
 **미확인:** 실제 앱의 화면과 OS 알림 표시(Windows·Mac), 앱에서 실제 SSH로 조회하는 경로, 실제 클러스터의 재시작·회복 변화 기록(순수 로직과 합성 데이터까지), 숨겨진 창의 타이머 제한 영향(WebView2 강한 타이머 제한, WKWebView App Nap으로 조회 간격이 늘 수 있다), 권한 없는 계정의 `pvcs`·`jobs`·`hpas`, `scripts/verify-kube-tree.mjs`의 조회 목록 수정분 실행, 대형 클러스터, CI.
+## KV.13·KV.9 Mac 실기기 검증 (2026-11-09)
+
+`mac-verify` 절차로 실행했다. 범위는 사용자가 지정한 SSH 세션의 실시간 로그, 요청 흐름, 중지 시 서버 `kubectl` 정리, 런타임 탭이다.
+
+### 대상과 환경
+
+| 항목 | 값 |
+|---|---|
+| 대상 커밋 | `e56215c`(KV.6 병합 전 `dev`), 별도 worktree에서 빌드 |
+| Mac | macOS 26.5(25F71), arm64 |
+| 도구 | Node 26.0.0, Rust 1.99.1(`/opt/homebrew/opt/rustup/bin`), Docker 29.8.0, kind 0.32.0 |
+| 앱 | `npm run tauri -- build --debug --bundles app`로 만든 `.app`을 `open`으로 실행 |
+| 접속 | 앱의 실제 SSH 접속 → `tests/openssh` 서버 컨테이너 → kind `kv13`, 데이터는 `DACHSTERM_TEST_DATA_DIR`로 격리 |
+| 쿠버네티스 환경 | ingress-nginx v1.15.1, `kv13-logs`(ticker×2, quiet, web×2, other, traffic), `kv9-workers`(stuck, healthy, noshell) |
+
+**화면 조작 방식:** 이 세션에는 데스크톱 제어 도구가 없고 `osascript`는 손쉬운 사용 권한이 없다. 그래서 프런트엔드 빌드 산출물에 조작 스크립트 하나를 주입하고 CSP에 `unsafe-eval`과 루프백 연결만 더한 **임시 빌드**를 만들어 WKWebView 안에서 조작했다. 소스와 Rust 코드는 위 커밋 그대로이고 임시 빌드는 삭제했다. 클릭은 DOM에 합성 이벤트를 보낸 것이고, 결과 판정은 화면 DOM과 서버 프로세스 목록이다. 앱 비밀번호는 fixture 값을 메모리로만 전달했다.
+
+**서버 쪽 관측:** `docker exec kv13-ssh ps`를 1초마다 돌려 `kubectl ... logs -f` 프로세스와 `awk`, `sshd: probe@` 세션 수의 변화를 기록했다.
+
+### 자동 게이트
+
+`verify-macos.sh --package`는 `format:check`에서 중단되므로 같은 단계를 worktree(`e56215c`)에서 나눠 실행했다.
+
+| 단계 | 결과 |
+|---|---|
+| `typecheck`, `lint`, `build`, `audit` | 종료 0, `audit` 0건 |
+| `format:check` | **실패**: `scripts/test-phase63-67-native.mjs` 경고(KV.13 변경 밖, 기존과 동일) |
+| `npm test` | 1229/1229 |
+| `npm run test:ui -- --workers=2` | 496/496(Chromium) |
+| `cargo fmt --check`, `clippy --workspace --all-targets -D warnings` | 종료 0 |
+| `cargo test --workspace --locked` | **538 통과 1 실패** `git_graph::tests::a_repositorys_signature_program_does_not_run`("the fixture's signature program did not run", 기존과 동일) |
+| `npm run tauri -- build --debug --bundles app` | 종료 0 |
+
+`verify-macos.sh`는 `~/.cargo/bin`만 `PATH`에 넣는다. 이 Mac의 rustup은 Homebrew keg 전용이라 `/opt/homebrew/opt/rustup/bin`을 따로 지정해야 Rust 단계가 실행됐다.
+
+`npm run probe`, `probe:phase1`은 범위 밖이라 실행하지 않았다.
+
+### 합격 시나리오
+
+KST 시각. 입력 감시(아래 "실제 입력과 겹침")는 런타임 단계부터 켰다.
+
+| 항목 | 결과 |
+|---|---|
+| 실시간 로그 시작 | 워크로드 `ticker`, `quiet`를 고르자 칸 3개, 서버에 `kubectl logs -f` 3개(12:57:14). `awk` 3, SSH 세션 1 |
+| 조용한 파드 | `quiet`의 새 줄이 약 20초 주기로 바로 도착(mawk 블록 버퍼링 회귀 없음) |
+| 오류 색 | `ERROR` 줄 `kube-line error`(글자색 rgb(142,53,37)), 일반 줄 `kube-line normal` |
+| **중지: 항목 빼기** | `ticker`, `quiet`를 빼자 시작 화면으로 돌아가고 서버 `kubectl` 0개, `awk` 0개(12:58:10). SSH 세션은 유지 |
+| 요청 흐름 | `flow.local`의 **요청 흐름**: 위 **인그레스 컨트롤러** 칸은 `[kv13-logs-web-80] 요청만`, 아래 `web` 파드 2칸. 컨트롤러 칸에 `kv13flow` 17줄, `kv13other` 0줄, `web` 칸에 `response:200` 수신. 서버 `kubectl` 3개 |
+| 4xx 색 | `/missing-N` 줄 `kube-line warn` |
+| 전체 요청 | **전체 요청** 뒤 헤더 `모든 요청`, `kv13other` 줄 도착 |
+| **중지: 요청 흐름** | 칩을 모두 빼자 서버 `kubectl` 0개(12:58:42) |
+| 런타임 후보 | `stuck` 파드 우클릭 **런타임**: `:8080/metrics`, `지표 4개`, `annotation`. 목록에 `go_goroutines` 없음 |
+| 워커 감시 | 메트릭 메뉴로 사용 중·전체·완료 수 지정, 판정 1분, **워커 감시 켜기**: 트리 행 `사용 8/8`, 이후 `⚠ 의심`, 제목 `반환 안 됨 의심`, `워커 포화 의심` |
+| 프로브 | **수집** → `런타임 읽기` 확인창 → 실행: `httpd`, `8080`, `ESTABLISHED` 표시. 같은 워크로드 재수집은 확인창 없음 |
+| 셸 없는 이미지 | `noshell`(`pause:3.10`): `이 컨테이너에서는 읽을 수 없음` |
+| 롤아웃 추적 | `rollout restart deployment/ticker` 뒤 새 파드 칸이 추가되고 서버 스트림이 새 파드 2개로 교체(13:06:35), 잠시 뒤 옛 파드 칸이 사라짐 |
+| **중지: 탭 닫기** | 쿠버네티스 탭을 닫자 서버 `kubectl` 0개, SSH 세션 0개(13:07:03) |
+
+### 찾은 문제
+
+- **스트림 재개 시 줄 중복 표시(이 검증 뒤 수정).** `ticker` 칸이 있는 상태에서 `quiet`를 추가해 스트림이 교체되자, `ticker-…-j2q9q` 칸에 `tick 460`과 `ERROR sample failure 460`이 두 번씩 표시됐다(둘 다 `12:57:13.241`). 서버 인자는 `--since-time=…03:57:13.241206845Z`였다. `src/features/kube/logBoardModel.ts`의 `LineStore.add`는 재개 지점을 `at < from.at || time === from.time`으로 판정한다. 그래서 재개 지점과 나노초만 다른 같은 밀리초의 앞줄이 통과하면 그 뒤로 재개 상태가 풀리고, 재개 지점의 줄까지 다시 들어간다. `LineStore.add`가 같은 밀리초 안에서는 소수부 전체를 비교하도록 고치고, 수정 전에 실패하는 재현 테스트를 `logBoardModel.test.ts`에 넣었다. 수정 뒤 실제 앱과 kind로는 다시 실행하지 않았다(위 표의 앱 결과는 `e56215c`의 것이다).
+
+### 관찰
+
+- **창이 가려지면 감시 조회가 멈춘다.** VS Code 창이 앱을 완전히 덮었을 때 WKWebView의 `document.visibilityState`가 `hidden`이었고, 설계대로 워커 감시 조회가 멈춰 `의심` 판정이 나오지 않았다(13:04:41 확인). 앱을 앞으로 가져오자 곧 판정이 표시됐다.
+- **실제 입력과 겹침.** 런타임 단계부터 `isTrusted` 입력을 기록했다. 13:01:55~13:02:01과 13:05:21~13:05:34에 실제 마우스 클릭이 들어와 화면이 바뀌었고, 해당 구간의 조작(런타임 첫 시도, 롤아웃 첫 시도)은 입력이 멈춘 뒤 다시 실행했다. 표의 런타임·롤아웃·탭 닫기 결과는 입력이 없던 구간의 것이다. 실시간 로그·요청 흐름 단계는 입력 기록 전에 실행했고, 서버 프로세스 시각이 조작 시각과 일치한다.
+
+### 미확인
+
+- 실제 마우스·키보드 조작(합성 이벤트만), 화면 모양(스크린샷 없음, 화면 기록 권한 없음).
+- Mac에서 대시보드의 워커 판정 표시, `pods/exec` 권한 없는 계정, 프로브 단독 감시, 호스트 우클릭 메뉴의 요청 흐름.
+- 소스 20개 상한, 초당 3000줄 상한, 12시간 상한.
+- Windows 실제 앱(KV.13), CI, `dev` 이후 커밋(KV.6)과 합친 트리의 앱.
+
+## KV.13 구현 경과 (병합 전 기록)
+
+`docs/progress.md` 상단에 있던 내용을 옮긴 것이다. "미커밋", "현재" 표현은 병합 전 시점 기준이다.
+
+**KV.13 실시간 로그 보드·화면 개선: 프런트엔드 구현·Playwright 통과 / Rust 컴파일·실제 클러스터·Mac 실기기 미검증** — 브랜치 `feat/kv13-kube-workbench`(`b343613` 기준 미커밋), [설계안](design/kubernetes-workspace.md#kv13--실시간-로그-보드와-화면-개선). 사용자 요청: 상세 패널 마우스 리사이즈, 로그 크게 보기, 여러 파드 동시 보기, 인그레스→서비스 파드 로그 동시 보기, UI 품질. **원인과 수정:** 패널 리사이즈가 안 된 것은 `.resize-handle`이 그리드 칸에서 폭을 받는데 쿠버네티스 분할은 flex라 폭이 0px이었기 때문이다(측정값 0, 로그 검색의 분할도 같은 원인). 새 화면 **실시간 로그**: 서비스·워크로드·노드·파드·인그레스 컨트롤러를 골라 파드별로 나눠 보거나 시간순으로 합쳐 보고, 칸 크게 보기, 글자 크기, 줄바꿈, 일시정지, 필터, 경고·오류만을 제공한다. 인그레스 호스트 행의 **요청 흐름**은 컨트롤러 로그(upstream으로 좁힘)를 위에, 서비스 파드를 아래에 연다. 롤아웃으로 파드가 바뀌면 스트림을 교체해 마지막 시각부터 잇는다. 파드 패널에 크게 보기와 오류 색, 트리 메뉴에 진입점을 넣었고 헤더·트리·대시보드·인그레스를 다듬었다(`문제만` 글자 세로 깨짐 수정). 명령 `kube_log_stream` 추가(취소는 `kube_log_cancel` 공용, SSH 채널 하나에 최대 20개). 파일: `src-tauri/src/kube/log_stream.rs`, `src/features/kube/LogBoard.tsx`, `LogLines.tsx`, `LogBoardPicker.tsx`, `logBoardModel.ts`, `useLogBoard.ts`, `logBoard.css`, `tests/ui/kube-board.spec.ts`. 실제 클러스터 검사에서 **mawk가 파이프 입력을 블록으로 모아 읽어 조용한 파드의 로그가 나오지 않는 버그**를 찾아 고쳤다(`-W interactive` 선택, 한 줄 한 번에 쓰기). `scripts/kube-fixture.sh`는 호스트의 kubectl 대신 kind 노드의 Linux kubectl을 넣게 고쳐 Mac에서도 동작한다(WSL 경로 재실행은 안 함). 검사 `npm run test:kube-stream`(fixture 필요, `--ignored`) 추가. 결과(미커밋 트리, 이 MacBook, Rust 1.99.1): `verify-macos.sh`의 단계를 나눠 실행해 typecheck·lint·`npm test` 1229/1229·`npm run build`·`cargo fmt --check`·`cargo clippy --workspace --all-targets -D warnings`·`npm audit` 0건 통과. 실제 kind(`test:kube-stream`, `docker exec -i`로 서버 셸 실행): 여러 파드 수신, 서버 필터, 없는 파드의 오류 보고, stdin 종료 시 kubectl 0개 통과. mawk에서 3KB 줄 8만 개 동시 쓰기 깨짐 0. **게이트 실패 3건, 모두 이번 변경 밖:** ① `format:check` 경고 `scripts/test-phase63-67-native.mjs`(`origin/dev`와 동일, 이 때문에 스크립트가 중단돼 나눠 실행). ② Playwright 479 통과 1 실패 `session-form.spec.ts:45`(Mac에서 행 배치, 수정 전 `b343613`에서도 동일 실패). ③ `cargo test --workspace` 538 통과 1 실패 `git_graph::tests::a_repositorys_signature_program_does_not_run`(Apple Git 2.50.1, 건드리지 않은 모듈이며 기준 커밋 재실행은 안 함). **미검증:** 실제 SSH 채널 위의 스트림과 취소(`docker exec`로 대체해 스크립트까지만 확인), 앱 화면과 실제 백엔드의 연결(Playwright는 백엔드 대역), 패키지된 앱의 화면 동작(`npm run tauri -- build --debug --bundles app` 종료 0, `open`으로 프로세스와 창 생성까지 확인, 화면 기록 권한이 없어 창 내용은 못 봄), Mac WKWebView, Windows 앱, CI, 사용 안내서. 사용자 실기기 지적 후속(같은 브랜치, 미커밋): ① 글꼴 스택에 Mac 글꼴 추가(`foundations.ts`, M.7). ② `select`를 `appearance: none`으로 직접 그려 Mac에서 입력칸보다 납작하던 문제 수정(`styles.css`). ③ 새 연결의 `접속 후 화면`을 전체 폭으로 수정(`WorkspaceField.tsx`), 위 게이트 실패 ②의 원인이었고 `session-form.spec.ts:45`는 Chromium·WebKit 모두 통과. 결과: Chromium의 `session-form`·`terminal-font`·`themes`·`kube-board`·`kube-ingress` 42/42, `npm test` 1229/1229, `.app` 재빌드 종료 0. 전체 Playwright를 수정 ②까지 적용해 WebKit으로 돌린 결과는 462 통과 18 실패다: Tab 포커스(Safari 기본 동작) 10건은 `layout`·`session-manager`·`themes`·`session-form:71`, 나머지는 `games` 3건, `port-tools` 클립보드 권한 1건, `layout:45`, `themes:92`, `workspace:87`이며 ③의 대상이던 `session-form:45`는 위와 같이 해결했다. `layout:45`, `themes:92`, `workspace:87`, `games`는 원인을 확인하지 않았다. WebKit 결과는 WKWebView 실기기 결과가 아니다. ④ 사용자 캡처: Mac 앱의 SSH 키 만들기 창에서 본문이 접혀 제목과 버튼만 보였다. Playwright WebKit(27.2)에서는 재현되지 않았고, `.dialog-body`의 `flex: 1`(0% 기준)을 `flex: 1 1 auto`로 바꿨다(사용자가 Mac 앱에서 정상 표시를 확인). 재발 방지로 `ssh-key.spec.ts`에 기준값 검사를 넣었다. 결과: `ssh-key`·`session-form`·`agent-launch`·`tools`·`themes` 32/32(Chromium), 두 엔진에서 새 연결·설정·SSH 키 창 크기 유지, `.app` 재빌드 후 실행. ⑤ WebKit 실패 분석: `layout:45`는 재실행 통과(일시적), `workspace:87`은 앱 시작 전에 값을 쓰는 테스트 타이밍(대기 후 두 엔진 동일). 실제 버그 2건 수정: 게임 일시정지가 WebKit에서 바로 재개되던 문제(`games/shared.tsx`, 클릭해도 버튼에 포커스가 가지 않아 게임판 blur가 먼저 일시정지), 저장소 쓰기 실패 시 앱이 사라지던 문제(`App.tsx` 효과 2곳, 새 `lib/saveSetting.ts`). WebKit에서 `games`·`themes:92` 재실행 6/6 통과. ⑥ 쿠버 UI: 대시보드 순서를 현황·재시작·미달 워크로드 먼저로 변경, 표본 2개 전에는 추세 차트 숨김, 노드 행 폭, 상세 탭 여백·표 머리·이벤트 경고색. 결과(미커밋 트리): lint·typecheck 오류 출력 없음, `npm test` 1229/1229, Playwright Chromium 전체 480/480, `.app` 재빌드·재실행. WebKit Tab 포커스 10건은 미수정(기본 동작으로 판단, Mac 전체 키보드 접근 설정의 실기기 확인은 안 함). 로그 검색 화면은 구조 변경 없음. 사용자 확인(2026-11-09, 이 MacBook의 디버그 `.app`, kind `kv13`에 실제 SSH 접속): 쿠버네티스 화면이 "잘 보인다"고 확인했다. 화면별 세부 항목(요청 흐름의 스트림, 중지 시 서버 kubectl 정리)은 따로 확인하지 않았다. 다음 첫 행동: 사용자 요청 시 커밋하고 `dev`에 병합한다. 이어서 SSH 세션의 실시간 로그와 요청 흐름을 확인한다.
