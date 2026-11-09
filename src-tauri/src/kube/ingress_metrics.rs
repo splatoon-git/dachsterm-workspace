@@ -12,6 +12,7 @@ use crate::remote_exec::{Limits, quote};
 use serde::Serialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ops::ControlFlow,
     time::Duration,
 };
 
@@ -22,6 +23,14 @@ const METRICS_PORT: u32 = 10254;
 const PREFIX: &str = "nginx_ingress_controller_";
 /// Everything but histogram buckets, which are most of the output and nothing here reads them.
 const WANTED: &str = "^nginx_ingress_controller_(requests|request_duration_seconds_(sum|count)|nginx_process_connections|config_last_reload_successful)";
+/// `WANTED` for a local cluster, where no grep runs: the same names after `PREFIX`.
+const WANTED_NAMES: [&str; 5] = [
+    "requests",
+    "request_duration_seconds_sum",
+    "request_duration_seconds_count",
+    "nginx_process_connections",
+    "config_last_reload_successful",
+];
 const MAX_CONTROLLERS: usize = 10;
 const MAX_FIELD: usize = 256;
 const REQUEST_TIMEOUT_SECONDS: u32 = 12;
@@ -196,13 +205,12 @@ enum Reading {
     Failed(KubeState),
 }
 
-/// grep exits 1 when nothing matches, so kubectl's own status travels on stderr (KV.5).
-fn script(kube: &KubeSettings, controller: &Controller) -> String {
+fn raw_line(kube: &KubeSettings, controller: &Controller) -> String {
     let path = format!(
         "/api/v1/namespaces/{}/pods/{}:{METRICS_PORT}/proxy/metrics",
         controller.namespace, controller.name
     );
-    let raw = Kubectl {
+    Kubectl {
         command: &kube.kubectl,
         kubeconfig: &kube.kubeconfig,
     }
@@ -210,11 +218,67 @@ fn script(kube: &KubeSettings, controller: &Controller) -> String {
         &kube.context,
         REQUEST_TIMEOUT_SECONDS,
         &format!("get --raw {}", quote(&path)),
-    );
+    )
+}
+
+/// grep exits 1 when nothing matches, so kubectl's own status travels on stderr (KV.5).
+fn script(kube: &KubeSettings, controller: &Controller) -> String {
+    let raw = raw_line(kube, controller);
     format!(
         "{{ {raw}; printf '\\n{STATUS} %s\\n' \"$?\" >&2; }} | grep -aE {}",
         quote(WANTED)
     )
+}
+
+fn wanted(line: &[u8]) -> bool {
+    line.strip_prefix(PREFIX.as_bytes()).is_some_and(|rest| {
+        WANTED_NAMES
+            .iter()
+            .any(|name| rest.starts_with(name.as_bytes()))
+    })
+}
+
+/// The lines of a local read that `grep` would have kept. Buckets are most of the output, so the
+/// rest of the document is never held.
+#[derive(Default)]
+struct WantedLines {
+    pending: Vec<u8>,
+    kept: Vec<u8>,
+}
+impl WantedLines {
+    fn push(&mut self, piece: &[u8]) {
+        self.pending.extend_from_slice(piece);
+        let Some(last) = self.pending.iter().rposition(|byte| *byte == b'\n') else {
+            return;
+        };
+        let rest = self.pending.split_off(last + 1);
+        for line in std::mem::replace(&mut self.pending, rest).split_inclusive(|b| *b == b'\n') {
+            if wanted(line) {
+                self.kept.extend_from_slice(line);
+            }
+        }
+    }
+}
+
+/// Status and stderr as they came, and only the wanted metric lines from stdout.
+async fn read_raw(
+    runner: &Runner<'_>,
+    kube: &KubeSettings,
+    controller: &Controller,
+) -> Result<(Option<u32>, Vec<u8>, Vec<u8>), Failed> {
+    if !runner.is_local() {
+        let output = runner.script(&script(kube, controller), LIMITS).await?;
+        let (status, stderr) = kubectl_status(&output.stderr);
+        return Ok((status, stderr.to_vec(), output.stdout));
+    }
+    let mut lines = WantedLines::default();
+    let done = runner
+        .stream(&raw_line(kube, controller), LIMITS, |piece| {
+            lines.push(piece);
+            ControlFlow::Continue(())
+        })
+        .await?;
+    Ok((done.exit, done.stderr, lines.kept))
 }
 
 async fn read_one(
@@ -228,15 +292,14 @@ async fn read_one(
             message: "컨트롤러 파드 이름이 올바르지 않습니다.".into(),
         });
     }
-    let output = match runner.script(&script(kube, controller), LIMITS).await {
-        Ok(output) => output,
+    let (status, stderr, stdout) = match read_raw(runner, kube, controller).await {
+        Ok(read) => read,
         Err(Failed::ChannelLimit) => return Reading::Failed(KubeState::ChannelLimit),
         Err(failed) => return Reading::Failed(failed.into_state()),
     };
-    let (status, stderr) = kubectl_status(&output.stderr);
-    match classify(status, stderr) {
+    match classify(status, &stderr) {
         KubeState::Ready => {
-            let mut sample = parse_metrics(&String::from_utf8_lossy(&output.stdout));
+            let mut sample = parse_metrics(&String::from_utf8_lossy(&stdout));
             sample.hosts.retain(|host, _| hosts.contains(host));
             Reading::Metrics(sample)
         }
@@ -322,6 +385,32 @@ pub async fn read(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_local_read_keeps_what_grep_would_and_drops_the_buckets() {
+        let mut lines = WantedLines::default();
+        lines
+            .push(b"# HELP nginx_ingress_controller_requests total\nnginx_ingress_controller_requ");
+        lines.push(b"ests{host=\"a\"} 4\nnginx_ingress_controller_request_duration_seconds_bucket{le=\"1\"} 3\n");
+        lines.push(b"nginx_ingress_controller_request_duration_seconds_sum{host=\"a\"} 2\n");
+        lines.push(b"nginx_ingress_controller_config_last_reload_successful 1\nother_metric 1\n");
+        assert_eq!(
+            String::from_utf8(lines.kept).unwrap(),
+            "nginx_ingress_controller_requests{host=\"a\"} 4\n\
+             nginx_ingress_controller_request_duration_seconds_sum{host=\"a\"} 2\n\
+             nginx_ingress_controller_config_last_reload_successful 1\n"
+        );
+    }
+
+    #[test]
+    fn the_local_names_cover_the_servers_pattern() {
+        for name in WANTED_NAMES {
+            assert!(wanted(format!("{PREFIX}{name} 1").as_bytes()), "{name}");
+        }
+        assert!(!wanted(
+            format!("{PREFIX}request_duration_seconds_bucket 1").as_bytes()
+        ));
+    }
 
     fn requests(host: &str, status: &str, value: u32) -> String {
         format!(

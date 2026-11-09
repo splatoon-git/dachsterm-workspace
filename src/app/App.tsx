@@ -63,6 +63,7 @@ import { Dialog } from '../components/Dialog';
 import { TitleBar } from './TitleBar';
 import { SidebarTabs, type SidebarView } from './SidebarTabs';
 import { ConnectionTree, useFolded } from './ConnectionTree';
+import { localClusterOf, localTabProfile, type LocalClusterProfile } from './connectionSections';
 import { HeaderActions, HeaderMenus } from './HeaderTools';
 import { modKey } from '../lib/platform';
 import { saveSetting } from '../lib/saveSetting';
@@ -219,9 +220,8 @@ export function App() {
     agent.connect(session, value, remember, opening.launch);
   }
   const agent = useAgentLaunch((p, launch) => requestConnect(p, undefined, { launch }));
-  function openLocal(target: LocalTarget, beside?: Beside) {
-    const profile = { ...blankProfile(), id: target.id, name: target.name, host: 'localhost' };
-    const session = new TerminalSession(profile, theme, () => {}, target);
+  function openLocal(target: LocalTarget, beside?: Beside, cluster?: LocalClusterProfile) {
+    const session = new TerminalSession(localTabProfile(target, cluster), theme, () => {}, target);
     setTabs((previous) => [...previous, session]);
     workspace.open(sessionRef(session), beside);
     setLocalOpen(false);
@@ -319,7 +319,7 @@ export function App() {
   };
   const splitTab = (t: TerminalSession, beside: Beside) =>
     t.localTarget
-      ? openLocal(t.localTarget, beside)
+      ? openLocal(t.localTarget, beside, localClusterOf(t.profile))
       : requestConnect(savedProfile(t), undefined, { beside });
   const kubeTabs = useKubeTabs({ workspace, theme, tabs, setTabs, closeTab });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
@@ -547,7 +547,7 @@ export function App() {
                     setForm({ ...blankProfile(), groupId: groupId ?? null }),
                   newGroup: (parentId) => setGroup({ id: '', name: '', parentId }),
                   editGroup: setGroup,
-                  openLocal: (target) => openLocal(target),
+                  openLocal: (target, cluster) => openLocal(target, undefined, cluster),
                   pickLocal: () => setLocalOpen(true),
                   refreshLocal: () => void refreshLocal(),
                 }}

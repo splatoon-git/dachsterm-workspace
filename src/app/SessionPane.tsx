@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type ComponentProps } from 'react';
 import { KubeWorkspace, type KubeCopyResult } from '../features/kube/KubeWorkspace';
 import { kubeDisplay } from '../features/kube/kubeModel';
+import { LocalCluster } from '../features/kube/localCluster';
 import type { PodTerminalRequest } from '../features/kube/podShell';
 import { FtpPane } from '../features/sftp/FtpPane';
 import { usePaneView } from '../features/terminal/paneView';
@@ -53,21 +54,23 @@ function KubeOrTerminal({ openPodTerminal, ...props }: KubeProps) {
   return (
     <div className="session-pane">
       {display !== 'off' && (
-        <KubeWorkspace
-          key={session.connectionId}
-          connectionId={session.connectionId}
-          persist={session.profile.workspace === 'kubernetes'}
-          session={session.profile.id}
-          sessionName={session.profile.name}
-          visible={active}
-          focused={focused ?? false}
-          display={display}
-          showTerminal={() => session.view.set({ kubeTerminal: true })}
-          showWorkspace={() => session.view.set({ kubeTerminal: false })}
-          copy={(command) => copyInto(session, command)}
-          focusPod={view.kubeFocus}
-          openTerminal={openPodTerminal}
-        />
+        <LocalCluster.Provider value={!!session.localTarget}>
+          <KubeWorkspace
+            key={session.connectionId}
+            connectionId={session.connectionId}
+            persist={session.profile.workspace === 'kubernetes'}
+            session={session.profile.id}
+            sessionName={session.profile.name}
+            visible={active}
+            focused={focused ?? false}
+            display={display}
+            showTerminal={() => session.view.set({ kubeTerminal: true })}
+            showWorkspace={() => session.view.set({ kubeTerminal: false })}
+            copy={(command) => copyInto(session, command)}
+            focusPod={view.kubeFocus}
+            openTerminal={openPodTerminal}
+          />
+        </LocalCluster.Provider>
       )}
       <SessionTerminal
         {...props}

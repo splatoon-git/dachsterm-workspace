@@ -109,7 +109,7 @@ kube?: {              // 첫 접속의 탐지가 채운다. 없으면 탭 안에
 | 파일 | 역할 |
 |---|---|
 | `src-tauri/src/kube/mod.rs` | 명령 등록과 입력 검증 |
-| `kube/runner.rs` | `kubectl` 호출 구성. `Ssh`만 먼저 구현하고 `Local`(KV.11)을 넣을 자리를 둔다 |
+| `kube/runner.rs` | `kubectl` 호출 구성과 `Ssh`·`Local` 실행 분기. 로컬 실행은 `kube/local_run.rs` |
 | `kube/detect.rs` | `kubectl`, kubeconfig, context 탐지 |
 | `kube/state.rs`, `kube/settings.rs` | 상태 enum과 kubectl 출력 분류, 세션에 저장하는 값과 검증 |
 | `kube/snapshot.rs`, `kube/templates.rs` | go-template 정의, 파서, 트리와 대시보드 원본 데이터 |
@@ -528,6 +528,15 @@ SSH 없이 내 PC의 kubeconfig로 접속한다. Mac 판매에 필요할 가능�
 - 연결 목록에 "로컬 클러스터"를 추가하고 `Local` 러너를 구현한다. Windows는 `kubectl.exe`, macOS는 탐지한 절대 경로를 쓴다. Finder 실행 앱은 Homebrew 경로를 모르므로 이름만으로 실행하지 않는다(규칙 §11).
 - 인증 플러그인(`exec` credential)이 PATH를 요구할 수 있어 패키지된 앱으로 직접 검증한다.
 - 로그 검색의 서버 측 `grep`은 쓸 수 없으므로 앱에서 거른다. 정책이 달라 러너에서 분기한다.
+
+구현 결정(2026-11-09):
+
+- **탭 구조:** 로컬 클러스터 탭은 이 컴퓨터의 셸 하나 위에 작업 화면을 얹은 것이다. SSH 세션과 같이 숨은 터미널을 두므로 **로컬 터미널** 전환, 분할, 탭 수명을 그대로 쓴다. 명령의 연결 ID가 로컬 PTY이면 `Link::Local`, `Home::Local`이 된다(`kube/mod.rs`). 새 IPC 명령은 없다.
+- **셸을 쓰지 않는다.** Windows에 기댈 셸이 없으므로 `Kubectl`이 만든 명령 줄을 `local_run::parse`가 인자로 되돌려 직접 실행한다. 셸이 해석할 문자가 따옴표 밖에 있으면 실행을 거부한다. 프로그램 경로는 설정값과 글자 그대로 비교한다. 공백 있는 경로(`/Applications/Rancher Desktop.app/...`)를 나누지 않기 위해서다.
+- **셸·파이프를 쓰던 곳의 분기:** 로그 검색(`LineReader.unfiltered`, 일치한 줄만 상한에 센다), 실시간 로그(`log_stream/local.rs`, 소스별 kubectl), 인그레스 메트릭(`WantedLines`), 로그 따라가기 탭(`LineFilter`, PTY 출력을 줄 단위로 거른다), 파드 셸(PTY에서 kubectl을 직접 실행).
+- **경로와 환경:** kubectl은 항상 절대 경로이고, 화면에서 오는 값이므로 파일 이름이 `kubectl`로 시작해야 한다(`check_local_kubectl`). macOS의 Finder 실행은 `login_path`가 로그인 셸의 `PATH`와 `KUBECONFIG`를 가져온다. kubectl이 있는 폴더도 `PATH`에 더해 함께 설치된 인증 플러그인을 찾게 한다.
+- **인증 플러그인 실패:** `getting credentials:` 문구를 `AuthPluginFailed`로 분류해 "연결 불가"로 오인하지 않게 했다. 실측 문구로 테스트를 고정했다.
+- **설정 저장:** 저장된 세션이 없으므로 `settings` 표의 `kubeLocalCluster`에 하나만 둔다. 로컬 항목 하나로 kubeconfig의 모든 클러스터에 닿으므로 **context를 바꾸면 운영 모드가 꺼진다**(설계에 없던 판단. SSH 세션은 유지).
 
 ### KV.12 — 터미널 UI 제거와 문서
 

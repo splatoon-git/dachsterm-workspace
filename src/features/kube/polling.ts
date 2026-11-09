@@ -140,6 +140,8 @@ export function stateNote(state: KubeState): string {
       return '';
     case 'unreachable':
       return '클러스터 연결 불가';
+    case 'authPluginFailed':
+      return '인증 플러그인 실행 실패';
     case 'authFailed':
       return '클러스터 인증 실패';
     case 'forbidden':

@@ -1,23 +1,22 @@
 //! `kube_log_stream`: follows several containers' logs at once for the live log board. All of them
 //! share one SSH channel, because `MaxSessions` (default 10) is also spent on the shell, SFTP and
 //! every other tab, and a board can follow 20 pods. Log text stays in memory (design §6).
+mod local;
+
 use super::{
     log_search::STATUS,
     logs::clean,
-    runner::{Failed, Kubectl, Runner},
+    runner::{Failed, Kubectl, Link},
     settings::{KubeSettings, check_container, check_namespace, check_pod, is_log_time},
     state::{KubeState, classify},
 };
 use crate::{
     remote_exec::{Limits, quote},
-    ssh::Host,
     storage::Result,
 };
-use russh::client;
 use serde::{Deserialize, Serialize};
 use std::{
     ops::ControlFlow,
-    sync::Arc,
     time::{Duration, Instant},
 };
 use tauri::ipc::Channel;
@@ -27,6 +26,8 @@ use tokio::sync::watch;
 const MAX_SOURCES: usize = 20;
 const MAX_TAIL: u32 = 2000;
 const MAX_FILTER_CHARS: usize = 200;
+/// What `substr` keeps of a line on a server (`PREFIX_LINES`), and a local stream the same.
+const MAX_LINE_BYTES: usize = 3800;
 /// A board left open overnight should not follow forever.
 const LIMITS: Limits = Limits {
     timeout: Duration::from_secs(12 * 60 * 60),
@@ -119,14 +120,12 @@ pub fn check(sources: &[StreamSource]) -> Result<()> {
     Ok(())
 }
 
-/// One backgrounded `kubectl logs -f`. With no PTY nothing tells kubectl that the channel closed, so
-/// a watcher reads this channel's stdin, which ends at that moment, and stops kubectl (KV.5).
-fn source_script(kube: &KubeSettings, index: usize, source: &StreamSource) -> String {
+fn logs_line(kube: &KubeSettings, source: &StreamSource) -> String {
     let range = match &source.since {
         Some(time) => format!("--since-time={}", quote(time)),
         None => format!("--tail={}", source.tail.min(MAX_TAIL)),
     };
-    let logs = Kubectl {
+    Kubectl {
         command: &kube.kubectl,
         kubeconfig: &kube.kubeconfig,
     }
@@ -138,7 +137,13 @@ fn source_script(kube: &KubeSettings, index: usize, source: &StreamSource) -> St
             quote(&source.namespace),
             quote(&source.container),
         ),
-    );
+    )
+}
+
+/// One backgrounded `kubectl logs -f`. With no PTY nothing tells kubectl that the channel closed, so
+/// a watcher reads this channel's stdin, which ends at that moment, and stops kubectl (KV.5).
+fn source_script(kube: &KubeSettings, index: usize, source: &StreamSource) -> String {
+    let logs = logs_line(kube, source);
     format!(
         "( {{ {logs} 2>&1 & k=$!; ( cat <&3 >/dev/null 2>&1; kill \"$k\" 2>/dev/null ) \
          >/dev/null 2>&1 & w=$!; wait \"$k\"; s=$?; kill \"$w\" 2>/dev/null; \
@@ -268,7 +273,7 @@ fn deliver(channel: &Channel<Event>, parsed: Parsed, limiter: &mut Limiter) -> b
 /// Ends when every source has ended, the connection drops or the board cancels. Dropping the
 /// stream's future closes its channel, which is what stops kubectl on the server.
 pub async fn run(
-    handle: Arc<client::Handle<Host>>,
+    link: Link,
     kube: KubeSettings,
     sources: Vec<StreamSource>,
     channel: Channel<Event>,
@@ -277,20 +282,27 @@ pub async fn run(
     if channel.send(Event::Started).is_err() {
         return;
     }
-    let script = stream_script(&kube, &sources);
-    let runner = Runner::Ssh(&handle);
+    let runner = link.runner(&kube);
     let mut reader = Reader::new(sources.len());
     let mut limiter = Limiter {
         window: Instant::now(),
         used: 0,
     };
-    let work = runner.stream(&script, LIMITS, |piece| {
+    let on_piece = |piece: &[u8]| {
         if deliver(&channel, reader.push(piece), &mut limiter) {
             ControlFlow::Continue(())
         } else {
             ControlFlow::Break(())
         }
-    });
+    };
+    let work = async {
+        if runner.is_local() {
+            local::follow(&kube, &sources, LIMITS, on_piece).await
+        } else {
+            let script = stream_script(&kube, &sources);
+            runner.stream(&script, LIMITS, on_piece).await
+        }
+    };
     let result = tokio::select! {
         result = work => Some(result),
         _ = cancel.changed() => None,

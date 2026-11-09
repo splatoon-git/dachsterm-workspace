@@ -52,6 +52,31 @@ describe('setup steps', () => {
     );
     expect(setupGuide({ kind: 'ready' })).toBeNull();
   });
+
+  it('never tells a local cluster to use a server or sudo', () => {
+    const states = [
+      { kind: 'kubectlMissing' },
+      { kind: 'configMissing' },
+      { kind: 'configUnreadable' },
+      { kind: 'authFailed' },
+      { kind: 'unreachable' },
+    ] as const;
+    for (const state of states) {
+      const body = setupGuide(state, true)?.body ?? '';
+      expect(body, state.kind).not.toContain('서버에서');
+      expect(body, state.kind).not.toContain('sudo');
+      expect(body, state.kind).not.toContain('복사본');
+    }
+    expect(setupStep(detection({ kind: 'configUnreadable' }), true)).toBe('manual');
+    expect(setupStep(detection({ kind: 'authFailed' }), true)).toBe('retry');
+  });
+
+  it('says what the credential plugin reported', () => {
+    const state = { kind: 'authPluginFailed', message: 'exec: executable aws not found' } as const;
+    expect(setupGuide(state)?.body).toContain('exec: executable aws not found');
+    expect(setupGuide(state)?.body).toContain('PATH');
+    expect(setupStep(detection(state))).toBe('retry');
+  });
 });
 
 describe('opening', () => {

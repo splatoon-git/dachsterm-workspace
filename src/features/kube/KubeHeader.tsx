@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { KubeSettings } from '../../lib/ipc';
 import { kubeScreens, type KubeDisplay, type KubeScreen } from './kubeModel';
+import { useLocalCluster } from './localCluster';
 
 /** The workspace's screen tabs and the status at their end. */
 export function KubeHeader({
@@ -32,6 +33,7 @@ export function KubeHeader({
   /** The way back from the terminal while setup is unfinished; `null` otherwise. */
   setup: { note: string; busy: boolean; recheck: () => void } | null;
 }) {
+  const local = useLocalCluster();
   return (
     <div className="kube-header" role="tablist" aria-label="쿠버네티스 화면">
       {kubeScreens.map(({ id, label }) => (
@@ -52,7 +54,7 @@ export function KubeHeader({
       ))}
       <span className="kube-header-divider" aria-hidden="true" />
       <button role="tab" aria-selected={display === 'terminal'} onClick={showTerminal}>
-        서버 터미널
+        {local ? '로컬 터미널' : '서버 터미널'}
       </button>
       <span className="kube-status">
         {settings && (

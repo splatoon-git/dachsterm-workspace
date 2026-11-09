@@ -1,7 +1,8 @@
 //! Command lines for the pod shell and log-follow tabs (design §3.3), and the check that decides
 //! whether a shell tab is worth opening. Every name here was checked by `check_target`.
 use super::{
-    log_keywords::Keywords,
+    local_run::{self, Invocation},
+    log_keywords::{Keywords, LineFilter},
     runner::{Kubectl, Runner},
     settings::{KubeSettings, check_container, check_namespace, check_pod},
     state::{KubeState, ShellCheck, classify_shell},
@@ -27,6 +28,11 @@ pub fn check_target(
     container: &str,
 ) -> Result<()> {
     kube.validate()?;
+    check_names(namespace, pod, container)
+}
+
+/// The names alone, for a caller that has checked the settings for where they will run.
+pub fn check_names(namespace: &str, pod: &str, container: &str) -> Result<()> {
     if namespace.is_empty() {
         return Err("파드의 namespace가 필요합니다.".into());
     }
@@ -48,8 +54,8 @@ fn under_sh(command: String) -> String {
     format!("sh -c {}", quote(&command))
 }
 
-pub fn shell_command(kube: &KubeSettings, namespace: &str, pod: &str, container: &str) -> String {
-    under_sh(kubectl(kube).streaming(
+fn shell_line(kube: &KubeSettings, namespace: &str, pod: &str, container: &str) -> String {
+    kubectl(kube).streaming(
         &kube.context,
         &format!(
             "exec -it {} -n {} -c {} -- sh -c {}",
@@ -58,7 +64,30 @@ pub fn shell_command(kube: &KubeSettings, namespace: &str, pod: &str, container:
             quote(container),
             quote(SHELL),
         ),
-    ))
+    )
+}
+
+pub fn shell_command(kube: &KubeSettings, namespace: &str, pod: &str, container: &str) -> String {
+    under_sh(shell_line(kube, namespace, pod, container))
+}
+
+fn logs_line(
+    kube: &KubeSettings,
+    namespace: &str,
+    pod: &str,
+    container: &str,
+    tail: u32,
+) -> String {
+    kubectl(kube).streaming(
+        &kube.context,
+        &format!(
+            "logs -f --tail={} {} -n {} -c {}",
+            tail.clamp(1, super::logs::MAX_TAIL),
+            quote(pod),
+            quote(namespace),
+            quote(container),
+        ),
+    )
 }
 
 pub fn logs_command(
@@ -69,19 +98,40 @@ pub fn logs_command(
     tail: u32,
     keywords: &Keywords,
 ) -> String {
-    let follow = kubectl(kube).streaming(
-        &kube.context,
-        &format!(
-            "logs -f --tail={} {} -n {} -c {}",
-            tail.clamp(1, super::logs::MAX_TAIL),
-            quote(pod),
-            quote(namespace),
-            quote(container),
-        ),
-    );
+    let follow = logs_line(kube, namespace, pod, container, tail);
     under_sh(format!(
         "{follow}{}",
         keywords.stages("--line-buffered ", false)
+    ))
+}
+
+fn local(kube: &KubeSettings, line: String) -> Result<Invocation> {
+    local_run::parse(&line, &kube.kubectl).ok_or_else(|| "kubectl 명령을 만들지 못했습니다.".into())
+}
+
+/// A pod shell on a local cluster: kubectl itself in the PTY, since there is no `sh` to count on.
+pub fn local_shell(
+    kube: &KubeSettings,
+    namespace: &str,
+    pod: &str,
+    container: &str,
+) -> Result<Invocation> {
+    local(kube, shell_line(kube, namespace, pod, container))
+}
+
+/// A followed log on a local cluster. Keywords are applied to the PTY's output (design KV.11).
+pub fn local_logs(
+    kube: &KubeSettings,
+    namespace: &str,
+    pod: &str,
+    container: &str,
+    tail: u32,
+    keywords: Keywords,
+) -> Result<(Invocation, Option<LineFilter>)> {
+    let filter = (!keywords.is_empty()).then(|| LineFilter::new(keywords));
+    Ok((
+        local(kube, logs_line(kube, namespace, pod, container, tail))?,
+        filter,
     ))
 }
 
@@ -157,6 +207,37 @@ mod tests {
         let line = logs_command(&settings(), "web", "api-1", "app", 500, &keywords);
         assert!(line.contains("grep --line-buffered -aiF --"), "{line}");
         assert!(line.contains("grep --line-buffered -aivF --"), "{line}");
+    }
+
+    fn local_settings() -> KubeSettings {
+        KubeSettings {
+            kubectl: "/opt/My Tools/kubectl".into(),
+            kubeconfig: "/a b/config".into(),
+            ..settings()
+        }
+    }
+
+    #[test]
+    fn a_local_shell_is_kubectl_itself_with_no_sh_around_it() {
+        let run = local_shell(&local_settings(), "web", "api-1", "app").unwrap();
+        assert_eq!(run.program, "/opt/My Tools/kubectl");
+        assert_eq!(run.kubeconfig.as_deref(), Some("/a b/config"));
+        assert_eq!(run.args[0..2], ["--context".to_string(), "kind-x".into()]);
+        assert!(run.args.contains(&"exec".to_string()));
+        assert_eq!(run.args.last().unwrap(), SHELL);
+    }
+
+    #[test]
+    fn a_local_followed_log_has_no_grep_and_filters_only_when_asked() {
+        let kube = local_settings();
+        let (run, filter) =
+            local_logs(&kube, "web", "api-1", "app", 100, Keywords::default()).unwrap();
+        assert!(run.args.contains(&"logs".to_string()));
+        assert!(filter.is_none());
+        let keywords = Keywords::parse("error").unwrap();
+        let (run, filter) = local_logs(&kube, "web", "api-1", "app", 100, keywords).unwrap();
+        assert!(!run.args.iter().any(|arg| arg.contains("grep")));
+        assert!(filter.is_some());
     }
 
     #[test]

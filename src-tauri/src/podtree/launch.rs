@@ -3,7 +3,10 @@
 use super::{Location, quote, stage};
 use crate::{
     AppState,
-    kube::{Keywords, KubeSettings, check_target, logs_command, shell_command},
+    kube::{
+        Invocation, Keywords, KubeSettings, LineFilter, check_names, check_target,
+        is_local_connection, local_logs, local_shell, logs_command, shell_command,
+    },
     storage::Result,
 };
 use serde::Deserialize;
@@ -58,11 +61,34 @@ pub(super) struct Prepared {
     pub labels: Labels,
     /// The staged script's folder, removed again if the PTY could not start.
     pub staged: Option<String>,
+    /// Set for a local cluster's pod tab: this process runs in the PTY instead of `command`.
+    pub local: Option<LocalPod>,
 }
 
-fn pod_location(connection: &str) -> Location {
+pub(super) struct LocalPod {
+    pub invocation: Invocation,
+    pub filter: Option<LineFilter>,
+}
+
+const LOCAL_LOCATION: &str = "kubeLocal";
+
+/// What a PTY runs: the program, its arguments, added environment and an optional output filter.
+pub(super) type PtyProcess = (
+    std::path::PathBuf,
+    Vec<String>,
+    Vec<(std::ffi::OsString, std::ffi::OsString)>,
+    Option<crate::kube::LineFilter>,
+);
+
+pub(super) fn pty_process(pod: LocalPod) -> PtyProcess {
+    let LocalPod { invocation, filter } = pod;
+    let env = crate::kube::environment(&invocation);
+    (invocation.program.into(), invocation.args, env, filter)
+}
+
+fn pod_location(connection: &str, local: bool) -> Location {
     Location {
-        kind: "ssh".into(),
+        kind: if local { LOCAL_LOCATION } else { "ssh" }.into(),
         id: connection.into(),
     }
 }
@@ -84,6 +110,21 @@ fn script_title(launch: &ScriptLaunch, path: &str) -> String {
     )
 }
 
+fn check_pod_target(
+    kube: &KubeSettings,
+    namespace: &str,
+    pod: &str,
+    container: &str,
+    local: bool,
+) -> Result<()> {
+    if local {
+        kube.validate_local()?;
+        check_names(namespace, pod, container)
+    } else {
+        check_target(kube, namespace, pod, container)
+    }
+}
+
 pub(super) async fn prepare(state: &AppState, launch: &Launch) -> Result<Prepared> {
     Ok(match launch {
         Launch::Script(script) => {
@@ -97,6 +138,7 @@ pub(super) async fn prepare(state: &AppState, launch: &Launch) -> Result<Prepare
                     failed: "PodTree 프로세스가 실패했습니다. 터미널 안내를 확인하세요.",
                 },
                 staged: Some(path),
+                local: None,
             }
         }
         Launch::PodShell {
@@ -106,9 +148,18 @@ pub(super) async fn prepare(state: &AppState, launch: &Launch) -> Result<Prepare
             pod,
             container,
         } => {
-            check_target(kube, namespace, pod, container)?;
+            let is_local = is_local_connection(state, connection);
+            check_pod_target(kube, namespace, pod, container, is_local)?;
+            let local = if is_local {
+                Some(LocalPod {
+                    invocation: local_shell(kube, namespace, pod, container)?,
+                    filter: None,
+                })
+            } else {
+                None
+            };
             Prepared {
-                location: pod_location(connection),
+                location: pod_location(connection, is_local),
                 command: shell_command(kube, namespace, pod, container),
                 labels: Labels {
                     title: format!("{} · {namespace}/{pod} · {container}", kube.context),
@@ -116,6 +167,7 @@ pub(super) async fn prepare(state: &AppState, launch: &Launch) -> Result<Prepare
                     failed: "파드 셸 연결이 끊겼습니다.",
                 },
                 staged: None,
+                local,
             }
         }
         Launch::PodLogs {
@@ -127,17 +179,27 @@ pub(super) async fn prepare(state: &AppState, launch: &Launch) -> Result<Prepare
             tail,
             keywords,
         } => {
-            check_target(kube, namespace, pod, container)?;
+            let is_local = is_local_connection(state, connection);
+            check_pod_target(kube, namespace, pod, container, is_local)?;
             let keywords = Keywords::parse(keywords)?;
+            let command = logs_command(kube, namespace, pod, container, *tail, &keywords);
+            let local = if is_local {
+                let (invocation, filter) =
+                    local_logs(kube, namespace, pod, container, *tail, keywords)?;
+                Some(LocalPod { invocation, filter })
+            } else {
+                None
+            };
             Prepared {
-                location: pod_location(connection),
-                command: logs_command(kube, namespace, pod, container, *tail, &keywords),
+                location: pod_location(connection, is_local),
+                command,
                 labels: Labels {
                     title: format!("{} · {namespace}/{pod} · {container} 로그", kube.context),
                     closed: "로그 따라가기가 끝났습니다.",
                     failed: "로그 따라가기가 끝났습니다.",
                 },
                 staged: None,
+                local,
             }
         }
     })
