@@ -133,6 +133,8 @@
 
 화살표는 저장소 밖 Swift 스크립트로 실제 WKWebView에서 스냅샷을 찍어 확인했다. 기존 글꼴 목록은 빈칸, 뒤에 `JetBrainsMono Nerd Font Mono`를 붙인 목록은 화살표가 그려졌다. 패키지 앱 화면이 아니라 같은 웹뷰의 단독 페이지 결과다.
 
+T.6을 합친 뒤 재실행(macOS, `d6dbba3`, 같은 임시 설정): typecheck, eslint, format:check 종료 0, vitest 1323에서 1325/1325(T.6 테스트 추가), Playwright Chromium 전체 519/519, 대비 테스트 WebKit 16/16.
+
 미실행: 패키지 앱 화면, Windows, CI.
 
 ## T.6 기초 토큰 정리 (2026-11-09)
