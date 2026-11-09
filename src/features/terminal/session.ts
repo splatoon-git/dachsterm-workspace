@@ -17,7 +17,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { call, errorText, type Profile, type TerminalLaunch } from '../../lib/ipc';
-import { terminalTheme } from '../../themes/adapters/xterm';
+import { terminalColorOptions, terminalTheme } from '../../themes/adapters/xterm';
 import type { ThemeDefinition } from '../../themes/contract';
 export class TerminalSession {
   followDirectory?: boolean;
@@ -122,7 +122,7 @@ export class TerminalSession {
     public podtree?: KubeLaunch,
   ) {
     this.terminal = new Terminal({
-      theme: terminalTheme(theme),
+      ...terminalColorOptions(theme),
       fontFamily: theme.foundations.font.mono,
       ...terminalDisplay(),
       cursorBlink: true,

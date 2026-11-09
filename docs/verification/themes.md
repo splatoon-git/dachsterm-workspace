@@ -109,3 +109,15 @@
 그 결과 `--color-action-accent`, `--color-action-on-accent`를 쓰는 CSS는 다시 없다. 포인트색은 Retro Dark·Retro Blue Dark의 경고색과 ANSI yellow로만 화면에 나타난다. 배지 같은 소비처를 만들지는 사용자 결정 전까지 보류한다.
 
 실행 결과(커밋 전 트리, Windows): `npm run typecheck`, 바꾼 파일 eslint·Prettier, `npx vitest run src/themes/tokens.test.mjs` 1/1, `npx playwright test tests/ui/themes.spec.ts -g "every theme"` 1/1(16개 테마의 선택 탭 색과 hover 유지 포함). Classic 스크린샷 시각 확인. 미실행: 전체 스위트, 실제 앱 재검사, Mac 실기기, CI.
+
+## T.5 터미널 글자 대비 보정 (2026-11-09)
+
+사용자가 agnoster 프롬프트의 검은 띠를 보고 테마가 터미널 기본 설정을 덮지 못하는지 물었다. 띠는 프롬프트가 지정한 ANSI black이고 색은 테마 값이 적용된 것이다(스크린샷은 Retro Dark로 보인다). 띠 자체는 그대로 두기로 했다.
+
+실제 결함은 라이트 테마에 있었다. agnoster는 기본 글자색을 ANSI black 위에 그리는데, 라이트 테마 6종은 글자색이 어둡고 `black`이 `#000000`이라 대비가 1.33~2.24:1이었다(Classic 1.66). 테마의 ANSI 값은 터미널 배경 대비만 보장하므로 글자·배경을 프로그램이 따로 고르는 조합은 팔레트로 해결되지 않는다. 그래서 `src/themes/adapters/xterm.ts`의 `terminalColorOptions`로 xterm `minimumContrastRatio: 4.5`를 켜고 `session.ts`와 `TerminalPreview.tsx`가 함께 쓴다.
+
+재현 테스트 `tests/ui/terminal-contrast.spec.ts`는 제품 `TerminalSession`으로 프롬프트와 같은 색을 그려 화면 색을 읽는다. 16개 테마에서 black 위 글자 4.5:1 이상, 일반 글자와 ANSI red는 테마 값 유지, Powerline 화살표는 보정 없이 black 유지를 확인한다. 수정 전에는 라이트 테마 6종이 실패했다.
+
+실행 결과(macOS, `b343613` 기준 미커밋 트리): `npm run typecheck`, 바꾼 파일 eslint·Prettier 종료 0, `npx vitest run` 1204/1204(98개 파일). 새 테스트 Chromium 16/16, Playwright WebKit 16/16. Chromium 전체 Playwright 484 통과·1 실패. 실패 `session-form.spec.ts:45`는 제품 코드를 고치기 전 실행에서도 같은 값으로 실패했으며 원인은 확인하지 않았다. 포트 1420을 다른 세션의 개발 서버가 쓰고 있어 worktree 전용 서버(1431)로 실행했다.
+
+미실행: 실제 앱 화면(이 경로에는 WKWebView 자동 검사가 없다), Windows, CI. WebKit 결과는 WKWebView 실기기 결과가 아니다. 256색 이상과 트루컬러 글자도 같은 보정을 받지만 별도로 측정하지 않았다.
