@@ -543,6 +543,15 @@ kind에서 확인한 것(대역 응답 기준):
 
 수정 뒤 `2dd74b3`에서 `bash scripts/verify-macos.sh --package` 종료 0: Vitest 1322, Playwright 519(Chromium), Rust `dachsterm` 630 통과·0 실패·3 무시, `npm audit` 0건, `.app` 빌드.
 
+CI(`dev`, `workflow_dispatch`):
+
+| 워크플로 | 실행 | 대상 | 결과 |
+|---|---|---|---|
+| macOS verification | `42571659125` | `2c20775` | 통과 |
+| Windows verification | `42571656051` 1회차 | `2c20775` | 실패: Playwright `file-tab.spec.ts:59` 1건(518 통과). 2회차에서 519 통과해 일시적 실패로 본다. 원인은 조사하지 않았다 |
+| Windows verification | `42571656051` 2회차 | `2c20775` | 실패: `kube::settings::tests::a_local_kubeconfig_is_empty_or_absolute`. KV.11 테스트의 경로에 BEL·BS 제어 문자가 들어가 있었다. 제품 코드는 맞게 거부했고 `0584211`에서 테스트를 고쳤다 |
+| Windows verification | `42574696398` | `0584211` | 통과 |
+
 **미실행:** 패키지 앱에서 **vLLM·GPU** 탭을 띄우는 확인. 임시 계측 빌드를 만들지 않아 실제 앱 화면은 대기다.
 
 **대기:**
