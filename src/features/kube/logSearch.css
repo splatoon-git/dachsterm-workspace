@@ -140,7 +140,7 @@
 }
 .kube-search mark,
 .kube-around mark {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--color-action-selected);
   color: var(--color-text-primary);
   font-weight: var(--font-weight-bold);

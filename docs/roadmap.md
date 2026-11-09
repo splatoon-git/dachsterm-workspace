@@ -61,7 +61,7 @@ MobaXterm의 SSH 작업 흐름을 참고해 SSH, SFTP, 외부 파일 편집, 멀
 | 계층 | 역할 | 예시 |
 |---|---|---|
 | 공통 토큰 계약 | 모든 테마가 제공해야 하는 키와 타입 | `ThemeDefinition` |
-| 기초 토큰 | 간격·타이포그래피·모서리·테두리·그림자·모션 | `space`, `font`, `radius`, `borderWidth`, `shadow`, `motion` |
+| 기초 토큰 | 간격·타이포그래피·모서리·테두리·그림자·모션·쌓임 순서 | `space`, `font`, `radius`, `borderWidth`, `shadow`, `motion`, `layer` |
 | 의미 기반 색상 | 용도별 색상 및 상호작용 상태 | `surface`, `text`, `border`, `action`, `status`, `focus`, `overlay` |
 | 전용 토큰 | 터미널·차트의 렌더링 값 | `terminal`, `chart` |
 | 테마 정의 | 계약을 만족하는 실제 값의 묶음 | `pms-retro-light`(내부 식별자) |

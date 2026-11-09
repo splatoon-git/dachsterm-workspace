@@ -49,9 +49,9 @@ dialog.dialog-large {
 }
 .dialog-title h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--font-heading);
   font-weight: var(--font-weight-semibold);
-  line-height: 22px;
+  line-height: var(--space-lg-plus);
 }
 .dialog-title p {
   margin: var(--space-xxs) 0 0;
@@ -125,7 +125,7 @@ dialog.dialog-large {
 }
 .form-actions > button {
   min-height: var(--control-height);
-  padding: 5px 14px;
+  padding: var(--space-xs) var(--space-md);
   font-size: var(--font-small);
   line-height: var(--space-lg-plus);
 }
@@ -151,7 +151,7 @@ dialog.dialog-large {
 dialog input:not([type='checkbox']):not([type='radio']),
 dialog select {
   min-height: var(--control-height);
-  padding: 5px var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-small);
   line-height: var(--space-lg-plus);
 }

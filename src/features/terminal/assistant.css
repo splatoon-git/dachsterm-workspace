@@ -60,7 +60,7 @@
 .guide-popover dl {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm) 18px;
+  gap: var(--space-sm) var(--space-lg);
   margin: var(--space-sm) 0;
 }
 .guide-popover dl > div {

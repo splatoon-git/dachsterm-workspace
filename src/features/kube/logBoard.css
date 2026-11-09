@@ -121,7 +121,7 @@
 .kube-board-status.live::before {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-status-success);
   content: '';
 }
@@ -213,7 +213,7 @@
   flex-shrink: 0;
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 .kube-board-pane-actions {
   display: inline-flex;
@@ -290,7 +290,7 @@
   color: var(--terminal-bright-red);
 }
 .kube-line mark {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--terminal-selection-background);
   color: var(--terminal-selection-foreground);
 }

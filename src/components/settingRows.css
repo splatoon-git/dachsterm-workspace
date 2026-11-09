@@ -46,7 +46,7 @@ input.switch::after {
   left: 2px;
   width: 14px;
   height: 14px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-surface-panel);
   transition: transform var(--motion-fast);
 }

@@ -194,14 +194,14 @@
 }
 .tunnel-kind input {
   width: auto;
-  margin: 3px 0 0;
+  margin: var(--space-xxs) 0 0;
   align-self: flex-start;
   accent-color: var(--color-action-primary);
 }
 .tunnel-kind span {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-xs);
   min-width: 0;
 }
 .tunnel-flow-section,

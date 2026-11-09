@@ -1,10 +1,10 @@
 .survivor-hub {
   max-width: 960px;
-  line-height: 1.7;
+  line-height: var(--font-leading-relaxed);
   overflow-wrap: anywhere;
 }
 .survivor-hub h2 {
-  font-size: 20px;
+  font-size: var(--font-large);
 }
 .survivor-hub h3 {
   margin-top: var(--space-xl);

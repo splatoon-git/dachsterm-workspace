@@ -7,7 +7,7 @@
 dialog .tunnel-row-actions > button,
 dialog .tunnel-list-actions > button {
   min-height: var(--control-height);
-  padding: 5px var(--space-md);
+  padding: var(--space-xs) var(--space-md);
   font-size: var(--font-small);
   line-height: var(--space-lg-plus);
 }

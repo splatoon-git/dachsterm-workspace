@@ -27,7 +27,7 @@
 .log-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-text-disabled);
 }
 .log-state.recording .log-dot {

@@ -33,7 +33,7 @@ button:disabled {
 }
 :focus-visible {
   outline: var(--border-width-focus) solid var(--color-focus-ring);
-  outline-offset: 3px;
+  outline-offset: var(--border-width-focus);
 }
 .app-shell {
   height: 100dvh;
@@ -107,7 +107,7 @@ nav {
   display: inline-block;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-text-secondary);
   margin-right: var(--space-sm);
 }
@@ -145,12 +145,12 @@ main {
 }
 .eyebrow {
   font-size: var(--font-tiny);
-  letter-spacing: 2px;
+  letter-spacing: var(--font-tracking-wider);
   color: var(--color-text-secondary);
 }
 h1 {
   font-size: var(--font-title);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   letter-spacing: var(--font-tracking-tighter);
   margin: var(--space-md) 0;
 }
@@ -408,7 +408,7 @@ button {
   background: var(--color-surface-subtle);
 }
 .panel-title {
-  padding: var(--space-lg-plus) var(--space-lg) 18px;
+  padding: var(--space-lg-plus) var(--space-lg) var(--space-lg);
   min-height: 58px;
 }
 .panel-title h2 {
@@ -416,12 +416,12 @@ button {
   align-items: center;
   gap: var(--space-sm);
   font-size: var(--font-small);
-  letter-spacing: 0.3px;
+  letter-spacing: var(--font-tracking-wide);
 }
 .count {
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   background: var(--color-surface-header);
-  padding: var(--space-xxs) 7px;
+  padding: var(--space-xxs) var(--space-xs-plus);
 }
 
 .resize-handle {
@@ -447,16 +447,16 @@ main {
 .welcome {
   display: block;
   text-align: left;
-  padding: 28px clamp(var(--space-xl), 5vw, calc(var(--space-xl) * 3));
+  padding: var(--space-xl) clamp(var(--space-xl), 5vw, calc(var(--space-xl) * 3));
   overflow: auto;
 }
 .welcome-topline {
   display: flex;
   justify-content: space-between;
   font-size: var(--font-micro);
-  letter-spacing: 1.2px;
+  letter-spacing: var(--font-tracking-wider);
   color: var(--color-text-secondary);
-  margin-bottom: 38px;
+  margin-bottom: var(--space-xxxl);
   gap: var(--space-md);
 }
 .welcome-topline span:last-child {
@@ -467,26 +467,26 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-lg);
-  padding-bottom: 38px;
+  padding-bottom: var(--space-xxxl);
 }
 .welcome-copy {
   min-width: 0;
 }
 .welcome-copy h1 {
-  font-size: clamp(var(--font-display), 2.2vw, 32px);
+  font-size: clamp(var(--font-display), 2.2vw, var(--font-title));
   line-height: var(--font-leading-tight);
   margin: var(--space-md) 0 var(--space-lg);
-  letter-spacing: -1.2px;
+  letter-spacing: var(--font-tracking-tighter);
   word-break: keep-all;
 }
 .welcome-copy p {
   font-size: var(--font-small);
-  line-height: 1.9;
-  margin-bottom: 22px;
+  line-height: var(--font-leading-loose);
+  margin-bottom: var(--space-lg-plus);
 }
 .eyebrow {
-  font-size: 8px;
-  letter-spacing: 1.7px;
+  font-size: var(--font-micro);
+  letter-spacing: var(--font-tracking-wider);
   color: var(--color-status-info);
   font-weight: var(--font-weight-semibold);
 }
@@ -526,12 +526,12 @@ main {
   align-items: flex-start;
   flex-direction: column;
   text-align: left;
-  padding: var(--space-lg) 14px;
+  padding: var(--space-lg) var(--space-md);
   position: relative;
   border-color: var(--color-border-subtle);
   background: var(--color-surface-subtle);
   gap: var(--space-md);
-  border-radius: 9px;
+  border-radius: var(--radius-medium);
 }
 .quick-actions button > svg:first-child {
   color: var(--color-action-primary);
@@ -552,9 +552,9 @@ main {
 }
 .workflow-note {
   display: flex;
-  gap: 14px;
+  gap: var(--space-md);
   align-items: center;
-  padding: 15px 0;
+  padding: var(--space-lg) 0;
   border-bottom: var(--border-width-default) solid var(--color-border-subtle);
 }
 .workflow-note > div {
@@ -566,8 +566,8 @@ main {
 }
 .workflow-note p {
   font-size: var(--font-tiny);
-  margin: 5px 0 0;
-  line-height: 1.7;
+  margin: var(--space-xs) 0 0;
+  line-height: var(--font-leading-relaxed);
 }
 .workflow-note > svg {
   color: var(--color-text-secondary);
@@ -577,12 +577,12 @@ main {
   font-size: var(--font-caption);
   color: var(--color-text-secondary);
   background: var(--color-surface-header);
-  padding: 9px;
-  border-radius: 7px;
+  padding: var(--space-sm);
+  border-radius: var(--radius-small);
 }
 .welcome > small {
   display: block;
-  margin-top: 26px;
+  margin-top: var(--space-xl);
   font-size: var(--font-tiny);
   color: var(--color-text-secondary);
 }
@@ -599,13 +599,13 @@ main {
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--space-xs-plus);
-  margin-top: 22px;
+  margin-top: var(--space-lg-plus);
 }
 .empty-capabilities span {
   font-size: var(--font-micro);
   border: var(--border-width-default) solid var(--color-border-subtle);
-  border-radius: 4px;
-  padding: 5px 7px;
+  border-radius: var(--radius-xs);
+  padding: var(--space-xs) var(--space-xs-plus);
   color: var(--color-text-secondary);
 }
 .files {
@@ -636,7 +636,7 @@ main {
 }
 .file-toolbar button {
   font-size: var(--font-tiny);
-  padding: 5px var(--space-xs-plus);
+  padding: var(--space-xs) var(--space-xs-plus);
   border-color: var(--color-border-subtle);
 }
 .file-list {
@@ -692,13 +692,13 @@ main {
 }
 .transfer-tray .muted {
   font-size: var(--font-tiny);
-  line-height: 1.7;
+  line-height: var(--font-leading-relaxed);
 }
 .transfer-item,
 .edit-item {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-xs);
   padding: var(--space-sm-plus) 0;
   border-bottom: var(--border-width-default) solid var(--color-border-subtle);
   overflow-wrap: anywhere;
@@ -734,7 +734,7 @@ main {
     height: 110px;
   }
   .welcome-copy h1 {
-    font-size: 25px;
+    font-size: var(--font-display);
   }
   .welcome-topline {
     margin-bottom: var(--space-xl);
@@ -743,7 +743,7 @@ main {
     gap: var(--space-xs-plus);
   }
   .quick-actions button {
-    padding: var(--space-md) 9px;
+    padding: var(--space-md) var(--space-sm);
   }
   .quick-actions span {
     font-size: var(--font-micro);
@@ -769,7 +769,7 @@ main {
     padding: var(--space-lg-plus) var(--space-lg);
   }
   .welcome-topline {
-    font-size: 8px;
+    font-size: var(--font-micro);
     margin-bottom: var(--space-xl);
   }
   .welcome-topline span:last-child {
@@ -797,21 +797,21 @@ main {
     max-width: 230px;
   }
   .eyebrow {
-    font-size: 7px;
-    letter-spacing: 0.6px;
+    font-size: var(--font-micro);
+    letter-spacing: var(--font-tracking-wide);
     max-width: 180px;
     display: block;
   }
   .quick-actions {
     grid-template-columns: 1fr;
     gap: var(--space-xs-plus);
-    margin-bottom: 22px;
+    margin-bottom: var(--space-lg-plus);
   }
   .quick-actions button {
     flex-direction: row;
     align-items: center;
     padding: var(--space-md);
-    gap: 9px;
+    gap: var(--space-sm);
   }
   .quick-actions button > svg:last-child,
   .quick-actions span {
@@ -825,7 +825,7 @@ main {
   }
   .workflow-note {
     padding: var(--space-md) 0;
-    gap: 9px;
+    gap: var(--space-sm);
   }
   .workflow-note p {
     font-size: var(--font-micro);
@@ -846,7 +846,7 @@ main {
 }
 .detach-button {
   font-size: var(--font-tiny);
-  padding: var(--space-xs) 7px;
+  padding: var(--space-xs) var(--space-xs-plus);
   border-color: var(--color-border-subtle);
 }
 @media (max-width: 1050px) {
@@ -882,7 +882,7 @@ main {
   width: min(640px, calc(100vw - 2 * var(--space-lg)));
   max-height: min(340px, 60vh);
   overflow: auto;
-  padding: 14px var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
   border: var(--border-width-default) solid var(--color-border-default);
   border-radius: var(--radius-medium);
   background: var(--color-surface-panel);
@@ -898,7 +898,7 @@ main {
 .monitor-heading > div:first-child {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-xs);
 }
 .monitor-heading strong {
   font-size: var(--font-small);
@@ -915,7 +915,7 @@ main {
 .monitor-options label {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-xs);
   font-size: var(--font-tiny);
 }
 .monitor-options input {
@@ -927,12 +927,12 @@ main {
   padding: var(--space-xs);
 }
 .monitor-options button {
-  padding: var(--space-xxs) 7px;
+  padding: var(--space-xxs) var(--space-xs-plus);
 }
 .monitor-charts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: var(--space-lg);
   margin-top: var(--space-lg-plus);
 }
 .metric-chart > div {
@@ -957,8 +957,8 @@ main {
 }
 .disk-list span {
   background: var(--color-surface-subtle);
-  padding: 5px var(--space-sm);
-  border-radius: 4px;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-xs);
 }
 @media (max-width: 1050px) {
   .workspace-grid:not(.files-hidden) > .files {
@@ -1050,7 +1050,7 @@ main {
   min-height: 200px;
 }
 .ftp-pane .file-row {
-  font-size: 13px;
+  font-size: var(--font-small);
 }
 .ftp-pane .file-toolbar button {
   font-size: var(--font-small);
@@ -1195,7 +1195,7 @@ main {
 .shortcut-list kbd {
   padding: var(--space-hair) var(--space-xs-plus);
   border: var(--border-width-default) solid var(--color-border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-subtle);
   font-family: var(--font-mono);
   font-size: var(--font-caption);

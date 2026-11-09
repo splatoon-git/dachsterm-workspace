@@ -54,7 +54,7 @@
 .agent-preset-row input,
 .agent-preset-row select {
   min-height: var(--control-height);
-  padding: 5px var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-small);
 }
 .agent-preset-row input.command {

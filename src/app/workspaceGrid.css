@@ -95,7 +95,7 @@
   flex: 0 0 auto;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-status-success);
 }
 .session-tab small.tab-state {

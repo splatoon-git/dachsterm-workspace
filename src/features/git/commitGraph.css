@@ -32,7 +32,7 @@
 }
 .git-graph-scope {
   flex: none;
-  gap: 3px;
+  gap: var(--space-xxs);
   height: 22px;
   min-height: 0;
   padding: 0 var(--space-xs);
@@ -95,7 +95,7 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xxs);
   max-width: 55%;
   overflow: hidden;
 }
@@ -103,10 +103,10 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xxs);
   height: 16px;
   padding: 0 var(--space-xs);
-  border-radius: 8px;
+  border-radius: var(--radius-medium);
   background: var(--color-surface-subtle);
   color: var(--color-text-secondary);
   font-size: var(--font-caption);
@@ -209,7 +209,7 @@
 .git-commit-card-refs {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: var(--space-xxs);
   margin-top: var(--space-sm);
 }
 .git-commit-card-foot {

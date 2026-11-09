@@ -6,7 +6,7 @@
   background: var(--terminal-background);
   color: var(--terminal-foreground);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--font-small);
   container-type: inline-size;
   --game-line: color-mix(in srgb, var(--terminal-foreground) 35%, var(--terminal-background));
 }
@@ -91,7 +91,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm) var(--space-xl);
-  margin: 18px 0;
+  margin: var(--space-lg) 0;
 }
 .game-stats > div {
   display: flex;
@@ -99,19 +99,19 @@
   align-items: baseline;
 }
 .game-stats strong {
-  font-size: 13px;
+  font-size: var(--font-small);
   font-weight: var(--font-weight-normal);
   font-variant-numeric: tabular-nums;
 }
 .game-stage {
   display: flex;
   align-items: flex-start;
-  gap: 28px;
+  gap: var(--space-xl);
 }
 .game-board {
   display: grid;
   flex-shrink: 0;
-  padding: 5px;
+  padding: var(--space-xs);
   border: var(--border-width-default) solid var(--game-line);
 }
 .game-guide {
@@ -168,7 +168,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 13px;
+  font-size: var(--font-small);
 }
 .snake-body {
   background: var(--terminal-foreground);
@@ -191,7 +191,7 @@
   justify-content: center;
   align-items: center;
   border: var(--border-width-default) solid var(--game-line);
-  font-size: 20px;
+  font-size: var(--font-large);
   font-variant-numeric: tabular-nums;
 }
 .tile-0 {
@@ -405,7 +405,7 @@
   stroke: var(--game-line);
 }
 .adventure-overlay .adventure-overlay-title {
-  font-size: 17px;
+  font-size: var(--font-large);
   font-weight: var(--font-weight-semibold);
 }
 .adventure-controls {
@@ -531,7 +531,7 @@
 .adventure-enemy text {
   stroke: none;
   font-size: var(--font-display);
-  font-weight: bold;
+  font-weight: var(--font-weight-bold);
 }
 .adventure-stomp-trail {
   stroke: var(--adventure-accent);
@@ -553,7 +553,7 @@
   cursor: pointer;
 }
 .adventure-map-options p {
-  line-height: 1.7;
+  line-height: var(--font-leading-relaxed);
 }
 .adventure-map-options form {
   display: flex;
@@ -725,7 +725,7 @@
 }
 .adventure-arena .arena-name {
   stroke: none;
-  letter-spacing: 3px;
+  letter-spacing: var(--font-tracking-wider);
   font-size: var(--font-large);
   opacity: 0.35;
 }
@@ -768,7 +768,7 @@
   stroke-dasharray: 12 8;
 }
 .adventure-boss .boss-warning {
-  font-size: 30px;
+  font-size: var(--font-title);
   fill: var(--terminal-red);
   stroke: var(--terminal-background);
   paint-order: stroke;
