@@ -72,6 +72,29 @@ export type KubeEvent = {
   message: string;
 };
 
+export type KubePvc = { namespace: string; name: string; phase: string };
+
+export type KubeJob = {
+  namespace: string;
+  name: string;
+  created: string;
+  ownerKind: string;
+  ownerName: string;
+  /** The `Failed` condition is true: the Job has given up, not merely retried a pod. */
+  failed: boolean;
+  failedAt: string;
+  reason: string;
+};
+
+export type KubeHpa = {
+  namespace: string;
+  name: string;
+  targetKind: string;
+  targetName: string;
+  max: number;
+  current: number;
+};
+
 export type SnapshotItems = {
   pods: KubePod[];
   workloads: KubeWorkload[];
@@ -80,6 +103,9 @@ export type SnapshotItems = {
   podUsage: KubePodUsage[];
   nodeUsage: KubeNodeUsage[];
   events: KubeEvent[];
+  pvcs: KubePvc[];
+  jobs: KubeJob[];
+  hpas: KubeHpa[];
 };
 export type SnapshotKind = keyof SnapshotItems;
 

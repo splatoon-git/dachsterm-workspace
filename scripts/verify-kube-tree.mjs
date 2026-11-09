@@ -263,6 +263,9 @@ try {
     'top pods',
     'top nodes',
     'get events',
+    'get persistentvolumeclaims',
+    'get jobs',
+    'get horizontalpodautoscalers',
   ]);
   const extra = whileOpen.filter((entry) => entry.what && !polled.has(entry.what));
   assert.deepEqual(extra, [], 'the dashboard ran only the kinds the tree polls');

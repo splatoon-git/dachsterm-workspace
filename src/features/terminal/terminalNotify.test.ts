@@ -2,15 +2,9 @@
 import type { Terminal } from '@xterm/xterm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { call } from '../../lib/ipc';
+import { NotificationLimiter } from '../../lib/notifications';
 import { saveTerminalPreferences } from './preferences';
-import {
-  NotificationLimiter,
-  notificationBody,
-  notificationTitle,
-  osc777Message,
-  osc9Message,
-  programNotifier,
-} from './terminalNotify';
+import { notificationTitle, osc777Message, osc9Message, programNotifier } from './terminalNotify';
 
 vi.mock('../../lib/ipc', () => ({
   call: vi.fn(() => Promise.resolve()),
@@ -92,40 +86,10 @@ describe('deciding to notify', () => {
   });
 });
 
-describe('notification limits', () => {
-  it('allows one per tab in five seconds', () => {
-    const limiter = new NotificationLimiter();
-    const tab = {};
-    expect(limiter.allow(tab, 0)).toBe(true);
-    expect(limiter.allow(tab, 4999)).toBe(false);
-    expect(limiter.allow(tab, 5000)).toBe(true);
-  });
-
-  it('allows one across the app in two seconds', () => {
-    const limiter = new NotificationLimiter();
-    expect(limiter.allow({}, 0)).toBe(true);
-    expect(limiter.allow({}, 1999)).toBe(false);
-    expect(limiter.allow({}, 2000)).toBe(true);
-  });
-
-  it('does not count a refused notification against the tab', () => {
-    const limiter = new NotificationLimiter();
-    const tab = {};
-    expect(limiter.allow({}, 0)).toBe(true);
-    expect(limiter.allow(tab, 1000)).toBe(false);
-    expect(limiter.allow(tab, 2000)).toBe(true);
-  });
-});
-
 describe('notification text', () => {
   it('builds the title from the session name', () => {
     expect(notificationTitle('prod', 'blocked')).toBe('prod — 입력 대기');
     expect(notificationTitle('prod', 'done')).toBe('prod — 완료');
-  });
-
-  it('removes control and hidden characters and shortens the body', () => {
-    expect(notificationBody('a\nb\u202ec\u0007')).toBe('abc');
-    expect(notificationBody('x'.repeat(500))).toHaveLength(200);
   });
 });
 

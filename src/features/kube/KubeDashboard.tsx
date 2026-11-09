@@ -28,13 +28,13 @@ const NO_PROBLEM = '문제 없음';
 
 type Format = (value: number) => string;
 
-const Mark = ({ health }: { health: Health }) => (
+export const Mark = ({ health }: { health: Health }) => (
   <span className={`kube-health ${health}`} aria-hidden="true">
     {statusMark[health]}
   </span>
 );
 
-function Panel<T>({
+export function Panel<T>({
   title,
   part,
   wide,
@@ -57,7 +57,7 @@ function Panel<T>({
   );
 }
 
-function Rows<T>({
+export function Rows<T>({
   list,
   empty,
   children,

@@ -181,6 +181,7 @@ function Harness() {
       connectionId="connection"
       persist={state.persist}
       session="profile"
+      sessionName="prod-bastion"
       visible={visible}
       focused
       display={display}

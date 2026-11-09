@@ -10,8 +10,26 @@ export const pollPeriods: Record<SnapshotKind, number> = {
   podUsage: 15_000,
   nodeUsage: 15_000,
   events: 15_000,
+  pvcs: 30_000,
+  jobs: 30_000,
+  hpas: 30_000,
 };
 export const snapshotKinds = Object.keys(pollPeriods) as SnapshotKind[];
+
+/** What decides problems, and all that a hidden tab polls while its alerts are on (KV.7). */
+export const problemKinds: readonly SnapshotKind[] = [
+  'pods',
+  'workloads',
+  'nodes',
+  'pvcs',
+  'jobs',
+  'hpas',
+];
+
+/** The kinds the tree and dashboard show. A refused PVC list is not their problem to report. */
+export const overviewKinds = snapshotKinds.filter(
+  (kind) => !['pvcs', 'jobs', 'hpas'].includes(kind),
+);
 
 const SLOW_FACTOR = 3;
 const LIMIT_FACTOR = 4;
@@ -30,8 +48,11 @@ export const newSchedule = (now: number): Schedule =>
 export const resumed = (schedule: Schedule, now: number): Schedule =>
   eachKind((kind) => (schedule[kind].inFlight ? schedule[kind] : { inFlight: false, nextAt: now }));
 
-export const dueKinds = (schedule: Schedule, now: number) =>
-  snapshotKinds.filter((kind) => !schedule[kind].inFlight && schedule[kind].nextAt <= now);
+export const dueKinds = (
+  schedule: Schedule,
+  now: number,
+  kinds: readonly SnapshotKind[] = snapshotKinds,
+) => kinds.filter((kind) => !schedule[kind].inFlight && schedule[kind].nextAt <= now);
 
 export const started = (schedule: Schedule, kind: SnapshotKind): Schedule => ({
   ...schedule,
@@ -63,8 +84,12 @@ export const finished = (
 });
 
 /** Milliseconds until the next kind is due; `null` while every kind is running. */
-export function nextWakeIn(schedule: Schedule, now: number) {
-  const waiting = snapshotKinds.filter((kind) => !schedule[kind].inFlight);
+export function nextWakeIn(
+  schedule: Schedule,
+  now: number,
+  kinds: readonly SnapshotKind[] = snapshotKinds,
+) {
+  const waiting = kinds.filter((kind) => !schedule[kind].inFlight);
   if (!waiting.length) return null;
   return Math.max(0, Math.min(...waiting.map((kind) => schedule[kind].nextAt)) - now);
 }
@@ -166,11 +191,14 @@ const kindNames: Record<SnapshotKind, string> = {
   podUsage: '파드 사용량',
   nodeUsage: '노드 사용량',
   events: '경고 이벤트',
+  pvcs: 'PVC',
+  jobs: 'Job',
+  hpas: 'HPA',
 };
 
 /** One line for each kind that did not arrive, so an empty column has a reason next to it. */
 export function kindNotes(store: SnapshotStore) {
-  return snapshotKinds.flatMap((kind) => {
+  return overviewKinds.flatMap((kind) => {
     const state = store[kind].state;
     return kind !== 'pods' && state && state.kind !== 'ready'
       ? [`${kindNames[kind]}: ${stateNote(state)}`]

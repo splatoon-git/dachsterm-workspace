@@ -119,7 +119,7 @@ function workloadLevel(view: PodView, known: Map<string, KubeWorkload>): Level {
   };
 }
 
-function nodeState(node: KubeNode): { text: string; health: Health } {
+export function nodeState(node: KubeNode): { text: string; health: Health } {
   if (!node.ready) return { text: 'NotReady', health: 'error' };
   if (node.unschedulable) return { text: '스케줄 중지', health: 'warn' };
   return { text: 'Ready', health: 'ok' };

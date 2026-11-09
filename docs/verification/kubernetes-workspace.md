@@ -478,3 +478,27 @@ KV.8과 합친 트리(`dev` 병합 전). `cargo fmt --all --check`, `cargo clipp
 
 - **실제 앱 화면으로 kind를 조작하는 검사.** 이 Mac에는 WKWebView 자동화 경로가 없다. 메뉴·확인창은 Playwright 픽스처, 백엔드는 위 실제 검사로 나눠 확인했고, 둘을 이은 앱 전체 동작은 사람이 보지 않았다. Windows `*-native.mjs` 검사도 작성·실행하지 않았다.
 - Mac 실기기 항목(`mac-verify`), CI.
+
+## KV.7 검증 (2026-11-09)
+
+MacBook(darwin, Apple Silicon), 브랜치 `feat/kv7-kube-issues`를 KV.6이 합쳐진 `1cebc0b` 위로 올린 트리. **실제 앱 실행은 하지 않았다.** 쿠버네티스 네이티브 검사는 WebView2 전용이다.
+
+**kubectl 실측(kind, `dachsterm-kv7`):** `templates.rs`의 PVCS·JOBS·HPAS 문자열을 그대로 읽어 `kubectl get ... -A -o go-template=`로 실행했다. 세 종류 모두 종료 0.
+
+| 재현 | 출력 |
+|---|---|
+| 없는 StorageClass의 PVC | `kv7\tstuck-claim\tPending` |
+| `backoffLimit: 0`의 실패 Job | `kv7\tbroken-job\t...\t\t2026-11-09T03:49:51Z;BackoffLimitExceeded` |
+| CronJob에서 만든 실패 Job | `kv7\tnightly-1\t...\tCronJob/nightly,\t2026-11-09T03:49:52Z;BackoffLimitExceeded` |
+| `maxReplicas: 1`의 HPA(metrics-server 없음) | `kv7\tapi\tDeployment\tapi\t1\t1` |
+
+이 출력을 `kube/cluster_issues/tests.rs`의 입력으로 고정했다.
+
+**자동 검사(위 트리에서 재실행):** `cargo fmt --all --check` 종료 0, `cargo test -p dachsterm --lib --locked kube::` 164건 통과(2건 ignored), `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` 종료 0. 새 파서 테스트 9건 포함.
+
+- `npm run typecheck` 종료 0, 바꾼 파일 eslint·prettier 종료 0, `npm run build` 종료 0.
+- Vitest 전체 105파일 1,284건 통과.
+- Playwright(Mac, Chromium) `kube-problems` 8건 포함 쿠버네티스 9개 스펙 122건 통과. WKWebView 결과가 아니다.
+- `kube-tree`의 "polling stops" 기대값을 종류 수 증가에 맞춰 7에서 10으로 고쳤다.
+
+**미확인:** 실제 앱의 화면과 OS 알림 표시(Windows·Mac), 앱에서 실제 SSH로 조회하는 경로, 실제 클러스터의 재시작·회복 변화 기록(순수 로직과 합성 데이터까지), 숨겨진 창의 타이머 제한 영향(WebView2 강한 타이머 제한, WKWebView App Nap으로 조회 간격이 늘 수 있다), 권한 없는 계정의 `pvcs`·`jobs`·`hpas`, `scripts/verify-kube-tree.mjs`의 조회 목록 수정분 실행, 대형 클러스터, CI.

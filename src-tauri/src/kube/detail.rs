@@ -1,9 +1,10 @@
 //! `kube_detail`: the panel beside the tree. Cluster output is untrusted, so text is bounded and
 //! shown as text. YAML and environment values stay in memory; Secret objects are never read.
 use super::{
+    quantity::{cpu_millis, memory_bytes},
     runner::{Kubectl, Runner},
     settings::KubeSettings,
-    snapshot::{count, cpu_millis, decode, fields, memory_bytes, records, shown},
+    snapshot::{count, decode, fields, records, shown},
     state::KubeState,
     templates,
 };

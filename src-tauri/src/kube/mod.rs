@@ -3,6 +3,7 @@
 mod action;
 #[cfg(all(test, unix))]
 mod action_cluster_test;
+mod cluster_issues;
 mod detail;
 mod detect;
 mod ingress;
@@ -14,6 +15,7 @@ mod log_stream;
 mod logs;
 mod metrics;
 mod probe;
+mod quantity;
 mod runner;
 mod settings;
 mod shell;

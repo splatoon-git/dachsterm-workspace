@@ -1,6 +1,8 @@
 //! `kube_snapshot`: one kind of cluster data per call, so the screen can poll each kind on its own
 //! period. Cluster output is untrusted: lengths are bounded here and values are shown as text.
 use super::{
+    cluster_issues::{self, Hpa, Job, Pvc},
+    quantity::{cpu_millis, memory_bytes},
     runner::{Kubectl, Runner},
     settings::KubeSettings,
     state::KubeState,
@@ -38,6 +40,9 @@ pub enum Kind {
     PodUsage,
     NodeUsage,
     Events,
+    Pvcs,
+    Jobs,
+    Hpas,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -146,6 +151,9 @@ pub enum Data {
     PodUsage(Vec<PodUsage>),
     NodeUsage(Vec<NodeUsage>),
     Events(Vec<Event>),
+    Pvcs(Vec<Pvc>),
+    Jobs(Vec<Job>),
+    Hpas(Vec<Hpa>),
 }
 
 #[derive(Serialize)]
@@ -182,6 +190,15 @@ fn arguments(kind: Kind, namespace: &str) -> String {
         Kind::Events => format!(
             "get events {scope} --field-selector type=Warning {}",
             template(templates::EVENTS)
+        ),
+        Kind::Pvcs => format!(
+            "get persistentvolumeclaims {scope} {}",
+            template(templates::PVCS)
+        ),
+        Kind::Jobs => format!("get jobs {scope} {}", template(templates::JOBS)),
+        Kind::Hpas => format!(
+            "get horizontalpodautoscalers {scope} {}",
+            template(templates::HPAS)
         ),
     }
 }
@@ -243,6 +260,9 @@ pub fn parse(kind: Kind, text: &str, namespace: &str) -> Option<Data> {
         Kind::PodUsage => Data::PodUsage(usages(text, |line| pod_usage(line, namespace))?),
         Kind::NodeUsage => Data::NodeUsage(usages(text, node_usage)?),
         Kind::Events => Data::Events(events(text)?),
+        Kind::Pvcs => Data::Pvcs(lines(text, cluster_issues::pvc)?),
+        Kind::Jobs => Data::Jobs(lines(text, cluster_issues::job)?),
+        Kind::Hpas => Data::Hpas(lines(text, cluster_issues::hpa)?),
     })
 }
 
@@ -275,7 +295,7 @@ pub(super) fn shown(value: &str, limit: usize) -> String {
         .collect()
 }
 
-fn text(value: &str) -> String {
+pub(super) fn text(value: &str) -> String {
     shown(value, MAX_FIELD)
 }
 
@@ -324,50 +344,6 @@ fn pairs(value: &str) -> BTreeMap<String, String> {
         .filter_map(|pair| pair.split_once('='))
         .map(|(key, value)| (text(key), text(value)))
         .collect()
-}
-
-fn scaled(number: &str, unit: f64) -> Option<u64> {
-    let value: f64 = number.parse().ok()?;
-    // Rounded first, so `128974848000m` does not come out one byte high from binary fractions.
-    (value.is_finite() && value >= 0.0).then(|| ((value * unit * 1e3).round() / 1e3).ceil() as u64)
-}
-
-/// A CPU quantity in millicores: `250m`, `2`, `1.5`, `31415926n`.
-pub fn cpu_millis(value: &str) -> Option<u64> {
-    const SUFFIXES: [(&str, f64); 4] = [("n", 1e-6), ("u", 1e-3), ("m", 1.0), ("k", 1e6)];
-    SUFFIXES
-        .iter()
-        .find_map(|(suffix, unit)| Some((value.strip_suffix(suffix)?, *unit)))
-        .map_or_else(
-            || scaled(value, 1000.0),
-            |(number, unit)| scaled(number, unit),
-        )
-}
-
-/// A memory quantity in bytes: `64Mi`, `1G`, `129M`, `128974848000m`, `1e3`.
-pub fn memory_bytes(value: &str) -> Option<u64> {
-    const BINARY: [(&str, f64); 6] = [
-        ("Ki", 1024.0),
-        ("Mi", 1_048_576.0),
-        ("Gi", 1_073_741_824.0),
-        ("Ti", 1_099_511_627_776.0),
-        ("Pi", 1_125_899_906_842_624.0),
-        ("Ei", 1_152_921_504_606_846_976.0),
-    ];
-    const DECIMAL: [(&str, f64); 7] = [
-        ("m", 1e-3),
-        ("k", 1e3),
-        ("M", 1e6),
-        ("G", 1e9),
-        ("T", 1e12),
-        ("P", 1e15),
-        ("E", 1e18),
-    ];
-    BINARY
-        .iter()
-        .chain(DECIMAL.iter())
-        .find_map(|(suffix, unit)| Some((value.strip_suffix(suffix)?, *unit)))
-        .map_or_else(|| scaled(value, 1.0), |(number, unit)| scaled(number, unit))
 }
 
 fn add(total: &mut Option<u64>, value: &str, read: fn(&str) -> Option<u64>) {

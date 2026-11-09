@@ -1,8 +1,8 @@
 import type { KubeState } from './kubeModel';
-import { snapshotKinds, stateNote, type SnapshotStore } from './polling';
+import { overviewKinds, stateNote, type SnapshotStore } from './polling';
 import type { DashboardHistory } from './dashboardHistory';
 import { recentWarnings, type WarningRow } from './dashboardWarnings';
-import type { ContainerState, KubePod, KubeWorkload } from './snapshotTypes';
+import type { ContainerState, KubePod, KubeWorkload, SnapshotKind } from './snapshotTypes';
 import { nodeSection, type NodeSection } from './tree';
 import { podViews, severity, worse, type Health, type PodView } from './treePods';
 import type { TreeTarget } from './treeReveal';
@@ -18,7 +18,7 @@ export const TOP_LIMIT = 10;
 export type Part<T> =
   { state: 'ready'; value: T } | { state: 'waiting' } | { state: 'missing'; reason: string };
 
-function part<D, T>(
+export function part<D, T>(
   entry: { data: D | null; state: KubeState | null },
   build: (data: D) => T,
 ): Part<T> {
@@ -29,7 +29,7 @@ function part<D, T>(
 }
 
 export type Capped<T> = { items: T[]; more: number };
-const capped = <T>(items: T[], limit = LIST_LIMIT): Capped<T> => ({
+export const capped = <T>(items: T[], limit = LIST_LIMIT): Capped<T> => ({
   items: items.slice(0, limit),
   more: Math.max(0, items.length - limit),
 });
@@ -181,7 +181,7 @@ function stopText(container: ContainerState, named: boolean) {
 }
 
 /** The container that stopped most recently speaks for the pod. */
-function lastStop(pod: KubePod) {
+export function lastStop(pod: KubePod) {
   const stopped = pod.containers.filter((c) => c.lastReason || c.lastExitCode !== null);
   const newest = stopped.reduce<ContainerState | null>(
     (best, c) => (best === null || (finishedAt(c) ?? 0) > (finishedAt(best) ?? 0) ? c : best),
@@ -317,8 +317,8 @@ export function underReady(workloads: KubeWorkload[]): UnderRow[] {
 }
 
 /** Set when some kind kept old data after a failed poll; the screen must not pass it off as new. */
-export function staleNote(store: SnapshotStore) {
-  for (const kind of snapshotKinds) {
+export function staleNote(store: SnapshotStore, kinds: readonly SnapshotKind[] = overviewKinds) {
+  for (const kind of kinds) {
     const { data, state } = store[kind];
     if (data !== null && state && state.kind !== 'ready') return stateNote(state);
   }

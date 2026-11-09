@@ -609,7 +609,7 @@ test('polling stops while the tab is hidden and refreshes when it returns', asyn
   expect(await snapshotCalls(page)).toBe(before);
   await setVisible(page, true);
   await expect.poll(() => snapshotCalls(page)).toBeGreaterThan(before);
-  expect(await snapshotCalls(page)).toBe(before + 7);
+  expect(await snapshotCalls(page)).toBe(before + 10);
 });
 
 test('polling stops on the server terminal too', async ({ page }) => {

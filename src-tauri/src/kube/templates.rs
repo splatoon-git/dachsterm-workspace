@@ -68,6 +68,24 @@ pub const EVENTS: &str = concat!(
     "{{with .message}}{{urlquery .}}{{end}}\n{{end}}",
 );
 
+pub const PVCS: &str =
+    "{{range .items}}{{.metadata.namespace}}\t{{.metadata.name}}\t{{.status.phase}}\n{{end}}";
+
+/// The last field is `time;reason`, and empty unless the Job has given up.
+pub const JOBS: &str = concat!(
+    "{{range .items}}{{.metadata.namespace}}\t{{.metadata.name}}\t",
+    "{{.metadata.creationTimestamp}}\t",
+    "{{range .metadata.ownerReferences}}{{.kind}}/{{.name}},{{end}}\t",
+    "{{range .status.conditions}}{{if and (eq .type \"Failed\") (eq .status \"True\")}}",
+    "{{.lastTransitionTime}};{{with .reason}}{{urlquery .}}{{end}}{{end}}{{end}}\n{{end}}",
+);
+
+pub const HPAS: &str = concat!(
+    "{{range .items}}{{.metadata.namespace}}\t{{.metadata.name}}\t",
+    "{{.spec.scaleTargetRef.kind}}\t{{.spec.scaleTargetRef.name}}\t",
+    "{{.spec.maxReplicas}}\t{{.status.currentReplicas}}\n{{end}}",
+);
+
 /// `kube_ingress`. Seven fields, with `host;path;pathType;service;port|` for each path. A path is
 /// the one value here the API server leaves free, so it goes through `urlquery`.
 pub const INGRESSES: &str = concat!(
