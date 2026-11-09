@@ -2,14 +2,14 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { terminalTheme } from '../../themes/adapters/xterm';
+import { terminalColorOptions, terminalTheme } from '../../themes/adapters/xterm';
 import type { ThemeDefinition } from '../../themes/contract';
 export function TerminalPreview({ theme }: { theme: ThemeDefinition }) {
   const host = useRef<HTMLDivElement>(null);
   const instance = useRef<Terminal | null>(null);
   useEffect(() => {
     const terminal = new Terminal({
-      theme: terminalTheme(theme),
+      ...terminalColorOptions(theme),
       fontFamily: theme.foundations.font.mono,
       fontSize: 13,
       cursorBlink: false,
