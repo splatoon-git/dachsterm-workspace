@@ -5,8 +5,11 @@ import { IngressView } from './IngressView';
 import { KubeDashboard } from './KubeDashboard';
 import { KubeSetup } from './KubeSetup';
 import { KubeTreeScreen, type PanelState } from './KubeTreeScreen';
+import { LogBoard } from './LogBoard';
+import { flowEntries, scopeEntry, type BoardScope } from './logBoardModel';
 import { LogSearch } from './LogSearch';
 import type { SearchScope } from './logSearchModel';
+import type { PathRow } from './ingressModel';
 import type { PodTerminalRequest } from './podShell';
 import { freshness } from './polling';
 import { readLastScreen, writeLastScreen } from './screenPref';
@@ -14,6 +17,7 @@ import { initialTreeView } from './tree';
 import type { TreeTarget } from './treeReveal';
 import { useKubeIngress } from './useKubeIngress';
 import { useKubeSnapshots } from './useKubeSnapshots';
+import { useLogBoard } from './useLogBoard';
 import { useLogSearch } from './useLogSearch';
 import { useWorkerWatch } from './useWorkerWatch';
 import { WorkersContext } from './workerContext';
@@ -227,11 +231,35 @@ export function KubeWorkspace({
     store.pods.data,
     session,
   );
-  // These two screens are all that show it, and it is the costliest poll here (design KV.8).
+  // Only the screens that use it: the costliest poll here (KV.8). The board needs controller names.
   const ingress = useKubeIngress(
     connectionId,
     phase.name === 'open' ? phase.settings : null,
-    visible && display === 'workspace' && (screen === 'ingress' || screen === 'dashboard'),
+    visible &&
+      display === 'workspace' &&
+      (screen === 'ingress' || screen === 'dashboard' || screen === 'board'),
+  );
+  const board = useLogBoard(
+    connectionId,
+    phase.name === 'open' ? phase.settings : null,
+    store.pods.data,
+    store.services.data,
+    ingress.controllers,
+  );
+  const { watch: watchEntries } = board;
+  const watchLogs = useCallback(
+    (scope: BoardScope) => {
+      watchEntries([scopeEntry(scope)]);
+      openScreen('board');
+    },
+    [watchEntries, openScreen],
+  );
+  const openFlow = useCallback(
+    (rows: PathRow[]) => {
+      watchEntries(flowEntries(rows), true);
+      openScreen('board');
+    },
+    [watchEntries, openScreen],
   );
   const fresh = freshness(store, now);
   const warning =
@@ -247,8 +275,12 @@ export function KubeWorkspace({
             onClick={() => openScreen(id)}
           >
             {label}
+            {id === 'board' && board.phase === 'live' && (
+              <i className="kube-header-live" title="로그를 받는 중" aria-hidden="true" />
+            )}
           </button>
         ))}
+        <span className="kube-header-divider" aria-hidden="true" />
         <button role="tab" aria-selected={display === 'terminal'} onClick={showTerminal}>
           서버 터미널
         </button>
@@ -318,7 +350,11 @@ export function KubeWorkspace({
                 focusPod={focusPod}
                 openTerminal={openTerminal}
                 searchLogs={searchLogs}
+                watchLogs={watchLogs}
               />
+            )}
+            {phase.name === 'open' && screen === 'board' && (
+              <LogBoard board={board} store={store} controllers={ingress.controllers} />
             )}
             {phase.name === 'open' && screen === 'dashboard' && (
               <KubeDashboard
@@ -352,6 +388,7 @@ export function KubeWorkspace({
                 setFilter={setIngressFilter}
                 reveal={reveal}
                 searchController={searchController}
+                openFlow={openFlow}
               />
             )}
             {phase.name === 'detecting' && error && <p role="alert">{error}</p>}

@@ -16,25 +16,56 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 2px;
-  min-height: 30px;
+  gap: var(--space-xs);
+  min-height: 36px;
   padding: 0 var(--space-sm);
   border-bottom: var(--border-width-default) solid var(--color-border-subtle);
   background: var(--color-surface-header);
   overflow-x: auto;
 }
 .kube-header > [role='tab'] {
+  position: relative;
+  gap: var(--space-xs);
+  align-self: stretch;
   min-height: 0;
-  height: 24px;
-  padding: 0 var(--space-sm);
+  height: auto;
+  padding: 0 var(--space-md);
   border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--color-text-secondary);
   white-space: nowrap;
 }
-.kube-header > [role='tab'][aria-selected='true'] {
-  background: var(--color-action-selected);
+.kube-header > [role='tab']:hover:enabled {
+  background: transparent;
   color: var(--color-text-primary);
+}
+.kube-header > [role='tab'][aria-selected='true'] {
+  background: transparent;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+.kube-header > [role='tab'][aria-selected='true']::after {
+  position: absolute;
+  right: var(--space-sm);
+  bottom: 0;
+  left: var(--space-sm);
+  height: 2px;
+  background: var(--color-action-primary);
+  content: '';
+}
+.kube-header-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-status-success);
+}
+.kube-header-divider {
+  flex-shrink: 0;
+  width: var(--border-width-default);
+  height: 16px;
+  margin: 0 var(--space-xs);
+  background: var(--color-border-default);
 }
 .kube-status {
   display: flex;
@@ -167,6 +198,10 @@
   gap: var(--space-xs);
   white-space: nowrap;
 }
+.kube-tree-problems input {
+  width: auto;
+  margin: 0;
+}
 .kube-tree-summary {
   margin-left: auto;
   color: var(--color-text-secondary);
@@ -208,6 +243,7 @@
   padding: 0 var(--space-sm);
   box-sizing: border-box;
   cursor: default;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .kube-tree-row > span {
@@ -215,6 +251,7 @@
   text-overflow: ellipsis;
 }
 .kube-tree-row.group {
+  background: var(--color-surface-subtle);
   font-weight: 600;
 }
 .kube-tree-row:hover {

@@ -258,6 +258,7 @@ pub fn run() {
             kube::kube_ingress,
             kube::kube_logs,
             kube::kube_log_search,
+            kube::kube_log_stream,
             kube::kube_log_cancel,
             kube::kube_terminal_probe,
             kube::kube_metrics,

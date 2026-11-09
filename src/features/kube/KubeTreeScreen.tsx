@@ -12,13 +12,20 @@ import type { KubeSettings } from '../../lib/ipc';
 import { KubePodPanel } from './KubePodPanel';
 import { KubeTree, type PodAction } from './KubeTree';
 import type { PodRef } from './detailTypes';
+import { boardScopeOfGroup, type BoardScope } from './logBoardModel';
 import { scopeOfGroup, type SearchScope } from './logSearchModel';
 import { detailTab, type PodPanelTarget } from './podPanel';
 import type { PodTerminalRequest } from './podShell';
 import type { SnapshotStore } from './polling';
 import type { TreeGroup, TreeView } from './tree';
 import type { PodView } from './treePods';
-import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, usePanelWidth } from './usePanelWidth';
+import {
+  PANEL_DEFAULT_WIDTH,
+  PANEL_MAX_WIDTH,
+  PANEL_MIN_WIDTH,
+  panelWidthStyle,
+  usePanelWidth,
+} from './usePanelWidth';
 import { usePodShell } from './usePodShell';
 
 export type PanelState = (PodPanelTarget & { problem: boolean }) | null;
@@ -37,6 +44,7 @@ export function KubeTreeScreen({
   focusPod,
   openTerminal,
   searchLogs,
+  watchLogs,
 }: {
   store: SnapshotStore;
   session: string;
@@ -50,8 +58,10 @@ export function KubeTreeScreen({
   focusPod: PodRef | null;
   openTerminal: (request: PodTerminalRequest) => void;
   searchLogs: (scope: SearchScope) => void;
+  watchLogs: (scope: BoardScope) => void;
 }) {
   const [notice, setNotice] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const [menu, setMenu] = useState<(MenuRequest & { label?: string }) | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const { width, change } = usePanelWidth();
@@ -89,8 +99,13 @@ export function KubeTreeScreen({
             { label: '상세', run: () => handle('detail', item) },
             { label: '런타임', run: () => showPanel(item, 'runtime') },
             {
-              label: '로그 검색',
+              label: '실시간 로그에 추가',
               separated: true,
+              run: () =>
+                watchLogs({ kind: 'pod', value: `${item.pod.namespace}/${item.pod.name}` }),
+            },
+            {
+              label: '로그 검색',
               run: () =>
                 searchLogs({ kind: 'pod', value: `${item.pod.namespace}/${item.pod.name}` }),
             },
@@ -109,18 +124,23 @@ export function KubeTreeScreen({
   );
   const onGroup = useCallback(
     (group: TreeGroup, at?: MenuPoint) => {
-      const scope = scopeOfGroup(group.id);
-      if (scope)
+      const watch = boardScopeOfGroup(group.id);
+      const search = scopeOfGroup(group.id);
+      if (watch)
         setMenu({
           at: at ?? { x: 0, y: 0 },
           label: '그룹 메뉴',
-          items: [{ label: '로그 검색', run: () => searchLogs(scope) }],
+          items: [
+            { label: '실시간 로그 보기', run: () => watchLogs(watch) },
+            ...(search ? [{ label: '로그 검색', run: () => searchLogs(search) }] : []),
+          ],
         });
     },
-    [searchLogs],
+    [searchLogs, watchLogs],
   );
   const closePanel = useCallback(() => {
     setPanel(null);
+    setExpanded(false);
     setFocusSignal((n) => n + 1);
   }, [setPanel]);
 
@@ -134,7 +154,7 @@ export function KubeTreeScreen({
           </button>
         </div>
       )}
-      <div className="kube-split">
+      <div className={`kube-split ${expanded && panel ? 'expanded' : ''}`}>
         <KubeTree
           store={store}
           session={session}
@@ -156,6 +176,7 @@ export function KubeTreeScreen({
               max={PANEL_MAX_WIDTH}
               reverse
               onChange={change}
+              onReset={() => change(PANEL_DEFAULT_WIDTH)}
               label="로그 패널 크기"
             />
             <KubePodPanel
@@ -165,10 +186,13 @@ export function KubeTreeScreen({
               session={session}
               target={panel}
               store={store}
-              style={{ width: `min(${width}px, 70%)` }}
+              style={expanded ? undefined : { width: panelWidthStyle(width) }}
               setTab={(tab) => setPanel((now) => (now ? { ...now, tab } : now))}
               close={closePanel}
               openTerminal={openTerminal}
+              expanded={expanded}
+              toggleExpanded={() => setExpanded((now) => !now)}
+              watchPod={(pod) => watchLogs({ kind: 'pod', value: `${pod.namespace}/${pod.name}` })}
             />
           </>
         )}

@@ -102,8 +102,8 @@ DOCKERFILE
     in_ssh 'test -f /run/probe/ready'
   fi
   if ! in_ssh 'test -x /opt/kube/bin/kubectl'; then
-    # Streamed: WSL's kubectl is often a symlink into Docker Desktop's folder, which `docker cp` trips on.
-    in_ssh 'rm -f /tmp/kubectl; cat > /tmp/kubectl' < "$(readlink -f "$(command -v kubectl)")"
+    # The node's own: the host's kubectl is a macOS binary on a Mac and cannot run in this container.
+    docker exec "$cluster-control-plane" cat /usr/bin/kubectl | in_ssh 'rm -f /tmp/kubectl; cat > /tmp/kubectl'
     in_ssh 'install -D -m 755 /tmp/kubectl /opt/kube/bin/kubectl && rm /tmp/kubectl'
   fi
   prepare_bashrc_account

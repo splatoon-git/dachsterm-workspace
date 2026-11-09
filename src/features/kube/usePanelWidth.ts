@@ -3,7 +3,10 @@ import { useState } from 'react';
 const WIDTH_KEY = 'dachsterm.kube.panelWidth';
 export const PANEL_MIN_WIDTH = 280;
 export const PANEL_MAX_WIDTH = 1400;
-const DEFAULT_WIDTH = 520;
+export const PANEL_DEFAULT_WIDTH = 520;
+const DEFAULT_WIDTH = PANEL_DEFAULT_WIDTH;
+/** The saved width, leaving the tree its minimum and the handle its own width. */
+export const panelWidthStyle = (width: number) => `min(${width}px, calc(100% - 206px))`;
 
 function readWidth() {
   try {

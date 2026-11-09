@@ -207,7 +207,9 @@ test('a namespace session says requests cover only that namespace', async ({ pag
 test('the usage trend grows with each reading', async ({ page }) => {
   await open(page);
   const chart = region(page, '전체 자원').getByRole('img', { name: /CPU 추세/ });
-  await expect(chart).toHaveAttribute('aria-label', 'CPU 추세 최근 1개 샘플');
+  // One reading is a point, not a trend, so nothing is drawn until the second.
+  await expect(region(page, '전체 자원')).toContainText('n1');
+  await expect(chart).toHaveCount(0);
   await page.evaluate(
     (usage) => {
       window.__kube.snapshots!.nodeUsage = usage;

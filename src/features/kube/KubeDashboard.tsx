@@ -155,7 +155,7 @@ function ResourcesBody({
       <Total label="메모리" amount={value.memory} format={formatMemory} />
       {scope && <p className="kube-dash-note">요청량은 {scope} namespace만 합산합니다.</p>}
       {usageNote && <p className="kube-dash-note">{usageNote}</p>}
-      {!usageNote && (
+      {!usageNote && cpu.length > 1 && (
         <div className="kube-dash-trend">
           <MetricChart label="CPU 추세" values={cpu} unit="%" max={100} color={1} />
           <MetricChart label="메모리 추세" values={memory} unit="%" max={100} color={2} />
@@ -246,19 +246,6 @@ export const KubeDashboard = memo(function KubeDashboard({
           </p>
         )}
         <div className="kube-dash-grid">
-          <Panel title="전체 자원" part={board.resources} wide>
-            {(value) => (
-              <ResourcesBody
-                value={value}
-                scope={namespace}
-                usageNote={board.usageNote}
-                cpu={history.trend.map((sample) => sample.cpu)}
-                memory={history.trend.map((sample) => sample.memory)}
-                reveal={reveal}
-              />
-            )}
-          </Panel>
-
           <section className="kube-dash-panel" aria-label="현황">
             <h3>현황</h3>
             <dl className="kube-dash-counts">
@@ -321,23 +308,6 @@ export const KubeDashboard = memo(function KubeDashboard({
             )}
           </Panel>
 
-          <Panel title="자원 상위" part={board.top}>
-            {(top) => (
-              <>
-                {top.basis === 'request' && <p className="kube-dash-note">요청량 기준입니다.</p>}
-                <div className="kube-dash-top">
-                  <TopColumn title="CPU" rows={top.cpu} format={formatCpu} reveal={reveal} />
-                  <TopColumn
-                    title="메모리"
-                    rows={top.memory}
-                    format={formatMemory}
-                    reveal={reveal}
-                  />
-                </div>
-              </>
-            )}
-          </Panel>
-
           <Panel title="미달 워크로드" part={board.under}>
             {(list) => (
               <Rows list={list} empty={NO_PROBLEM}>
@@ -354,6 +324,36 @@ export const KubeDashboard = memo(function KubeDashboard({
                   </li>
                 )}
               </Rows>
+            )}
+          </Panel>
+
+          <Panel title="전체 자원" part={board.resources} wide>
+            {(value) => (
+              <ResourcesBody
+                value={value}
+                scope={namespace}
+                usageNote={board.usageNote}
+                cpu={history.trend.map((sample) => sample.cpu)}
+                memory={history.trend.map((sample) => sample.memory)}
+                reveal={reveal}
+              />
+            )}
+          </Panel>
+
+          <Panel title="자원 상위" part={board.top}>
+            {(top) => (
+              <>
+                {top.basis === 'request' && <p className="kube-dash-note">요청량 기준입니다.</p>}
+                <div className="kube-dash-top">
+                  <TopColumn title="CPU" rows={top.cpu} format={formatCpu} reveal={reveal} />
+                  <TopColumn
+                    title="메모리"
+                    rows={top.memory}
+                    format={formatMemory}
+                    reveal={reveal}
+                  />
+                </div>
+              </>
             )}
           </Panel>
 

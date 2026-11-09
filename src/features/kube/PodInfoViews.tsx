@@ -155,7 +155,10 @@ export function EventsView(props: ReadProps) {
           </thead>
           <tbody>
             {items.map((event, at) => (
-              <tr key={`${event.time}-${at}`}>
+              <tr
+                key={`${event.time}-${at}`}
+                className={event.eventType === 'Warning' ? 'warn' : ''}
+              >
                 <td>{formatTime(event.time)}</td>
                 <td>{event.eventType}</td>
                 <td>{event.reason}</td>
