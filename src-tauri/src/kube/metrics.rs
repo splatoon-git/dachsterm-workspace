@@ -62,7 +62,7 @@ pub enum MetricsTarget {
 }
 
 /// A path that names a metrics endpoint and nothing else the proxy could reach: no query, no `..`.
-fn is_metrics_path(path: &str) -> bool {
+pub(super) fn is_metrics_path(path: &str) -> bool {
     let Some(rest) = path.strip_prefix('/') else {
         return false;
     };
@@ -199,7 +199,7 @@ fn label_end(text: &str) -> Option<usize> {
     None
 }
 
-fn parse_line(line: &str) -> Option<(&str, &str, f64)> {
+pub(super) fn parse_line(line: &str) -> Option<(&str, &str, f64)> {
     let line = line.trim();
     if line.is_empty() || line.starts_with('#') {
         return None;
@@ -220,7 +220,7 @@ fn parse_line(line: &str) -> Option<(&str, &str, f64)> {
 }
 
 /// The value of one label in a block such as `container="app",pod="a"`.
-fn label_value(labels: &str, wanted: &str) -> Option<String> {
+pub(super) fn label_value(labels: &str, wanted: &str) -> Option<String> {
     let mut rest = labels.trim_start_matches([',', ' ']);
     while let Some(equals) = rest.find('=') {
         let key = rest[..equals].trim();
@@ -363,7 +363,13 @@ fn candidates_of(pod: &Value) -> Vec<Candidate> {
     items
 }
 
-fn pod_proxy_path(namespace: &str, pod: &str, port: u16, path: &str, https: bool) -> String {
+pub(super) fn pod_proxy_path(
+    namespace: &str,
+    pod: &str,
+    port: u16,
+    path: &str,
+    https: bool,
+) -> String {
     let scheme = if https { "https:" } else { "" };
     format!("/api/v1/namespaces/{namespace}/pods/{scheme}{pod}:{port}/proxy{path}")
 }

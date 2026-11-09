@@ -176,6 +176,15 @@ export type KubeMenu = 'open' | 'close' | 'fixed';
 export const kubeMenu = (workspace: 'terminal' | 'kubernetes' | undefined, opened: boolean) =>
   workspace === 'kubernetes' ? 'fixed' : opened ? 'close' : 'open';
 
+export type KubeCopyResult = { blocked: string } | { typed: 'run' | 'wait' };
+
+export function copyResultNote(result: KubeCopyResult) {
+  if ('blocked' in result) return result.blocked;
+  return result.typed === 'run'
+    ? '터미널에 sudo 암호를 입력한 뒤 다시 확인을 누르세요.'
+    : '터미널에 명령을 넣었습니다. Enter를 누르고 sudo 암호를 입력한 뒤 다시 확인을 누르세요.';
+}
+
 /** Fixed screens of the workspace, the first screen first. KV.3 and later fill the others. */
 export const kubeScreens = [
   { id: 'tree', label: '트리' },
@@ -183,6 +192,7 @@ export const kubeScreens = [
   { id: 'problems', label: '문제 목록' },
   { id: 'changes', label: '변화 기록' },
   { id: 'ingress', label: '인그레스' },
+  { id: 'ai', label: 'vLLM·GPU' },
   { id: 'board', label: '실시간 로그' },
   { id: 'logs', label: '로그 검색' },
 ] as const;

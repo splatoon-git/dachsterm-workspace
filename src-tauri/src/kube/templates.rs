@@ -113,6 +113,39 @@ pub const INGRESS_CONTROLLERS: &str = concat!(
     "{{(index .spec.containers 0).name}}\n{{end}}",
 );
 
+/// One annotation's value, or nothing. `with`, because `index` prints `<no value>` for a missing
+/// key. Annotation values are free text, so they go through `urlquery`.
+macro_rules! annotation {
+    ($key:literal) => {
+        concat!(
+            "{{with .metadata.annotations}}{{with index . \"",
+            $key,
+            "\"}}{{urlquery .}}{{end}}{{end}}"
+        )
+    };
+}
+
+/// `kube_ai`'s detection: thirteen fields. Images, commands and arguments are free text, and only
+/// the last three are searched, so they share one field with a space between each.
+pub const AI_PODS: &str = concat!(
+    "{{range .items}}{{.metadata.namespace}}\t{{.metadata.name}}\t{{.spec.nodeName}}\t",
+    "{{.status.phase}}\t{{.metadata.uid}}\t",
+    "{{range .status.containerStatuses}}{{.restartCount}},{{end}}\t",
+    "{{range .spec.containers}}{{range .ports}}{{.containerPort}},{{end}}{{end}}\t",
+    "{{range .spec.containers}}{{urlquery .image}} ",
+    "{{range .command}}{{urlquery .}} {{end}}{{range .args}}{{urlquery .}} {{end}}{{end}}\t",
+    annotation!("podtree.io/monitor"),
+    "\t",
+    annotation!("podtree.io/metrics-port"),
+    "\t",
+    annotation!("podtree.io/metrics-path"),
+    "\t",
+    annotation!("prometheus.io/port"),
+    "\t",
+    annotation!("prometheus.io/path"),
+    "\n{{end}}",
+);
+
 /// `kube_detail`'s events for one pod: Normal and Warning alike, unlike `EVENTS` above.
 pub const POD_EVENTS: &str = concat!(
     "{{range .items}}{{.type}}\t",

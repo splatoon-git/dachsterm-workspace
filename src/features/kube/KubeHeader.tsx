@@ -15,6 +15,7 @@ export function KubeHeader({
   warning,
   liveLogs,
   problems,
+  aiAvailable,
   setup,
 }: {
   screen: KubeScreen;
@@ -30,28 +31,32 @@ export function KubeHeader({
   liveLogs: boolean;
   /** Shown on the problem tab only when there are any. */
   problems: number;
+  /** The vLLM·GPU tab exists only where detection found something to show. */
+  aiAvailable: boolean;
   /** The way back from the terminal while setup is unfinished; `null` otherwise. */
   setup: { note: string; busy: boolean; recheck: () => void } | null;
 }) {
   const local = useLocalCluster();
   return (
     <div className="kube-header" role="tablist" aria-label="쿠버네티스 화면">
-      {kubeScreens.map(({ id, label }) => (
-        <button
-          key={id}
-          role="tab"
-          aria-selected={display === 'workspace' && screen === id}
-          onClick={() => openScreen(id)}
-        >
-          {label}
-          {id === 'board' && liveLogs && (
-            <i className="kube-header-live" title="로그를 받는 중" aria-hidden="true" />
-          )}
-          {id === 'problems' && problems > 0 && (
-            <span className="kube-header-count">{problems}</span>
-          )}
-        </button>
-      ))}
+      {kubeScreens
+        .filter(({ id }) => id !== 'ai' || aiAvailable)
+        .map(({ id, label }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={display === 'workspace' && screen === id}
+            onClick={() => openScreen(id)}
+          >
+            {label}
+            {id === 'board' && liveLogs && (
+              <i className="kube-header-live" title="로그를 받는 중" aria-hidden="true" />
+            )}
+            {id === 'problems' && problems > 0 && (
+              <span className="kube-header-count">{problems}</span>
+            )}
+          </button>
+        ))}
       <span className="kube-header-divider" aria-hidden="true" />
       <button role="tab" aria-selected={display === 'terminal'} onClick={showTerminal}>
         {local ? '로컬 터미널' : '서버 터미널'}

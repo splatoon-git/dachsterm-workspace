@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, errorText, type KubeSettings } from '../../lib/ipc';
 import type { PodRef } from './detailTypes';
 import { IngressView } from './IngressView';
+import { KubeAi } from './KubeAi';
 import { KubeChanges } from './KubeChanges';
 import { KubeDashboard } from './KubeDashboard';
 import { KubeHeader } from './KubeHeader';
@@ -29,17 +30,19 @@ import { useAlertPref, useProblemAlerts } from './useProblemAlerts';
 import { useWorkerWatch } from './useWorkerWatch';
 import { WorkersContext } from './workerContext';
 import {
+  copyResultNote,
   finishesAfterRecheck,
   opensDirectly,
   settingsFrom,
   type DetectRequest,
   type Detection,
+  type KubeCopyResult,
   type KubeDisplay,
   type KubeScreen,
 } from './kubeModel';
 import './kube.css';
 
-export type KubeCopyResult = { blocked: string } | { typed: 'run' | 'wait' };
+export type { KubeCopyResult };
 
 type Phase =
   | { name: 'detecting' }
@@ -215,16 +218,7 @@ export function KubeWorkspace({
     [openScreen],
   );
 
-  const copyToTerminal = (command: string) => {
-    const result = copy(command);
-    if ('blocked' in result) setNote(result.blocked);
-    else
-      setNote(
-        result.typed === 'run'
-          ? '터미널에 sudo 암호를 입력한 뒤 다시 확인을 누르세요.'
-          : '터미널에 명령을 넣었습니다. Enter를 누르고 sudo 암호를 입력한 뒤 다시 확인을 누르세요.',
-      );
-  };
+  const copyToTerminal = (command: string) => setNote(copyResultNote(copy(command)));
 
   const detection = phase.name === 'setup' ? phase.detection : null;
   const settingUp = phase.name !== 'open';
@@ -285,6 +279,7 @@ export function KubeWorkspace({
         warning={warning}
         liveLogs={board.phase === 'live'}
         problems={problemCount(sections)}
+        aiAvailable={workers.ai.available}
         setup={settingUp ? { note, busy, recheck: () => recheck({ mode: 'scan' }) } : null}
       />
       {display === 'workspace' && (
@@ -389,6 +384,7 @@ export function KubeWorkspace({
                 openFlow={openFlow}
               />
             )}
+            {phase.name === 'open' && screen === 'ai' && <KubeAi openRuntime={openRuntime} />}
             {phase.name === 'detecting' && error && <p role="alert">{error}</p>}
           </div>
         </WorkersContext.Provider>

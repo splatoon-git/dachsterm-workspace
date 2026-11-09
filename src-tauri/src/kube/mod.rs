@@ -3,6 +3,11 @@
 mod action;
 #[cfg(all(test, unix))]
 mod action_cluster_test;
+#[cfg(all(test, unix))]
+mod ai_cluster_test;
+mod ai_collect;
+mod ai_detect;
+mod ai_parse;
 mod cluster_issues;
 mod detail;
 mod detect;
@@ -31,6 +36,8 @@ use crate::{
     storage::{Result, Store},
 };
 use action::{Action, OperateMode};
+use ai_collect::AiRead;
+pub use ai_collect::AiTargets;
 use detail::{Detail, DetailKind, PodTarget};
 use detect::{Detection, Source, detect};
 use home::Home;
@@ -383,6 +390,22 @@ pub async fn kube_metrics(
         .await
         .map_err(|_| "조회를 시작하지 못했습니다.".to_string())?;
     Ok(metrics::read(&link.runner(&kube), &kube, &target).await)
+}
+
+/// vLLM and GPU metrics of the pods detection found. Takes no port or path: what is read is decided
+/// on this side (design KV.10), so it needs no operate mode.
+#[tauri::command]
+pub async fn kube_ai(
+    state: State<'_, AppState>,
+    slots: State<'_, WatchSlots>,
+    targets: State<'_, AiTargets>,
+    id: String,
+    kube: KubeSettings,
+) -> Result<AiRead> {
+    let link = link_of(&state, &id)?;
+    link.check(&kube)?;
+    let slot = slots.0.for_connection(&id);
+    Ok(ai_collect::collect(&targets, link, slot, &id, &kube).await)
 }
 
 /// Runs the app's fixed read-only script in a container. There is no path for any other command.

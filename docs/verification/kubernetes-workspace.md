@@ -502,6 +502,51 @@ MacBook(darwin, Apple Silicon), 브랜치 `feat/kv7-kube-issues`를 KV.6이 합�
 - `kube-tree`의 "polling stops" 기대값을 종류 수 증가에 맞춰 7에서 10으로 고쳤다.
 
 **미확인:** 실제 앱의 화면과 OS 알림 표시(Windows·Mac), 앱에서 실제 SSH로 조회하는 경로, 실제 클러스터의 재시작·회복 변화 기록(순수 로직과 합성 데이터까지), 숨겨진 창의 타이머 제한 영향(WebView2 강한 타이머 제한, WKWebView App Nap으로 조회 간격이 늘 수 있다), 권한 없는 계정의 `pvcs`·`jobs`·`hpas`, `scripts/verify-kube-tree.mjs`의 조회 목록 수정분 실행, 대형 클러스터, CI.
+## KV.10 검증 (2026-11-09)
+
+대상: 아래 표는 `feat/kv10-kube-vllm`의 미커밋 트리(기준 `7edabce`), [병합 뒤 재검증](#kv10-병합-뒤-재검증-2026-11-09)은 `dev`를 합치고 `kube_ai`를 `Link`로 옮긴 `7ec51d3`. 이 MacBook, Rust 1.99.1, Apple Git 2.50.1.
+
+**이 환경에는 GPU와 실제 vLLM이 없다. 아래의 메트릭은 전부 대역이며 파서 검증까지만 인정한다.** 메트릭 이름, 라벨, 값의 의미가 실제 엔진과 맞는지는 확인하지 못했다.
+
+| 범위 | 명령 | 결과 |
+|---|---|---|
+| 파서·탐지 단위 | `cargo test --workspace --locked --no-fail-fast` | 594 통과, 1 실패, 3 무시. 실패는 `git_graph::tests::a_repositorys_signature_program_does_not_run`이다. KV.10이 건드리지 않은 모듈이고 KV.13 기록의 실패와 같은 테스트다. 기준 커밋 재실행은 하지 않았다 |
+| 프런트 단위 | `npm test` | 1308/1308 |
+| 화면(백엔드 대역) | `npx playwright test` (Chromium) | 517 통과. `kube-ai.spec.ts` 6건 포함 |
+| 정적 검사 | `npm run typecheck`, `npm run lint`, `npm run build`, `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과 |
+| 형식 검사 | `npm run format:check` | 경고 1건 `scripts/test-phase63-67-native.mjs`. KV.10 변경 밖이다 |
+| 탐지·proxy 경로 | `DACHSTERM_KUBE_FIXTURE=kv10 npm run test:kube-ai` (kind, 앱의 SSH 연결 경로, busybox `httpd` 대역) | 통과 |
+
+kind에서 확인한 것(대역 응답 기준):
+
+- `AI_PODS` go-template이 실제 kubectl에서 동작하고, annotation·이미지·명령줄로 대상을 찾는다. 표시 없는 파드는 읽지 않는다.
+- `get --raw` proxy 읽기가 조회 모드(`operate: false`)에서 동작한다.
+- annotation이 `/admin/delete`를 가리키는 파드는 요청 자체가 가지 않는다. **파드의 `httpd` 로그에 해당 경로가 없다.**
+- 지원 메트릭 없음, 잘못된 포트, 허용되지 않는 경로를 구분해 표시한다.
+- namespace를 지정하면 vLLM은 그 안에서만, GPU exporter는 전체에서 찾는다.
+- `view`만 가진 계정은 `pods/proxy`가 없어 권한 없음으로, 전체 목록 조회가 막히면 GPU 일부만 표시로 나온다.
+
+### KV.10 병합 뒤 재검증 (2026-11-09)
+
+`7ec51d3`(KV.11·KV.12를 합치고 `kube_ai`를 `Link`로 옮긴 뒤), macOS 26.5 arm64, Node 26.0.0, kind `kv10`.
+
+| 범위 | 명령 | 결과 |
+|---|---|---|
+| 클러스터 경로 | `DACHSTERM_KUBE_FIXTURE=kv10 npm run test:kube-ai` | PASS 6줄. 새 단계: `Link::Local`로 이 컴퓨터의 kubectl과 kind kubeconfig를 써서 같은 대상을 탐지·읽음, 허용되지 않는 경로는 요청 없음 |
+| 프런트 | `npm run typecheck`, `lint`, `format:check`, `build`, `npm audit --audit-level=low` | 종료 0. `format:check` 경고는 KV.12가 스크립트를 지워 사라졌다 |
+| 프런트 단위 | `npm test` | 1322/1322 |
+| 화면(백엔드 대역) | `npm run test:ui -- --workers=4` (Chromium) | 519 통과 |
+| Rust | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 종료 0 |
+| Rust 테스트 | `cargo test --workspace --locked --no-fail-fast` | 629 통과, 1 실패, 3 무시. 실패는 `git_graph::tests::a_repositorys_signature_program_does_not_run` (KV 변경 밖) |
+
+**미실행:** 패키지 앱에서 **vLLM·GPU** 탭을 띄우는 확인. 임시 계측 빌드를 만들지 않아 실제 앱 화면은 대기다.
+
+**대기:**
+
+- 실제 vLLM·DCGM exporter에서 메트릭 이름·라벨·값 확인(`vllm:*`, `DCGM_FI_DEV_*`), 처리 정지 판정의 실제 동작. GPU와 실제 엔진이 있는 환경에서 해야 한다.
+- 실제 앱 화면(패키지 앱, WKWebView, WebView2). Playwright는 백엔드 대역이다.
+- Mac 실기기(`mac-verify`), Windows 앱, CI.
+
 ## KV.13·KV.9 Mac 실기기 검증 (2026-11-09)
 
 `mac-verify` 절차로 실행했다. 범위는 사용자가 지정한 SSH 세션의 실시간 로그, 요청 흐름, 중지 시 서버 `kubectl` 정리, 런타임 탭이다.
@@ -631,7 +676,7 @@ Windows 대상 컴파일은 이 Mac에 `x86_64-pc-windows-msvc` 타깃이 없어
 
 ### 미확인
 
-- **KV.10 `kube_ai`의 Local 동작:** 아직 `dev`에 없다(`feat/kv10-kube-vllm` 미커밋). 해당 코드에 적용하지 못했다.
+- **KV.10 `kube_ai`의 Local 동작:** KV.10 병합 때 적용했고 [kind로 확인](#kv10-병합-뒤-재검증-2026-11-09)했다. 패키지 앱 화면은 대기다.
 - Windows 빌드와 실행, Windows 패키지 앱, CI.
 - 실제 인증 플러그인(aws, gke-gcloud-auth-plugin, kubelogin 등). 이 Mac에 설치돼 있지 않아 대역으로 검사했다.
 - 로그인 셸의 `KUBECONFIG` 가져오기는 단위 테스트로만 확인했다. 패키지 앱 실행에서는 `open --env`로 전달했다.

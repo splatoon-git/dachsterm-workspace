@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KubeCopyResult } from '../../../src/features/kube/KubeWorkspace';
+import type { AiRead } from '../../../src/features/kube/aiTypes';
 import type {
   Detail,
   DetailKind,
@@ -50,6 +51,8 @@ declare global {
         ports?: Record<number, MetricsRead>;
         probe?: ProbeRead;
       };
+      /** Called for each `kube_ai`, so a sample can carry the moment it was read. */
+      aiAnswer?: () => AiRead;
       /** Sent to the running search's channel, with Tauri's message numbering. */
       emitSearch?: (event: SearchEvent) => void;
       /** Ends the fake `kube_log_search` call, as the backend does when a search is over. */
@@ -137,6 +140,7 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
           answer ?? { state: { kind: 'unreachable' }, data: null, elapsedMs: 1 },
         );
       }
+      if (command === 'kube_ai') return structuredClone(state.aiAnswer?.() ?? null);
       if (command === 'kube_probe')
         return structuredClone(state.runtime?.probe ?? { kind: 'noShell' });
       if (command === 'kube_ingress')

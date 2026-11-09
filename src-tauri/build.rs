@@ -60,6 +60,7 @@ fn main() {
             "kube_log_cancel",
             "kube_metrics",
             "kube_probe",
+            "kube_ai",
             "kube_operate_mode",
             "kube_set_operate_mode",
             "kube_action",

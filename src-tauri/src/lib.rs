@@ -166,6 +166,7 @@ pub fn run() {
             }
             app.manage(kube::Slots::default());
             app.manage(kube::WatchSlots::default());
+            app.manage(kube::AiTargets::default());
             app.manage(kube::LogSearches::default());
             app.manage(AppState {
                 instance_lock,
@@ -261,6 +262,7 @@ pub fn run() {
             kube::kube_terminal_probe,
             kube::kube_metrics,
             kube::kube_probe,
+            kube::kube_ai,
             kube::kube_operate_mode,
             kube::kube_set_operate_mode,
             kube::kube_action,
