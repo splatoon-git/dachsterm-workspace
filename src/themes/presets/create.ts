@@ -70,7 +70,7 @@ export function createTheme(p: Palette): ThemeDefinition {
       ? {
           ...foundations,
           font: { ...foundations.font, ui: foundations.font.mono },
-          radius: { small: '3px', medium: '6px', large: '8px' },
+          radius: { xs: '2px', small: '3px', medium: '6px', large: '8px', full: '999px' },
         }
       : foundations,
     color: {

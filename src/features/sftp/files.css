@@ -4,8 +4,8 @@
   align-items: center;
   gap: var(--space-sm);
   min-height: 28px;
-  padding: 2px 10px;
-  font-size: 11px;
+  padding: var(--space-xxs) var(--space-sm-plus);
+  font-size: var(--font-caption);
 }
 .file-header-name {
   flex: 1;
@@ -18,8 +18,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
-  padding: 0 8px 2px;
+  gap: var(--space-xxs);
+  padding: 0 var(--space-sm) var(--space-xxs);
 }
 .file-actions button {
   width: 26px;
@@ -43,15 +43,15 @@
 .file-actions-gap {
   width: 1px;
   height: 16px;
-  margin-inline: 2px;
+  margin-inline: var(--space-xxs);
   background: var(--color-border-default);
 }
 /* The default 240px sidebar: keep each row of actions on one line with slightly smaller buttons. */
 @container (max-width: 300px) {
   .file-actions {
     flex-wrap: nowrap;
-    gap: 1px;
-    padding-inline: 4px;
+    gap: var(--space-hair);
+    padding-inline: var(--space-xs);
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -61,23 +61,23 @@
   }
   .file-actions-gap {
     flex: 0 0 1px;
-    margin-inline: 1px;
+    margin-inline: var(--space-hair);
   }
 }
 .file-options {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 10px;
-  padding: 4px 10px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  font-size: 11px;
+  gap: var(--space-xxs) var(--space-sm-plus);
+  padding: var(--space-xs) var(--space-sm-plus);
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
+  font-size: var(--font-caption);
 }
 .file-options label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
+  gap: var(--space-xs);
+  font-size: var(--font-caption);
   white-space: nowrap;
 }
 .file-options input[type='checkbox'] {
@@ -91,19 +91,20 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
-  font-size: 10px;
+  font-size: var(--font-tiny);
   color: var(--color-text-secondary);
 }
 .file-follow-note button {
   height: 22px;
   min-height: 0;
-  padding: 0 8px;
-  font-size: 11px;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-caption);
 }
 .file-tree-row {
   display: flex;
   align-items: center;
-  padding-left: calc(var(--file-depth) * 14px + 2px);
+  --file-indent: 14px;
+  padding-left: calc(var(--file-depth) * var(--file-indent) + var(--space-xxs));
 }
 .file-tree-row:hover {
   background: var(--color-surface-subtle);
@@ -129,8 +130,8 @@
 }
 .file-selection {
   flex: 0 0 auto;
-  padding-top: 4px;
-  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-xs);
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
 }
 .file-selection-info {
   display: flex;
@@ -139,19 +140,19 @@
   gap: var(--space-sm);
   min-width: 0;
   min-height: 18px;
-  padding: 0 12px;
-  font-size: 11px;
+  padding: 0 var(--space-md);
+  font-size: var(--font-caption);
 }
 .file-selection-info strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .file-selection-info small {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: var(--font-tiny);
   color: var(--color-text-secondary);
 }
 /* Git status of a row (DX.5). The letter is the default, so the state need not depend on color. */
@@ -160,7 +161,7 @@
   min-width: 1.2em;
   text-align: center;
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .file-git-mark[data-mark='M'],
 .file-git-mark[data-mark='folder'],

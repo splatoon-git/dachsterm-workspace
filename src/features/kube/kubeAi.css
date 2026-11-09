@@ -54,11 +54,11 @@
 .kube-ai-name em {
   color: var(--color-status-warning);
   font-style: normal;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-ai-model td {
   background: var(--color-surface-panel);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-ai-pod,
 .kube-ai-device {
@@ -70,7 +70,7 @@
 }
 .kube-ai-count {
   color: var(--color-text-secondary);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-ai-short {
   color: var(--color-status-error);
@@ -84,7 +84,7 @@
 .kube-ai h3 {
   margin: var(--space-md) 0 var(--space-xs);
   font-size: var(--font-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-ai-trend-head h3 {
   margin: 0;

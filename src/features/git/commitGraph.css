@@ -27,12 +27,12 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 1px;
+  gap: var(--space-hair);
   padding-right: var(--space-xs);
 }
 .git-graph-scope {
   flex: none;
-  gap: 3px;
+  gap: var(--space-xxs);
   height: 22px;
   min-height: 0;
   padding: 0 var(--space-xs);
@@ -95,7 +95,7 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xxs);
   max-width: 55%;
   overflow: hidden;
 }
@@ -103,14 +103,14 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xxs);
   height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-medium);
   background: var(--color-surface-subtle);
   color: var(--color-text-secondary);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: var(--font-caption);
+  line-height: var(--space-lg);
 }
 .git-graph-ref[data-kind='remote'] {
   color: var(--color-status-info);
@@ -121,7 +121,7 @@
 .git-graph-ref[data-current] {
   background: var(--color-action-primary);
   color: var(--color-text-on-action);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .git-graph-ref-name {
   overflow: hidden;
@@ -165,7 +165,7 @@
 /* The hover card: the whole commit, beside the row instead of inside the tree. */
 .git-commit-card {
   position: fixed;
-  z-index: 90;
+  z-index: var(--layer-hover-card);
   top: 0;
   left: 0;
   width: max-content;
@@ -189,7 +189,7 @@
   color: var(--color-text-secondary);
 }
 .git-commit-card-co {
-  margin-top: 2px !important;
+  margin-top: var(--space-xxs) !important;
 }
 .git-commit-card-message {
   margin-top: var(--space-sm) !important;
@@ -209,7 +209,7 @@
 .git-commit-card-refs {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: var(--space-xxs);
   margin-top: var(--space-sm);
 }
 .git-commit-card-foot {

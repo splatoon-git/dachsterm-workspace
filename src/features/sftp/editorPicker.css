@@ -42,7 +42,7 @@
 }
 .editor-option:has(input:focus-visible) {
   outline: var(--border-width-focus) solid var(--color-focus-ring);
-  outline-offset: 2px;
+  outline-offset: var(--border-width-focus);
 }
 /* The radio stays for keyboard and screen readers; the card shows the state. */
 .editor-option input {
@@ -61,7 +61,7 @@
   border-radius: var(--radius-small);
   background: var(--color-surface-header);
   color: var(--color-text-secondary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .editor-option:has(input:checked) .editor-mark {
   background: var(--color-action-primary);
@@ -71,7 +71,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 2px;
+  gap: var(--space-xxs);
 }
 .editor-text strong,
 .editor-text small {
@@ -80,12 +80,12 @@
   white-space: nowrap;
 }
 .editor-text strong {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .editor-text small {
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-tiny);
 }
 .editor-browse {
   border-style: dashed;
@@ -95,7 +95,7 @@
 }
 .editor-typed {
   margin-top: var(--space-sm);
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .editor-typed summary {
   color: var(--color-text-secondary);
@@ -108,7 +108,7 @@
 .editor-note {
   margin: var(--space-sm) 0 0;
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .editor-browse .editor-text small {
   font-family: inherit;

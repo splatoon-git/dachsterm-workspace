@@ -41,7 +41,7 @@
 .kube-board-chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-xxs);
   height: 26px;
   padding-left: var(--space-sm);
   border-radius: var(--radius-small);
@@ -63,7 +63,7 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 20;
+  z-index: var(--layer-dropdown);
   width: 360px;
   padding: var(--space-sm);
   border: var(--border-width-default) solid var(--color-border-default);
@@ -102,7 +102,7 @@
 }
 .kube-board-buttons {
   display: inline-flex;
-  gap: 2px;
+  gap: var(--space-xxs);
 }
 .kube-board-buttons button {
   min-width: 28px;
@@ -121,7 +121,7 @@
 .kube-board-status.live::before {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-status-success);
   content: '';
 }
@@ -196,7 +196,7 @@
 }
 .kube-board-pane > header strong {
   overflow: hidden;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-overflow: ellipsis;
 }
 .kube-board-pane > header span {
@@ -213,12 +213,12 @@
   flex-shrink: 0;
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 .kube-board-pane-actions {
   display: inline-flex;
   flex-shrink: 0;
-  gap: 2px;
+  gap: var(--space-xxs);
   margin-left: auto;
 }
 .kube-board-pane header button {
@@ -231,7 +231,7 @@
 .kube-board-pane-note {
   flex-shrink: 0;
   margin: 0;
-  padding: 2px var(--space-sm);
+  padding: var(--space-xxs) var(--space-sm);
   background: var(--color-surface-header);
   color: var(--color-status-warning);
 }
@@ -278,7 +278,7 @@
 }
 .kube-line-tag {
   flex-shrink: 0;
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-line.warn .kube-line-text {
   color: var(--terminal-yellow);
@@ -290,7 +290,7 @@
   color: var(--terminal-bright-red);
 }
 .kube-line mark {
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--terminal-selection-background);
   color: var(--terminal-selection-foreground);
 }
@@ -322,7 +322,7 @@
 .kube-board-start p {
   margin: 0;
   color: var(--color-text-secondary);
-  line-height: 1.6;
+  line-height: var(--font-leading-relaxed);
 }
 .kube-board-picker {
   display: flex;
@@ -338,10 +338,10 @@
   overflow: auto;
 }
 .kube-board-picker h4 {
-  margin: var(--space-sm) 0 2px;
+  margin: var(--space-sm) 0 var(--space-xxs);
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-board-picker button {
   display: flex;
@@ -349,7 +349,7 @@
   gap: var(--space-sm);
   width: 100%;
   min-height: 26px;
-  padding: 2px var(--space-sm);
+  padding: var(--space-xxs) var(--space-sm);
   border: 0;
   background: transparent;
   font-size: var(--font-small);

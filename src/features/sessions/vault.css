@@ -10,10 +10,10 @@
 p.vault-state {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   margin: 0 0 var(--space-lg);
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: var(--space-xs) var(--space-sm-plus);
+  border-radius: var(--radius-full);
   background: var(--color-surface-subtle);
   color: var(--color-text-secondary);
   font-size: var(--font-small);

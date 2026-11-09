@@ -40,7 +40,7 @@
 }
 .input-scope-modes label:focus-within {
   outline: var(--border-width-focus) solid var(--color-focus-ring);
-  outline-offset: -2px;
+  outline-offset: calc(-1 * var(--border-width-focus));
 }
 .input-scope-state {
   white-space: nowrap;
@@ -58,7 +58,7 @@
 .tab-strip .input-mark {
   position: sticky;
   left: 0;
-  z-index: 1;
+  z-index: var(--layer-raised);
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -67,7 +67,7 @@
   padding: 0 var(--space-sm);
   background: var(--color-surface-subtle);
   border-right: var(--border-width-default) solid var(--color-border-subtle);
-  font-size: 11px;
+  font-size: var(--font-caption);
   white-space: nowrap;
 }
 .tab-strip .input-mark.pick {

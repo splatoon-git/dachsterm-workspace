@@ -1,5 +1,6 @@
 import atlasUrl from '../../../assets/brand/dachshund-adventure-atlas.png';
 import type { ThemeDefinition } from '../../../themes/contract';
+import { canvasFont } from './canvasFont';
 import { ENEMY_RULES, VIEW } from './content';
 import { survivorCamera } from './geometry';
 import { drawScenery, regionForStage } from './scenery';
@@ -109,7 +110,7 @@ export function drawSurvivor(
         circle(attack.x, attack.y, attack.radius, t.yellow);
       } else {
         ctx.fillStyle = t.yellow;
-        ctx.font = 'bold 22px sans-serif';
+        ctx.font = canvasFont(theme, 'display', true);
         ctx.textAlign = 'center';
         ctx.fillText('↓', attack.x, attack.y + 6);
       }
@@ -260,7 +261,7 @@ export function drawSurvivor(
   const hit = run.lastDamage;
   if (hit && run.tick - hit.tick < 28) {
     const rise = reduced ? 0 : (run.tick - hit.tick) * 0.5;
-    ctx.font = 'bold 15px sans-serif';
+    ctx.font = canvasFont(theme, 'heading', true);
     ctx.textAlign = 'center';
     ctx.lineWidth = 3;
     ctx.strokeStyle = t.background;
@@ -279,9 +280,9 @@ export function drawSurvivor(
   ctx.fillRect(14, VIEW.height - 58, 3, 44);
   ctx.fillStyle = t.foreground;
   ctx.textAlign = 'left';
-  ctx.font = 'bold 14px sans-serif';
+  ctx.font = canvasFont(theme, 'body', true);
   ctx.fillText(`${region.chapter + 1}지역 · ${region.name}`, 27, VIEW.height - 38);
-  ctx.font = '11px sans-serif';
+  ctx.font = canvasFont(theme, 'caption');
   ctx.fillText(region.subtitle, 27, VIEW.height - 22);
   ctx.restore();
   const boss = run.enemies.find((e) => e.kind === 'boss');
@@ -295,7 +296,7 @@ export function drawSurvivor(
     const x = Math.max(55, Math.min(VIEW.width - 55, boss.x - cam.x));
     const y = Math.max(30, Math.min(VIEW.height - 30, boss.y - cam.y));
     ctx.fillStyle = t.red;
-    ctx.font = 'bold 18px sans-serif';
+    ctx.font = canvasFont(theme, 'large', true);
     ctx.textAlign = 'center';
     ctx.fillText('◆ 보스', x, y);
   }

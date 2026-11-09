@@ -24,7 +24,7 @@
   color: var(--color-text-primary);
   font-family: var(--font-mono);
   font-size: var(--font-small);
-  line-height: 1.5;
+  line-height: var(--font-leading-normal);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -54,7 +54,7 @@
 .agent-preset-row input,
 .agent-preset-row select {
   min-height: var(--control-height);
-  padding: 5px 8px;
+  padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-small);
 }
 .agent-preset-row input.command {

@@ -1,3 +1,4 @@
+import { canvasFont } from './canvasFont';
 import type { ThemeDefinition } from '../../../themes/contract';
 import type { SurvivorEnemy, SurvivorRun } from './types';
 
@@ -213,7 +214,7 @@ function paintEnemyBody(
   ctx.restore();
   if (windup) {
     ctx.fillStyle = t.red;
-    ctx.font = 'bold 17px sans-serif';
+    ctx.font = canvasFont(theme, 'large', true);
     ctx.textAlign = 'center';
     ctx.fillText('!', 0, -r - (elite ? 22 : 12));
   }

@@ -10,7 +10,7 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-xxs);
   height: 28px;
   padding: 0 var(--space-xs) 0 var(--space-sm);
 }
@@ -45,7 +45,7 @@
 }
 .git-view-branch-name {
   overflow: hidden;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -113,13 +113,13 @@
   background: transparent;
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-align: left;
 }
 .git-group-head small {
   margin-left: auto;
   font-size: var(--font-small);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .git-group-bar {
   display: flex;
@@ -153,7 +153,8 @@
   align-items: center;
   gap: var(--space-xs);
   height: 22px;
-  padding: 0 var(--space-sm) 0 calc(var(--space-sm) + 12px + var(--git-depth, 0) * var(--space-md));
+  padding: 0 var(--space-sm) 0
+    calc(var(--space-sm) + var(--space-md) + var(--git-depth, 0) * var(--space-md));
   color: var(--color-text-primary);
   cursor: default;
   white-space: nowrap;
@@ -169,7 +170,7 @@
 .git-row-actions {
   display: none;
   flex: none;
-  gap: 1px;
+  gap: var(--space-hair);
   margin-left: auto;
 }
 .git-row:hover .git-row-actions,
@@ -214,7 +215,7 @@
   min-width: 1.2em;
   margin-left: auto;
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-align: center;
   color: var(--color-status-warning);
 }
@@ -244,7 +245,7 @@
 }
 .git-commit-actions {
   display: flex;
-  gap: 1px;
+  gap: var(--space-hair);
 }
 .git-commit-tip {
   display: flex;
@@ -291,7 +292,7 @@
   list-style: none;
 }
 .git-output li {
-  padding: 2px 0;
+  padding: var(--space-xxs) 0;
   overflow-wrap: anywhere;
 }
 .git-output code {
@@ -338,10 +339,10 @@ dialog.git-branch-picker {
   list-style: none;
 }
 .git-branch-picker-heading {
-  padding: var(--space-sm) var(--space-sm) 2px;
+  padding: var(--space-sm) var(--space-sm) var(--space-xxs);
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .git-branch-picker-option {
   display: flex;
