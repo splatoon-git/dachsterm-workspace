@@ -145,6 +145,15 @@ test('the change log starts empty and records what changed later', async ({ page
   await expect(row).toContainText('+2');
 });
 
+test('the alert checkbox keeps its own size and its label stays on one line', async ({ page }) => {
+  await open(page);
+  await tab(page, /문제 목록/).click();
+  const box = await page.getByRole('checkbox').boundingBox();
+  expect(box?.width).toBeLessThan(32);
+  const label = await page.locator('.kube-issues-bar label').boundingBox();
+  expect(label?.height).toBeLessThan(40);
+});
+
 test('alerts are off by default and a hidden tab then stops polling', async ({ page }) => {
   await open(page);
   await tab(page, /문제 목록/).click();

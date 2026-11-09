@@ -11,6 +11,10 @@
   align-items: center;
   gap: var(--space-xs);
 }
+.kube-issues-bar label input {
+  width: auto;
+  margin: 0;
+}
 .kube-issues-bar span {
   color: var(--color-text-secondary);
 }
