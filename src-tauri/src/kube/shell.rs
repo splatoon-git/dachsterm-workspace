@@ -13,7 +13,7 @@ use crate::{
 };
 use std::time::Duration;
 
-/// The same fallback as PodTree: bash when the image has it, otherwise sh.
+/// bash when the image has it, otherwise sh.
 const SHELL: &str = "command -v bash >/dev/null 2>&1 && exec bash || exec sh";
 
 const PROBE: Limits = Limits {

@@ -1,14 +1,14 @@
-import type { Profile } from '../../lib/ipc';
+import type { PodTerminalLaunch, Profile } from '../../lib/ipc';
 import type { Source } from '../../lib/source';
-import type { KubeLaunch, LocalTarget } from './sessionTypes';
+import type { LocalTarget } from './sessionTypes';
 
-export type SessionKind = 'ssh' | 'local' | 'podtree' | 'ftp';
+export type SessionKind = 'ssh' | 'local' | 'pod' | 'ftp';
 export type SessionCapabilities = {
   /** Has a terminal, so search, copy and paste apply. */
   terminal: boolean;
   /** The output can be recorded to a session log. */
   log: boolean;
-  /** Program guides apply; PodTree draws its own screen. */
+  /** Program guides apply. A pod tab runs one fixed command. */
   guide: boolean;
   /** "Split right/down" can open the same target again. */
   split: boolean;
@@ -23,11 +23,11 @@ export type SessionCapabilities = {
 type SessionLike = {
   profile: Pick<Profile, 'protocol'>;
   localTarget?: LocalTarget;
-  podtree?: KubeLaunch;
+  podTerminal?: PodTerminalLaunch;
 };
 
 export function sessionKind(session: SessionLike): SessionKind {
-  if (session.podtree) return 'podtree';
+  if (session.podTerminal) return 'pod';
   if (session.localTarget) return 'local';
   return session.profile.protocol === 'ssh' ? 'ssh' : 'ftp';
 }
@@ -51,7 +51,7 @@ const table: Record<SessionKind, SessionCapabilities> = {
     monitor: false,
     kube: false,
   },
-  podtree: {
+  pod: {
     terminal: true,
     log: false,
     guide: false,
@@ -73,9 +73,9 @@ const table: Record<SessionKind, SessionCapabilities> = {
 
 export const capabilities = (session: SessionLike) => table[sessionKind(session)];
 
-/** What commands that work on any tab are told about this one. PodTree has no files of its own. */
+/** What commands that work on any tab are told about this one. A pod tab has no files of its own. */
 export function sessionSource(session: SessionLike & { connectionId: string }): Source | null {
-  if (session.podtree) return null;
+  if (session.podTerminal) return null;
   if (session.localTarget) return { kind: 'local', targetId: session.localTarget.id };
   return {
     kind: session.profile.protocol === 'ssh' ? 'ssh' : 'ftp',

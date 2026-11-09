@@ -46,7 +46,7 @@ describe('input scope', () => {
     expect(paneRole('a', { mode: 'all' }, on, ['a', 'b', 'c'], true)).toBe('target');
     expect(paneRole('c', { mode: 'all' }, on, ['a', 'b', 'c'], true)).toBe('outside');
     expect(paneRole('c', { mode: 'pick', ids: [] }, on, ['a', 'b', 'c'], true)).toBe('pick');
-    // PodTree and FTP are never candidates, so they get no box.
+    // Pod tabs and FTP are never candidates, so they get no box.
     expect(paneRole('ftp', { mode: 'pick', ids: [] }, on, ['a', 'b'], true)).toBe('outside');
     expect(paneRole('a', { mode: 'off' }, status(['a', 'b']), ['a', 'b'], false)).toBeNull();
   });

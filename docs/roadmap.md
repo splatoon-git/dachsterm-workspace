@@ -663,7 +663,7 @@ API 문서 검토와 프로젝트 내 동작 실증은 별도다. 실제 버전 
 ### 6.7 — PodTree 내장
 
 - 검토 원본: `C:/Users/Administrator/OneDrive/Desktop/Offline-ClaudeCode/podtree/podtree.sh` 및 같은 폴더 README. 소스 표기 버전2.4.0, Bash4+·kubectl·awk·sort·대화형 PTY가 필요하다. 노드/namespace/워크로드/파드 트리, 로그/이벤트/관계, 네트워크, GPU/vLLM/DCGM 보기와 운영 액션이 있다. 계획 당시에는 소스만 검토했으며, 이후 구현/실제 클러스터 검증 상태는 아래 검증 기록을 따른다.
-- 사용자 결정(2026-11-07): 쿠버네티스 작업 화면(KV)으로 대체하므로 TW.9에서 도구 메뉴의 진입점을 숨겼다. 코드와 명령은 KV.12에서 제거한다.
+- 사용자 결정(2026-11-07): 쿠버네티스 작업 화면(KV)으로 대체하므로 TW.9에서 도구 메뉴의 진입점을 숨겼다. 코드와 명령은 KV.12에서 제거했다(패킷 캡처·네트워크 2초 화면은 뺌, [비교표](design/kubernetes-workspace.md#kv12--터미널-ui-제거와-문서)).
 - [x] 앱의 도구/연결 메뉴에서 **PodTree 열기** → 실행 위치(선택 SSH 서버 또는 로컬 WSL/Bash 환경)·context·namespace 선택 → 전용 터미널 탭으로 실행. 기존 작업 셸의 입력을 덮어쓰지 않고 독립 PTY를 사용한다. Windows PowerShell에서 Bash 스크립트를 직접 실행할 수 있다고 가정하지 않는다.
 - [x] 원본의 저작/배포 조건과 의존성을 확인하고 버전·해시·출처를 고정한 앱 자산으로 반입한다. 원본 파일과 OneDrive 절대 경로에 런타임 의존하지 않는다. 서버에 이미 설치된 버전 실행 또는 사용자에게 보이는 사용자 전용 임시 경로 배치/정리를 지원하고 상주 에이전트·전역 설치·sudo를 요구하지 않는다. 의존 도구나 디버그 이미지를 자동 설치하지 않는다.
 - [x] 실행 위치의 기존 kubectl/context/RBAC를 사용하며 kubeconfig·토큰·인증서를 앱 설정/세션 내보내기/로그로 복사하지 않는다. 실행할 context·namespace를 고정해서 표시하고 전역 current-context를 바꾸지 않는다. 권한 부족·metrics-server/DCGM 등 선택 기능 부재는 기본 트리를 유지하며 별도로 표시한다.

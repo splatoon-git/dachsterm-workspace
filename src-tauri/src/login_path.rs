@@ -1,5 +1,5 @@
 //! A Finder-launched app gets launchd's minimal PATH, without Homebrew or the user's own tool
-//! directories. PodTree and editors need the PATH the user sees in a terminal.
+//! directories. kubectl and editors need the PATH the user sees in a terminal.
 use std::{
     collections::HashSet,
     io::{BufRead, BufReader, Read},

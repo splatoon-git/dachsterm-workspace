@@ -97,8 +97,8 @@ const second = {
 const excluded = {
   ...first,
   tabId: 'pod',
-  profile: { ...first.profile, name: 'PodTree' },
-  podtree: {},
+  profile: { ...first.profile, name: '파드 탭' },
+  podTerminal: {},
 } as unknown as TerminalSession;
 window.__invalidate = () => {
   first.connectionId = 'new-id';

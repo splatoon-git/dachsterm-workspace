@@ -137,7 +137,7 @@ docker ps -a --filter label=app.dachsterm.purpose=phase1-probe
 | 인증·터미널 기본 동작 | [RSA·agent·MFA](verification/security-terminal-basics.md) |
 | 폴더 전송·영속 큐 | [기록](verification/phase-6-1.md) |
 | 스니펫·명령 모음·조작표 | [기록](verification/phase-6-2-6.md) |
-| 세션 로그·PodTree | [기록](verification/phase63-67.md) |
+| 세션 로그 | [기록](verification/phase63-67.md) (PodTree 단계는 KV.12에서 제거) |
 | 점프 호스트·세션 이관 | [기록](verification/phase-6-jump-sessions.md) |
 | 설정 UI | [기록](verification/settings-ui.md) |
 | 테마 | [기록](verification/themes.md) |

@@ -10,13 +10,19 @@ import { ProgramStatus } from './programStatus';
 import { PaneView } from './paneView';
 import { AgentSignQueue } from './agentSign';
 import { InputQueue } from './inputQueue';
-import type { KubeLaunch, LocalTarget, SessionEvent as Event, SessionState } from './sessionTypes';
-export type { KubeLaunch, LocalCatalog, LocalTarget, SessionState } from './sessionTypes';
+import type { LocalTarget, SessionEvent as Event, SessionState } from './sessionTypes';
+export type { LocalCatalog, LocalTarget, SessionState } from './sessionTypes';
 import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
-import { call, errorText, type Profile, type TerminalLaunch } from '../../lib/ipc';
+import {
+  call,
+  errorText,
+  type PodTerminalLaunch,
+  type Profile,
+  type TerminalLaunch,
+} from '../../lib/ipc';
 import { terminalColorOptions, terminalTheme } from '../../themes/adapters/xterm';
 import type { ThemeDefinition } from '../../themes/contract';
 export class TerminalSession {
@@ -38,7 +44,7 @@ export class TerminalSession {
       // tmux may reattach to a pane where a program runs, so nothing may ever be typed there.
       // A Kubernetes session's shell is hidden, and nothing is typed into a shell nobody sees.
       const { protocol, tmuxSession, workspace } = this.profile;
-      if (this.podtree || protocol !== 'ssh' || tmuxSession || workspace === 'kubernetes')
+      if (this.podTerminal || protocol !== 'ssh' || tmuxSession || workspace === 'kubernetes')
         return 'none';
       return this.localTarget?.follow ?? 'remote';
     },
@@ -63,7 +69,7 @@ export class TerminalSession {
   /** tmux gets the helper from its start command instead, since nothing is typed there. */
   private async loadGitHook(id: string) {
     const { forwardGitCredentials, tmuxSession } = this.profile;
-    const asks = forwardGitCredentials && !tmuxSession && !this.localTarget && !this.podtree;
+    const asks = forwardGitCredentials && !tmuxSession && !this.localTarget && !this.podTerminal;
     const hook =
       asks && (await call<string | null>('git_credential_shell', { id }).catch(() => null));
     if (id === this.connectionId) this.gitHook = hook || undefined;
@@ -75,7 +81,7 @@ export class TerminalSession {
   }
   /** A Windows shell only takes its hook at launch; the typed hook is Bash and Zsh text. */
   get canTypeDirectoryHook() {
-    if (this.podtree || this.profile.tmuxSession) return false;
+    if (this.podTerminal || this.profile.tmuxSession) return false;
     return !this.localTarget || this.localTarget.kind === 'wsl';
   }
   typeDirectoryHook() {
@@ -119,7 +125,7 @@ export class TerminalSession {
     readonly onConnected: () => void,
     readonly localTarget?: LocalTarget,
     /** Reassigned only to point a cut pod shell at the workload's new pod before `reconnect`. */
-    public podtree?: KubeLaunch,
+    public podTerminal?: PodTerminalLaunch,
   ) {
     this.terminal = new Terminal({
       ...terminalColorOptions(theme),
@@ -137,10 +143,10 @@ export class TerminalSession {
       // Kept while the guide is off too, so turning it on shows a program already running.
       program: (guideProgram) => {
         const guideRun = (this.current.guideRun ?? 0) + 1;
-        if (!this.podtree) this.update({ ...this.current, guideProgram, guideRun });
+        if (!this.podTerminal) this.update({ ...this.current, guideProgram, guideRun });
       },
       agent:
-        this.podtree || this.profile.protocol !== 'ssh'
+        this.podTerminal || this.profile.protocol !== 'ssh'
           ? undefined
           : {
               keyboard: this.keyboard,
@@ -157,7 +163,7 @@ export class TerminalSession {
             },
       respond: (data) => this.send(data),
     });
-    if (!this.podtree && this.profile.protocol === 'ssh')
+    if (!this.podTerminal && this.profile.protocol === 'ssh')
       attachTerminalLinks(this.terminal, {
         remote: () => !this.localTarget,
         server: (serverLink) => this.update({ ...this.current, serverLink }),
@@ -172,10 +178,14 @@ export class TerminalSession {
     });
   }
   private get backend() {
-    return this.podtree ? 'kube_terminal' : this.localTarget ? 'local' : 'terminal';
+    return this.podTerminal ? 'kube_terminal' : this.localTarget ? 'local' : 'terminal';
   }
   private get closeCommand() {
-    return this.podtree ? 'kube_terminal_close' : this.localTarget ? 'local_close' : 'disconnect';
+    return this.podTerminal
+      ? 'kube_terminal_close'
+      : this.localTarget
+        ? 'local_close'
+        : 'disconnect';
   }
   private setDirectory(path: string) {
     if (this.current.directory !== path)
@@ -223,10 +233,10 @@ export class TerminalSession {
     this.channel = new Channel<Event>();
     this.bindEvents(this.channel, id);
     try {
-      await (this.podtree
+      await (this.podTerminal
         ? call('kube_terminal_open', {
             id,
-            launch: this.podtree,
+            launch: this.podTerminal,
             cols: this.terminal.cols,
             rows: this.terminal.rows,
             onEvent: this.channel,

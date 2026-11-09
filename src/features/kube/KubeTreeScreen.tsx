@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { ContextMenu, type MenuPoint, type MenuRequest } from '../../components/ContextMenu';
 import { ResizeHandle } from '../../components/ResizeHandle';
-import type { KubeSettings } from '../../lib/ipc';
+import { call, errorText, type KubeSettings } from '../../lib/ipc';
 import { planDelete, blockedReason, type ActionPlan } from './actionModel';
 import { KubeActionDialog } from './KubeActionDialog';
 import { KubePodPanel } from './KubePodPanel';
@@ -21,6 +21,7 @@ import type { PodTerminalRequest } from './podShell';
 import type { SnapshotStore } from './polling';
 import type { TreeRow, TreeView } from './tree';
 import { actionItem, treeRowMenu } from './treeRowMenu';
+import { treeText, type ShownTree } from './treeText';
 import type { PodView } from './treePods';
 import {
   PANEL_DEFAULT_WIDTH,
@@ -31,6 +32,7 @@ import {
 } from './usePanelWidth';
 import type { OperateControl } from './useOperateMode';
 import { usePodShell } from './usePodShell';
+import { useWorkers } from './workerContext';
 
 export type PanelState = (PodPanelTarget & { problem: boolean }) | null;
 
@@ -72,6 +74,8 @@ export function KubeTreeScreen({
   const [plan, setPlan] = useState<ActionPlan | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const { width, change } = usePanelWidth();
+  const shown = useRef<ShownTree | null>(null);
+  const workers = useWorkers();
   const openShell = usePodShell({
     connectionId,
     kube,
@@ -86,6 +90,16 @@ export function KubeTreeScreen({
   const showPanel = (item: PodView, tab: PodPanelTarget['tab']) => {
     setNotice('');
     setPanel({ namespace: item.pod.namespace, name: item.pod.name, tab, problem: item.problem });
+  };
+
+  const copyTree = () => {
+    if (!shown.current) return;
+    const scope = { ...view, context: kube.context, namespace: kube.namespace };
+    const text = treeText(shown.current, scope, workers.cells);
+    call('clipboard_write_text', { text }).then(
+      () => setNotice('보이는 트리를 복사했습니다.'),
+      (e: unknown) => setNotice(errorText(e)),
+    );
   };
 
   const handle = (action: PodAction, item: PodView, at?: MenuPoint): void => {
@@ -118,6 +132,7 @@ export function KubeTreeScreen({
               run: () =>
                 searchLogs({ kind: 'pod', value: `${item.pod.namespace}/${item.pod.name}` }),
             },
+            { label: '보이는 트리 복사', separated: true, run: copyTree },
             actionItem(planDelete(item.pod), blocked, setPlan),
           ],
         });
@@ -125,7 +140,14 @@ export function KubeTreeScreen({
   };
   const rowMenu = (row: TreeRow, at?: MenuPoint): void => {
     const nodes = store.nodes.data;
-    const found = treeRowMenu(row, { nodes, blocked, ask: setPlan, watchLogs, searchLogs });
+    const found = treeRowMenu(row, {
+      nodes,
+      blocked,
+      ask: setPlan,
+      watchLogs,
+      searchLogs,
+      copyTree,
+    });
     if (found) setMenu({ ...found, at: at ?? { x: 0, y: 0 } });
   };
   // The tree is memoized and redraws only for new data, so it gets one function for its lifetime.
@@ -167,6 +189,7 @@ export function KubeTreeScreen({
           closePanel={closePanel}
           focusPod={focusPod}
           focusSignal={focusSignal}
+          shown={shown}
         />
         {panel && (
           <>

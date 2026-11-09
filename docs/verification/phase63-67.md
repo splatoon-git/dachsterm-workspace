@@ -1,5 +1,7 @@
 # Phase 6.3 세션 로그 · 6.7 PodTree
 
+> 6.7의 PodTree와 그 검사 스크립트는 KV.12에서 제거했다. 세션 로그 검사는 `scripts/test-session-log-native.mjs`로 이름이 바뀌었다. 아래는 당시 기록이다.
+
 ## 구현 계약
 
 - `src-tauri/src/session_log.rs`: Rust PTY 출력 생산자 한 곳에서만 디코딩/기록한다. SSH의 Broker 재생/창 분리는 기록 경로가 아니다. 로컬/WSL은 같은 Logs 소유자를 공유한다. 인증 이벤트와 입력은 API에 연결하지 않는다.

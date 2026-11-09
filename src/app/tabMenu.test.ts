@@ -14,14 +14,16 @@ const local = {
     follow: 'launch' as const,
   },
 };
-const podtree = {
+const pod = {
   profile: blankProfile(),
-  podtree: {
-    kind: 'script' as const,
-    location: { kind: 'local' as const, id: 'x' },
-    context: 'c',
+  podTerminal: {
+    kind: 'podLogs' as const,
+    connection: 'c',
+    kube: { context: 'c', namespace: 'n', kubectl: 'kubectl', kubeconfig: '', operate: false },
     namespace: 'n',
-    operational: false,
+    pod: 'p',
+    container: 'app',
+    tail: 200,
   },
 };
 const base: TabMenuState = {
@@ -44,16 +46,16 @@ const commands = (state: Partial<TabMenuState>) =>
 
 describe('sessionKind', () => {
   it('tells the four kinds apart', () => {
-    expect([ssh, ftp, local, podtree].map(sessionKind)).toEqual(['ssh', 'ftp', 'local', 'podtree']);
+    expect([ssh, ftp, local, pod].map(sessionKind)).toEqual(['ssh', 'ftp', 'local', 'pod']);
   });
   it('lets only SSH leave the window or report server load', () => {
-    expect([ssh, ftp, local, podtree].map((s) => capabilities(s).detach)).toEqual([
+    expect([ssh, ftp, local, pod].map((s) => capabilities(s).detach)).toEqual([
       true,
       false,
       false,
       false,
     ]);
-    expect([ssh, ftp, local, podtree].map((s) => capabilities(s).monitor)).toEqual([
+    expect([ssh, ftp, local, pod].map((s) => capabilities(s).monitor)).toEqual([
       true,
       false,
       false,
@@ -96,8 +98,8 @@ describe('tabMenuEntries', () => {
       'closeOthers',
     ]);
   });
-  it('keeps search but not logs, guides or splitting on PodTree', () => {
-    expect(commands({ capabilities: capabilities(podtree), review: null })).toEqual([
+  it('keeps search but not logs, guides or splitting on a pod tab', () => {
+    expect(commands({ capabilities: capabilities(pod), review: null })).toEqual([
       'search',
       'zoom',
       'disconnect',
