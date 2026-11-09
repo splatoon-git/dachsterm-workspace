@@ -211,6 +211,9 @@ const trimmed = (lines: BoardLine[], limit: number) => {
 };
 
 /** Log lines in memory only, and bounded: nothing here reaches a file or the session log. */
+/** A log time's fraction digits, padded because Go drops trailing zeros. They compare as text. */
+const fractionOf = (time: string) => (/\.(\d+)/.exec(time)?.[1] ?? '').padEnd(9, '0');
+
 export class LineStore {
   private readonly bySource = new Map<string, BoardLine[]>();
   private readonly merged: BoardLine[] = [];
@@ -245,7 +248,8 @@ export class LineStore {
     const at = logTimeMs(time);
     const from = this.resuming.get(source.key);
     if (from) {
-      if (at < from.at || time === from.time) return;
+      // `at` stops at the millisecond; lines inside the resume point's millisecond need the rest.
+      if (at < from.at || (at === from.at && fractionOf(time) <= fractionOf(from.time))) return;
       this.resuming.delete(source.key);
     }
     const level = levelOf(text, source.lane === 'ingress');

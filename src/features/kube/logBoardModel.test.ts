@@ -146,6 +146,24 @@ describe('LineStore', () => {
     expect(store.lines(key).map((line) => line.text)).toEqual(['one', 'two', 'three']);
   });
 
+  it('skips repeated lines that differ from the resume point only below a millisecond', () => {
+    const store = new LineStore();
+    // Go drops trailing zeros, so the same millisecond can have fractions of different lengths.
+    store.add(source, '2026-11-09T03:57:13.2411Z', 'tick');
+    store.add(source, '2026-11-09T03:57:13.241206845Z', 'error');
+    store.resume(key);
+    store.add(source, '2026-11-09T03:57:13.2411Z', 'tick');
+    store.add(source, '2026-11-09T03:57:13.241206845Z', 'error');
+    store.add(source, '2026-11-09T03:57:13.241300001Z', 'same millisecond, later');
+    store.add(source, '2026-11-09T03:57:15.2411Z', 'next');
+    expect(store.lines(key).map((line) => line.text)).toEqual([
+      'tick',
+      'error',
+      'same millisecond, later',
+      'next',
+    ]);
+  });
+
   it('keeps lines that share a time in a stream that was not resumed', () => {
     const store = new LineStore();
     store.add(source, time(1), 'a');
