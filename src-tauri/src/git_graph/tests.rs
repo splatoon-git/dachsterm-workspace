@@ -481,6 +481,12 @@ async fn a_repositorys_signature_program_does_not_run() {
         format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
     )
     .unwrap();
+    // Without the execute bit git cannot start it on Unix, and the check below finds nothing.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
     git_at(&repo, &["config", "log.showSignature", "true"]);
     git_at(&repo, &["config", "gpg.program", script.to_str().unwrap()]);
 

@@ -539,6 +539,10 @@ kind에서 확인한 것(대역 응답 기준):
 | Rust | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 종료 0 |
 | Rust 테스트 | `cargo test --workspace --locked --no-fail-fast` | 629 통과, 1 실패, 3 무시. 실패는 `git_graph::tests::a_repositorys_signature_program_does_not_run` (KV 변경 밖) |
 
+`git_graph` 실패는 제품이 아니라 테스트 준비 코드 문제였다. 가짜 서명 프로그램에 실행 권한이 없어 Unix에서 git이 실행하지 못했다(`2dd74b3`에서 수정, 제품은 `--no-show-signature`로 이미 막고 있음).
+
+수정 뒤 `2dd74b3`에서 `bash scripts/verify-macos.sh --package` 종료 0: Vitest 1322, Playwright 519(Chromium), Rust `dachsterm` 630 통과·0 실패·3 무시, `npm audit` 0건, `.app` 빌드.
+
 **미실행:** 패키지 앱에서 **vLLM·GPU** 탭을 띄우는 확인. 임시 계측 빌드를 만들지 않아 실제 앱 화면은 대기다.
 
 **대기:**
