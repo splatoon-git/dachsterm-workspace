@@ -2,18 +2,18 @@
   width: min(920px, calc(100vw - 32px));
 }
 .tunnel-dialog h3 {
-  font-size: 16px;
-  margin: 0 0 8px;
+  font-size: var(--font-heading);
+  margin: 0 0 var(--space-sm);
 }
 .tunnel-dialog h4,
 .tunnel-dialog legend {
   font-size: var(--font-body);
-  font-weight: 600;
-  margin: 0 0 12px;
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--space-md);
 }
 .tunnel-dialog p,
 .tunnel-dialog small {
-  line-height: 1.6;
+  line-height: var(--font-leading-relaxed);
 }
 .tunnel-notice:empty {
   display: none;
@@ -26,8 +26,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 .tunnel-list-heading p {
   margin: 0;
@@ -38,14 +38,14 @@
   gap: var(--space-sm);
 }
 .tunnel-empty {
-  border: 1px dashed var(--color-border-input);
+  border: var(--border-width-default) dashed var(--color-border-input);
   border-radius: var(--radius-medium);
   background: var(--color-surface-subtle);
-  padding: 40px 16px;
+  padding: var(--space-xxxl) var(--space-lg);
   display: flex;
   align-items: center;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
   text-align: center;
 }
 .tunnel-empty p {
@@ -56,13 +56,13 @@
 .tunnel-dialog .tunnel-list {
   max-height: none;
   overflow: visible;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 .tunnel-dialog .tunnel-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-md);
-  border: 1px solid var(--color-border-subtle);
+  border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-small);
   padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
   margin-bottom: var(--space-sm);
@@ -75,12 +75,12 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 .tunnel-card-title {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
 }
 .tunnel-dialog .tunnel-card strong {
@@ -91,9 +91,9 @@
 }
 .tunnel-state,
 .tunnel-tag {
-  font-size: 11px;
-  border-radius: 999px;
-  padding: 1px 8px;
+  font-size: var(--font-caption);
+  border-radius: var(--radius-full);
+  padding: var(--space-hair) var(--space-sm);
   background: var(--color-surface-subtle);
   color: var(--color-text-secondary);
 }
@@ -117,7 +117,7 @@
 .tunnel-card-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 .tunnel-card-controls > button:first-child {
   min-width: 64px;
@@ -137,7 +137,7 @@
 }
 .tunnel-row-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   flex-wrap: wrap;
 }
 .tunnel-row-actions button {
@@ -146,7 +146,7 @@
 .tunnel-connection {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: var(--font-small);
 }
 .tunnel-connection select {
@@ -159,9 +159,9 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  border-top: 1px solid var(--color-border-default);
-  padding-top: 12px;
+  gap: var(--space-sm);
+  border-top: var(--border-width-default) solid var(--color-border-default);
+  padding-top: var(--space-md);
   font-size: var(--font-small);
 }
 .tunnel-editor-fields,
@@ -172,17 +172,17 @@
   min-width: 0;
 }
 .tunnel-kind-picker {
-  margin-top: 24px;
+  margin-top: var(--space-xl);
 }
 .tunnel-kind-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--space-sm-plus);
 }
 .tunnel-dialog .tunnel-kind {
   flex-direction: row;
-  padding: 12px;
-  border: 1px solid var(--color-border-input);
+  padding: var(--space-md);
+  border: var(--border-width-default) solid var(--color-border-input);
   border-radius: var(--radius-medium);
   cursor: pointer;
   background: var(--color-surface-subtle);
@@ -206,23 +206,23 @@
 }
 .tunnel-flow-section,
 .tunnel-save-section {
-  margin-top: 24px;
+  margin-top: var(--space-xl);
 }
 .tunnel-flow-section > .muted {
-  margin-top: -4px;
+  margin-top: calc(-1 * var(--space-xs));
 }
 .tunnel-flow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr);
-  gap: 6px;
+  gap: var(--space-xs-plus);
 }
 .tunnel-node {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--color-border-default);
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: var(--border-width-default) solid var(--color-border-default);
   border-radius: var(--radius-medium);
   background: var(--color-surface-subtle);
 }
@@ -238,7 +238,7 @@
 .tunnel-node-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: var(--font-small);
 }
 .tunnel-node-heading svg {
@@ -251,7 +251,7 @@
   color: var(--color-action-primary);
 }
 .tunnel-hint {
-  padding: 10px 12px;
+  padding: var(--space-sm-plus) var(--space-md);
   background: var(--color-surface-header);
   border-radius: var(--radius-small);
   color: var(--color-text-secondary);

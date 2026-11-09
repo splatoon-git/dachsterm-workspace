@@ -122,12 +122,12 @@
 }
 .kube-search-row.group {
   grid-template-columns: minmax(0, 1fr);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-search-row small {
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-search-row:not(.head):not(.group):hover {
   background: var(--color-action-hover);
@@ -143,7 +143,7 @@
   border-radius: 2px;
   background: var(--color-action-selected);
   color: var(--color-text-primary);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .kube-around-lines {
   flex: 1;

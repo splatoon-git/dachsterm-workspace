@@ -19,15 +19,15 @@
 }
 .cmd-tabs {
   display: flex;
-  gap: 2px;
-  padding: 2px;
+  gap: var(--space-xxs);
+  padding: var(--space-xxs);
   border-radius: var(--radius-small);
   background: var(--color-surface-header);
 }
 .cmd-tabs [role='tab'] {
   height: 28px;
   min-height: 0;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   padding: 0 var(--space-md);
   border: 0;
   border-radius: 4px;
@@ -39,19 +39,19 @@
 .cmd-tabs [role='tab'][aria-selected='true'] {
   background: var(--color-surface-panel);
   color: var(--color-text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   box-shadow: 0 1px 2px var(--color-overlay-backdrop);
 }
 .cmd-tabs small {
   color: var(--color-text-secondary);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .cmd-search {
   display: flex;
   flex: 1;
   align-items: center;
   min-width: 0;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   height: 32px;
   padding: 0 var(--space-sm);
   border: var(--border-width-default) solid var(--color-border-input);
@@ -100,8 +100,8 @@
 .cmd-section-title {
   padding: var(--space-xs) var(--space-sm);
   color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--font-caption);
+  font-weight: var(--font-weight-semibold);
 }
 .cmd-item {
   display: flex;
@@ -109,8 +109,8 @@
   align-items: stretch;
   width: 100%;
   min-height: 0;
-  gap: 2px;
-  padding: 6px var(--space-sm);
+  gap: var(--space-xxs);
+  padding: var(--space-xs-plus) var(--space-sm);
   border: 0;
   border-radius: var(--radius-small);
   background: transparent;
@@ -132,12 +132,12 @@
 }
 .cmd-item-name {
   font-size: var(--font-small);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .cmd-item-body {
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-tiny);
 }
 .cmd-pane {
   display: flex;
@@ -172,7 +172,7 @@
 }
 .cmd-detail h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-heading);
 }
 .cmd-detail-head p {
   margin: var(--space-xs) 0 0;
@@ -181,7 +181,7 @@
 }
 .cmd-detail-tools {
   display: flex;
-  gap: 2px;
+  gap: var(--space-xxs);
 }
 .cmd-detail-tools button {
   width: 28px;
@@ -203,11 +203,11 @@
   margin-top: var(--space-sm);
 }
 .cmd-chip {
-  padding: 1px var(--space-sm);
-  border-radius: 999px;
+  padding: var(--space-hair) var(--space-sm);
+  border-radius: var(--radius-full);
   background: var(--color-surface-header);
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .cmd-block h4 {
   display: flex;
@@ -215,11 +215,11 @@
   gap: var(--space-sm);
   margin: 0 0 var(--space-sm);
   color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--font-caption);
+  font-weight: var(--font-weight-semibold);
 }
 .cmd-block h4 small {
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .cmd-vars {
   display: grid;
@@ -230,7 +230,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .cmd-vars label span {
   color: var(--color-text-secondary);
@@ -245,17 +245,17 @@
   background: var(--color-surface-header);
   font-family: var(--font-mono);
   font-size: var(--font-small);
-  line-height: 1.6;
+  line-height: var(--font-leading-relaxed);
   white-space: pre-wrap;
   word-break: break-all;
 }
 .cmd-code mark {
-  padding: 0 2px;
-  border-radius: 3px;
+  padding: 0 var(--space-xxs);
+  border-radius: var(--radius-xs);
   background: var(--color-action-selected);
   color: var(--color-action-primary);
-  outline: 1px dashed var(--color-action-primary);
-  outline-offset: -1px;
+  outline: var(--border-width-default) dashed var(--color-action-primary);
+  outline-offset: calc(-1 * var(--border-width-default));
 }
 .cmd-code mark.filled {
   outline: 0;
@@ -265,8 +265,8 @@
 .cmd-note {
   margin: var(--space-sm) 0 0;
   color: var(--color-text-secondary);
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: var(--font-caption);
+  line-height: var(--font-leading-relaxed);
 }
 .cmd-targets {
   display: flex;
@@ -277,7 +277,7 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   padding: var(--space-xs) var(--space-sm);
   border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-small);
@@ -312,7 +312,7 @@
   white-space: nowrap;
 }
 .cmd-target small {
-  font-size: 10px;
+  font-size: var(--font-tiny);
 }
 .cmd-confirm {
   align-items: flex-start;
@@ -349,7 +349,7 @@
   min-width: 0;
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: var(--font-caption);
   white-space: pre-line;
 }
 .cmd-message.error {
@@ -357,8 +357,8 @@
 }
 .cmd-help {
   color: var(--color-text-secondary);
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: var(--font-caption);
+  line-height: var(--font-leading-relaxed);
 }
 .cmd-help summary {
   cursor: pointer;
@@ -410,7 +410,7 @@
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  line-height: 1.6;
+  line-height: var(--font-leading-relaxed);
 }
 .cmd-empty-actions {
   display: flex;
@@ -427,14 +427,14 @@
   flex-shrink: 0;
   margin: var(--space-sm) 0 0;
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .cmd-foot kbd {
-  padding: 0 4px;
+  padding: 0 var(--space-xs);
   border: var(--border-width-default) solid var(--color-border-subtle);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-tiny);
 }
 @media (max-width: 700px) {
   .command-panel .dialog-body {

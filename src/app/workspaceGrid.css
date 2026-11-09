@@ -26,8 +26,8 @@
   position: absolute;
   inset: 0;
   /* Above xterm's own layers (up to 6), which sit in the same stacking context. */
-  z-index: 7;
-  border: 2px solid var(--color-status-warning);
+  z-index: var(--layer-pane-flash);
+  border: var(--border-width-focus) solid var(--color-status-warning);
   pointer-events: none;
 }
 .empty-cell {
@@ -57,8 +57,8 @@
   height: 100%;
   align-items: center;
   border-bottom: var(--border-width-focus) solid transparent;
-  border-right: 1px solid var(--color-border-subtle);
-  font-size: 12px;
+  border-right: var(--border-width-default) solid var(--color-border-subtle);
+  font-size: var(--font-small);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -75,7 +75,7 @@
 }
 .session-tab small {
   margin-left: var(--space-sm);
-  font-size: 10px;
+  font-size: var(--font-tiny);
 }
 .session-tab [role='tab'] {
   gap: var(--space-xs);
@@ -106,7 +106,7 @@
 }
 .session-tab small.tab-rec {
   color: var(--color-status-error);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .tab-strip .next-group,
 .tab-strip .tab-menu-button {
@@ -142,33 +142,33 @@ body.tab-dragging * {
 }
 .drop-preview {
   position: absolute;
-  z-index: 4;
+  z-index: var(--layer-drop-preview);
   background: color-mix(in srgb, var(--color-action-primary) 22%, transparent);
   box-shadow: inset 0 0 0 2px var(--color-action-primary);
 }
 .drop-insert {
   position: absolute;
-  z-index: 5;
+  z-index: var(--layer-pane-overlay);
   width: 2px;
-  margin-left: -1px;
+  margin-left: calc(-1 * var(--space-hair));
   background: var(--color-action-primary);
 }
 .tab-drag-label {
   position: fixed;
-  z-index: 30;
+  z-index: var(--layer-popover);
   max-width: 240px;
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   overflow: hidden;
-  border: 1px solid var(--color-border-default);
+  border: var(--border-width-default) solid var(--color-border-default);
   background: var(--color-surface-panel);
   color: var(--color-text-primary);
-  font-size: 12px;
+  font-size: var(--font-small);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .resize-handle.pane-divider {
   position: absolute;
-  z-index: 3;
+  z-index: var(--layer-divider);
   background: transparent;
 }
 .resize-handle.pane-divider:hover,

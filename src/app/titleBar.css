@@ -53,7 +53,7 @@
   border: var(--border-width-default) solid transparent;
   border-radius: var(--radius-small);
   background: transparent;
-  font-size: 12px;
+  font-size: var(--font-small);
   white-space: nowrap;
 }
 .tools > button:hover,

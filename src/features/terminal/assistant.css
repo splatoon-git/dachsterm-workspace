@@ -14,13 +14,13 @@
   white-space: nowrap;
 }
 .guide-key kbd {
-  font-size: 10px;
+  font-size: var(--font-tiny);
 }
 /* Fixed above the status bar's middle: the guide slot is empty when no program runs, so it
    cannot anchor the panel, and the bar's nowrap must not reach the panel's sentences. */
 .guide-popover {
   position: fixed;
-  z-index: 30;
+  z-index: var(--layer-popover);
   bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
@@ -39,13 +39,13 @@
 }
 .guide-popover .guide-auto {
   margin: var(--space-sm) 0 0;
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .guide-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-plus);
 }
 .guide-controls button,
 .guide-controls select {
@@ -55,18 +55,18 @@
 .guide-controls .checkbox {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 .guide-popover dl {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
-  margin: 8px 0;
+  gap: var(--space-sm) 18px;
+  margin: var(--space-sm) 0;
 }
 .guide-popover dl > div {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-xs-plus);
 }
 .guide-popover dd {
   margin: 0;

@@ -1,6 +1,6 @@
 .hover-tip {
   position: fixed;
-  z-index: 110;
+  z-index: var(--layer-tooltip);
   top: 0;
   left: 0;
   max-width: min(320px, calc(100vw - 8px));

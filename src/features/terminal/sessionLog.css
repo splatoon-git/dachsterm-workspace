@@ -6,7 +6,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px var(--space-sm);
+  gap: var(--space-xs) var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-small);
   background: var(--color-surface-subtle);
@@ -20,7 +20,7 @@
   overflow: hidden;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--font-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -38,7 +38,7 @@
   background: var(--color-status-warning);
 }
 .log-state + .field-help {
-  margin: var(--space-sm) 0 20px;
+  margin: var(--space-sm) 0 var(--space-lg-plus);
 }
 .log-folder {
   display: flex;

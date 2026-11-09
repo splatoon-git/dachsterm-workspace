@@ -5,28 +5,28 @@
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 20px;
-  font-size: 12px;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg-plus);
+  font-size: var(--font-small);
 }
 .snack-heading > span:first-child {
   opacity: 0.65;
 }
 .snack-play .game-stats {
-  gap: 12px 28px;
-  margin: 20px 0 16px;
+  gap: var(--space-md) 28px;
+  margin: var(--space-lg-plus) 0 var(--space-lg);
 }
 .snack-play .game-stats > div {
   flex-direction: column;
   gap: 5px;
 }
 .snack-play .game-stats span {
-  font-size: 11px;
+  font-size: var(--font-caption);
   opacity: 0.7;
 }
 .snack-play .game-stats strong {
   font-size: 19px;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .snack-play .game-stats > div:first-child {
   margin-right: auto;
@@ -88,7 +88,7 @@
 }
 .snack-effect text {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   paint-order: stroke;
   stroke: var(--terminal-background);
   stroke-width: 4;
@@ -113,36 +113,36 @@
 .snack-overlay-card {
   width: min(360px, 100%);
   text-align: center;
-  padding: 20px 12px;
-  border: 1px solid var(--game-line);
+  padding: var(--space-lg-plus) var(--space-md);
+  border: var(--border-width-default) solid var(--game-line);
   background: color-mix(in srgb, var(--terminal-background) 96%, transparent);
   border-radius: 8px;
 }
 .snack-eyebrow {
-  font-size: 10px;
+  font-size: var(--font-tiny);
   letter-spacing: 0.14em;
   opacity: 0.65;
 }
 .snack-overlay h3 {
   font-family: inherit;
   font-size: 21px;
-  margin: 10px 0;
+  margin: var(--space-sm-plus) 0;
 }
 .snack-overlay p {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.7;
   margin: 5px 0 0;
 }
 .snack-overlay .snack-overlay-note {
-  font-size: 11px;
+  font-size: var(--font-caption);
   opacity: 0.7;
 }
 .snack-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 22px;
-  margin-top: 12px;
-  font-size: 12px;
+  gap: var(--space-sm-plus) 22px;
+  margin-top: var(--space-md);
+  font-size: var(--font-small);
 }
 .snack-legend span {
   display: flex;
@@ -162,10 +162,10 @@
 }
 @container (max-width: 510px) {
   .snack-play .game-stats {
-    gap: 14px 20px;
+    gap: 14px var(--space-lg-plus);
   }
   .snack-play .game-stats strong {
-    font-size: 16px;
+    font-size: var(--font-heading);
   }
   .snack-play .game-stats > div:first-child {
     margin-right: 0;
@@ -174,13 +174,13 @@
     padding-top: 38px;
   }
   .snack-overlay-card {
-    padding: 14px 8px;
+    padding: 14px var(--space-sm);
   }
   .snack-overlay h3 {
-    font-size: 18px;
+    font-size: var(--font-large);
   }
   .snack-legend {
-    gap: 8px 12px;
-    font-size: 11px;
+    gap: var(--space-sm) var(--space-md);
+    font-size: var(--font-caption);
   }
 }

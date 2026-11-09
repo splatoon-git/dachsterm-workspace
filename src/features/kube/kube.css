@@ -43,7 +43,7 @@
 .kube-header > [role='tab'][aria-selected='true'] {
   background: transparent;
   color: var(--color-text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-header > [role='tab'][aria-selected='true']::after {
   position: absolute;
@@ -257,7 +257,7 @@
 }
 .kube-tree-row.group {
   background: var(--color-surface-subtle);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-tree-row:hover {
   background: var(--color-action-hover);
@@ -269,7 +269,7 @@
 .kube-tree-head {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--layer-raised);
   background: var(--color-surface-header);
   color: var(--color-text-secondary);
 }
@@ -299,7 +299,7 @@
   flex-shrink: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-health.ok {
   color: var(--color-status-success);

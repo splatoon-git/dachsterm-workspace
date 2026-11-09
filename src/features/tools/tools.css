@@ -16,7 +16,7 @@
 .tool-pane h2 {
   margin: 0;
   font-size: var(--font-body);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .tool-pane > * {
   max-width: var(--tool-content-width);
@@ -83,10 +83,10 @@
 }
 .tool-session-list {
   position: absolute;
-  z-index: 20;
+  z-index: var(--layer-dropdown);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-xxs);
   width: 300px;
   max-width: calc(100vw - 32px);
   max-height: 320px;
@@ -94,7 +94,7 @@
   padding: var(--space-xs);
   overflow: auto;
   background: var(--color-surface-panel);
-  border: 1px solid var(--color-border-default);
+  border: var(--border-width-default) solid var(--color-border-default);
   border-radius: var(--radius-medium);
 }
 .tool-session-list button {
@@ -206,23 +206,23 @@
   top: 0;
   padding: var(--space-xs) var(--space-sm);
   background: var(--color-surface-panel);
-  border-bottom: 1px solid var(--color-border-default);
+  border-bottom: var(--border-width-default) solid var(--color-border-default);
   color: var(--color-text-secondary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   text-align: left;
   white-space: nowrap;
 }
 .tool-results td {
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
   overflow-wrap: anywhere;
 }
 .tool-results tbody tr:hover {
   background: var(--color-action-selected);
 }
 .tool-results tbody tr:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: -1px;
+  outline: var(--border-width-default) solid var(--color-focus-ring);
+  outline-offset: calc(-1 * var(--border-width-default));
 }
 .tool-outcome {
   white-space: nowrap;
@@ -254,7 +254,7 @@
   align-items: baseline;
   gap: var(--space-xs) var(--space-md);
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
   cursor: pointer;
 }
 .service-result > summary::before {
@@ -265,7 +265,7 @@
   content: '▾';
 }
 .service-route {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
 }
 .service-steps {
@@ -305,7 +305,7 @@
 }
 .service-conclusion {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
 }
 .tool-outside {
@@ -316,5 +316,5 @@
 .tool-outside h3 {
   margin: 0;
   font-size: var(--font-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }

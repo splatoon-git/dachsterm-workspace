@@ -26,7 +26,7 @@
 .kube-rt-head h3 {
   margin: 0;
   font-size: var(--font-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-rt-tools {
   display: flex;
@@ -74,7 +74,7 @@
   margin: var(--space-md) 0 var(--space-xs);
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-rt-columns > div > h4:first-child {
   margin-top: 0;
@@ -101,14 +101,14 @@
   gap: var(--space-xs);
   margin: 0;
   font-size: var(--font-body);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .kube-rt-stat dd small {
   font-size: var(--font-small);
 }
 .kube-rt-stat.idle dd {
   color: var(--color-text-secondary);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-rt-stat.rising dd,
 .kube-rt-stat.rising dt {
@@ -151,7 +151,7 @@
 }
 .kube-rt-sources b {
   font-family: var(--font-mono);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-rt-sources span,
 .kube-rt-sources small {

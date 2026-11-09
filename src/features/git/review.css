@@ -67,7 +67,7 @@
   align-items: center;
   gap: var(--space-xs);
   width: 100%;
-  padding: 2px var(--space-sm);
+  padding: var(--space-xxs) var(--space-sm);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -136,7 +136,7 @@
 .diff-row {
   display: flex;
   height: 20px;
-  line-height: 20px;
+  line-height: var(--space-lg-plus);
   white-space: pre;
   min-width: 100%;
   width: max-content;
@@ -181,7 +181,7 @@
 .diff-line.selected {
   outline: var(--border-width-default) solid
     color-mix(in srgb, var(--color-action-primary) 45%, transparent);
-  outline-offset: -1px;
+  outline-offset: calc(-1 * var(--border-width-default));
 }
 .diff-gutter {
   flex: none;

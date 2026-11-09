@@ -8,7 +8,7 @@
 .settings-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-xxs);
   padding: var(--space-md) var(--space-sm);
   overflow: auto;
   border-right: var(--border-width-default) solid var(--color-border-subtle);
@@ -35,26 +35,26 @@
 .settings-nav [role='tab'][aria-selected='true'] {
   background: var(--color-action-selected);
   color: var(--color-text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .settings-panel {
   min-width: 0;
   overflow: auto;
-  padding: 20px var(--space-xl) var(--space-xl);
+  padding: var(--space-lg-plus) var(--space-xl) var(--space-xl);
 }
 .settings-panel-heading {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg-plus);
 }
 .settings-panel-heading h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-heading);
+  font-weight: var(--font-weight-semibold);
 }
 .settings-panel-heading p {
   margin: var(--space-xs) 0 0;
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  line-height: 1.5;
+  line-height: var(--font-leading-normal);
 }
 /* A category's own section needs no frame of its own inside the panel. */
 .settings-data {

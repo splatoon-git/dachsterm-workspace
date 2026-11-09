@@ -19,17 +19,17 @@
   color: var(--color-text-primary);
   font-family: var(--font-mono);
   font-size: var(--font-small);
-  line-height: 1.5;
+  line-height: var(--font-leading-normal);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
 }
 .paste-confirm mark {
-  padding: 0 2px;
+  padding: 0 var(--space-xxs);
   border-radius: var(--radius-small);
   background: var(--color-surface-header);
   color: var(--color-status-warning);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .paste-confirm .paste-counts,
 .paste-confirm .paste-omitted {

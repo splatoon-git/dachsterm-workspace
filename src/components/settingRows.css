@@ -13,7 +13,7 @@ div.setting-row {
   justify-content: space-between;
   gap: var(--space-lg);
   min-height: 40px;
-  padding: 4px var(--space-md);
+  padding: var(--space-xs) var(--space-md);
   font-size: var(--font-small);
 }
 .setting-row + .setting-row {
@@ -34,7 +34,7 @@ input.switch {
   width: 32px;
   height: 18px;
   margin: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--color-border-input);
   cursor: pointer;
   transition: background var(--motion-fast);
@@ -58,7 +58,7 @@ input.switch:checked::after {
 }
 input.switch:focus-visible {
   outline: var(--border-width-focus) solid var(--color-focus-ring);
-  outline-offset: 2px;
+  outline-offset: var(--border-width-focus);
 }
 @media (max-width: 560px) {
   .setting-row select {

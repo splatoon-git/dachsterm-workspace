@@ -2,11 +2,12 @@
 .conn-tree {
   --tree-row: 26px;
   --tree-indent: 12px;
+  --tree-icon: 14px;
   padding: var(--space-xs) var(--space-xs) var(--space-md);
   font-size: var(--font-small);
 }
 .tree-section + .tree-section {
-  margin-top: 2px;
+  margin-top: var(--space-xxs);
 }
 .tree-head {
   display: flex;
@@ -21,7 +22,7 @@
   min-width: 0;
   height: var(--tree-row);
   min-height: 0;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   padding: 0 var(--space-xs);
   border: 0;
   background: transparent;
@@ -30,8 +31,8 @@
 }
 .tree-section > .tree-head .tree-toggle {
   color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--font-caption);
+  font-weight: var(--font-weight-semibold);
 }
 .tree-toggle:hover:enabled,
 .tree-head:hover {
@@ -56,15 +57,15 @@
 .tree-count {
   margin-left: auto;
   color: var(--color-text-secondary);
-  font-size: 10px;
-  font-weight: 400;
+  font-size: var(--font-tiny);
+  font-weight: var(--font-weight-normal);
 }
 /* The section menu button shows on hover or focus, as on the tab bars. */
 .tree-more {
   width: 22px;
   height: 22px;
   min-height: 0;
-  margin-right: 2px;
+  margin-right: var(--space-xxs);
   padding: 0;
   border: 0;
   background: transparent;
@@ -90,7 +91,7 @@
   width: 100%;
   height: var(--tree-row);
   min-height: 0;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   padding: 0 var(--space-sm) 0
     calc(var(--space-xs) + var(--depth, 1) * var(--tree-indent) + var(--space-xs));
   border: 0;
@@ -108,7 +109,7 @@
 .conn-tree .profile-target:focus-visible,
 .conn-tree .profile-shortcut-target:focus-visible,
 .conn-tree .local-target:focus-visible {
-  outline-offset: -2px;
+  outline-offset: calc(-1 * var(--border-width-focus));
 }
 .conn-tree .profile-target svg,
 .conn-tree .profile-shortcut-target svg,
@@ -122,7 +123,7 @@
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   text-overflow: ellipsis;
 }
 .conn-tree .row-detail {
@@ -131,7 +132,7 @@
   overflow: hidden;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-tiny);
   text-overflow: ellipsis;
 }
 .local-target small {
@@ -140,15 +141,15 @@
   border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-small);
   color: var(--color-text-secondary);
-  font-size: 9px;
+  font-size: var(--font-micro);
 }
 .tree-note,
 .tree-empty {
   margin: 0;
   padding: var(--space-xs) var(--space-sm) var(--space-xs)
-    calc(var(--space-sm) + var(--tree-indent) + 14px);
+    calc(var(--space-sm) + var(--tree-indent) + var(--tree-icon));
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .tree-empty p {
   margin: 0 0 var(--space-xs);
@@ -159,7 +160,7 @@
   border: 0;
   background: transparent;
   color: var(--color-action-primary);
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 .link-button:hover:enabled {
   background: transparent;
@@ -171,8 +172,8 @@
   border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-small);
   color: var(--color-text-secondary);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: var(--font-micro);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.04em;
 }
 .protocol-badge.ftp {

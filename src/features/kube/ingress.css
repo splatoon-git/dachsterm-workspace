@@ -42,7 +42,8 @@
 }
 /* The heading too, so that its columns stay over the rows' while the flow button takes this room. */
 .kube-ingress-row.host {
-  padding-right: 92px;
+  --kube-ingress-flow-room: 92px;
+  padding-right: var(--kube-ingress-flow-room);
 }
 .kube-ingress-flow {
   position: absolute;
@@ -103,11 +104,11 @@ button.kube-ingress-row:hover {
 }
 .kube-ingress-row.host {
   grid-template-columns: minmax(0, 2fr) 56px 48px 48px 48px 72px minmax(0, 2fr);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .kube-ingress-row.head {
   color: var(--color-text-secondary);
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 .kube-ingress-row.path {
   grid-template-columns:

@@ -7,7 +7,7 @@
   font-size: 20px;
 }
 .survivor-hub h3 {
-  margin-top: 24px;
+  margin-top: var(--space-xl);
 }
 .survivor-hub h4 {
   margin: 0;
@@ -27,12 +27,12 @@
 .survivor-shop {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 12px;
+  gap: var(--space-md);
 }
 .survivor-shop article,
 .survivor-refund {
-  border: 1px solid var(--game-line);
-  padding: 16px;
+  border: var(--border-width-default) solid var(--game-line);
+  padding: var(--space-lg);
   min-width: 0;
 }
 .survivor-shop button {
@@ -41,8 +41,8 @@
 .survivor-hub label {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin: 12px;
+  gap: var(--space-sm);
+  margin: var(--space-md);
   white-space: nowrap;
 }
 .survivor-hub input[type='checkbox'] {
@@ -53,5 +53,5 @@
   color: inherit;
   background: var(--terminal-background);
   font: inherit;
-  border: 1px solid var(--game-line);
+  border: var(--border-width-default) solid var(--game-line);
 }

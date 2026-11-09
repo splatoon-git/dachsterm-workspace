@@ -1,7 +1,7 @@
 .theme-current {
   color: var(--color-text-secondary);
   font-size: var(--font-small);
-  line-height: 1.6;
+  line-height: var(--font-leading-relaxed);
   margin: var(--space-md) 0 0;
 }
 .theme-picker {
@@ -26,7 +26,7 @@
   display: block;
   min-width: 0;
   padding: var(--space-sm);
-  border: 1px solid var(--color-border-default);
+  border: var(--border-width-default) solid var(--color-border-default);
   border-radius: var(--radius-medium);
   cursor: pointer;
   background: var(--color-surface-panel);
@@ -46,7 +46,7 @@
 .theme-thumbnail {
   overflow: hidden;
   border-radius: var(--radius-small);
-  border: 1px solid var(--color-border-default);
+  border: var(--border-width-default) solid var(--color-border-default);
   color: var(--color-text-primary);
   background: var(--color-surface-panel);
   pointer-events: none;
@@ -55,10 +55,10 @@
   height: 22px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   padding: 0 7px;
   background: var(--color-surface-header);
-  border-bottom: 1px solid var(--color-border-default);
+  border-bottom: var(--border-width-default) solid var(--color-border-default);
 }
 .theme-mini-toolbar > i {
   width: 4px;
@@ -78,14 +78,14 @@
   width: 24%;
   padding: 11px 7px;
   background: var(--color-surface-subtle);
-  border-right: 1px solid var(--color-border-default);
+  border-right: var(--border-width-default) solid var(--color-border-default);
 }
 .theme-mini-sidebar i {
   display: block;
   height: 4px;
   background: var(--color-border-input);
   border-radius: 2px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 .theme-mini-sidebar i:first-child {
   background: var(--color-action-primary);
@@ -98,11 +98,11 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   padding: 9px;
   background: var(--terminal-background);
   color: var(--terminal-foreground);
-  font: 9px var(--font-mono);
+  font: var(--font-micro) var(--font-mono);
 }
 .theme-mini-terminal b,
 .theme-mini-prompt {
@@ -127,7 +127,7 @@
 .theme-card-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-plus);
   margin-top: 9px;
 }
 .theme-card-label input {
@@ -139,19 +139,19 @@
   accent-color: var(--color-action-primary);
 }
 .theme-card-label strong {
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .theme-card-label span {
   margin-left: auto;
   white-space: nowrap;
   color: var(--color-text-secondary);
-  font-size: 10px;
+  font-size: var(--font-tiny);
 }
 .theme-card > p {
   margin: 5px 0 0;
   color: var(--color-text-secondary);
-  font-size: 10px;
-  line-height: 1.5;
+  font-size: var(--font-tiny);
+  line-height: var(--font-leading-normal);
 }
 .theme-current {
   margin-top: var(--space-md);
