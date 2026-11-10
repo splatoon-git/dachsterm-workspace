@@ -82,10 +82,4 @@ export function presetCommand(preset: AgentPreset, name: string): string | null 
   return nameProblem(name) ? null : preset.command.split(nameToken).join(name);
 }
 
-/** A server folder for the start, or why it cannot be used. Empty means the login folder. */
-export function folderProblem(folder: string): string | null {
-  if (!folder) return null;
-  if (!folder.startsWith('/')) return '서버 폴더는 /로 시작하는 경로로 입력하세요.';
-  if (hasControl(folder) || folder.length > 4096) return '폴더 경로를 확인하세요.';
-  return null;
-}
+export { folderProblem } from '../../lib/shell';

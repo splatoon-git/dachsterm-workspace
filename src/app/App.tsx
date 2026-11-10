@@ -527,7 +527,7 @@ export function App() {
                 actions={{
                   connect: (p) => requestConnect(p),
                   startAgent: (p) => agent.ask(p),
-                  openChat: chats.open,
+                  openChat: chats.ask,
                   edit: setForm,
                   toggleFavorite: (p) =>
                     void action('save_session', {
@@ -553,6 +553,7 @@ export function App() {
             session={owner}
             showConnections={() => setSidebarView('connections')}
             startAgent={(folder) => owner && agent.ask(savedProfile(owner), folder)}
+            openChat={(folder) => owner && chats.open(savedProfile(owner), folder)}
             openReview={() => owner && reviews.open(owner)}
             files={files}
           />
@@ -700,6 +701,7 @@ export function App() {
       )}
       {vault.dialog}
       {agent.dialogs}
+      {chats.dialog}
       <SettingsDialog
         open={settingsOpen}
         setOpen={setSettingsOpen}

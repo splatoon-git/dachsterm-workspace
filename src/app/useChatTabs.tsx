@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { rememberFolder } from '../features/chat/chatFolders';
+import { ChatOpenDialog } from '../features/chat/ChatOpenDialog';
 import { ChatPane } from '../features/chat/ChatPane';
 import { ChatSession } from '../features/chat/chatSession';
 import type { Profile } from '../lib/ipc';
@@ -17,8 +19,11 @@ const refOf = (chat: Chat): ChatRef => ({ kind: 'chat', id: chat.id });
  */
 export function useChatTabs({ workspace }: { workspace: Workspace }) {
   const [chats, setChats] = useState<Chat[]>([]);
-  const open = (profile: Profile) => {
-    const chat: Chat = { id: crypto.randomUUID(), session: new ChatSession(profile) };
+  const [asking, setAsking] = useState<Profile | null>(null);
+  /** Opens a chat whose agent works in `folder` on the server; empty means the login folder. */
+  const open = (profile: Profile, folder: string) => {
+    const chat: Chat = { id: crypto.randomUUID(), session: new ChatSession(profile, folder) };
+    rememberFolder(profile.id, folder);
     chat.session.open();
     setChats((old) => [...old, chat]);
     workspace.open(refOf(chat));
@@ -36,6 +41,18 @@ export function useChatTabs({ workspace }: { workspace: Workspace }) {
   return {
     order: chats.map(refOf),
     open,
+    /** Asks for the folder first, for a chat opened from the session list. */
+    ask: setAsking,
+    dialog: asking && (
+      <ChatOpenDialog
+        profile={asking}
+        open={(folder) => {
+          setAsking(null);
+          open(asking, folder);
+        }}
+        close={() => setAsking(null)}
+      />
+    ),
     close,
     renderTab: (tab: ChatRef, active: boolean, select: () => void) => {
       const chat = find(tab);

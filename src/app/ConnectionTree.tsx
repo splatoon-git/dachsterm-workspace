@@ -30,7 +30,7 @@ export type TreeActions = {
   connect: (profile: Profile) => void;
   /** Asks for a folder and a preset, then starts a CLI agent in a new SSH tab. */
   startAgent: (profile: Profile) => void;
-  /** Opens the session as a conversation with its agent instead of a terminal (AC.1). */
+  /** Asks for a server folder, then opens the session as a chat with its agent (AC.1). */
   openChat: (profile: Profile) => void;
   edit: (profile: Profile) => void;
   toggleFavorite: (profile: Profile) => void;
@@ -116,7 +116,7 @@ export function ConnectionTree({
     { label: '연결', shortcut: 'Enter', run: () => actions.connect(p) },
     ...((p.protocol ?? 'ssh') === 'ssh'
       ? [
-          { label: '채팅으로 열기', run: () => actions.openChat(p) },
+          { label: '채팅으로 열기…', run: () => actions.openChat(p) },
           { label: '에이전트 시작…', run: () => actions.startAgent(p) },
         ]
       : []),
