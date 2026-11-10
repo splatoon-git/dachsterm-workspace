@@ -98,6 +98,18 @@ export class ChatSession {
     }
   }
 
+  /** Stops the running turn. The agent stays for the next message. */
+  interrupt = async () => {
+    const id = this.started;
+    if (!id || this.state.phase !== 'working') return;
+    this.set({ ...this.state, stopping: true });
+    try {
+      await call('chat_interrupt', { id });
+    } catch (e) {
+      this.set(withNotice({ ...this.state, stopping: false }, 'error', errorText(e)));
+    }
+  };
+
   /** False when the message could not be handed over; the reason is in the conversation. */
   send = async (text: string) => {
     const id = this.started;

@@ -143,6 +143,7 @@
     "allow-chat-start",
     "allow-chat-start-local",
     "allow-chat-send",
+    "allow-chat-interrupt",
     "allow-chat-close",
     "allow-net-port-check",
     "allow-net-listeners",

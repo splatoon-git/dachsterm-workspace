@@ -21,7 +21,7 @@ describe('chat state', () => {
     expect(state.model).toBe('m');
     expect(state.items).toEqual([
       { kind: 'user', id: 1, text: '안녕' },
-      { kind: 'agent', id: 2, text: '반가워요' },
+      { kind: 'agent', id: 2, text: '반가워요', streaming: false },
     ]);
   });
 
@@ -63,5 +63,53 @@ describe('chat state', () => {
     expect(applyChatEvent(ended, { kind: 'turnFinished', ok: true, detail: null }).phase).toBe(
       'ended',
     );
+  });
+
+  it('streams a reply and lets the finished block replace it', () => {
+    let state = withSent(ready, 'x');
+    state = applyChatEvent(state, { kind: 'textDelta', text: '안' });
+    state = applyChatEvent(state, { kind: 'textDelta', text: '녕' });
+    expect(state.items.at(-1)).toMatchObject({ kind: 'agent', text: '안녕', streaming: true });
+    state = applyChatEvent(state, { kind: 'text', text: '안녕하세요' });
+    expect(state.items.at(-1)).toMatchObject({ text: '안녕하세요', streaming: false });
+    expect(state.items.filter((i) => i.kind === 'agent')).toHaveLength(1);
+  });
+
+  it('times the thinking', () => {
+    let state = applyChatEvent(ready, { kind: 'thinking', done: false }, 1000);
+    state = applyChatEvent(state, { kind: 'thinking', done: true }, 7400);
+    expect(state.items.at(-1)).toMatchObject({ kind: 'thinking', seconds: 6 });
+  });
+
+  it('follows a tool call to its result, and fails what a turn left running', () => {
+    let state = applyChatEvent(ready, {
+      kind: 'toolStarted',
+      id: 't1',
+      name: 'Bash',
+      summary: 'npm test',
+      edit: null,
+    });
+    state = applyChatEvent(state, { kind: 'toolFinished', id: 't1', ok: true, output: 'ok' });
+    expect(state.items.at(-1)).toMatchObject({ status: 'done', output: 'ok' });
+    state = applyChatEvent(state, {
+      kind: 'toolStarted',
+      id: 't2',
+      name: 'Read',
+      summary: '/a',
+      edit: null,
+    });
+    state = applyChatEvent(state, { kind: 'turnFinished', ok: true, detail: null });
+    expect(state.items.at(-1)).toMatchObject({ call: 't2', status: 'failed' });
+  });
+
+  it('a stopped turn is not an error', () => {
+    const stopping = { ...withSent(ready, 'x'), stopping: true };
+    const state = applyChatEvent(stopping, {
+      kind: 'turnFinished',
+      ok: false,
+      detail: 'error_during_execution',
+    });
+    expect(state.items.at(-1)).toMatchObject({ tone: 'info', text: '중지했습니다.' });
+    expect(state.stopping).toBe(false);
   });
 });

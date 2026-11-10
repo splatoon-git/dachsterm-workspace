@@ -1,13 +1,23 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { Dialog } from '../../components/Dialog';
-import { call, errorText } from '../../lib/ipc';
-import { renderMarkdown } from './markdown';
+import { call, errorText } from '../lib/ipc';
+import { renderMarkdown } from '../lib/markdown';
+import { Dialog } from './Dialog';
+import './markdown.css';
 
 const externalOf = (target: EventTarget) =>
   (target as Element).closest?.('[data-external]')?.getAttribute('data-external') ?? null;
 
-/** Rendered Markdown. A separate chunk, loaded when a Markdown file is first previewed. */
-export default function MarkdownPreview({ text }: { text: string }) {
+/**
+ * Rendered Markdown: a Markdown file's preview, and an agent's replies in a chat. Links open in the
+ * browser only after the user agrees. `className` places it: the file tab's fills its tab.
+ */
+export default function MarkdownPreview({
+  text,
+  className = 'markdown-preview',
+}: {
+  text: string;
+  className?: string;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const [asking, setAsking] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -33,7 +43,7 @@ export default function MarkdownPreview({ text }: { text: string }) {
     <>
       <div
         ref={host}
-        className="markdown-preview"
+        className={`markdown ${className}`}
         onClick={ask}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') ask(e);

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-chat-interrupt"
+description = "Enables the chat_interrupt command without any pre-configured scope."
+commands.allow = ["chat_interrupt"]
+
+[[permission]]
+identifier = "deny-chat-interrupt"
+description = "Denies the chat_interrupt command without any pre-configured scope."
+commands.deny = ["chat_interrupt"]

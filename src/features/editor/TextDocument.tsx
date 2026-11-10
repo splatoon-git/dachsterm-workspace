@@ -12,7 +12,7 @@ import { SaveBanners } from './SaveBanners';
 import { setFileStatus } from './fileStatus';
 import { prettyJson, textFacts } from './fileText';
 
-const MarkdownPreview = lazy(() => import('./MarkdownPreview'));
+const MarkdownPreview = lazy(() => import('../../components/MarkdownPreview'));
 
 export type TextFile = Extract<FileRead, { kind: 'text' }>;
 

@@ -174,14 +174,25 @@ pub async fn chat_send(state: State<'_, AppState>, id: String, text: String) -> 
     if line.len() > runner::MAX_MESSAGE {
         return Err("메시지가 너무 깁니다.".into());
     }
-    let chat = state.chats.get(&id)?;
+    deliver(&state, &id, &line).await
+}
+
+/// Stops the turn that is running. The agent stays and takes the next message.
+#[tauri::command]
+pub async fn chat_interrupt(state: State<'_, AppState>, id: String) -> Result<()> {
+    deliver(&state, &id, &claude::interrupt_message()).await
+}
+
+/// One line to the agent's input, in the order lines were given.
+async fn deliver(state: &AppState, id: &str, line: &str) -> Result<()> {
+    let chat = state.chats.get(id)?;
     let _order = chat.sending.lock().await;
     match &chat.agent {
         Agent::Remote(name) => {
-            let handle = state.connections.handle(&id)?;
-            runner::send(&handle, name, &line).await
+            let handle = state.connections.handle(id)?;
+            runner::send(&handle, name, line).await
         }
-        Agent::Local(agent) => agent.send(&line).await,
+        Agent::Local(agent) => agent.send(line).await,
     }
 }
 
