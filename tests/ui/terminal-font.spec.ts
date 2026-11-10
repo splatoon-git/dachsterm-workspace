@@ -5,6 +5,8 @@ async function ctrlWheel(page: Page, deltaY: number) {
   await page.keyboard.down('Control');
   await page.mouse.wheel(0, deltaY);
   await page.keyboard.up('Control');
+  // A pause ends the gesture, so the next call is a separate notch (fontWheel.ts).
+  await page.waitForTimeout(200);
 }
 const fontSize = (page: Page) =>
   page.evaluate(() => window.__terminalPane.session.terminal.options.fontSize);
@@ -75,6 +77,20 @@ test('Ctrl+wheel leaves keyboard focus where it was', async ({ page }) => {
   await ctrlWheel(page, -100);
   await expect.poll(() => fontSize(page)).toBe(15);
   await expect(outside).toBeFocused();
+});
+
+test('a burst of Ctrl+wheel events from one notch changes the size once', async ({ page }) => {
+  // Dispatched in one go: `mouse.wheel` waits for each event, which can leave gaps of a gesture's end.
+  await page.evaluate(() => {
+    const target = document.querySelector('.xterm-screen')!;
+    for (let i = 0; i < 8; i++)
+      target.dispatchEvent(
+        new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -40 }),
+      );
+  });
+  await expect.poll(() => fontSize(page)).toBe(15);
+  await page.waitForTimeout(300);
+  expect(await fontSize(page)).toBe(15);
 });
 
 test('plain wheel does not change the font size', async ({ page }) => {

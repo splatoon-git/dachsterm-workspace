@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { graphStep, layoutGraph, maxGraphWidth, openLanes, rowPaths } from './commitGraphModel';
+import {
+  graphStep,
+  layoutGraph,
+  maxGraphWidth,
+  openLanes,
+  rowPaths,
+  rowRefs,
+  type GraphRef,
+} from './commitGraphModel';
 
 const commit = (hash: string, ...parents: string[]) => ({ hash, parents });
 const shape = (rows: ReturnType<typeof layoutGraph>['rows']) =>
@@ -136,5 +144,55 @@ describe('commit graph drawing', () => {
     expect(paths).toEqual(['M6 11V22', 'M6 11C6 16.5 18 16.5 18 22']);
     const next = rowPaths(rows[1]!, 12, 22).map((path) => path.d);
     expect(next).toEqual(['M18 0V22', 'M6 0V11', 'M6 11V22']);
+  });
+});
+
+describe('row references', () => {
+  const ref = (kind: GraphRef['kind'], name: string, current = false): GraphRef => ({
+    kind,
+    name,
+    current,
+  });
+  const show = (refs: GraphRef[]) =>
+    rowRefs(refs).map((pill) => [pill.item.name, pill.remote?.name ?? null, pill.named]);
+
+  it('folds a remote branch of the same name into the local one and names branches', () => {
+    expect(
+      show([
+        ref('remote', 'origin/feat/x'),
+        ref('tag', 'v1'),
+        ref('branch', 'feat/x'),
+        ref('remote', 'origin/only'),
+      ]),
+    ).toEqual([
+      ['feat/x', 'origin/feat/x', true],
+      ['origin/only', null, true],
+      ['v1', null, false],
+    ]);
+  });
+
+  it('puts the current branch first, before branches Git listed earlier', () => {
+    expect(
+      show([ref('branch', 'other'), ref('remote', 'origin/main'), ref('branch', 'main', true)]),
+    ).toEqual([
+      ['main', 'origin/main', true],
+      ['other', null, true],
+    ]);
+  });
+
+  it('prefers origin when several remotes hold the branch, and keeps the others', () => {
+    expect(
+      show([ref('remote', 'fork/main'), ref('remote', 'origin/main'), ref('branch', 'main')]),
+    ).toEqual([
+      ['main', 'origin/main', true],
+      ['fork/main', null, true],
+    ]);
+  });
+
+  it('does not fold a remote branch whose name only ends like the local one', () => {
+    expect(show([ref('branch', 'x'), ref('remote', 'origin/feat/x')])).toEqual([
+      ['x', null, true],
+      ['origin/feat/x', null, true],
+    ]);
   });
 });
