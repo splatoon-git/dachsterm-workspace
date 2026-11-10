@@ -89,3 +89,5 @@
 - **새 단위 테스트:** 실행기 스크립트의 ID 검사·인용·오프셋·줄 버퍼(Rust 7), Claude 출력 읽기(Rust 5), 채팅 상태 축약(Vitest 5). 기존 `net_tools::link`의 유휴 시험 3건은 `login_only`로 옮겼다.
 - **미실행:** 실제 앱에서의 채팅 왕복(Mac 실기기 확인 대기), Windows 네이티브 검사(`test-chat-native.mjs`는 아직 없음), CI.
 - **작업 폴더(`4b2ef0f`):** 사이드바 파일 트리의 폴더 우클릭 **여기서 채팅 열기**는 그 폴더에서 바로 연다. 연결 트리의 **채팅으로 열기…**는 폴더를 묻고 그 세션의 최근 폴더 8개를 제안한다(`dachsterm.chatFolders`). 폴더 검사는 에이전트 시작과 함께 `lib/shell.ts`의 `folderProblem`을 쓴다. 게이트: typecheck·lint·format 통과, Vitest 109파일 1335 통과, Playwright 521 통과. 실제 앱 확인은 대기.
+- **이 PC 채팅(`8408b60`):** 로컬 셸 탭(WSL 제외)의 파일 트리 폴더 우클릭 **여기서 채팅 열기**로 앱이 `claude`를 자식 프로세스로 실행한다(`chat_start_local`). 경로는 `PATH`(macOS는 `login_path` 적용분)와 `~/.local/bin`, 폴더는 절대 경로이면서 실제 폴더여야 한다. 게이트(Mac): format·typecheck·lint 통과, Vitest 1335, Playwright 521, `cargo test --workspace` 658, clippy 통과. 실제 앱 확인 대기. Windows에서는 `claude.exe`만 찾는다(npm 설치본의 `.cmd`는 미지원).
+
