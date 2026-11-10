@@ -44,6 +44,7 @@ import { CommandPanel } from '../features/terminal/CommandPanel';
 import { SessionPane } from './SessionPane';
 import { useInputPanes } from './inputPanes';
 import { GroupDialog } from './GroupDialog';
+import { useChatTabs } from './useChatTabs';
 import { useReviewTabs } from './useReviewTabs';
 import { useFileTabs } from './useFileTabs';
 import { useToolTabs } from './useToolTabs';
@@ -56,7 +57,7 @@ import { SessionTab } from './SessionTab';
 import { capabilities } from '../features/terminal/sessionKind';
 import type { CSSProperties } from 'react';
 import { SidebarViews } from './SidebarViews';
-import { TerminalPreviewCell } from './TerminalPreviewCell';
+import { PreviewTab, TerminalPreviewCell } from './TerminalPreviewCell';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
 import { TitleBar } from './TitleBar';
@@ -312,7 +313,7 @@ export function App() {
     const game = games.find((g) => tabKey({ kind: 'game', id: g.id }) === key);
     if (session) closeTab(session);
     else if (game) closeGame(game.id);
-    else if (!reviews.close(key) && !files.close(key) && !tools.close(key)) workspace.close(key);
+    else if (![reviews, files, tools, chats].some((t) => t.close(key))) workspace.close(key);
   };
   const splitTab = (t: TerminalSession, beside: Beside) =>
     t.localTarget
@@ -320,6 +321,7 @@ export function App() {
       : requestConnect(savedProfile(t), undefined, { beside });
   const kubeTabs = useKubeTabs({ workspace, theme, tabs, setTabs, closeTab });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
+  const chats = useChatTabs({ workspace });
   const files = useFileTabs({ workspace, sessions: tabs, narrow, fail: setError });
   const tools = useToolTabs({
     workspace,
@@ -382,16 +384,9 @@ export function App() {
     if (tab.kind === 'review') return reviews.renderTab(tab, active, select);
     if (tab.kind === 'tool') return tools.renderTab(tab, active, select);
     if (tab.kind === 'file' || tab.kind === 'diff') return files.renderTab(tab, active, select);
+    if (tab.kind === 'chat') return chats.renderTab(tab, active, select);
     if (tab.kind === 'preview')
-      return (
-        <PlainTab
-          tabKey={key}
-          title="터미널 미리보기"
-          active={active}
-          select={select}
-          close={() => workspace.close(key)}
-        />
-      );
+      return <PreviewTab tabKey={key} active={active} select={select} close={workspace.close} />;
     return (
       <PlainTab
         tabKey={key}
@@ -406,6 +401,7 @@ export function App() {
   };
   const renderCell = (tab: TabRef, { visible, focused }: CellState) => {
     if (tab.kind === 'review') return reviews.renderCell(tab);
+    if (tab.kind === 'chat') return chats.renderCell(tab);
     if (tab.kind === 'tool') return tools.renderCell(tab, visible);
     if (tab.kind === 'file' || tab.kind === 'diff') return files.renderCell(tab);
     if (tab.kind === 'preview') return <TerminalPreviewCell theme={theme} />;
@@ -531,6 +527,7 @@ export function App() {
                 actions={{
                   connect: (p) => requestConnect(p),
                   startAgent: (p) => agent.ask(p),
+                  openChat: chats.open,
                   edit: setForm,
                   toggleFavorite: (p) =>
                     void action('save_session', {
@@ -578,6 +575,7 @@ export function App() {
               ...(hasPreview ? [{ kind: 'preview' } as const] : []),
               ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
               ...reviews.order,
+              ...chats.order,
               ...files.order,
               ...tools.order,
             ]}

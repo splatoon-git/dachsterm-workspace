@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ComponentProps } from 'react';
+import { PlainTab } from './GroupTabBar';
 
 const TerminalPreview = lazy(() =>
   import('../features/terminal/TerminalPreview').then((m) => ({ default: m.TerminalPreview })),
@@ -13,5 +14,28 @@ export function TerminalPreviewCell({ theme }: ComponentProps<typeof TerminalPre
         <TerminalPreview theme={theme} />
       </Suspense>
     </div>
+  );
+}
+
+/** Its tab: nothing to connect or save, so closing only takes it away. */
+export function PreviewTab({
+  tabKey,
+  active,
+  select,
+  close,
+}: {
+  tabKey: string;
+  active: boolean;
+  select: () => void;
+  close: (key: string) => void;
+}) {
+  return (
+    <PlainTab
+      tabKey={tabKey}
+      title="터미널 미리보기"
+      active={active}
+      select={select}
+      close={() => close(tabKey)}
+    />
   );
 }
