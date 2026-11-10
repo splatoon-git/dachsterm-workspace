@@ -66,6 +66,7 @@ pub async fn list(connections: &Connections, id: &str, directory: &str) -> Resul
                 Ok(packet)=>{
                     for file in packet.files {
                         if matches!(file.filename.as_str(),"."|".."){continue;}
+                        if file.filename.len()>4096 {return Err("파일 이름이 너무 깁니다.".into());}
                         if file.filename.contains('\u{fffd}') || file.filename.contains('/') {return Err("UTF-8이 아닌 파일 이름이 감지되었습니다. 이 서버의 파일명 인코딩을 UTF-8로 변환한 뒤 사용하세요. 잘못된 이름으로 파일을 변경하지 않습니다.".into());}
                         let m=file.attrs;
                         entries.push(Entry{name:file.filename,directory:m.file_type().is_dir(),symlink:m.file_type().is_symlink(),size:m.size,modified:m.mtime,permissions:m.permissions});

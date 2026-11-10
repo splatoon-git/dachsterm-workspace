@@ -3,7 +3,12 @@
 //!
 //! This does not use the transfer queue. The queue's lasting resume and conflict handling do not
 //! fit "attach this to the prompt now", and after a restart there is no prompt left to type into.
-use crate::{AppState, sftp::failure, ssh::Connections, storage::Result};
+use crate::{
+    AppState,
+    sftp::{Entry, failure},
+    ssh::Connections,
+    storage::Result,
+};
 use russh_sftp::{
     client::SftpSession,
     protocol::{FileAttributes, OpenFlags},
@@ -23,6 +28,7 @@ const MAX_IMAGE_PIXELS: usize = 40_000_000;
 const MAX_NAME_CHARS: usize = 100;
 const KEEP_SECONDS: u64 = 7 * 24 * 60 * 60;
 const FILE_TIMEOUT: Duration = Duration::from_secs(60);
+const CLEANUP_TIMEOUT: Duration = Duration::from_secs(10);
 const CLIPBOARD_NAME: &str = "clipboard.png";
 const TOO_LARGE: &str =
     "파일당 20MiB, 한 번에 10개까지 보낼 수 있습니다. 더 큰 파일은 파일 패널을 사용하세요.";
@@ -166,22 +172,32 @@ async fn prepare(session: &SftpSession) -> Result<String> {
     Ok(folder)
 }
 
-/// Failing to clean up must never fail the upload the user asked for.
-async fn remove_old(session: &SftpSession, folder: &str) {
-    let Ok(entries) = session.read_dir(folder).await else {
+/// Failing to clean up must never fail the upload the user asked for. `sftp::list` is the listing
+/// with a limit: `read_dir` collects until the server says it is done, which it need not say.
+async fn remove_old(connections: &Connections, id: &str, session: &SftpSession, folder: &str) {
+    let Ok(listing) = crate::sftp::list(connections, id, folder).await else {
         return;
     };
     let now = now();
-    for entry in entries {
-        let name = entry.file_name();
-        let meta = entry.metadata();
-        let expired = meta
-            .mtime
-            .is_some_and(|time| now.saturating_sub(u64::from(time)) > KEEP_SECONDS);
-        if meta.is_regular() && expired && is_stored_name(&name) {
-            let _ = session.remove_file(format!("{folder}/{name}")).await;
+    let remove = async {
+        for entry in listing.entries {
+            if expired(&entry, now) {
+                let _ = session
+                    .remove_file(format!("{folder}/{}", entry.name))
+                    .await;
+            }
         }
-    }
+    };
+    let _ = tokio::time::timeout(CLEANUP_TIMEOUT, remove).await;
+}
+
+fn expired(entry: &Entry, now: u64) -> bool {
+    !entry.directory
+        && !entry.symlink
+        && is_stored_name(&entry.name)
+        && entry
+            .modified
+            .is_some_and(|time| now.saturating_sub(u64::from(time)) > KEEP_SECONDS)
 }
 
 async fn write_new(session: &SftpSession, target: &str, data: &[u8]) -> Result<()> {
@@ -217,7 +233,7 @@ async fn upload(
 ) -> Result<Vec<String>> {
     let session = crate::sftp::open(connections, id).await?;
     let folder = prepare(&session).await?;
-    remove_old(&session, &folder).await;
+    remove_old(connections, id, &session, &folder).await;
     let mut written = Vec::new();
     for (name, data) in files {
         let random = uuid::Uuid::new_v4().simple().to_string();
@@ -370,7 +386,10 @@ pub async fn prompt_files_upload(
 
 #[cfg(test)]
 mod tests {
-    use super::{check_local, civil, encode_png, is_stored_name, safe_name, stored_name};
+    use super::{
+        Entry, KEEP_SECONDS, check_local, civil, encode_png, expired, is_stored_name, safe_name,
+        stored_name,
+    };
 
     #[test]
     fn stored_names_are_shell_safe_and_keep_the_extension() {
@@ -396,6 +415,29 @@ mod tests {
             stored_name("a b.png", 1_794_052_861, "0a1b2c3d"),
             "20261107-120101-0a1b2c3d-a_b.png"
         );
+    }
+
+    #[test]
+    fn only_old_regular_files_of_this_module_expire() {
+        let name = stored_name("a.png", 1_000, "abcd1234");
+        let entry = |name: &str, directory, symlink, modified| Entry {
+            name: name.into(),
+            directory,
+            symlink,
+            size: None,
+            modified,
+            permissions: None,
+        };
+        let now = 1_000 + KEEP_SECONDS + 1;
+        assert!(expired(&entry(&name, false, false, Some(1_000)), now));
+        assert!(!expired(&entry(&name, false, false, Some(1_001)), now));
+        assert!(!expired(&entry(&name, false, false, None), now));
+        assert!(!expired(&entry(&name, true, false, Some(1_000)), now));
+        assert!(!expired(&entry(&name, false, true, Some(1_000)), now));
+        assert!(!expired(
+            &entry("notes.txt", false, false, Some(1_000)),
+            now
+        ));
     }
 
     #[test]

@@ -13,6 +13,7 @@ use crate::{
 };
 use russh::client;
 use std::{
+    collections::BTreeSet,
     path::{Path, PathBuf},
     process::Stdio,
     sync::Arc,
@@ -24,8 +25,8 @@ use tokio::{
 
 /// A repository's own settings must not start a program, and optional locks would collide with
 /// the user's own Git commands. Pathspecs are read literally, so a file named `:(top)*` is that
-/// file and not a pattern. Clean filters cannot be turned off by name and remain, which the user
-/// guide states.
+/// file and not a pattern. Clean filters depend on the repository's names, so `git_read` turns them
+/// off for the queries that start by themselves.
 const SAFE_ENV: [(&str, &str); 3] = [
     ("LC_ALL", "C"),
     ("GIT_OPTIONAL_LOCKS", "0"),
@@ -300,6 +301,90 @@ pub async fn git_run(
     run(host, folder, None, commands, limits).await
 }
 
+const FILTER_REFUSED: &str =
+    "이 저장소의 Git 필터 설정을 안전하게 끌 수 없어 자동 조회를 하지 않았습니다.";
+
+/// Every filter setting and where it came from. `--includes` because a repository's config can
+/// pull in another file. `--show-scope` needs Git 2.26; older ones are refused, not guessed at.
+fn filter_listing() -> Vec<String> {
+    args([
+        "config",
+        "--show-scope",
+        "--includes",
+        "--name-only",
+        "-z",
+        "--get-regexp",
+        r"^filter\.",
+    ])
+}
+
+/// The options that switch off the filters a repository set for itself. The user's own, such as
+/// Git LFS in the global config, stay on. `None` when a name cannot be written as `-c`: Git splits
+/// that option at the first `=`, so the filter would stay on.
+fn filters_off(listing: &[u8]) -> Option<Vec<String>> {
+    let listing = std::str::from_utf8(listing).ok()?;
+    let mut names = BTreeSet::new();
+    let mut parts = listing.split('\0');
+    while let (Some(scope), Some(key)) = (parts.next(), parts.next()) {
+        if !matches!(scope, "local" | "worktree") {
+            continue;
+        }
+        let Some((name, _)) = key.strip_prefix("filter.").and_then(|k| k.rsplit_once('.')) else {
+            continue;
+        };
+        if name.contains('=') {
+            return None;
+        }
+        names.insert(name);
+    }
+    // `required` alone would make Git stop with an error once the program is gone.
+    let off = names.into_iter().flat_map(|name| {
+        [
+            format!("filter.{name}.clean="),
+            format!("filter.{name}.process="),
+            format!("filter.{name}.required=false"),
+        ]
+    });
+    Some(off.flat_map(|option| ["-c".to_string(), option]).collect())
+}
+
+async fn repository_filters_off(
+    host: &GitHost,
+    folder: &str,
+    limits: Limits,
+) -> std::result::Result<Vec<String>, Failure> {
+    // The app's downloads land on this PC, and a server folder is one the user's own prompt
+    // already reads. This saves an SSH channel on every prompt.
+    if matches!(host, GitHost::Remote(_)) {
+        return Ok(Vec::new());
+    }
+    let listing = run(host, folder, None, &[filter_listing()], limits).await?;
+    match listing.exit {
+        Some(0) => filters_off(&listing.stdout).ok_or(Failure::Other(FILTER_REFUSED.into())),
+        // No filters, no folder, no Git or a config Git cannot read. The query itself reports it,
+        // and with an unreadable config it stops before any filter.
+        Some(1 | 2 | 128 | NO_GIT) => Ok(Vec::new()),
+        _ => Err(Failure::Other(FILTER_REFUSED.into())),
+    }
+}
+
+/// `git_run` for read-only queries the app starts by itself, when a tab merely shows a folder. A
+/// downloaded repository's own filters must not run then. Stage, commit and a diff the user opens
+/// keep them: without an encryption filter, staging would commit the plain text.
+pub async fn git_read(
+    host: &GitHost,
+    folder: &str,
+    commands: &[Vec<String>],
+    limits: Limits,
+) -> std::result::Result<Output, Failure> {
+    let off = repository_filters_off(host, folder, limits).await?;
+    let commands: Vec<Vec<String>> = commands
+        .iter()
+        .map(|command| off.iter().chain(command).cloned().collect())
+        .collect();
+    run(host, folder, None, &commands, limits).await
+}
+
 /// `git_run`, unless a file is over the guard's limit.
 pub async fn git_run_guarded(
     host: &GitHost,
@@ -320,6 +405,42 @@ mod tests {
         timeout: Duration::from_secs(10),
         max_output: 1024 * 1024,
     };
+
+    #[test]
+    fn only_a_repositorys_own_filters_are_turned_off() {
+        let listing = b"global\0filter.lfs.clean\0local\0filter.a b.clean\0\
+                        local\0filter.a b.smudge\0worktree\0filter.x.y.process\0\
+                        command\0filter.c.clean\0local\0filter.nosub\0";
+        assert_eq!(
+            filters_off(listing).unwrap(),
+            [
+                "-c",
+                "filter.a b.clean=",
+                "-c",
+                "filter.a b.process=",
+                "-c",
+                "filter.a b.required=false",
+                "-c",
+                "filter.x.y.clean=",
+                "-c",
+                "filter.x.y.process=",
+                "-c",
+                "filter.x.y.required=false",
+            ]
+        );
+        assert_eq!(filters_off(b"").unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_filter_name_that_cannot_be_written_is_refused() {
+        assert_eq!(filters_off(b"local\0filter.a=b.clean\0"), None);
+        assert_eq!(filters_off(b"local\0filter.\xff.clean\0"), None);
+        // Git LFS and the like are the user's own and can have any name.
+        assert_eq!(
+            filters_off(b"global\0filter.a=b.clean\0").unwrap(),
+            Vec::<String>::new()
+        );
+    }
 
     #[test]
     fn the_script_quotes_everything_and_keeps_the_safe_settings() {

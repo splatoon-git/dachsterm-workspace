@@ -4,7 +4,7 @@ use super::{MAX_ENTRIES, Record, StopReason, first_line, scan, status_commands};
 use crate::{
     AppState,
     git_diff::{Change, change},
-    git_run::{GitHost, NO_GIT, git_run},
+    git_run::{GitHost, NO_GIT, git_read},
     remote_exec::{Failure, Limits, Output},
     source::Source,
     storage::Result,
@@ -120,7 +120,7 @@ pub async fn query(host: &GitHost, folder: &str) -> Result<GitViewResult> {
         max_output: MAX_OUTPUT,
     };
     let commands = status_commands(&["--untracked-files=all"]);
-    match git_run(host, folder, &commands, limits).await {
+    match git_read(host, folder, &commands, limits).await {
         Ok(output) => outcome(host, &output, folder),
         Err(Failure::TimedOut) => Ok(GitViewResult::Stopped {
             reason: StopReason::Timeout,

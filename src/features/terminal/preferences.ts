@@ -125,7 +125,10 @@ export const terminalPreferences = () => current;
 export function useTerminalPreferences() {
   return useSyncExternalStore(subscribeTerminalPreferences, () => current);
 }
-/** `windowsPaths` is for local Windows shells, which report a drive or network share. */
+/**
+ * `windowsPaths` is for local Windows shells, which report a drive. A network share is refused:
+ * following one opens an SMB connection, and any output in the tab can send this report.
+ */
 export function directoryFromOsc(value: string, uri = true, windowsPaths = false): string | null {
   try {
     let path = value;
@@ -136,7 +139,8 @@ export function directoryFromOsc(value: string, uri = true, windowsPaths = false
       path = decodeURIComponent(url.pathname);
       if (windowsPaths && /^\/[A-Za-z]:/.test(path)) path = path.slice(1);
     }
-    return (path.startsWith('/') || (windowsPaths && /^([A-Za-z]:[\\/]|\\\\)/.test(path))) &&
+    if (windowsPaths && /^[\\/]{2}/.test(path)) return null;
+    return (path.startsWith('/') || (windowsPaths && /^[A-Za-z]:[\\/]/.test(path))) &&
       path.length <= 4096 &&
       !Array.from(path).some((c) => c.charCodeAt(0) < 32 || c === '\x7f' || c === '\ufffd')
       ? path
