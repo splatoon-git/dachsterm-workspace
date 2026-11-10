@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AuthPromptCard, HostKeyCard } from '../../components/ConnectionCards';
-import type { ChatSession } from './chatSession';
+import { placeDetail, placeTitle, type ChatSession } from './chatSession';
 import { canSend, type ChatItem, type ChatPhase } from './chatState';
 import './chat.css';
 
@@ -26,7 +26,8 @@ export function ChatPane({ session }: { session: ChatSession }) {
   const [draft, setDraft] = useState('');
   const thread = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
-  const { profile, folder } = session;
+  const { place, folder } = session;
+  const title = placeTitle(place);
   // Follows new messages unless the user has scrolled up to read.
   useLayoutEffect(() => {
     const view = thread.current;
@@ -40,12 +41,12 @@ export function ChatPane({ session }: { session: ChatSession }) {
   };
   const status = chat.phase === 'connecting' ? link.message : waiting[chat.phase];
   return (
-    <section className="chat-pane" aria-label={`${profile.name} 에이전트 채팅`}>
+    <section className="chat-pane" aria-label={`${title} 에이전트 채팅`}>
       <header className="chat-head">
         <div>
-          <h2>{profile.name}</h2>
+          <h2>{title}</h2>
           <p>
-            {profile.username}@{profile.host}
+            {placeDetail(place)}
             {folder ? ` · ${folder}` : ''}
           </p>
         </div>
@@ -75,7 +76,7 @@ export function ChatPane({ session }: { session: ChatSession }) {
             {link.authPrompt && (
               <AuthPromptCard
                 key={link.authPrompt.challenge}
-                host={profile.host}
+                host={link.profile?.host ?? ''}
                 prompt={link.authPrompt}
                 reply={(responses) => session.link.reply(responses)}
                 cancel={session.close}

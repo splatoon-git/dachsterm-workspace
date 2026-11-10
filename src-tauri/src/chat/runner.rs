@@ -215,12 +215,12 @@ pub async fn attach(
 /// Cuts output into lines. Unlike `remote_exec`'s splitter it bounds a line, since the output is
 /// the server's, and leaves an unfinished last line unread so the next attach can start at it.
 #[derive(Default)]
-struct LineBuffer {
+pub(super) struct LineBuffer {
     pending: Vec<u8>,
-    too_long: bool,
+    pub(super) too_long: bool,
 }
 impl LineBuffer {
-    fn feed(
+    pub(super) fn feed(
         &mut self,
         data: &[u8],
         on_line: &mut impl FnMut(&[u8]) -> ControlFlow<()>,

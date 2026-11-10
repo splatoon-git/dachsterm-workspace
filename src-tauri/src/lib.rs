@@ -319,6 +319,7 @@ pub fn run() {
             net_tools::net_disconnect,
             chat::chat_open,
             chat::chat_start,
+            chat::chat_start_local,
             chat::chat_send,
             chat::chat_close,
             net_tools::net_port_check,

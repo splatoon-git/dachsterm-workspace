@@ -553,7 +553,7 @@ export function App() {
             session={owner}
             showConnections={() => setSidebarView('connections')}
             startAgent={(folder) => owner && agent.ask(savedProfile(owner), folder)}
-            openChat={(folder) => owner && chats.open(savedProfile(owner), folder)}
+            openChat={(folder) => owner && chats.openFrom(owner, folder)}
             openReview={() => owner && reviews.open(owner)}
             files={files}
           />

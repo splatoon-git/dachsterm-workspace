@@ -30,9 +30,11 @@ export function SidebarFiles({
   const session = props.session;
   const remote =
     !!session && !session.localTarget && !session.podTerminal && session.profile.protocol === 'ssh';
+  // A chat runs on this PC for a local shell. Inside WSL it would need the agent installed there.
+  const local = session?.localTarget?.kind === 'shell';
   const decorations = useMemo<FileDecorations | null>(
     () =>
-      remote
+      remote || local
         ? {
             mark: (path) => marks?.mark(path),
             listed: (folder) => marks?.listed(folder),
@@ -42,11 +44,13 @@ export function SidebarFiles({
                 separated: true,
                 run: () => start.current.openChat(path),
               },
-              { label: '에이전트 시작…', run: () => start.current.startAgent(path) },
+              ...(remote
+                ? [{ label: '에이전트 시작…', run: () => start.current.startAgent(path) }]
+                : []),
             ],
           }
         : marks,
-    [marks, remote],
+    [marks, remote, local],
   );
   const opener = session && ((path: string, pinned: boolean) => openFile(session, path, pinned));
   return (

@@ -87,6 +87,7 @@ fn main() {
             "net_disconnect",
             "chat_open",
             "chat_start",
+            "chat_start_local",
             "chat_send",
             "chat_close",
             "net_port_check",

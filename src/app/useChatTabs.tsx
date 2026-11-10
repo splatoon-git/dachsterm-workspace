@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { rememberFolder } from '../features/chat/chatFolders';
 import { ChatOpenDialog } from '../features/chat/ChatOpenDialog';
 import { ChatPane } from '../features/chat/ChatPane';
-import { ChatSession } from '../features/chat/chatSession';
+import { ChatSession, placeTitle, type ChatPlace } from '../features/chat/chatSession';
+import type { TerminalSession } from '../features/terminal/session';
 import type { Profile } from '../lib/ipc';
 import { PlainTab } from './GroupTabBar';
 import type { Workspace } from './useWorkspaceLayout';
@@ -20,10 +21,10 @@ const refOf = (chat: Chat): ChatRef => ({ kind: 'chat', id: chat.id });
 export function useChatTabs({ workspace }: { workspace: Workspace }) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [asking, setAsking] = useState<Profile | null>(null);
-  /** Opens a chat whose agent works in `folder` on the server; empty means the login folder. */
-  const open = (profile: Profile, folder: string) => {
-    const chat: Chat = { id: crypto.randomUUID(), session: new ChatSession(profile, folder) };
-    rememberFolder(profile.id, folder);
+  /** Opens a chat whose agent works in `folder`; empty means the login or home folder. */
+  const open = (place: ChatPlace, folder: string) => {
+    const chat: Chat = { id: crypto.randomUUID(), session: new ChatSession(place, folder) };
+    if (place.kind === 'ssh') rememberFolder(place.profile.id, folder);
     chat.session.open();
     setChats((old) => [...old, chat]);
     workspace.open(refOf(chat));
@@ -40,7 +41,14 @@ export function useChatTabs({ workspace }: { workspace: Workspace }) {
   };
   return {
     order: chats.map(refOf),
-    open,
+    /** A chat in a folder of the tab's own place: its server, or this PC for a local shell. */
+    openFrom: (session: TerminalSession, folder: string) =>
+      open(
+        session.localTarget
+          ? { kind: 'local', name: session.localTarget.name }
+          : { kind: 'ssh', profile: session.profile },
+        folder,
+      ),
     /** Asks for the folder first, for a chat opened from the session list. */
     ask: setAsking,
     dialog: asking && (
@@ -48,7 +56,7 @@ export function useChatTabs({ workspace }: { workspace: Workspace }) {
         profile={asking}
         open={(folder) => {
           setAsking(null);
-          open(asking, folder);
+          open({ kind: 'ssh', profile: asking }, folder);
         }}
         close={() => setAsking(null)}
       />
@@ -60,7 +68,7 @@ export function useChatTabs({ workspace }: { workspace: Workspace }) {
         chat && (
           <PlainTab
             tabKey={tabKey(tab)}
-            title={`채팅 · ${chat.session.profile.name}`}
+            title={`채팅 · ${placeTitle(chat.session.place)}`}
             active={active}
             select={select}
             close={() => close(tabKey(tab))}
