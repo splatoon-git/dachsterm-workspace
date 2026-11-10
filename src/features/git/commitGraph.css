@@ -112,6 +112,13 @@
   font-size: var(--font-caption);
   line-height: var(--space-lg);
 }
+.git-graph-ref[data-named] {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.git-graph-ref > svg {
+  flex: none;
+}
 .git-graph-ref[data-kind='remote'] {
   color: var(--color-status-info);
 }

@@ -13,6 +13,7 @@ import { CommitHoverCard } from './CommitHoverCard';
 import {
   graphStep,
   layoutGraph,
+  rowRefs,
   type CommitFileOrigin,
   type GraphCommit,
   type GraphRef,
@@ -27,16 +28,20 @@ const maxPills = 3;
 
 function RefPills({ refs }: { refs: GraphRef[] }) {
   if (!refs.length) return null;
-  // The current branch keeps its name in view, so it goes first whatever Git listed.
-  const ordered = [...refs].sort((a, b) => Number(b.current) - Number(a.current));
-  const rest = ordered.slice(maxPills);
+  const pills = rowRefs(refs);
+  const rest = pills.slice(maxPills);
   return (
     <span className="git-graph-refs">
-      {ordered.slice(0, maxPills).map((item) => (
-        <CommitRefPill key={`${item.kind}:${item.name}`} item={item} named={item.current} />
+      {pills.slice(0, maxPills).map((pill) => (
+        <CommitRefPill
+          key={`${pill.item.kind}:${pill.item.name}`}
+          item={pill.item}
+          remote={pill.remote}
+          named={pill.named}
+        />
       ))}
       {rest.length > 0 && (
-        <span className="git-graph-ref" title={rest.map((item) => item.name).join(', ')}>
+        <span className="git-graph-ref" title={rest.map((pill) => pill.item.name).join(', ')}>
           +{rest.length}
         </span>
       )}

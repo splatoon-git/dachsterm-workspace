@@ -12,6 +12,47 @@ export type GraphCommit = {
   refs: GraphRef[];
   subject: string;
 };
+/**
+ * A reference as a row shows it. A local branch takes the remote branch of the same name at the
+ * same commit, so `main` and `origin/main` read as one pill, as they do in other Git views.
+ */
+export type RowRef = { item: GraphRef; remote?: GraphRef; named: boolean };
+
+/** `feat/x` for `origin/feat/x`. Remote names hold no `/` in practice; branch names often do. */
+const remoteBranch = (name: string) => name.slice(name.indexOf('/') + 1);
+const refRank = (item: GraphRef) =>
+  item.current
+    ? 0
+    : item.kind === 'branch' || item.kind === 'head'
+      ? 1
+      : item.kind === 'remote'
+        ? 2
+        : 3;
+
+/**
+ * The pills of a row: the current branch first, then branches, remote branches and tags. Branches
+ * keep their names in view so another worktree's branch can be told apart; tags stay icons.
+ */
+export function rowRefs(refs: readonly GraphRef[]): RowRef[] {
+  const branches = new Set(refs.filter((item) => item.kind === 'branch').map((item) => item.name));
+  const remotes = new Map<string, GraphRef>();
+  for (const item of refs) {
+    if (item.kind !== 'remote') continue;
+    const branch = remoteBranch(item.name);
+    if (!branches.has(branch)) continue;
+    // `origin` wins when several remotes hold the same branch here; the others keep their pills.
+    if (!remotes.has(branch) || item.name.startsWith('origin/')) remotes.set(branch, item);
+  }
+  const merged = new Set(remotes.values());
+  return refs
+    .filter((item) => !merged.has(item))
+    .sort((a, b) => refRank(a) - refRank(b))
+    .map((item) => ({
+      item,
+      remote: item.kind === 'branch' ? remotes.get(item.name) : undefined,
+      named: item.kind !== 'tag',
+    }));
+}
 /** Which commits `git_graph` walks. */
 export type GraphScope = 'auto' | 'all';
 /** The commit a file in the graph was changed by, and the side it is compared with. */

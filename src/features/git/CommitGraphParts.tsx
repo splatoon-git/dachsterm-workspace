@@ -69,19 +69,33 @@ const refIcon: Record<GraphRef['kind'], IconName> = {
   tag: 'tag',
 };
 
-/** A reference as a pill. In a narrow row only the current one spends room on its name. */
-export function CommitRefPill({ item, named }: { item: GraphRef; named: boolean }) {
-  const label = `${refLabel[item.kind]} ${item.name}`;
+/**
+ * A reference as a pill. `remote` is the remote branch of the same name at this commit, shown as a
+ * cloud after the name; a named pill gives way first when the row is narrow.
+ */
+export function CommitRefPill({
+  item,
+  remote,
+  named,
+}: {
+  item: GraphRef;
+  remote?: GraphRef;
+  named: boolean;
+}) {
+  const own = `${refLabel[item.kind]} ${item.name}`;
+  const label = remote ? `${own} · ${refLabel.remote} ${remote.name}` : own;
   return (
     <span
       className="git-graph-ref"
       data-kind={item.kind}
       data-current={item.current || undefined}
+      data-named={named || undefined}
       title={label}
       aria-label={label}
     >
       <Icon name={item.current ? 'target' : refIcon[item.kind]} size={11} />
       {named && <span className="git-graph-ref-name">{item.name}</span>}
+      {remote && <Icon name={refIcon.remote} size={11} />}
     </span>
   );
 }

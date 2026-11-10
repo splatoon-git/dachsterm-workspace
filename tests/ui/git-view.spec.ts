@@ -21,7 +21,17 @@ const graph: GitGraphResult = {
         { kind: 'tag', name: 'v2', current: false },
       ],
     },
-    { hash: hash('c'), parents: [hash('b')], author: 'x', time: 1, subject: 'feature', refs: [] },
+    {
+      hash: hash('c'),
+      parents: [hash('b')],
+      author: 'x',
+      time: 1,
+      subject: 'feature',
+      refs: [
+        { kind: 'remote', name: 'origin/feat/side', current: false },
+        { kind: 'branch', name: 'feat/side', current: false },
+      ],
+    },
     { hash: hash('b'), parents: [], author: 'x', time: 1, subject: 'root', refs: [] },
   ],
 };
@@ -320,10 +330,16 @@ const row = (page: Page, subject: string) =>
 test('the graph lists the history for the tab and draws its lanes', async ({ page }) => {
   await open(page);
   await expect(page.locator('.git-graph-subject')).toHaveText(['merge feature', 'feature', 'root']);
-  // Only the current branch spends room on its name in a narrow row.
+  // A branch and its remote branch at the same commit share one pill; tags stay icons.
   const refs = row(page, 'merge feature').locator('.git-graph-ref');
-  await expect(refs).toHaveText(['main', '', '', '+1']);
-  await expect(refs.nth(1)).toHaveAttribute('title', '원격 브랜치 origin/main');
+  await expect(refs).toHaveText(['main', '', '']);
+  await expect(refs.nth(0)).toHaveAttribute('title', '브랜치 main · 원격 브랜치 origin/main');
+  await expect(refs.nth(1)).toHaveAttribute('title', '태그 v1');
+  // A branch that is not checked out here, such as another worktree's, keeps its name too.
+  const side = row(page, 'feature').locator('.git-graph-ref');
+  await expect(side).toHaveText(['feat/side']);
+  await expect(side).toHaveAttribute('title', '브랜치 feat/side · 원격 브랜치 origin/feat/side');
+  await expect(side.locator('svg')).toHaveCount(2);
   // The two lanes of the merge: a row is as wide as the widest one.
   await expect(row(page, 'merge feature').locator('.git-graph-dot')).toHaveAttribute(
     'data-merge',
