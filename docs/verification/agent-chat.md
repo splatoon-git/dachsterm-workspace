@@ -50,10 +50,33 @@
 
 ### 대기
 
-- 실제 SSH 실행 채널에서의 끊김과 재접속. Docker 일회용 서버에서 사용자가 로그인해 잰다(AC.1).
-- Finder로 띄운 앱이 아니라 SSH 비대화형 셸에서의 `claude`·`codex` 경로 탐색(AC.1).
 - `root` 계정의 `--dangerously-skip-permissions` 동작.
-- 승인이 대기 중일 때 끊겼다가 다시 붙은 경우(AC.9).
 - 승인의 "세션 동안 허용"(`permission_suggestions`의 적용 형식, Codex `acceptForSession`).
 - Codex의 `auto_review`가 `--approve-for-me`와 같은지.
 - Windows 앱에서의 동작, Mac 실기기 앱.
+
+## AC.1 실제 SSH 실측 (2026-11-10)
+
+- **환경:** Mac의 Docker 일회용 서버. `tests/openssh` 이미지에 `claude` 2.1.321(공식 설치 스크립트, `~/.local/bin`)과 `codex-cli` 0.167.0(npm, `/usr/local/bin`)을 더했다. 사용자가 컨테이너 안에서 직접 로그인했다. 이미지 정의는 저장소에 넣지 않았다.
+- **연결:** 시스템 `ssh`의 실행 채널(`-F /dev/null`, 이 검사용 일회용 키). 앱의 russh 경로가 아니다. 끊김은 클라이언트 `ssh` 프로세스를 강제 종료해 만들었다. 망이 조용히 끊기는 경우(FIN 없음)는 재지 않았다.
+- 분리 실행기는 설계안 §2.1의 `nohup sh -c 'exec "$@" <>in >out.jsonl 2>err.log'`, 위치는 `$HOME/.cache/dachsterm/chat/<id>`다.
+
+| 항목 | 결과 |
+|---|---|
+| 경로: 실행 채널 그대로 | `codex`만 찾음. `claude`(`~/.local/bin`)는 못 찾음 |
+| 경로: `$SHELL -lc` | 둘 다 찾음 |
+| 경로: `$SHELL -ic` | `claude`를 못 찾음(설치 스크립트가 로그인 셸 설정에 경로를 넣음) |
+| 직접 연결, 명령 중 클라이언트 종료 | 서버의 `claude`가 명령을 끝내고(표식 생성) 그 뒤 종료. 로컬 파이프 실측과 같다 |
+| 분리 실행, 승인 대기 중 끊김 | 20초 뒤에도 살아 있고 명령은 실행되지 않았다. 다시 읽은 로그에서 `tool_result`가 없는 `can_use_tool` 1건을 찾아 허용하자 실행되고 턴이 끝났다 |
+| 분리 실행, 명령 중 끊김 후 바이트 오프셋으로 다시 붙기 | 25초 뒤 다시 붙어 `result`를 받았다. 표식 생성. 끊긴 동안의 출력을 잃지 않았다 |
+| 세션 도중 위험 모드 전환 | `--allow-dangerously-skip-permissions`로 시작한 세션에서 `set_permission_mode bypassPermissions` 성공 |
+| 종료와 정리 | `TERM`으로 종료, 폴더 삭제, 남은 프로세스 없음 |
+| `codex`, 분리 실행, 승인 대기 중 끊김 | 20초 뒤에도 살아 있고 명령은 실행되지 않았다. 다시 읽은 로그에서 `serverRequest/resolved`가 없는 `requestApproval` 1건을 찾아 `accept`로 답하자 실행되고 턴이 끝났다 |
+| `codex`, 명령 중 끊김 후 바이트 오프셋으로 다시 붙기 | 25초 뒤 다시 붙어 메인 스레드의 `turn/completed`를 받았다. 표식 생성 |
+| `codex`, 종료와 정리 | `TERM`으로 종료, 폴더 삭제, 남은 프로세스 없음 |
+| **`codex` 샌드박스** | `workspace-write`에서 명령이 `bwrap: No permissions to create a new namespace`로 실패했다(exit 1). 턴은 `completed`로 끝나 실패가 턴 상태에 드러나지 않는다. `danger-full-access`에서는 실행됐다. 비특권 user namespace를 막은 컨테이너·서버에서 Codex의 기본 모드는 명령을 실행하지 못한다 |
+
+- `codex`는 처음에 서버 로그인이 되지 않아 401로 실패했고, 사용자가 다시 로그인한 뒤 위 결과를 얻었다.
+- 분리 실행으로 띄운 `codex` 0.167.0은 Node 18(Debian bookworm)의 npm 설치본이다.
+- `pgrep -fc 'claude -p'`는 검사 명령의 셸 자신도 센다. 숫자는 그만큼 빼서 읽었다.
+- systemd의 `/run/user/<uid>`는 마지막 세션이 끝나면 지워질 수 있어 실행 폴더로 쓰지 않는다. 컨테이너에 systemd가 없어 재지 못했다. `KillUserProcesses=yes`인 서버에서는 분리 실행도 로그아웃 때 종료될 수 있다(tmux와 같음).
