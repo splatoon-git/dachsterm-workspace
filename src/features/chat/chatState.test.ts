@@ -24,7 +24,7 @@ describe('chat state', () => {
     expect(state.phase).toBe('ready');
     expect(state.model).toBe('m');
     expect(state.items).toEqual([
-      { kind: 'user', id: 1, text: '안녕' },
+      { kind: 'user', id: 1, text: '안녕', files: [] },
       { kind: 'agent', id: 2, text: '반가워요', streaming: false },
     ]);
   });

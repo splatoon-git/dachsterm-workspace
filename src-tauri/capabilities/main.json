@@ -150,6 +150,8 @@
     "allow-chat-set-mode",
     "allow-chat-usage",
     "allow-chat-set-ultracode",
+    "allow-chat-clipboard-local",
+    "allow-chat-pick-files",
     "allow-chat-close",
     "allow-net-port-check",
     "allow-net-listeners",

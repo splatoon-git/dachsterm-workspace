@@ -2,6 +2,7 @@
 //! instead of a terminal. Over SSH the connection stops after login (`login_only`) and the agent
 //! runs detached on the server (`runner`); on this PC it is a child process (`local`). Either way
 //! its output reaches the tab as `ChatEvent`s.
+pub mod attach;
 mod claude;
 mod event;
 mod local;

@@ -111,6 +111,9 @@ function Item({ item, agents }: { item: ChatItem; agents: ChatAgent[] }) {
       return (
         <li className="chat-you">
           {item.text}
+          {item.files.length > 0 && (
+            <span className="chat-you-files">첨부: {item.files.join(', ')}</span>
+          )}
           <CopyButton text={item.text} />
         </li>
       );

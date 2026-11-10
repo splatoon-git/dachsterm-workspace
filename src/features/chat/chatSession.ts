@@ -1,6 +1,7 @@
 import { Channel } from '@tauri-apps/api/core';
 import { call, errorText, type Profile } from '../../lib/ipc';
 import { LoginLink } from '../../lib/loginLink';
+import { withAttachments, type ChatAttachment } from './chatAttachments';
 import {
   applyChatEvent,
   canSend,
@@ -173,16 +174,40 @@ export class ChatSession {
   };
 
   /** False when the message could not be handed over; the reason is in the conversation. */
-  send = async (text: string) => {
+  send = async (text: string, attachments: ChatAttachment[] = []) => {
     const id = this.started;
-    if (!id || !canSend(this.state) || !text.trim()) return false;
-    this.set(withSent(this.state, text));
+    if (!id || !canSend(this.state) || (!text.trim() && !attachments.length)) return false;
+    const before = this.state.phase;
+    this.set(
+      withSent(
+        this.state,
+        text,
+        attachments.map((a) => a.name),
+      ),
+    );
     try {
-      await call('chat_send', { id, text });
+      const paths: string[] = [];
+      for (const attachment of attachments) paths.push(await this.readablePath(id, attachment));
+      await call('chat_send', { id, text: withAttachments(text, paths) });
       return true;
     } catch (e) {
-      this.set(withNotice({ ...this.state, phase: 'ready' }, 'error', errorText(e)));
+      this.set(withNotice({ ...this.state, phase: before }, 'error', errorText(e)));
       return false;
     }
+  };
+
+  /**
+   * Where the agent can read an attachment. On a server it is uploaded first; on this PC a file
+   * is already readable and only a clipboard image needs a file.
+   */
+  private readablePath = async (id: string, attachment: ChatAttachment): Promise<string> => {
+    const remote = this.place.kind === 'ssh';
+    if (attachment.kind === 'clipboard')
+      return remote
+        ? call<string>('prompt_clipboard_image', { id, expected: attachment.digest })
+        : call<string>('chat_clipboard_local', { expected: attachment.digest });
+    if (!remote) return attachment.path;
+    const [path] = await call<string[]>('prompt_files_upload', { id, paths: [attachment.path] });
+    return path;
   };
 }

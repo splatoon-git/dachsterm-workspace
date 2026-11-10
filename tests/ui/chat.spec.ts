@@ -230,3 +230,36 @@ test('permission mode, effort, usage, a new chat beside and copying', async ({ p
   });
   await expect(page.locator('.chat-reply').getByRole('button', { name: '복사됨' })).toBeVisible();
 });
+
+test('files and a pasted image go with the message as paths the agent can read', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole('button', { name: '파일 첨부' }).click();
+  const chips = page.getByRole('list', { name: '첨부' });
+  await expect(chips).toContainText('notes.txt');
+  // Picking the same file again adds nothing.
+  await page.getByRole('button', { name: '파일 첨부' }).click();
+  await expect(chips.getByRole('listitem')).toHaveCount(1);
+
+  const prompt = page.getByRole('textbox', { name: '프롬프트' });
+  await prompt.evaluate((box) => {
+    const data = new DataTransfer();
+    data.items.add(new File(['png'], 'shot.png', { type: 'image/png' }));
+    box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }));
+  });
+  await expect(chips).toContainText('clipboard.png');
+  await expect(chips).toContainText('20 KB');
+  await page.screenshot({ path: 'test-results/chat-attach.png' });
+
+  await prompt.fill('이거 봐 줘');
+  await prompt.press('Enter');
+  const sent = await page.evaluate(() =>
+    window.__chat.calls.filter((c) => c.command === 'chat_send').at(-1),
+  );
+  expect(sent?.args.text).toBe(
+    '이거 봐 줘\n\n첨부한 파일:\n- /Users/me/work/app/notes.txt\n- /tmp/dachsterm-chat/clipboard-1.png',
+  );
+  await expect(page.locator('.chat-you')).toContainText('첨부: notes.txt, clipboard.png');
+  await expect(page.getByRole('list', { name: '첨부' })).toHaveCount(0);
+});

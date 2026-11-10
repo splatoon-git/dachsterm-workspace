@@ -27,14 +27,29 @@ window.__chatEmit = (events) => {
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
+    // The composer listens for OS file drops on its window.
+    metadata: {
+      currentWindow: { label: 'main' },
+      currentWebview: { label: 'main', windowLabel: 'main' },
+    },
     transformCallback: (callback: (message: unknown) => void) => {
       const id = nextCallback++;
       callbacks.set(id, callback);
       return id;
     },
     invoke: async (command: string, args: Record<string, unknown>) => {
+      if (command.startsWith('plugin:event|')) return 0;
       const { onEvent, ...plain } = args;
       window.__chat.calls.push({ command, args: plain });
+      if (command === 'chat_pick_files') return ['/Users/me/work/app/notes.txt'];
+      if (command === 'prompt_files_inspect')
+        return (plain.paths as string[]).map((path) => ({
+          name: path.split('/').at(-1),
+          size: 1200,
+        }));
+      if (command === 'prompt_clipboard_inspect')
+        return { item: { name: 'clipboard.png', size: 20480 }, digest: 'seen' };
+      if (command === 'chat_clipboard_local') return '/tmp/dachsterm-chat/clipboard-1.png';
       if (command === 'chat_start_local') {
         channel = (onEvent as { id: number }).id;
         return null;

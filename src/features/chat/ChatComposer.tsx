@@ -1,4 +1,13 @@
 import { useRef, useState } from 'react';
+import { useFileDrop } from '../../lib/fileDrop';
+import { call, errorText } from '../../lib/ipc';
+import {
+  addFiles,
+  sizeText,
+  type AttachItem,
+  type ChatAttachment,
+  type ClipboardImage,
+} from './chatAttachments';
 import type { ChatSession } from './chatSession';
 import { AgentsPanel, ContextPanel, ModelPanel, ModePanel, UsagePanel } from './ChatPanels';
 import {
@@ -40,9 +49,39 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
   const [panel, setPanel] = useState<Panel>(null);
   const [pick, setPick] = useState(0);
   const [dismissed, setDismissed] = useState('');
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [attachError, setAttachError] = useState('');
   const box = useRef<HTMLTextAreaElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   const working = chat.phase === 'working';
   const ended = chat.phase === 'ended';
+  const remote = session.place.kind === 'ssh';
+  const empty = !draft.trim() && !attachments.length;
+  /** A server receives at most 20 MiB a file; this PC's files are only named. */
+  const addPaths = async (paths: string[]) => {
+    if (!paths.length) return;
+    setAttachError('');
+    try {
+      const items = await call<AttachItem[]>('prompt_files_inspect', { paths, upload: remote });
+      setAttachments((list) => addFiles(list, paths, items));
+    } catch (e) {
+      setAttachError(errorText(e));
+    }
+  };
+  const dropping = useFileDrop(form, (paths) => void addPaths(paths), !ended);
+  const pasteImage = async () => {
+    setAttachError('');
+    try {
+      const image = await call<ClipboardImage | null>('prompt_clipboard_inspect');
+      if (image)
+        setAttachments((list) => [
+          ...list,
+          { id: crypto.randomUUID(), kind: 'clipboard', digest: image.digest, ...image.item },
+        ]);
+    } catch (e) {
+      setAttachError(errorText(e));
+    }
+  };
   const known = !!chat.account;
   const commands = dismissed === draft ? [] : commandMatches(chat, draft).slice(0, 8);
   const running = chat.agents.filter((a) => a.status === 'running').length;
@@ -53,9 +92,14 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
   const close = () => setPanel(null);
   const submit = async () => {
     const text = draft;
-    if (!text.trim() || !canSend(chat)) return;
+    const sending = attachments;
+    if (empty || !canSend(chat)) return;
     setDraft('');
-    if (!(await session.send(text))) setDraft(text);
+    setAttachments([]);
+    if (!(await session.send(text, sending))) {
+      setDraft(text);
+      setAttachments(sending);
+    }
   };
   const chooseCommand = (name: string) => {
     setDraft(`/${name} `);
@@ -76,7 +120,8 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
   );
   return (
     <form
-      className="chat-composer"
+      ref={form}
+      className={`chat-composer${dropping ? ' dropping' : ''}`}
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
@@ -106,6 +151,29 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
       {panel === 'usage' && <UsagePanel chat={chat} close={close} />}
       {panel === 'context' && <ContextPanel chat={chat} close={close} />}
       {panel === 'agents' && <AgentsPanel chat={chat} close={close} />}
+      {(attachments.length > 0 || attachError) && (
+        <ul className="chat-attachments" aria-label="첨부">
+          {attachments.map((a) => (
+            <li key={a.id}>
+              <span className="chat-attachment-name">{a.name}</span>
+              <span className="chat-detail">{sizeText(a.size)}</span>
+              <button
+                type="button"
+                className="chat-icon"
+                aria-label={`첨부 빼기: ${a.name}`}
+                onClick={() => setAttachments((list) => list.filter((x) => x !== a))}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+          {attachError && (
+            <li className="chat-attach-error" role="alert">
+              {attachError}
+            </li>
+          )}
+        </ul>
+      )}
       <textarea
         ref={box}
         aria-label="프롬프트"
@@ -123,6 +191,13 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
         onChange={(e) => {
           setDraft(e.target.value);
           setPick(0);
+        }}
+        onPaste={(e) => {
+          // An image goes as an attachment; text pastes as usual.
+          const image = Array.from(e.clipboardData.files).some((f) => f.type.startsWith('image/'));
+          if (!image) return;
+          e.preventDefault();
+          void pasteImage();
         }}
         onKeyDown={(e) => {
           // Keys never act while an input method is composing.
@@ -153,6 +228,20 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
         }}
       />
       <div className="chat-composer-row">
+        <button
+          type="button"
+          className="chat-icon"
+          aria-label="파일 첨부"
+          title="파일 첨부 · 끌어다 놓기 · 이미지 붙여넣기"
+          disabled={ended}
+          onClick={() =>
+            void call<string[]>('chat_pick_files').then(addPaths, (e) =>
+              setAttachError(errorText(e)),
+            )
+          }
+        >
+          +
+        </button>
         <button
           type="button"
           className="chat-icon"
@@ -204,7 +293,7 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
               .filter(Boolean)
               .join(' · '),
           )}
-        {working && !draft.trim() ? (
+        {working && empty ? (
           <button
             type="button"
             className="chat-send"
@@ -223,7 +312,7 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
             className="chat-send"
             aria-label="보내기"
             title="보내기 (Enter)"
-            disabled={!canSend(chat) || !draft.trim()}
+            disabled={!canSend(chat) || empty}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" />

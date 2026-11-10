@@ -328,6 +328,8 @@ pub fn run() {
             chat::chat_set_mode,
             chat::chat_usage,
             chat::chat_set_ultracode,
+            chat::attach::chat_clipboard_local,
+            chat::attach::chat_pick_files,
             chat::chat_close,
             net_tools::net_port_check,
             net_tools::net_listeners,

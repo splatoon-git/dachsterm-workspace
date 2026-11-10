@@ -71,7 +71,8 @@ export type ChatEvent =
     };
 
 export type ChatItem =
-  | { kind: 'user'; id: number; text: string }
+  /** `files` are the attachments' names, shown under the words. */
+  | { kind: 'user'; id: number; text: string; files: string[] }
   /** `streaming` while the reply is still being written. */
   | { kind: 'agent'; id: number; text: string; streaming: boolean }
   /** `seconds` once the thinking is over. */
@@ -337,8 +338,8 @@ export function applyChatEvent(state: ChatState, event: ChatEvent, now = Date.no
 }
 
 /** The user's message, shown at once. The agent reads it when the current turn allows. */
-export const withSent = (state: ChatState, text: string): ChatState =>
-  add({ ...state, phase: 'working' }, { kind: 'user', text });
+export const withSent = (state: ChatState, text: string, files: string[] = []): ChatState =>
+  add({ ...state, phase: 'working' }, { kind: 'user', text, files });
 
 /** Messages are accepted during a turn too: the agent folds them into it (AC.0 measurement). */
 export const canSend = (state: ChatState) => state.phase === 'ready' || state.phase === 'working';
@@ -443,7 +444,9 @@ export function chatTranscript(state: ChatState) {
     .flatMap((item) => {
       switch (item.kind) {
         case 'user':
-          return [`**나:** ${item.text}`];
+          return [
+            `**나:** ${item.text}${item.files.length ? ` (첨부: ${item.files.join(', ')})` : ''}`,
+          ];
         case 'agent':
           return [item.text];
         case 'tool':

@@ -552,3 +552,42 @@
 .chat-switch .chat-detail {
   white-space: normal;
 }
+.chat-composer.dropping {
+  border-color: var(--color-action-primary);
+  background: var(--color-action-selected);
+}
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chat-attachments > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 100%;
+  padding: var(--space-xxs) var(--space-xxs) var(--space-xxs) var(--space-sm);
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-subtle);
+  font-size: var(--font-small);
+}
+.chat-attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-attachments > li.chat-attach-error {
+  border-color: var(--color-status-error);
+  color: var(--color-status-error);
+}
+.chat-you-files {
+  display: block;
+  margin-top: var(--space-xs);
+  font-size: var(--font-small);
+  color: var(--color-text-secondary);
+}
