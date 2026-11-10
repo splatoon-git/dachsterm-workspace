@@ -22,6 +22,14 @@
 
 대상 밖 5건은 Linux 그래프에만 있다: `glib` 0.18.5(RUSTSEC-2024-0429), `proc-macro-error`(RUSTSEC-2024-0370), `zvariant`·`zvariant_derive`·`zbus_names`(RUSTSEC-2026-0370·0371·0372). Linux를 출시 대상에 넣으면 다시 봐야 한다.
 
+### RUSTSEC-2026-0459 (2026-11-10)
+
+2026-10-30에 공개된 [RUSTSEC-2026-0459](https://rustsec.org/advisories/RUSTSEC-2026-0459.html)(CVE-2026-119375)로 `main` CI(`bc1893d`)가 Windows·macOS 모두 `audit-dependencies.mjs`에서 실패했다. 테스트는 두 OS 모두 통과했다. 3.54.0 이전 SQLite는 페이지 크기가 다른 `-wal` 파일과 함께 연 DB에서 초기화되지 않은 메모리를 돌려줄 수 있다. `rusqlite`의 `bundled` feature로 `libsqlite3-sys` 0.36.0(SQLite 3.53 계열)이 들어가 있었다.
+
+- 조치: `rusqlite` 0.38 → 0.41(잠금 0.41.1, `libsqlite3-sys` 0.39.1, `hashlink` 0.12.2). 소스 변경은 필요 없었다.
+- Mac 확인(`fix/rusqlite-0.41`, 미커밋 트리): `cargo fmt --all --check` 통과, `cargo clippy --workspace --all-targets --locked -- -D warnings` 통과, `cargo test --workspace --locked` 680개 통과·4개 무시, `node scripts/audit-dependencies.mjs` 차단 0건·대상 밖 5건.
+- Windows와 CI 결과는 `main` 반영 후 확인한다.
+
 GitHub Actions는 커밋 SHA가 아니라 태그(`@v4`)로 고정돼 있다. 권한은 `contents: read`다.
 
 ## 소스
