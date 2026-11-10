@@ -92,3 +92,10 @@
 - **이 PC 채팅(`8408b60`):** 로컬 셸 탭(WSL 제외)의 파일 트리 폴더 우클릭 **여기서 채팅 열기**로 앱이 `claude`를 자식 프로세스로 실행한다(`chat_start_local`). 경로는 `PATH`(macOS는 `login_path` 적용분)와 `~/.local/bin`, 폴더는 절대 경로이면서 실제 폴더여야 한다. 게이트(Mac): format·typecheck·lint 통과, Vitest 1335, Playwright 521, `cargo test --workspace` 658, clippy 통과. 실제 앱 확인 대기. Windows에서는 `claude.exe`만 찾는다(npm 설치본의 `.cmd`는 미지원).
 - **로컬 폴더 메뉴 결함(`580cfbf`):** 사용자가 디버그 앱에서 로컬 폴더 우클릭에 **여기서 채팅 열기**가 없다고 알렸다. `LocalFilePanel`이 `folderMenu`를 쓰지 않아 앱이 넘긴 폴더 항목이 그려지지 않았다. 고친 뒤 `tests/ui/local-files.spec.ts`(새 fixture)가 수정 전 실패·수정 후 통과함을 확인했다. 게이트: typecheck·lint·format, Vitest 1335, Playwright 522 통과.
 
+## AC.2 편집기식 채팅 화면 (2026-11-10, `2467421`)
+
+- **범위:** `--include-partial-messages`로 답을 실시간 표시하고, 블록이 끝나면 완성본으로 바꾼다. 답은 파일 미리보기의 정화된 Markdown으로 그린다(`lib/markdown.ts`, `components/MarkdownPreview.tsx`로 옮김). 생각 시작·끝(걸린 초), 도구 호출 한 줄 요약과 결과, `Edit`·`Write`의 전후 내용을 점이 있는 단계 줄로 보인다. 작업 중에는 **작업 중지**(`chat_interrupt`, Claude `control_request interrupt`)가 보이고, 중지한 턴은 오류가 아니라 "중지했습니다."로 끝난다.
+- **실측(로컬 `claude` 2.1.319, `sonnet`):** 부분 메시지 `content_block_start`·`text_delta`·`input_json_delta`·`content_block_stop`, 도구 결과의 `content`가 문자열로 왔다. 생각 블록은 이번 실행에서 나오지 않아 표준 형식(`thinking`)으로 구현하고 단위 테스트만 했다.
+- **게이트(Mac, `2467421`):** format·typecheck·lint 통과, Vitest 1339, Playwright 524(새 `chat.spec.ts` 2건: 스트리밍·도구·diff·중지, 완성본 교체), `cargo test --workspace` 662, clippy 통과. fixture 스크린샷으로 배치를 확인했다.
+- **대기:** 실제 앱 확인, 생각 블록 실측, 승인 카드와 권한 칩(AC.5).
+
