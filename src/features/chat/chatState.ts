@@ -105,6 +105,8 @@ export type ChatState = {
   agents: ChatAgent[];
   account: { plan: string; email: string } | null;
   effort: string;
+  /** Ultracode for this session, as last set from this chat. The agent does not report it. */
+  ultracode: boolean;
   /** The session's cost and edits, and the account's usage windows. */
   usage: { cost: number; added: number; removed: number } | null;
   limits: ChatLimit[];
@@ -125,6 +127,7 @@ export const initialChat: ChatState = {
   agents: [],
   account: null,
   effort: '',
+  ultracode: false,
   usage: null,
   limits: [],
   lastTurn: null,

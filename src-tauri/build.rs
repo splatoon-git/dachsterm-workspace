@@ -95,6 +95,7 @@ fn main() {
             "chat_set_effort",
             "chat_set_mode",
             "chat_usage",
+            "chat_set_ultracode",
             "chat_close",
             "net_port_check",
             "net_listeners",

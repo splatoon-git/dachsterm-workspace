@@ -123,6 +123,20 @@ export class ChatSession {
     }
   };
 
+  /** Ultracode runs as a short turn of its own, so it waits until no turn is running. */
+  setUltracode = async (on: boolean) => {
+    const id = this.started;
+    if (!id || this.state.phase !== 'ready') return;
+    this.set({ ...this.state, ultracode: on, phase: 'working' });
+    try {
+      await call('chat_set_ultracode', { id, on });
+    } catch (e) {
+      this.set(
+        withNotice({ ...this.state, ultracode: !on, phase: 'ready' }, 'error', errorText(e)),
+      );
+    }
+  };
+
   /** Changes the permission mode. The agent confirms it, or the chat says why not. */
   setMode = async (mode: string) => {
     const id = this.started;

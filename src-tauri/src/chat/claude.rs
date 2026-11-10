@@ -117,6 +117,16 @@ pub fn mode_message(mode: &str) -> Option<String> {
     })
 }
 
+/// Ultracode (dynamic workflows on every task) for this session. The CLI has no request for it;
+/// its `/effort` command takes it as a turn of its own (measured with 2.1.319).
+pub fn ultracode_message(on: bool) -> String {
+    user_message(if on {
+        "/effort ultracode on"
+    } else {
+        "/effort ultracode off"
+    })
+}
+
 pub fn usage_message() -> String {
     control("usage", json!({ "subtype": "get_usage" }))
 }
@@ -692,6 +702,8 @@ mod tests {
         ));
         assert!(effort_message("max").is_some() && effort_message("turbo").is_none());
         assert!(mode_message("bypassPermissions").is_some() && mode_message("x").is_none());
+        let on: Value = serde_json::from_str(&ultracode_message(true)).unwrap();
+        assert_eq!(on["message"]["content"], "/effort ultracode on");
     }
 
     #[test]

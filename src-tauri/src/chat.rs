@@ -214,6 +214,12 @@ pub async fn chat_set_mode(state: State<'_, AppState>, id: String, mode: String)
     deliver(&state, &id, &line).await
 }
 
+/// Turns Ultracode on or off for this session. It runs as a short turn of its own.
+#[tauri::command]
+pub async fn chat_set_ultracode(state: State<'_, AppState>, id: String, on: bool) -> Result<()> {
+    deliver(&state, &id, &claude::ultracode_message(on)).await
+}
+
 /// Asks for the session's cost and the account's usage limits; they come as a `Usage` event.
 #[tauri::command]
 pub async fn chat_usage(state: State<'_, AppState>, id: String) -> Result<()> {

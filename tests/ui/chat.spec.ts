@@ -187,6 +187,12 @@ test('permission mode, effort, usage, a new chat beside and copying', async ({ p
   await page.getByRole('group', { name: '노력 수준' }).getByRole('button', { name: 'Max' }).click();
   expect(await calls()).toContain('chat_set_effort');
   await expect(page.getByRole('button', { name: '모델 Opus' })).toHaveText('Opus · Max');
+  await page.getByRole('switch', { name: /Ultracode/ }).check();
+  expect(await calls()).toContain('chat_set_ultracode');
+  await expect(page.getByRole('button', { name: '모델 Opus' })).toHaveText(
+    'Opus · Max · Ultracode',
+  );
+  await emit(page, [{ kind: 'turnFinished', ok: true, detail: null }]);
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: '권한 모드 기본' }).click();

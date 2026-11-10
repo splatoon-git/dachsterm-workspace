@@ -149,6 +149,7 @@
     "allow-chat-set-effort",
     "allow-chat-set-mode",
     "allow-chat-usage",
+    "allow-chat-set-ultracode",
     "allow-chat-close",
     "allow-net-port-check",
     "allow-net-listeners",

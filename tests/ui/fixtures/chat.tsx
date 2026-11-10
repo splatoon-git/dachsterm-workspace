@@ -49,6 +49,7 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
           'chat_set_effort',
           'chat_set_mode',
           'chat_usage',
+          'chat_set_ultracode',
           'clipboard_write_text',
         ].includes(command)
       )

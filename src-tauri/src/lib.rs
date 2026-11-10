@@ -327,6 +327,7 @@ pub fn run() {
             chat::chat_set_effort,
             chat::chat_set_mode,
             chat::chat_usage,
+            chat::chat_set_ultracode,
             chat::chat_close,
             net_tools::net_port_check,
             net_tools::net_listeners,

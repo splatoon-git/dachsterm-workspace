@@ -196,7 +196,13 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
           chip(
             'model',
             `모델 ${modelLabel(chat)}`,
-            chat.effort ? `${modelLabel(chat)} · ${effortLabel(chat.effort)}` : modelLabel(chat),
+            [
+              modelLabel(chat),
+              chat.effort && effortLabel(chat.effort),
+              chat.ultracode && 'Ultracode',
+            ]
+              .filter(Boolean)
+              .join(' · '),
           )}
         {working && !draft.trim() ? (
           <button

@@ -88,7 +88,7 @@ npm run tauri -- build --bundles app,dmg           macOS 앱과 DMG
 ```text
 npx vitest run src/features/terminal/snippets.test.ts
 npx vitest run src/features/games/survivor/engine.test.ts -t "테스트 이름 일부"
-npx playwright test tests/ui/themes.spec.ts            최초 1회 npx playwright install chromium 필요
+npx playwright test tests/ui/themes.spec.ts            최초 1회 npx playwright install chromium 필요(macOS는 chromium webkit)
 cargo test -p dachsterm --lib --locked hostkeys        모듈명·테스트명으로 필터
 ```
 
