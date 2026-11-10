@@ -153,7 +153,7 @@ export function ChatPane({
   const link = useSyncExternalStore(session.link.subscribe, session.link.snapshot);
   const thread = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
-  const { place, folder } = session;
+  const { place, folder, program } = session;
   const title = placeTitle(place);
   const last = chat.items.at(-1);
   // Follows new output unless the user has scrolled up to read.
@@ -171,7 +171,7 @@ export function ChatPane({
     <section className="chat-pane" aria-label={`${title} 에이전트 채팅`}>
       <header className="chat-head">
         <strong>{title}</strong>
-        <span>{[placeDetail(place), folder].filter(Boolean).join(' · ')}</span>
+        <span>{[program, placeDetail(place), folder].filter(Boolean).join(' · ')}</span>
         <button
           type="button"
           className="chat-icon chat-new"

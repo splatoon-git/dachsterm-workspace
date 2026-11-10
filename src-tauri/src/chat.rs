@@ -1,12 +1,14 @@
 //! Agent chat (AC, docs/design/agent-chat.md): a conversation with an agent CLI in a chat tab
 //! instead of a terminal. Over SSH the connection stops after login (`login_only`) and the agent
 //! runs detached on the server (`runner`); on this PC it is a child process (`local`). Either way
-//! its output reaches the tab as `ChatEvent`s.
+//! its output reaches the tab as `ChatEvent`s. The agent is `claude` or `codex` (`program`).
 mod approval;
 pub mod attach;
 mod claude;
+mod codex;
 mod event;
 mod local;
+mod program;
 mod runner;
 
 use crate::{
@@ -15,6 +17,7 @@ use crate::{
     storage::Result,
 };
 pub use event::{ChatEvent, EndReason};
+use program::{Change, Program};
 use russh::client;
 use std::{
     collections::{HashMap, HashSet},
@@ -57,7 +60,9 @@ struct Chat {
     sending: tokio::sync::Mutex<()>,
     reading: Mutex<Option<JoinHandle<()>>>,
     /// Kept across attaches, since a reply being streamed can be cut between two of its lines.
-    reader: Mutex<claude::Reader>,
+    reader: Mutex<program::Reader>,
+    /// The tab's channel of the reading in progress, for what the chat shows without the agent.
+    events: Mutex<Option<Channel<ChatEvent>>>,
     /// Approvals the agent is waiting for, with the input each answer must carry back. They stay
     /// while the chat is disconnected, so an answer after reconnecting still finds its input.
     asking: Mutex<HashMap<String, serde_json::Value>>,
@@ -73,7 +78,7 @@ impl Chats {
             .ok_or_else(|| "채팅이 시작되지 않았습니다.".into())
     }
     /// Records a started chat, or gives back `None` if another start for this ID won the race.
-    fn insert(&self, id: &str, agent: Agent) -> Option<Arc<Chat>> {
+    fn insert(&self, id: &str, agent: Agent, program: Program) -> Option<Arc<Chat>> {
         let mut entries = self.entries.lock().unwrap();
         if entries.contains_key(id) {
             return None;
@@ -82,7 +87,8 @@ impl Chats {
             agent,
             sending: Default::default(),
             reading: Mutex::new(None),
-            reader: Mutex::default(),
+            reader: Mutex::new(program.reader()),
+            events: Mutex::default(),
             asking: Mutex::default(),
         });
         entries.insert(id.to_string(), chat.clone());
@@ -108,6 +114,7 @@ impl Chats {
         if let Some(old) = reading.take() {
             old.abort();
         }
+        *chat.events.lock().unwrap() = Some(events.clone());
         *reading = Some(tauri::async_runtime::spawn(read(
             handle,
             chat.clone(),
@@ -166,7 +173,7 @@ pub async fn chat_disconnect(state: State<'_, AppState>, id: String) -> Result<(
     Ok(())
 }
 
-/// Starts the agent in `folder` (empty: the login folder) through SSH connection `connection`,
+/// Starts `program` in `folder` (empty: the login folder) through SSH connection `connection`,
 /// the chat's own or a terminal's.
 #[tauri::command]
 pub async fn chat_start(
@@ -174,11 +181,13 @@ pub async fn chat_start(
     id: String,
     connection: String,
     folder: String,
+    program: String,
     on_event: Channel<ChatEvent>,
 ) -> Result<()> {
     if Uuid::parse_str(&id).is_err() {
         return Err("잘못된 채팅 ID".into());
     }
+    let program = Program::of(&program)?;
     if let Some(problem) = runner::folder_problem(&folder) {
         return Err(problem.into());
     }
@@ -186,24 +195,21 @@ pub async fn chat_start(
     if state.chats.entries.lock().unwrap().contains_key(&id) {
         return Err("이미 시작한 채팅입니다.".into());
     }
-    let program = runner::locate(&handle, claude::PROGRAM).await?;
+    let path = runner::locate(&handle, program.name()).await?;
     let name = Uuid::new_v4().simple().to_string();
-    let argv: Vec<String> = std::iter::once(program)
-        .chain(claude::arguments())
-        .collect();
+    let argv: Vec<String> = std::iter::once(path).chain(program.arguments()).collect();
     runner::start(&handle, &name, &folder, &argv).await?;
     let remote = Remote {
         runner: name.clone(),
         connection: Mutex::new(connection),
         offset: AtomicU64::new(0),
     };
-    let Some(chat) = state.chats.insert(&id, Agent::Remote(remote)) else {
+    let Some(chat) = state.chats.insert(&id, Agent::Remote(remote), program) else {
         let _ = runner::stop(&handle, &name).await;
         return Err("이미 시작한 채팅입니다.".into());
     };
     state.chats.attach(&chat, handle, on_event);
-    deliver(&state, &id, &claude::initialize_message()).await?;
-    deliver(&state, &id, &claude::settings_message()).await
+    open_conversation(&state, &id).await
 }
 
 /// Reads on through `connection` after the chat's connection was lost. Output the agent wrote in
@@ -225,34 +231,48 @@ pub async fn chat_attach(
     Ok(())
 }
 
-/// Starts the agent on this PC in `folder` (empty: the home folder).
+/// Starts `program` on this PC in `folder` (empty: the home folder).
 #[tauri::command]
 pub async fn chat_start_local(
     state: State<'_, AppState>,
     id: String,
     folder: String,
+    program: String,
     on_event: Channel<ChatEvent>,
 ) -> Result<()> {
     if Uuid::parse_str(&id).is_err() {
         return Err("잘못된 채팅 ID".into());
     }
+    let program = Program::of(&program)?;
     if state.chats.entries.lock().unwrap().contains_key(&id) {
         return Err("이미 시작한 채팅입니다.".into());
     }
     let (agent, stdout, stderr) = tauri::async_runtime::spawn_blocking(move || {
         let folder = local::folder(&folder)?;
-        let program = local::locate(claude::PROGRAM)?;
-        local::start(&program, &claude::arguments(), &folder)
+        let path = local::locate(program.name())?;
+        local::start(&path, &program.arguments(), &folder)
     })
     .await
     .map_err(|_| "에이전트를 실행할 수 없습니다.".to_string())??;
-    let Some(chat) = state.chats.insert(&id, Agent::Local(Box::new(agent))) else {
+    let Some(chat) = state
+        .chats
+        .insert(&id, Agent::Local(Box::new(agent)), program)
+    else {
         return Err("이미 시작한 채팅입니다.".into());
     };
+    *chat.events.lock().unwrap() = Some(on_event.clone());
     let task = tauri::async_runtime::spawn(read_local(stdout, stderr, chat.clone(), on_event));
     *chat.reading.lock().unwrap() = Some(task);
-    deliver(&state, &id, &claude::initialize_message()).await?;
-    deliver(&state, &id, &claude::settings_message()).await
+    open_conversation(&state, &id).await
+}
+
+/// What the agent is told first: what it offers, and for Codex the conversation itself.
+async fn open_conversation(state: &AppState, id: &str) -> Result<()> {
+    let opening = state.chats.get(id)?.reader.lock().unwrap().opening();
+    for line in opening {
+        deliver(state, id, &line).await?;
+    }
+    Ok(())
 }
 
 /// Hands the agent one user message. Messages queue on the server while a turn is running.
@@ -261,58 +281,56 @@ pub async fn chat_send(state: State<'_, AppState>, id: String, text: String) -> 
     if text.trim().is_empty() {
         return Err("보낼 내용을 입력하세요.".into());
     }
-    let line = claude::user_message(&text);
-    if line.len() > runner::MAX_MESSAGE {
-        return Err("메시지가 너무 깁니다.".into());
-    }
-    deliver(&state, &id, &line).await
+    change(&state, &id, |agent| {
+        let line = agent.user_message(&text)?;
+        if line.len() > runner::MAX_MESSAGE {
+            return Err("메시지가 너무 깁니다.".into());
+        }
+        Ok(Change::Line(line))
+    })
+    .await
 }
 
 /// Stops the turn that is running. The agent stays and takes the next message.
 #[tauri::command]
 pub async fn chat_interrupt(state: State<'_, AppState>, id: String) -> Result<()> {
-    deliver(&state, &id, &claude::interrupt_message()).await
+    change(&state, &id, |agent| Ok(agent.interrupt())).await
 }
 
 /// Asks how full the context window is. The answer comes as a `Context` event.
 #[tauri::command]
 pub async fn chat_context(state: State<'_, AppState>, id: String) -> Result<()> {
-    deliver(&state, &id, &claude::context_message()).await
+    change(&state, &id, |agent| Ok(agent.context())).await
 }
 
 /// Switches the model for the next turns. A refusal comes as a `Problem` event.
 #[tauri::command]
 pub async fn chat_set_model(state: State<'_, AppState>, id: String, model: String) -> Result<()> {
-    if let Some(problem) = claude::model_problem(&model) {
-        return Err(problem.into());
-    }
-    deliver(&state, &id, &claude::model_message(&model)).await
+    change(&state, &id, |agent| agent.model(&model)).await
 }
 
 /// Changes the effort level for the next turns.
 #[tauri::command]
 pub async fn chat_set_effort(state: State<'_, AppState>, id: String, level: String) -> Result<()> {
-    let line = claude::effort_message(&level).ok_or("알 수 없는 노력 수준입니다.")?;
-    deliver(&state, &id, &line).await
+    change(&state, &id, |agent| agent.effort(&level)).await
 }
 
 /// Changes the permission mode. The new mode comes back as a `Mode` event.
 #[tauri::command]
 pub async fn chat_set_mode(state: State<'_, AppState>, id: String, mode: String) -> Result<()> {
-    let line = claude::mode_message(&mode).ok_or("알 수 없는 권한 모드입니다.")?;
-    deliver(&state, &id, &line).await
+    change(&state, &id, |agent| agent.mode(&mode)).await
 }
 
 /// Turns Ultracode on or off for this session. It runs as a short turn of its own.
 #[tauri::command]
 pub async fn chat_set_ultracode(state: State<'_, AppState>, id: String, on: bool) -> Result<()> {
-    deliver(&state, &id, &claude::ultracode_message(on)).await
+    change(&state, &id, |agent| agent.ultracode(on)).await
 }
 
 /// Asks for the session's cost and the account's usage limits; they come as a `Usage` event.
 #[tauri::command]
 pub async fn chat_usage(state: State<'_, AppState>, id: String) -> Result<()> {
-    deliver(&state, &id, &claude::usage_message()).await
+    change(&state, &id, |agent| Ok(agent.usage())).await
 }
 
 /// Answers an approval the agent is waiting for. `answers` answers the question tool, by question.
@@ -336,18 +354,46 @@ pub async fn chat_answer(
         (true, Some(answers)) => approval::Decision::Answer(answers),
         (true, None) => approval::Decision::Allow,
     };
-    deliver(
-        &state,
-        &id,
-        &approval::answer_message(&request, &input, decision),
-    )
-    .await
+    let line = chat
+        .reader
+        .lock()
+        .unwrap()
+        .answer(&request, &input, decision);
+    deliver(&state, &id, &line).await
 }
 
 /// One line to the agent's input, in the order lines were given.
 async fn deliver(state: &AppState, id: &str, line: &str) -> Result<()> {
     let chat = state.chats.get(id)?;
     let _order = chat.sending.lock().await;
+    write(state, &chat, line).await
+}
+
+/// Builds what a request comes to from the agent's state and carries it out. Building waits for
+/// the lines before it, so a Codex request ID follows the order the agent reads them in.
+async fn change(
+    state: &AppState,
+    id: &str,
+    build: impl FnOnce(&mut program::Reader) -> Result<Change>,
+) -> Result<()> {
+    let chat = state.chats.get(id)?;
+    let _order = chat.sending.lock().await;
+    let built = build(&mut chat.reader.lock().unwrap())?;
+    match built {
+        Change::Line(line) => write(state, &chat, &line).await,
+        Change::Event(event) => {
+            let events = chat.events.lock().unwrap().clone();
+            // A tab that is gone sees nothing; the agent still takes the change.
+            if let Some(events) = events {
+                let _ = events.send(event);
+            }
+            Ok(())
+        }
+        Change::Nothing => Ok(()),
+    }
+}
+
+async fn write(state: &AppState, chat: &Chat, line: &str) -> Result<()> {
     match &chat.agent {
         Agent::Remote(remote) => {
             let connection = remote.connection.lock().unwrap().clone();

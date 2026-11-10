@@ -20,7 +20,9 @@ declare global {
 }
 window.__chat = { calls: [] };
 window.__via = 'terminal-1';
-const ssh = new URLSearchParams(location.search).has('ssh');
+const query = new URLSearchParams(location.search);
+const ssh = query.has('ssh');
+const program = query.has('codex') ? 'codex' : 'claude';
 
 const callbacks = new Map<number, (message: unknown) => void>();
 let nextCallback = 1;
@@ -113,7 +115,7 @@ const session = ssh
       },
       '/srv/app',
     )
-  : new ChatSession({ kind: 'local', name: 'zsh · 기본 셸' }, '/Users/me/work/app');
+  : new ChatSession({ kind: 'local', name: 'zsh · 기본 셸' }, '/Users/me/work/app', program);
 session.open();
 createRoot(document.getElementById('root')!).render(
   <div style={{ width: 900, height: 640, display: 'flex' }}>

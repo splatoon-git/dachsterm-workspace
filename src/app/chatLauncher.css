@@ -101,6 +101,12 @@
 .chat-launch-new .chat-launch-detail {
   white-space: normal;
 }
+.chat-launch-program {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-tiny);
+}
 .chat-launch-away {
   color: var(--color-text-secondary);
 }

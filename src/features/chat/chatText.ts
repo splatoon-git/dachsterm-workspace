@@ -1,3 +1,4 @@
+import type { ChatProgram } from './chatPlaces';
 import type { ChatState } from './chatState';
 
 /** How a chat's values read on screen and on the clipboard. Kept apart from the event reducer. */
@@ -46,15 +47,46 @@ export const permissionModes: { value: string; label: string; detail: string; ri
   },
 ];
 
-export const modeLabel = (mode: string) =>
-  permissionModes.find((m) => m.value === mode)?.label ?? mode;
+/** Codex's modes: its sandbox and who answers approvals (design §3). */
+const codexModes: typeof permissionModes = [
+  {
+    value: 'default',
+    label: '기본',
+    detail: '작업 폴더 안에서는 바로 하고, 그 밖의 파일이나 네트워크는 묻습니다.',
+  },
+  {
+    value: 'readOnly',
+    label: '읽기 전용',
+    detail: '파일을 바꾸지 않습니다. 바꿔야 하면 묻습니다.',
+  },
+  { value: 'auto', label: '자동', detail: '승인이 필요한 동작은 검토 에이전트가 판단합니다.' },
+  {
+    value: 'bypassPermissions',
+    label: '권한 확인 생략',
+    detail: '샌드박스 없이 묻지 않고 파일을 바꾸고 명령을 실행합니다.',
+    risky: true,
+  },
+];
+
+/** The permission modes the chat's agent offers. */
+export const modesOf = (program: ChatProgram) =>
+  program === 'codex' ? codexModes : permissionModes;
+
+/** A mode by its value. The two agents give a shared value the same meaning and label. */
+export const modeOf = (mode: string) =>
+  permissionModes.find((m) => m.value === mode) ?? codexModes.find((m) => m.value === mode);
+
+export const modeLabel = (mode: string) => modeOf(mode)?.label ?? mode;
 
 const effortNames: Record<string, string> = {
+  none: 'None',
+  minimal: 'Minimal',
   low: 'Low',
   medium: 'Medium',
   high: 'High',
   xhigh: 'XHigh',
   max: 'Max',
+  ultra: 'Ultra',
 };
 export const effortLabel = (level: string) => effortNames[level] ?? level;
 

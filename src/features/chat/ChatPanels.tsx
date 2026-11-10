@@ -7,7 +7,7 @@ import {
   effortLevels,
   limitLabel,
   modelLabel,
-  permissionModes,
+  modesOf,
   resetText,
   tokenText,
 } from './chatText';
@@ -68,21 +68,23 @@ export function ModelPanel({ session, chat, close }: Props) {
           <span className="chat-detail">{m.detail}</span>
         </button>
       ))}
-      <label className="chat-switch">
-        <span>
-          <b>Ultracode</b>
-          <span className="chat-detail">
-            모든 작업에 여러 에이전트 흐름을 씁니다. 이 세션에만 적용됩니다.
+      {session.program === 'claude' && (
+        <label className="chat-switch">
+          <span>
+            <b>Ultracode</b>
+            <span className="chat-detail">
+              모든 작업에 여러 에이전트 흐름을 씁니다. 이 세션에만 적용됩니다.
+            </span>
           </span>
-        </span>
-        <input
-          type="checkbox"
-          role="switch"
-          checked={chat.ultracode}
-          disabled={chat.phase !== 'ready'}
-          onChange={(e) => void session.setUltracode(e.target.checked)}
-        />
-      </label>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={chat.ultracode}
+            disabled={chat.phase !== 'ready'}
+            onChange={(e) => void session.setUltracode(e.target.checked)}
+          />
+        </label>
+      )}
       {levels.length > 0 && (
         <div className="chat-effort" role="group" aria-label="노력 수준">
           <span>노력</span>
@@ -105,7 +107,7 @@ export function ModelPanel({ session, chat, close }: Props) {
 export function ModePanel({ session, chat, close }: Props) {
   return (
     <Popover label="권한 모드" close={close}>
-      {permissionModes.map((mode) => (
+      {modesOf(session.program).map((mode) => (
         <button
           key={mode.value}
           type="button"
