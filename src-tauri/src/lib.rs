@@ -5,6 +5,7 @@ mod agent_relay;
 mod approval;
 pub mod archive;
 pub mod broadcast;
+mod chat;
 mod commands;
 mod config_includes;
 pub mod credential_helper;
@@ -31,6 +32,7 @@ pub mod local;
 mod local_agent;
 mod local_files;
 mod local_links;
+mod login_only;
 #[cfg(target_os = "macos")]
 mod login_path;
 #[cfg(target_os = "macos")]
@@ -87,6 +89,7 @@ pub struct AppState {
     pub directory: PathBuf,
     pub store: Arc<storage::Store>,
     pub connections: Arc<ssh::Connections>,
+    pub chats: Arc<chat::Chats>,
     pub known_hosts: Vec<PathBuf>,
     pub mutation: std::sync::Mutex<()>,
     pub closing: AtomicBool,
@@ -189,6 +192,7 @@ pub fn run() {
                 directory,
                 store,
                 connections,
+                chats: Arc::default(),
                 known_hosts,
                 mutation: std::sync::Mutex::new(()),
                 closing: AtomicBool::new(false),
@@ -313,6 +317,23 @@ pub fn run() {
             commands::auth_reply,
             net_tools::net_connect,
             net_tools::net_disconnect,
+            chat::chat_open,
+            chat::chat_start,
+            chat::chat_attach,
+            chat::chat_disconnect,
+            chat::chat_start_local,
+            chat::chat_send,
+            chat::chat_interrupt,
+            chat::chat_context,
+            chat::chat_set_model,
+            chat::chat_set_effort,
+            chat::chat_set_mode,
+            chat::chat_usage,
+            chat::chat_set_ultracode,
+            chat::chat_answer,
+            chat::attach::chat_clipboard_local,
+            chat::attach::chat_pick_files,
+            chat::chat_close,
             net_tools::net_port_check,
             net_tools::net_listeners,
             net_tools::net_service_check,

@@ -21,6 +21,7 @@ export type AppShortcut =
   | { name: 'tunnels' }
   | { name: 'help' }
   | { name: 'nextAgent' }
+  | { name: 'chat' }
   | { name: 'settings' };
 
 const sides: Record<string, Side> = {
@@ -47,6 +48,8 @@ const withShift: Record<string, AppShortcut> = {
   Slash: { name: 'help' },
   // Ctrl+> as "next". No control character or common program binding uses Ctrl+Shift+period.
   Period: { name: 'nextAgent' },
+  // A for agent. L, which editors use for chat, already opens a local terminal here.
+  KeyA: { name: 'chat' },
 };
 
 type Keys = Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>;

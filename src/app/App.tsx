@@ -44,6 +44,7 @@ import { CommandPanel } from '../features/terminal/CommandPanel';
 import { SessionPane } from './SessionPane';
 import { useInputPanes } from './inputPanes';
 import { GroupDialog } from './GroupDialog';
+import { useChatTabs } from './useChatTabs';
 import { useReviewTabs } from './useReviewTabs';
 import { useFileTabs } from './useFileTabs';
 import { useToolTabs } from './useToolTabs';
@@ -54,9 +55,8 @@ import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { SessionTab } from './SessionTab';
 import { capabilities } from '../features/terminal/sessionKind';
-import type { CSSProperties } from 'react';
 import { SidebarViews } from './SidebarViews';
-import { TerminalPreviewCell } from './TerminalPreviewCell';
+import { PreviewTab, TerminalPreviewCell } from './TerminalPreviewCell';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
 import { TitleBar } from './TitleBar';
@@ -228,6 +228,7 @@ export function App() {
   }
   const keptByFile = (shortcut: AppShortcut) => files.keepsShortcut(shortcut);
   const runShortcut = (shortcut: AppShortcut) => {
+    if (shortcut.name === 'chat') return chats.toggleLauncher();
     switch (shortcut.name) {
       case 'fullscreen':
         return void toggleFullscreen();
@@ -312,7 +313,7 @@ export function App() {
     const game = games.find((g) => tabKey({ kind: 'game', id: g.id }) === key);
     if (session) closeTab(session);
     else if (game) closeGame(game.id);
-    else if (!reviews.close(key) && !files.close(key) && !tools.close(key)) workspace.close(key);
+    else if (![reviews, files, tools, chats].some((t) => t.close(key))) workspace.close(key);
   };
   const splitTab = (t: TerminalSession, beside: Beside) =>
     t.localTarget
@@ -320,6 +321,7 @@ export function App() {
       : requestConnect(savedProfile(t), undefined, { beside });
   const kubeTabs = useKubeTabs({ workspace, theme, tabs, setTabs, closeTab });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
+  const chats = useChatTabs({ workspace, sessions: tabs, profiles: snapshot.profiles });
   const files = useFileTabs({ workspace, sessions: tabs, narrow, fail: setError });
   const tools = useToolTabs({
     workspace,
@@ -342,8 +344,8 @@ export function App() {
       review: (t) => reviews.open(t),
       reconnect: reconnectTab,
       close: closeKey,
-      reload: files.reload,
-      reloadable: files.reloadable,
+      files,
+      chat: chats.menu,
       arranged: focusActiveTerminal,
     },
   });
@@ -353,7 +355,7 @@ export function App() {
   const hasPreview = allTabs(workspace.layout.root).some((tab) => tab.kind === 'preview');
   const selected = tabs.find((t) => sessionKey(t) === focusedKey);
   const owner = selected ?? files.owner(focusedKey);
-  const agents = useAgentBoard({ tabs, selected, open: workspace.open, fail: setError });
+  const agents = useAgentBoard({ tabs, chats, selected, open: workspace.open, fail: setError });
   const activeSession = (group: GroupNode) => tabs.find((t) => sessionKey(t) === group.active);
   // Only panes on screen take part: zoom and a narrow window leave one group in view.
   const input = useInputScope(
@@ -382,16 +384,9 @@ export function App() {
     if (tab.kind === 'review') return reviews.renderTab(tab, active, select);
     if (tab.kind === 'tool') return tools.renderTab(tab, active, select);
     if (tab.kind === 'file' || tab.kind === 'diff') return files.renderTab(tab, active, select);
+    if (tab.kind === 'chat') return chats.renderTab(tab, active, select);
     if (tab.kind === 'preview')
-      return (
-        <PlainTab
-          tabKey={key}
-          title="터미널 미리보기"
-          active={active}
-          select={select}
-          close={() => workspace.close(key)}
-        />
-      );
+      return <PreviewTab tabKey={key} active={active} select={select} close={workspace.close} />;
     return (
       <PlainTab
         tabKey={key}
@@ -406,6 +401,7 @@ export function App() {
   };
   const renderCell = (tab: TabRef, { visible, focused }: CellState) => {
     if (tab.kind === 'review') return reviews.renderCell(tab);
+    if (tab.kind === 'chat') return chats.renderCell(tab);
     if (tab.kind === 'tool') return tools.renderCell(tab, visible);
     if (tab.kind === 'file' || tab.kind === 'diff') return files.renderCell(tab);
     if (tab.kind === 'preview') return <TerminalPreviewCell theme={theme} />;
@@ -446,7 +442,7 @@ export function App() {
           전체화면 종료 · F11
         </button>
       )}
-      <TitleBar fail={setError} end={<HeaderActions run={runShortcut} />}>
+      <TitleBar fail={setError} end={<HeaderActions run={runShortcut} chat={chats.launcher} />}>
         <HeaderMenus
           sidebarOpen={sidebarOpen}
           toggleSidebar={() =>
@@ -476,7 +472,7 @@ export function App() {
         style={
           {
             '--sidebar-width': `${leftWidth}px`,
-          } as CSSProperties
+          } as React.CSSProperties
         }
       >
         {sidebarOpen && (
@@ -531,6 +527,7 @@ export function App() {
                 actions={{
                   connect: (p) => requestConnect(p),
                   startAgent: (p) => agent.ask(p),
+                  openChat: chats.ask,
                   edit: setForm,
                   toggleFavorite: (p) =>
                     void action('save_session', {
@@ -556,6 +553,7 @@ export function App() {
             session={owner}
             showConnections={() => setSidebarView('connections')}
             startAgent={(folder) => owner && agent.ask(savedProfile(owner), folder)}
+            openChat={(folder) => owner && chats.openFrom(owner, folder)}
             openReview={() => owner && reviews.open(owner)}
             files={files}
           />
@@ -578,6 +576,7 @@ export function App() {
               ...(hasPreview ? [{ kind: 'preview' } as const] : []),
               ...gameTabs.map((id) => ({ kind: 'game', id }) as const),
               ...reviews.order,
+              ...chats.order,
               ...files.order,
               ...tools.order,
             ]}
@@ -702,6 +701,7 @@ export function App() {
       )}
       {vault.dialog}
       {agent.dialogs}
+      {chats.dialog}
       <SettingsDialog
         open={settingsOpen}
         setOpen={setSettingsOpen}

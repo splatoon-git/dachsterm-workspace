@@ -11,6 +11,7 @@ export function SidebarViews({
   session,
   showConnections,
   startAgent,
+  openChat,
   openReview,
   files,
 }: {
@@ -18,6 +19,7 @@ export function SidebarViews({
   session: TerminalSession | undefined;
   showConnections: () => void;
   startAgent: (folder: string) => void;
+  openChat: (folder: string) => void;
   openReview: () => void;
   files: FileTabOpeners;
 }) {
@@ -34,6 +36,7 @@ export function SidebarViews({
           session={session}
           showConnections={showConnections}
           startAgent={startAgent}
+          openChat={openChat}
           openFile={files.open}
         />
       </div>

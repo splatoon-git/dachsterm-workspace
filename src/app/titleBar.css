@@ -43,6 +43,7 @@
   gap: var(--space-xs);
 }
 .tools > button,
+.tools > .chat-launcher > button,
 .tools .toolbar-menu > summary {
   display: inline-flex;
   align-items: center;
@@ -57,17 +58,21 @@
   white-space: nowrap;
 }
 .tools > button:hover,
+.tools > .chat-launcher > button:hover,
 .tools .toolbar-menu > summary:hover {
   background: var(--color-surface-subtle);
 }
 /* Icon buttons: what the old view and tools menus held, one per action. */
-.tools > .header-icon {
+.tools > .header-icon,
+.tools > .chat-launcher > .header-icon {
   width: 28px;
   padding: 0;
   color: var(--color-text-secondary);
 }
 .tools > .header-icon:hover,
-.tools > .header-icon[aria-expanded='true'] {
+.tools > .header-icon[aria-expanded='true'],
+.tools > .chat-launcher > .header-icon:hover,
+.tools > .chat-launcher > .header-icon[aria-expanded='true'] {
   color: var(--color-text-primary);
 }
 .header-divider {

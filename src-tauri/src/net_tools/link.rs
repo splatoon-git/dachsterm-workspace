@@ -5,22 +5,19 @@ use super::{
     dial::{Gate, RemoteDialer},
 };
 use crate::{
-    ssh::{Connections, Control, Event, Host, Sink, route},
-    storage::{Profile, Result, Store},
+    login_only,
+    ssh::{Connections, Control, Event, Host, Sink},
+    storage::{Profile, Result},
 };
 use russh::{ChannelOpenFailure, client};
 use std::{
     collections::HashMap,
-    path::PathBuf,
     sync::{Arc, Mutex, Weak},
     time::{Duration, Instant},
 };
 use tokio::sync::watch;
-use zeroize::Zeroizing;
 
 const IDLE_LIMIT: Duration = Duration::from_secs(5 * 60);
-/// How often a held connection looks at whether it or a jump host has gone.
-const HEALTH_INTERVAL: Duration = Duration::from_millis(200);
 
 enum Link {
     /// The tool tab opened this connection, under the link's own ID, and ends it.
@@ -171,114 +168,28 @@ pub fn reusable(connections: &Connections, profile: &Profile) -> Option<(String,
         .find(|(id, _)| !connections.net.owns(id) && connections.handle(id).is_ok())
 }
 
-pub struct Start {
-    pub connections: Arc<Connections>,
-    pub id: String,
-    pub profile: Profile,
-    pub secret: Option<Zeroizing<String>>,
-    pub hops: Vec<(Profile, Option<Zeroizing<String>>)>,
-    pub paths: Vec<PathBuf>,
-    pub sink: Sink,
-    pub store: Arc<Store>,
-}
-
-pub fn start(request: Start) -> Result<()> {
-    let Start {
-        connections,
-        id,
-        profile,
-        secret,
-        hops,
-        paths,
-        sink,
-        store,
-    } = request;
-    let (sink, mut channels) = connections.register(&id, &profile, &hops, sink, &store)?;
+/// Opens the tool's own connection, which closes after five minutes without use.
+pub fn start(request: login_only::Start) -> Result<()> {
     let (used, clock) = watch::channel(Instant::now());
-    connections
-        .net
-        .entries
-        .lock()
-        .unwrap()
-        .insert(id.clone(), Link::Owned { used });
-    let mut stopped = channels.stop.clone();
-    tokio::spawn(async move {
-        let work = async {
-            let route = route::open(
-                route::Target {
-                    profile: &profile,
-                    secret,
-                    hops,
-                    paths: &paths,
-                    forward_agent: false,
-                },
-                &mut channels,
-                sink.clone(),
-                &connections,
-                &id,
-            )
-            .await?;
-            route.publish(&connections, &id);
-            sink(Event::State {
-                status: "connected".into(),
-                message: format!("연결됨 · {}", route.description),
-            })?;
-            hold(&route, clock).await
-        };
-        let result = tokio::select! {
-            biased;
-            _ = stopped.wait_for(|stop| *stop) => Ok("연결을 닫았습니다.".to_string()),
-            result = work => result,
-        };
-        connections.finish(&id);
-        connections.net.forget(&id);
-        let (status, message) = match result {
-            Ok(message) => ("closed", message),
-            Err(message) => ("error", message),
-        };
-        let _ = sink(Event::State {
-            status: status.into(),
-            message,
-        });
-    });
-    Ok(())
-}
-
-/// Keeps the logged-in connection until it breaks or stops being used.
-async fn hold(route: &route::Route, clock: watch::Receiver<Instant>) -> Result<String> {
-    let quiet = idle(clock, idle_limit());
-    tokio::pin!(quiet);
-    loop {
-        tokio::select! {
-            _ = &mut quiet => return Ok("5분간 쓰지 않아 연결을 닫았습니다.".into()),
-            _ = tokio::time::sleep(HEALTH_INTERVAL) => {}
-        }
-        if let Some(hop) = route.broken_hop() {
-            return Err(format!("{hop}홉 연결이 끊어졌습니다."));
-        }
-        if route.session.is_closed() {
-            return Err("서버 연결이 끊어졌습니다.".into());
-        }
-    }
-}
-
-/// Finishes once `limit` passes with no use. Connecting time does not count, so the clock
-/// starts when this is first polled.
-async fn idle(mut clock: watch::Receiver<Instant>, limit: Duration) {
-    let mut since = Instant::now();
-    loop {
-        let wait = tokio::time::sleep_until((since + limit).into());
-        tokio::select! {
-            _ = wait => return,
-            changed = clock.changed() => {
-                // The sender goes with the link, and the stop that follows ends this task.
-                if changed.is_err() {
-                    return std::future::pending().await;
-                }
-                since = *clock.borrow_and_update();
-            }
-        }
-    }
+    let (id, connections) = (request.id.clone(), request.connections.clone());
+    let owner = connections.clone();
+    let ended = {
+        let (id, connections) = (id.clone(), connections.clone());
+        move || connections.net.forget(&id)
+    };
+    login_only::start(
+        request,
+        Some((clock, idle_limit())),
+        move || {
+            owner
+                .net
+                .entries
+                .lock()
+                .unwrap()
+                .insert(id, Link::Owned { used });
+        },
+        ended,
+    )
 }
 
 fn idle_limit() -> Duration {
@@ -295,35 +206,6 @@ fn idle_limit() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    async fn idle_ends_after_the_limit() {
-        let (_used, clock) = watch::channel(Instant::now());
-        let started = Instant::now();
-        idle(clock, Duration::from_millis(60)).await;
-        assert!(started.elapsed() >= Duration::from_millis(60));
-    }
-
-    #[tokio::test]
-    async fn a_use_restarts_the_idle_clock() {
-        let (used, clock) = watch::channel(Instant::now());
-        let started = Instant::now();
-        let waiting = tokio::spawn(idle(clock, Duration::from_millis(200)));
-        tokio::time::sleep(Duration::from_millis(120)).await;
-        used.send_replace(Instant::now());
-        waiting.await.unwrap();
-        assert!(started.elapsed() >= Duration::from_millis(320));
-    }
-
-    #[tokio::test]
-    async fn a_dropped_link_does_not_end_the_wait_by_itself() {
-        let (used, clock) = watch::channel(Instant::now());
-        let waiting = tokio::spawn(idle(clock, Duration::from_secs(60)));
-        drop(used);
-        tokio::time::sleep(Duration::from_millis(30)).await;
-        assert!(!waiting.is_finished());
-        waiting.abort();
-    }
 
     #[tokio::test]
     async fn closing_a_reused_link_leaves_the_terminal_alone() {

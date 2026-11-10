@@ -271,7 +271,7 @@ fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>> {
     Ok(output)
 }
 
-fn clipboard_png() -> Result<Option<Vec<u8>>> {
+pub(crate) fn clipboard_png() -> Result<Option<Vec<u8>>> {
     let mut clipboard =
         arboard::Clipboard::new().map_err(|_| "클립보드를 읽지 못했습니다.".to_string())?;
     let image = match clipboard.get_image() {
@@ -290,7 +290,7 @@ fn clipboard_png() -> Result<Option<Vec<u8>>> {
     Ok(Some(png))
 }
 
-fn digest(data: &[u8]) -> String {
+pub(crate) fn digest(data: &[u8]) -> String {
     Sha256::digest(data)
         .iter()
         .map(|b| format!("{b:02x}"))

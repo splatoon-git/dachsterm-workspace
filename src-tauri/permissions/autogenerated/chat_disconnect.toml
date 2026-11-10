@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-chat-disconnect"
+description = "Enables the chat_disconnect command without any pre-configured scope."
+commands.allow = ["chat_disconnect"]
+
+[[permission]]
+identifier = "deny-chat-disconnect"
+description = "Denies the chat_disconnect command without any pre-configured scope."
+commands.deny = ["chat_disconnect"]

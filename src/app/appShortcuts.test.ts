@@ -49,6 +49,11 @@ describe('app shortcuts', () => {
     expect(appShortcut(key('Period', { ctrl: true, shift: true }))).toEqual({ name: 'nextAgent' });
     expect(appShortcut(key('Period', { meta: true, shift: true }))).toEqual({ name: 'nextAgent' });
     expect(appShortcut(key('Period', { ctrl: true }))).toBeNull();
+    expect(appShortcut(key('KeyA', { ctrl: true, shift: true }))).toEqual({ name: 'chat' });
+    expect(appShortcut(key('KeyA', { meta: true, shift: true }))).toEqual({ name: 'chat' });
+    // Ctrl+A moves to the start of the line in a shell; Ctrl+Shift+L stays the local terminal.
+    expect(appShortcut(key('KeyA', { ctrl: true }))).toBeNull();
+    expect(appShortcut(key('KeyL', { ctrl: true, shift: true }))).toEqual({ name: 'local' });
     // Ctrl+S is the terminal's XOFF and F1 is help in programs such as mc.
     expect(appShortcut(key('KeyS', { ctrl: true }))).toBeNull();
     expect(appShortcut(key('F1'))).toBeNull();

@@ -11,7 +11,7 @@ import {
   tabRowKey,
   type AgentRow,
 } from './agentRows';
-import { agentReportOf, watchAgentReport } from './agentStatus';
+import { agentReportOf, watchAgentReport, type AgentSource } from './agentStatus';
 import type { TabRef } from './workspaceLayout';
 import { focusActiveTerminal } from './WorkspaceGrid';
 
@@ -26,13 +26,13 @@ const same = (a: AgentRow[], b: AgentRow[]) => JSON.stringify(a) === JSON.string
 /** The rows of this window's tabs, recomputed only when one of them reports a change. */
 class TabRows {
   private rows: AgentRow[] = [];
-  constructor(private readonly tabs: readonly TerminalSession[]) {
+  constructor(private readonly tabs: readonly AgentSource[]) {
     this.rows = this.read();
   }
   private read() {
     return this.tabs.flatMap((tab) => {
-      const report = agentReportOf(tab);
-      return report ? [{ ...report, key: tabRowKey(tab.tabId) }] : [];
+      const report = tab.read();
+      return report ? [{ ...report, key: tab.key }] : [];
     });
   }
   subscribe = (listener: () => void) => {
@@ -42,7 +42,7 @@ class TabRows {
       this.rows = next;
       listener();
     };
-    const stops = this.tabs.map((tab) => watchAgentReport(tab, changed));
+    const stops = this.tabs.map((tab) => tab.watch(changed));
     changed();
     return () => stops.forEach((stop) => stop());
   };
@@ -105,23 +105,45 @@ function useWindowRows() {
   return { rows, drop };
 }
 
+/** Tabs other than terminals that report to the list: chat tabs (AC.4). */
+export type BoardTabs = {
+  sources: readonly AgentSource[];
+  /** The focused one's row key, when one of these tabs has the focus. */
+  focused?: string;
+  /** Goes to the tab of a row key. False for a key that is not one of these tabs. */
+  activate(key: string): boolean;
+};
+
 /**
  * Everything the main window's agent list needs: rows from its own tabs and from independent
  * windows, and how to go to one.
  */
 export function useAgentBoard({
   tabs,
+  chats: { board: chats },
   selected,
   open,
   fail,
 }: {
   tabs: readonly TerminalSession[];
+  chats: { board: BoardTabs };
   /** The focused tab, from which the next waiting tab is found. */
   selected?: TerminalSession;
   open(tab: TabRef): void;
   fail(message: string): void;
 }) {
-  const local = useMemo(() => new TabRows(tabs), [tabs]);
+  const local = useMemo(
+    () =>
+      new TabRows([
+        ...tabs.map((tab) => ({
+          key: tabRowKey(tab.tabId),
+          read: () => agentReportOf(tab),
+          watch: (changed: () => void) => watchAgentReport(tab, changed),
+        })),
+        ...chats.sources,
+      ]),
+    [tabs, chats.sources],
+  );
   const own = useSyncExternalStore(local.subscribe, local.snapshot);
   const windows = useWindowRows();
   const rows = useMemo(() => sortRows([...own, ...windows.rows.values()]), [own, windows.rows]);
@@ -137,6 +159,7 @@ export function useAgentBoard({
         .catch((e) => fail(errorText(e)));
       return;
     }
+    if (chats.activate(row.key)) return;
     const tab = tabs.find((t) => tabRowKey(t.tabId) === row.key);
     if (!tab) return;
     open({ kind: 'session', tabId: tab.tabId });
@@ -147,7 +170,7 @@ export function useAgentBoard({
     activate,
     /** Goes to the next tab waiting for input. */
     next: () => {
-      const row = nextBlocked(rows, selected && tabRowKey(selected.tabId));
+      const row = nextBlocked(rows, chats.focused ?? (selected && tabRowKey(selected.tabId)));
       if (row) activate(row);
     },
   };

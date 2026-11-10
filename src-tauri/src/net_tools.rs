@@ -23,7 +23,7 @@ mod trace_windows;
 pub use jobs::Jobs;
 
 use crate::{
-    AppState,
+    AppState, login_only,
     ssh::{Event, Sink},
     storage::Result,
 };
@@ -69,8 +69,7 @@ pub async fn net_connect(
             .send(event)
             .map_err(|_| "도구 구독이 종료되었습니다.".into())
     });
-    let reader = app.clone();
-    let profile = blocking(move || reader.state::<AppState>().store.profile(&profile_id)).await?;
+    let profile = login_only::saved_profile(&app, profile_id).await?;
     if profile.protocol != "ssh" {
         return Err("SSH 세션만 출발지로 쓸 수 있습니다.".into());
     }
@@ -78,25 +77,7 @@ pub async fn net_connect(
         connections.net.reuse(&connections, id, terminal, sink);
         return Ok(());
     }
-    let reader = app.clone();
-    let target = profile.clone();
-    let (secret, hops) = blocking(move || {
-        let state = reader.state::<AppState>();
-        let secret = crate::commands::saved_secret(&state, &target.id)?;
-        let hops = crate::commands::hop_secrets(&state, &target)?;
-        Ok((secret, hops))
-    })
-    .await?;
-    link::start(link::Start {
-        connections,
-        id,
-        profile,
-        secret,
-        hops,
-        paths: state.known_hosts.clone(),
-        sink,
-        store: state.store.clone(),
-    })
+    link::start(login_only::request(&app, id, profile, sink).await?)
 }
 
 /// Lets go of a tool tab's source. A terminal connection it was reusing stays open.
@@ -205,12 +186,4 @@ pub async fn net_trace(
 pub fn net_cancel(state: State<AppState>, job_id: String) -> Result<()> {
     state.connections.net.jobs.cancel(&job_id);
     Ok(())
-}
-
-async fn blocking<T: Send + 'static>(
-    work: impl FnOnce() -> Result<T> + Send + 'static,
-) -> Result<T> {
-    tauri::async_runtime::spawn_blocking(work)
-        .await
-        .map_err(|_| "연결 정보를 읽지 못했습니다.".to_string())?
 }

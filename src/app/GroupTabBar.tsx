@@ -21,10 +21,13 @@ export function PlainTab({
   hint,
   italic,
   dirty,
+  badge,
   onDoubleClick,
 }: {
   tabKey?: string;
   title: string;
+  /** A state shown after the title, such as a chat waiting for an answer. */
+  badge?: ReactNode;
   /** The tooltip, when the title alone is ambiguous. */
   hint?: string;
   /** A preview: the next file opened replaces it. */
@@ -59,6 +62,7 @@ export function PlainTab({
           </span>
         )}
         {title}
+        {badge}
       </button>
       {close && (
         <button aria-label={`${title} 탭 닫기`} onClick={close}>

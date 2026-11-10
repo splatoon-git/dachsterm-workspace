@@ -36,7 +36,8 @@ jobs:
       - name: Locked dependencies
         run: npm ci
       - name: Browser runtime
-        run: npx playwright install chromium
+        # WebKit is the engine of the macOS app's view; some UI tests run in it here.
+        run: npx playwright install chromium webkit
       - name: Rust toolchain
         run: rustup show
       # Every branch restores this, and only main writes it, because push runs on every branch

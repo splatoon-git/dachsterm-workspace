@@ -11,6 +11,7 @@ export type TabRef =
   | { kind: 'tool'; id: ToolId }
   | { kind: 'preview' }
   | { kind: 'review'; id: string }
+  | { kind: 'chat'; id: string }
   | { kind: 'file'; id: string; preview?: boolean }
   | { kind: 'diff'; id: string; preview?: boolean };
 export type GroupNode = {

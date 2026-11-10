@@ -84,7 +84,7 @@ export function LocalFilePanel({
     (folder: string) => call<Listing>('local_files_list', { targetId, path: folder }),
     [targetId],
   );
-  const { rows, toggle, fileMenu } = useFileTree(listing, view, listFolder);
+  const { rows, toggle, fileMenu, folderMenu } = useFileTree(listing, view, listFolder);
   const selectedPaths = withoutNested(selection).map((name) => childPath(listing.path, name));
   const selected = selection.length === 1 ? rows.find((e) => e.name === selection[0]) : undefined;
   const source = { kind: 'local', targetId } as const;
@@ -362,6 +362,8 @@ export function LocalFilePanel({
               run: () => void paste(),
             },
             copyPathsItem(selectedPaths, setError),
+            // What the app adds for a folder, such as a chat here (AC.1). WSL gets none yet.
+            ...folderMenu(selected?.directory ? selectedPaths[0] : undefined),
             {
               label: '삭제',
               shortcut: 'Delete',

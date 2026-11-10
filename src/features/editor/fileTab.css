@@ -142,56 +142,6 @@
   user-select: text;
 }
 
-.markdown-preview pre {
-  padding: var(--space-sm);
-  overflow: auto;
-  background: var(--color-surface-subtle);
-  font-family: var(--font-mono);
-}
-
-.markdown-preview code {
-  font-family: var(--font-mono);
-}
-
-.markdown-preview table {
-  border-collapse: collapse;
-}
-
-.markdown-preview th,
-.markdown-preview td {
-  padding: var(--space-xs) var(--space-sm);
-  border: var(--border-width-default) solid var(--color-border-default);
-}
-
-.markdown-preview blockquote {
-  margin-left: 0;
-  padding-left: var(--space-md);
-  border-left: var(--border-width-focus) solid var(--color-border-default);
-  color: var(--color-text-secondary);
-}
-
-.markdown-preview img {
-  max-width: 100%;
-}
-
-.markdown-preview [data-external] {
-  color: var(--color-action-primary);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.markdown-image-blocked {
-  display: inline-block;
-  padding: var(--space-xs) var(--space-sm);
-  border: var(--border-width-default) dashed var(--color-border-default);
-  color: var(--color-text-secondary);
-  font-size: var(--font-small);
-}
-
-.markdown-open-url {
-  overflow-wrap: anywhere;
-}
-
 .status-file {
   display: inline-flex;
   align-items: center;
