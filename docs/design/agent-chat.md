@@ -225,7 +225,7 @@ engineering-rules §4는 제품 코드가 호출하지 않는 명령과 함수�
 - 네이티브(Windows): `scripts/test-chat-native.mjs`를 `verify-windows.ps1 -Native`에 연결한다. OpenSSH 검사 서버에 **기록된 스트림을 재생하는 가짜 `claude`**를 두어 로그인 없이 돈다. SSH는 실제이고 CLI만 대역이므로 결과는 "앱 경로 검증"으로 기록한다.
 - 실제 CLI: 로그인한 일회용 서버(`dachsterm-ac1`)에서 사람이나 에이전트가 앱으로 실행하고 기록한다. Mac은 실기기에서 같은 절차를 따른다.
 
-## 8. 공개 배포 전 확인
+## 10. 공개 배포 전 확인
 
 1. Anthropic에 GUI의 `claude -p` 구동 허용 여부 확인.
 2. Codex `app-server` experimental 상태와 프로토콜 변경 대응.
