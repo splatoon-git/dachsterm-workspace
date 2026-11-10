@@ -81,6 +81,18 @@ pub enum ChatEvent {
         ok: bool,
         summary: String,
     },
+    /// The agent waits for the user before a tool call. `input` stays here, for the answer.
+    ApprovalAsked {
+        request: String,
+        tool: String,
+        summary: String,
+        detail: String,
+        edit: Option<Edit>,
+        /// The question tool's questions, empty for any other tool.
+        questions: Vec<Question>,
+        #[serde(skip)]
+        input: serde_json::Value,
+    },
     /// A request to the agent failed, such as a model change. `text` says which and why.
     Problem { text: String },
     /// The turn is over. `detail` says why when it failed.
@@ -150,4 +162,21 @@ pub struct ContextPart {
     pub name: String,
     pub tokens: u64,
     pub free: bool,
+}
+
+/// One question of the agent's question tool. `multi` allows more than one option.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Question {
+    pub question: String,
+    pub header: String,
+    pub multi: bool,
+    pub options: Vec<QuestionOption>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionOption {
+    pub label: String,
+    pub detail: String,
 }

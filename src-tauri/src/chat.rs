@@ -2,6 +2,7 @@
 //! instead of a terminal. Over SSH the connection stops after login (`login_only`) and the agent
 //! runs detached on the server (`runner`); on this PC it is a child process (`local`). Either way
 //! its output reaches the tab as `ChatEvent`s.
+mod approval;
 pub mod attach;
 mod claude;
 mod event;
@@ -41,6 +42,8 @@ struct Chat {
     /// One message at a time, so the agent reads them in the order they were sent.
     sending: tokio::sync::Mutex<()>,
     reading: Mutex<Option<JoinHandle<()>>>,
+    /// Approvals the agent is waiting for, with the input each answer must carry back.
+    asking: Mutex<HashMap<String, serde_json::Value>>,
 }
 
 impl Chats {
@@ -62,6 +65,7 @@ impl Chats {
             agent,
             sending: Default::default(),
             reading: Mutex::new(None),
+            asking: Mutex::default(),
         });
         entries.insert(id.to_string(), chat.clone());
         Some(chat)
@@ -131,7 +135,7 @@ pub async fn chat_start(
         let _ = runner::stop(&handle, &name).await;
         return Err("이미 시작한 채팅입니다.".into());
     };
-    let task = tauri::async_runtime::spawn(read(handle, name, on_event));
+    let task = tauri::async_runtime::spawn(read(handle, name, chat.clone(), on_event));
     *chat.reading.lock().unwrap() = Some(task);
     deliver(&state, &id, &claude::initialize_message()).await?;
     deliver(&state, &id, &claude::settings_message()).await
@@ -161,7 +165,7 @@ pub async fn chat_start_local(
     let Some(chat) = state.chats.insert(&id, Agent::Local(Box::new(agent))) else {
         return Err("이미 시작한 채팅입니다.".into());
     };
-    let task = tauri::async_runtime::spawn(read_local(stdout, stderr, on_event));
+    let task = tauri::async_runtime::spawn(read_local(stdout, stderr, chat.clone(), on_event));
     *chat.reading.lock().unwrap() = Some(task);
     deliver(&state, &id, &claude::initialize_message()).await?;
     deliver(&state, &id, &claude::settings_message()).await
@@ -227,6 +231,35 @@ pub async fn chat_usage(state: State<'_, AppState>, id: String) -> Result<()> {
     deliver(&state, &id, &claude::usage_message()).await
 }
 
+/// Answers an approval the agent is waiting for. `answers` answers the question tool, by question.
+#[tauri::command]
+pub async fn chat_answer(
+    state: State<'_, AppState>,
+    id: String,
+    request: String,
+    allow: bool,
+    answers: Option<HashMap<String, String>>,
+) -> Result<()> {
+    let chat = state.chats.get(&id)?;
+    let input = chat
+        .asking
+        .lock()
+        .unwrap()
+        .remove(&request)
+        .ok_or("이미 답했거나 끝난 요청입니다.")?;
+    let decision = match (allow, answers) {
+        (false, _) => approval::Decision::Deny,
+        (true, Some(answers)) => approval::Decision::Answer(answers),
+        (true, None) => approval::Decision::Allow,
+    };
+    deliver(
+        &state,
+        &id,
+        &approval::answer_message(&request, &input, decision),
+    )
+    .await
+}
+
 /// One line to the agent's input, in the order lines were given.
 async fn deliver(state: &AppState, id: &str, line: &str) -> Result<()> {
     let chat = state.chats.get(id)?;
@@ -261,10 +294,19 @@ pub async fn chat_close(state: State<'_, AppState>, id: String) -> Result<()> {
 }
 
 /// Hands each output line's events to the tab, and stops once the tab has gone.
-fn forward(events: &Channel<ChatEvent>) -> impl FnMut(&str) -> ControlFlow<()> + Send + '_ {
+fn forward<'a>(
+    events: &'a Channel<ChatEvent>,
+    chat: &'a Chat,
+) -> impl FnMut(&str) -> ControlFlow<()> + Send + 'a {
     let mut reader = claude::Reader::default();
     move |line| {
         for event in reader.read(line) {
+            if let ChatEvent::ApprovalAsked { request, input, .. } = &event {
+                chat.asking
+                    .lock()
+                    .unwrap()
+                    .insert(request.clone(), input.clone());
+            }
             if events.send(event).is_err() {
                 return ControlFlow::Break(());
             }
@@ -273,9 +315,14 @@ fn forward(events: &Channel<ChatEvent>) -> impl FnMut(&str) -> ControlFlow<()> +
     }
 }
 
-async fn read(handle: Arc<client::Handle<Host>>, runner: String, events: Channel<ChatEvent>) {
+async fn read(
+    handle: Arc<client::Handle<Host>>,
+    runner: String,
+    chat: Arc<Chat>,
+    events: Channel<ChatEvent>,
+) {
     let mut offset = 0;
-    let result = runner::attach(&handle, &runner, &mut offset, forward(&events)).await;
+    let result = runner::attach(&handle, &runner, &mut offset, forward(&events, &chat)).await;
     let (reason, detail) = match result {
         Ok(runner::Attached::Stopped) => return,
         Ok(runner::Attached::Exited) => (
@@ -291,10 +338,11 @@ async fn read(handle: Arc<client::Handle<Host>>, runner: String, events: Channel
 async fn read_local(
     stdout: tokio::process::ChildStdout,
     stderr: tokio::process::ChildStderr,
+    chat: Arc<Chat>,
     events: Channel<ChatEvent>,
 ) {
     let errors = tauri::async_runtime::spawn(local::error_tail(stderr));
-    let (reason, detail) = match local::read_lines(stdout, forward(&events)).await {
+    let (reason, detail) = match local::read_lines(stdout, forward(&events, &chat)).await {
         Ok(false) => return,
         Ok(true) => (EndReason::Exited, errors.await.ok().flatten()),
         Err(message) => (EndReason::Unreadable, Some(message)),

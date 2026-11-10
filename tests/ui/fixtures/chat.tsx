@@ -65,6 +65,7 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
           'chat_set_mode',
           'chat_usage',
           'chat_set_ultracode',
+          'chat_answer',
           'clipboard_write_text',
         ].includes(command)
       )

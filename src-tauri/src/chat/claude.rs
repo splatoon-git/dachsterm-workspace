@@ -22,8 +22,9 @@ pub fn arguments() -> Vec<String> {
         "stream-json",
         "--verbose",
         "--include-partial-messages",
-        "--permission-prompts",
-        "none",
+        // Approvals come to the app as control requests and wait for its answer (AC.5).
+        "--permission-prompt-tool",
+        "stdio",
         // Lets the user pick "skip permission checks" during the chat; it does not turn it on.
         "--allow-dangerously-skip-permissions",
     ]
@@ -158,7 +159,7 @@ fn cut(text: &str, limit: usize) -> String {
 }
 
 /// One line that says what a tool call is about: its command, file, pattern or address.
-fn summary(name: &str, input: &Value) -> String {
+pub(super) fn summary(name: &str, input: &Value) -> String {
     let field = |key: &str| input.get(key).and_then(Value::as_str);
     let chosen = match name {
         "Bash" => field("command"),
@@ -175,7 +176,7 @@ fn summary(name: &str, input: &Value) -> String {
     cut(chosen.lines().next().unwrap_or_default(), MAX_SUMMARY)
 }
 
-fn edit_of(name: &str, input: &Value) -> Option<Edit> {
+pub(super) fn edit_of(name: &str, input: &Value) -> Option<Edit> {
     let field = |key: &str| input.get(key).and_then(Value::as_str);
     let (before, after) = match name {
         "Edit" => (field("old_string")?, field("new_string")?),
@@ -377,6 +378,14 @@ impl Reader {
                 }]
             }
             (Some("control_response"), _) => answer(&value["response"]),
+            (Some("control_request"), _) if value["request"]["subtype"] == "can_use_tool" => {
+                vec![super::approval::asked(
+                    text("request_id").unwrap_or_default(),
+                    &value["request"],
+                    summary,
+                    edit_of,
+                )]
+            }
             // Utilization comes as a fraction here and as a percentage from `get_usage`.
             (Some("rate_limit_event"), _) => {
                 let limits = limits(

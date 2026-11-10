@@ -150,6 +150,7 @@
     "allow-chat-set-mode",
     "allow-chat-usage",
     "allow-chat-set-ultracode",
+    "allow-chat-answer",
     "allow-chat-clipboard-local",
     "allow-chat-pick-files",
     "allow-chat-close",

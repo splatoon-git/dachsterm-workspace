@@ -2,8 +2,9 @@ import { lazy, Suspense, useLayoutEffect, useRef, useState, useSyncExternalStore
 import { AuthPromptCard, HostKeyCard } from '../../components/ConnectionCards';
 import { call } from '../../lib/ipc';
 import { placeDetail, placeTitle, type ChatSession } from './chatSession';
+import { ApprovalCard, EditLines } from './ChatApproval';
 import { ChatComposer } from './ChatComposer';
-import { type ChatAgent, type ChatEdit, type ChatItem, type ChatPhase } from './chatState';
+import { waitsForUser, type ChatAgent, type ChatItem, type ChatPhase } from './chatState';
 import './chat.css';
 
 // The Markdown renderer is its own chunk, loaded with the first reply.
@@ -18,24 +19,6 @@ function Reply({ text, streaming }: { text: string; streaming: boolean }) {
     <Suspense fallback={<p className="chat-plain">{text}</p>}>
       <MarkdownPreview text={text} className={`chat-markdown${streaming ? ' streaming' : ''}`} />
     </Suspense>
-  );
-}
-
-function EditLines({ edit }: { edit: ChatEdit }) {
-  const lines = (text: string) => (text ? text.split('\n') : []);
-  return (
-    <pre className="chat-diff" aria-label={`${edit.path} 변경`}>
-      {lines(edit.before).map((line, i) => (
-        <span key={`b${i}`} className="del">
-          {`- ${line}`}
-        </span>
-      ))}
-      {lines(edit.after).map((line, i) => (
-        <span key={`a${i}`} className="add">
-          {`+ ${line}`}
-        </span>
-      ))}
-    </pre>
   );
 }
 
@@ -105,7 +88,15 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function Item({ item, agents }: { item: ChatItem; agents: ChatAgent[] }) {
+function Item({
+  item,
+  agents,
+  session,
+}: {
+  item: ChatItem;
+  agents: ChatAgent[];
+  session: ChatSession;
+}) {
   switch (item.kind) {
     case 'user':
       return (
@@ -132,6 +123,8 @@ function Item({ item, agents }: { item: ChatItem; agents: ChatAgent[] }) {
       );
     case 'tool':
       return <Tool item={item} agent={agents.find((a) => a.call === item.call)} />;
+    case 'approval':
+      return <ApprovalCard item={item} session={session} />;
     case 'notice':
       return (
         <li
@@ -167,7 +160,8 @@ export function ChatPane({
   }, [chat.items.length, last]);
   const status = chat.phase === 'connecting' ? link.message : waiting[chat.phase];
   const working = chat.phase === 'working';
-  const busy = working && !(last?.kind === 'agent' && last.streaming);
+  // Not while the agent waits for the user, or while its reply is visibly being written.
+  const busy = working && !waitsForUser(chat) && !(last?.kind === 'agent' && last.streaming);
   return (
     <section className="chat-pane" aria-label={`${title} 에이전트 채팅`}>
       <header className="chat-head">
@@ -193,7 +187,7 @@ export function ChatPane({
       >
         <ol className="chat-column" aria-label="대화" aria-live="polite">
           {chat.items.map((item) => (
-            <Item key={item.id} item={item} agents={chat.agents} />
+            <Item key={item.id} item={item} agents={chat.agents} session={session} />
           ))}
           {busy && (
             <li className="chat-step quiet running">

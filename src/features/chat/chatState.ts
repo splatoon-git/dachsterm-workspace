@@ -38,6 +38,14 @@ export type ChatAgent = {
   summary: string;
 };
 
+/** One question of the agent's question tool. `multi` allows more than one option. */
+export type ChatQuestion = {
+  question: string;
+  header: string;
+  multi: boolean;
+  options: { label: string; detail: string }[];
+};
+
 /** What the backend sends a chat tab (src-tauri/src/chat/event.rs). */
 export type ChatEvent =
   | { kind: 'started'; session: string; model: string }
@@ -63,6 +71,15 @@ export type ChatEvent =
   | { kind: 'agentStarted'; id: string; call: string; role: string; task: string }
   | { kind: 'agentFinished'; id: string; ok: boolean; summary: string }
   | { kind: 'problem'; text: string }
+  | {
+      kind: 'approvalAsked';
+      request: string;
+      tool: string;
+      summary: string;
+      detail: string;
+      edit: ChatEdit | null;
+      questions: ChatQuestion[];
+    }
   | { kind: 'turnFinished'; ok: boolean; detail: string | null }
   | {
       kind: 'ended';
@@ -87,7 +104,24 @@ export type ChatItem =
       status: 'running' | 'done' | 'failed';
       output: string;
     }
-  | { kind: 'notice'; id: number; tone: 'info' | 'error'; text: string };
+  | { kind: 'notice'; id: number; tone: 'info' | 'error'; text: string }
+  /**
+   * The agent waits for the user before a tool call. `auto` marks one allowed by an earlier
+   * "for this chat" answer; `answer` is what the user chose for a question.
+   */
+  | {
+      kind: 'approval';
+      id: number;
+      request: string;
+      tool: string;
+      summary: string;
+      detail: string;
+      edit: ChatEdit | null;
+      questions: ChatQuestion[];
+      status: 'pending' | 'allowed' | 'denied' | 'expired';
+      auto: boolean;
+      answer: string;
+    };
 
 /**
  * `connecting` until the login is done, `starting` while the agent launches, then `ready` and
@@ -177,7 +211,9 @@ function settle(state: ChatState): ChatState {
         ? { ...item, streaming: false }
         : item.kind === 'tool' && item.status === 'running'
           ? { ...item, status: 'failed' }
-          : item,
+          : item.kind === 'approval' && item.status === 'pending'
+            ? { ...item, status: 'expired' }
+            : item,
     ),
   };
 }
@@ -250,6 +286,21 @@ export function applyChatEvent(state: ChatState, event: ChatEvent, now = Date.no
             : agent,
         ),
       };
+    case 'approvalAsked': {
+      const { request, tool, summary, detail, edit, questions } = event;
+      return add(state, {
+        kind: 'approval',
+        request,
+        tool,
+        summary,
+        detail,
+        edit,
+        questions,
+        status: 'pending',
+        auto: false,
+        answer: '',
+      });
+    }
     case 'problem':
       return withNotice({ ...state, chosen: '' }, 'error', event.text);
     case 'textDelta': {
@@ -385,7 +436,7 @@ export const permissionModes: { value: string; label: string; detail: string; ri
   {
     value: 'default',
     label: '기본',
-    detail: '승인이 필요한 동작은 묻습니다. 승인 화면이 생기기 전까지는 거부됩니다.',
+    detail: '파일 편집이나 명령 실행처럼 승인이 필요한 동작은 묻습니다.',
   },
   { value: 'acceptEdits', label: '편집 자동 승인', detail: '파일 편집은 묻지 않고 합니다.' },
   { value: 'plan', label: '계획', detail: '읽기만 하고 계획을 제안합니다.' },
@@ -459,3 +510,42 @@ export function chatTranscript(state: ChatState) {
     })
     .join('\n\n');
 }
+
+/** Marks an approval as answered: allowed, refused, or allowed with a question's answer. */
+export function withAnswered(
+  state: ChatState,
+  request: string,
+  status: 'allowed' | 'denied',
+  extra: { auto?: boolean; answer?: string } = {},
+): ChatState {
+  return {
+    ...state,
+    items: state.items.map((item) =>
+      item.kind === 'approval' && item.request === request ? { ...item, status, ...extra } : item,
+    ),
+  };
+}
+
+const editTools = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+
+/**
+ * What "allow for this chat" covers: every file edit, the same command again, or the same tool.
+ * The agent's own way of widening a permission did not hold in this mode (AC.5 measurement), so
+ * the app remembers it for the chat instead.
+ */
+export function approvalScope(tool: string, summary: string) {
+  if (editTools.has(tool)) return 'edit';
+  if (tool === 'Bash') return `Bash ${summary}`;
+  return tool;
+}
+
+/** How a card names what "allow for this chat" will cover. */
+export function scopeText(tool: string) {
+  if (editTools.has(tool)) return '이 채팅에서 파일 편집은 묻지 않기';
+  if (tool === 'Bash') return '이 채팅에서 이 명령은 묻지 않기';
+  return `이 채팅에서 ${tool}은(는) 묻지 않기`;
+}
+
+/** Whether the agent is waiting for the user. */
+export const waitsForUser = (state: ChatState) =>
+  state.items.some((item) => item.kind === 'approval' && item.status === 'pending');

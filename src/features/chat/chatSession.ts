@@ -4,6 +4,8 @@ import { LoginLink } from '../../lib/loginLink';
 import { withAttachments, type ChatAttachment } from './chatAttachments';
 import {
   applyChatEvent,
+  approvalScope,
+  withAnswered,
   canSend,
   initialChat,
   withLinkEnded,
@@ -35,6 +37,8 @@ export class ChatSession {
   });
   private state = initialChat;
   private listeners = new Set<() => void>();
+  /** What the user allowed "for this chat", by `approvalScope`. */
+  private trusted = new Set<string>();
   /** The connection the agent was started on. */
   private started: string | null = null;
 
@@ -89,6 +93,12 @@ export class ChatSession {
     channel.onmessage = (event) => {
       if (this.started !== id) return;
       this.set(applyChatEvent(this.state, event));
+      if (
+        event.kind === 'approvalAsked' &&
+        !event.questions.length &&
+        this.trusted.has(approvalScope(event.tool, event.summary))
+      )
+        void this.answer(event.request, 'allow', { auto: true });
       // The context use changes with every turn; the agent answers in its own time.
       if (event.kind === 'turnFinished' || event.kind === 'capabilities')
         void this.refreshContext();
@@ -135,6 +145,31 @@ export class ChatSession {
       this.set(
         withNotice({ ...this.state, ultracode: !on, phase: 'ready' }, 'error', errorText(e)),
       );
+    }
+  };
+
+  /**
+   * Answers an approval: allow once, allow for this chat, refuse, or answer a question with
+   * `answers` (question to chosen labels).
+   */
+  answer = async (
+    request: string,
+    decision: 'allow' | 'chat' | 'deny',
+    extra: { auto?: boolean; answers?: Record<string, string> } = {},
+  ) => {
+    const id = this.started;
+    const item = this.state.items.find((i) => i.kind === 'approval' && i.request === request);
+    if (!id || item?.kind !== 'approval' || item.status !== 'pending') return;
+    if (decision === 'chat') this.trusted.add(approvalScope(item.tool, item.summary));
+    const allow = decision !== 'deny';
+    const answer = extra.answers ? Object.values(extra.answers).join(' · ') : '';
+    this.set(
+      withAnswered(this.state, request, allow ? 'allowed' : 'denied', { auto: extra.auto, answer }),
+    );
+    try {
+      await call('chat_answer', { id, request, allow, answers: extra.answers ?? null });
+    } catch (e) {
+      this.set(withNotice(this.state, 'error', errorText(e)));
     }
   };
 

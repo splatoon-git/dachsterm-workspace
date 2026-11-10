@@ -96,6 +96,7 @@ fn main() {
             "chat_set_mode",
             "chat_usage",
             "chat_set_ultracode",
+            "chat_answer",
             "chat_clipboard_local",
             "chat_pick_files",
             "chat_close",

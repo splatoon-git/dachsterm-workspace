@@ -263,3 +263,70 @@ test('files and a pasted image go with the message as paths the agent can read',
   await expect(page.locator('.chat-you')).toContainText('첨부: notes.txt, clipboard.png');
   await expect(page.getByRole('list', { name: '첨부' })).toHaveCount(0);
 });
+
+test('approvals: once, for this chat, refused, and a question answered', async ({ page }) => {
+  await open(page);
+  const prompt = page.getByRole('textbox', { name: '프롬프트' });
+  await prompt.fill('테스트 돌려 줘');
+  await prompt.press('Enter');
+  const ask = (request: string, tool: string, summary: string) =>
+    emit(page, [
+      { kind: 'approvalAsked', request, tool, summary, detail: '', edit: null, questions: [] },
+    ]);
+  const answers = () =>
+    page.evaluate(() =>
+      window.__chat.calls.filter((c) => c.command === 'chat_answer').map((c) => c.args),
+    );
+
+  await ask('r1', 'Bash', 'npm test');
+  const card = page.getByRole('group', { name: 'Bash 승인 요청' });
+  await expect(card).toContainText('명령을 실행할까요?');
+  await expect(page.getByText('작업 중…')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/chat-approval.png' });
+  await card.getByRole('button', { name: '이 채팅에서 이 명령은 묻지 않기' }).click();
+  await expect(page.getByText('허용함 · Bash npm test')).toBeVisible();
+
+  // The same command again is allowed without a card; another one asks.
+  await ask('r2', 'Bash', 'npm test');
+  await expect(page.getByText('자동 허용 · Bash npm test')).toBeVisible();
+  await ask('r3', 'Bash', 'rm -rf build');
+  await page
+    .getByRole('group', { name: 'Bash 승인 요청' })
+    .getByRole('button', { name: '거부' })
+    .click();
+  await expect(page.getByText('거부함 · Bash rm -rf build')).toBeVisible();
+
+  await emit(page, [
+    {
+      kind: 'approvalAsked',
+      request: 'r4',
+      tool: 'AskUserQuestion',
+      summary: '',
+      detail: '',
+      edit: null,
+      questions: [
+        {
+          question: 'Which colour?',
+          header: 'Colour',
+          multi: false,
+          options: [
+            { label: 'Red', detail: '' },
+            { label: 'Blue', detail: '' },
+          ],
+        },
+      ],
+    },
+  ]);
+  const question = page.getByRole('group', { name: 'AskUserQuestion 승인 요청' });
+  await expect(question.getByRole('button', { name: '답하기' })).toBeDisabled();
+  await question.getByRole('button', { name: 'Blue' }).click();
+  await question.getByRole('button', { name: '답하기' }).click();
+  await expect(page.getByText('답함: Blue')).toBeVisible();
+
+  expect(await answers()).toEqual([
+    { id: expect.any(String), request: 'r1', allow: true, answers: null },
+    { id: expect.any(String), request: 'r2', allow: true, answers: null },
+    { id: expect.any(String), request: 'r3', allow: false, answers: null },
+    { id: expect.any(String), request: 'r4', allow: true, answers: { 'Which colour?': 'Blue' } },
+  ]);
+});

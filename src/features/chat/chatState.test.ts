@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyChatEvent,
+  approvalScope,
+  waitsForUser,
+  withAnswered,
   canSend,
   chatTranscript,
   commandMatches,
@@ -188,5 +191,23 @@ describe('chat state', () => {
     state = applyChatEvent(state, { kind: 'toolFinished', id: 't', ok: true, output: 'secret' });
     state = applyChatEvent(state, { kind: 'text', text: '고쳤습니다.' });
     expect(chatTranscript(state)).toBe('**나:** 고쳐 줘\n\n- `Read` /a.txt\n\n고쳤습니다.');
+  });
+
+  it('keeps an approval until it is answered or its turn ends', () => {
+    const asked = applyChatEvent(withSent(ready, 'x'), {
+      kind: 'approvalAsked',
+      request: 'r1',
+      tool: 'Bash',
+      summary: 'npm test',
+      detail: '',
+      edit: null,
+      questions: [],
+    });
+    expect(waitsForUser(asked)).toBe(true);
+    expect(waitsForUser(withAnswered(asked, 'r1', 'allowed'))).toBe(false);
+    const ended = applyChatEvent(asked, { kind: 'turnFinished', ok: true, detail: null });
+    expect(ended.items.at(-1)).toMatchObject({ kind: 'approval', status: 'expired' });
+    expect(approvalScope('Edit', '/a')).toBe(approvalScope('Write', '/b'));
+    expect(approvalScope('Bash', 'npm test')).not.toBe(approvalScope('Bash', 'rm -rf /'));
   });
 });

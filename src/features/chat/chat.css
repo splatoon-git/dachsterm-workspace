@@ -591,3 +591,67 @@
   font-size: var(--font-small);
   color: var(--color-text-secondary);
 }
+/* An approval the agent waits for. It stands out from the steps, in the warning colour. */
+.chat-approval {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border: var(--border-width-default) solid var(--color-status-warning);
+  border-radius: var(--radius-medium);
+  background: color-mix(in srgb, var(--color-status-warning) 8%, var(--color-surface-panel));
+}
+.chat-approval-title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+.chat-approval-what {
+  display: block;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--font-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-approval-detail {
+  margin: 0;
+  font-size: var(--font-small);
+  color: var(--color-text-secondary);
+}
+.chat-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.chat-approval .chat-diff {
+  margin: 0;
+}
+.chat-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.chat-question legend {
+  margin-bottom: var(--space-xs);
+  padding: 0;
+  font-size: var(--font-small);
+}
+.chat-question button {
+  display: flex;
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: var(--space-sm);
+  text-align: left;
+}
+.chat-question button[aria-pressed='true'] {
+  border-color: var(--color-action-primary);
+  background: var(--color-action-selected);
+}
+.chat-step.approval.denied {
+  color: var(--color-status-error);
+}
