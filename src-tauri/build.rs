@@ -87,6 +87,8 @@ fn main() {
             "net_disconnect",
             "chat_open",
             "chat_start",
+            "chat_attach",
+            "chat_disconnect",
             "chat_start_local",
             "chat_send",
             "chat_interrupt",

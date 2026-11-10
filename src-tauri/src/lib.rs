@@ -319,6 +319,8 @@ pub fn run() {
             net_tools::net_disconnect,
             chat::chat_open,
             chat::chat_start,
+            chat::chat_attach,
+            chat::chat_disconnect,
             chat::chat_start_local,
             chat::chat_send,
             chat::chat_interrupt,

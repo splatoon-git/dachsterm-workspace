@@ -1,133 +1,21 @@
-/** A file edit the agent asked for, cut short by the backend. `before` is empty for a new file. */
-export type ChatEdit = { path: string; before: string; after: string };
+import type {
+  ChatAgent,
+  ChatChoice,
+  ChatContext,
+  ChatEvent,
+  ChatItem,
+  ChatLimit,
+  ChatTurnUsage,
+} from './chatTypes';
 
-/**
- * A model, command or agent the agent offers. `hint` is a command's arguments, or the full model
- * name a model choice stands for.
- */
-export type ChatChoice = {
-  value: string;
-  label: string;
-  detail: string;
-  hint: string;
-  /** A model's effort levels. */
-  levels: string[];
-};
-/** A usage window: `five_hour` or `seven_day`. `resetsAt` is RFC 3339 or Unix seconds. */
-export type ChatLimit = { name: string; percent: number; resetsAt: string };
-export type ChatTurnUsage = {
-  input: number;
-  cacheRead: number;
-  cacheWrite: number;
-  output: number;
-  cost: number;
-};
-export type ChatContext = {
-  percentage: number;
-  used: number;
-  max: number;
-  parts: { name: string; tokens: number; free: boolean }[];
-};
-export type ChatAgent = {
-  id: string;
-  /** The tool call that started it. */
-  call: string;
-  role: string;
-  task: string;
-  status: 'running' | 'done' | 'failed';
-  summary: string;
-};
-
-/** One question of the agent's question tool. `multi` allows more than one option. */
-export type ChatQuestion = {
-  question: string;
-  header: string;
-  multi: boolean;
-  options: { label: string; detail: string }[];
-};
-
-/** What the backend sends a chat tab (src-tauri/src/chat/event.rs). */
-export type ChatEvent =
-  | { kind: 'started'; session: string; model: string }
-  | { kind: 'textDelta'; text: string }
-  | { kind: 'text'; text: string }
-  | { kind: 'thinking'; done: boolean }
-  | { kind: 'toolStarted'; id: string; name: string; summary: string; edit: ChatEdit | null }
-  | { kind: 'toolFinished'; id: string; ok: boolean; output: string }
-  | {
-      kind: 'capabilities';
-      models: ChatChoice[];
-      commands: ChatChoice[];
-      agents: ChatChoice[];
-      permissionMode: string;
-      account: { plan: string; email: string };
-    }
-  | { kind: 'effort'; level: string }
-  | { kind: 'mode'; mode: string }
-  | { kind: 'usage'; cost: number; added: number; removed: number; limits: ChatLimit[] }
-  | { kind: 'limits'; limits: ChatLimit[] }
-  | ({ kind: 'turnUsage' } & ChatTurnUsage)
-  | ({ kind: 'context'; model: string } & ChatContext)
-  | { kind: 'agentStarted'; id: string; call: string; role: string; task: string }
-  | { kind: 'agentFinished'; id: string; ok: boolean; summary: string }
-  | { kind: 'problem'; text: string }
-  | {
-      kind: 'approvalAsked';
-      request: string;
-      tool: string;
-      summary: string;
-      detail: string;
-      edit: ChatEdit | null;
-      questions: ChatQuestion[];
-    }
-  | { kind: 'turnFinished'; ok: boolean; detail: string | null }
-  | {
-      kind: 'ended';
-      reason: 'exited' | 'disconnected' | 'unreadable';
-      detail: string | null;
-    };
-
-export type ChatItem =
-  /** `files` are the attachments' names, shown under the words. */
-  | { kind: 'user'; id: number; text: string; files: string[] }
-  /** `streaming` while the reply is still being written. */
-  | { kind: 'agent'; id: number; text: string; streaming: boolean }
-  /** `seconds` once the thinking is over. */
-  | { kind: 'thinking'; id: number; started: number; seconds: number | null }
-  | {
-      kind: 'tool';
-      id: number;
-      call: string;
-      name: string;
-      summary: string;
-      edit: ChatEdit | null;
-      status: 'running' | 'done' | 'failed';
-      output: string;
-    }
-  | { kind: 'notice'; id: number; tone: 'info' | 'error'; text: string }
-  /**
-   * The agent waits for the user before a tool call. `auto` marks one allowed by an earlier
-   * "for this chat" answer; `answer` is what the user chose for a question.
-   */
-  | {
-      kind: 'approval';
-      id: number;
-      request: string;
-      tool: string;
-      summary: string;
-      detail: string;
-      edit: ChatEdit | null;
-      questions: ChatQuestion[];
-      status: 'pending' | 'allowed' | 'denied' | 'expired';
-      auto: boolean;
-      answer: string;
-    };
+export type * from './chatTypes';
 
 /**
  * `connecting` until the login is done, `starting` while the agent launches, then `ready` and
- * `working` by turn. `ended` once the agent or its connection is gone.
+ * `working` by turn. `disconnected` while a server's agent works on with no connection to it,
+ * and `ended` once the agent itself is gone.
  */
-export type ChatPhase = 'connecting' | 'starting' | 'ready' | 'working' | 'ended';
+export type ChatPhase = 'connecting' | 'starting' | 'ready' | 'working' | 'disconnected' | 'ended';
 export type ChatState = {
   phase: ChatPhase;
   /** The model the agent reported. `chosen` is what the user picked since, until it reports. */
@@ -221,7 +109,8 @@ function settle(state: ChatState): ChatState {
 const endings: Record<Extract<ChatEvent, { kind: 'ended' }>['reason'], [string, 'info' | 'error']> =
   {
     exited: ['에이전트가 종료되었습니다.', 'error'],
-    disconnected: ['연결이 끊어졌습니다. 서버에서는 작업이 계속됩니다.', 'info'],
+    // Only a server's chat loses its connection, and it is not over then (`withDisconnected`).
+    disconnected: ['연결이 끊어졌습니다.', 'info'],
     unreadable: ['에이전트 출력을 읽지 못했습니다.', 'error'],
   };
 
@@ -378,6 +267,7 @@ export function applyChatEvent(state: ChatState, event: ChatEvent, now = Date.no
       return withNotice(next, 'error', `작업이 실패했습니다. ${event.detail ?? ''}`.trim());
     }
     case 'ended': {
+      if (event.reason === 'disconnected') return withDisconnected(state);
       const [text, tone] = endings[event.reason];
       return withNotice(
         { ...settle(state), phase: 'ended' },
@@ -395,120 +285,37 @@ export const withSent = (state: ChatState, text: string, files: string[] = []): 
 /** Messages are accepted during a turn too: the agent folds them into it (AC.0 measurement). */
 export const canSend = (state: ChatState) => state.phase === 'ready' || state.phase === 'working';
 
-/** The connection ended without the agent saying so: a failed login or a broken network. */
+/** The connection ended before the agent started: a failed login or a broken network. */
 export function withLinkEnded(
   state: ChatState,
   message: string,
   tone: 'info' | 'error' = 'info',
 ): ChatState {
-  if (state.phase === 'ended') return state;
+  if (state.phase === 'ended' || state.phase === 'disconnected') return state;
   return withNotice({ ...settle(state), phase: 'ended' }, tone, message);
 }
 
-/** The model's name for the composer: what the user just picked, else what the agent runs. */
-export function modelLabel(state: ChatState) {
-  const { models } = state.offers;
-  if (state.chosen) return models.find((m) => m.value === state.chosen)?.label ?? state.chosen;
-  // A model choice's hint is the full name it stands for. `default` stands for one of the others.
-  const named =
-    models.find((m) => m.hint === state.model && m.value !== 'default') ??
-    models.find((m) => m.hint === state.model);
-  return named?.label ?? state.model;
+/**
+ * A server's agent lost its connection but goes on (AC.1 measurement). Nothing is settled: a reply,
+ * a tool or an approval carries on from where it was once the chat is attached again.
+ */
+export function withDisconnected(state: ChatState): ChatState {
+  if (state.phase === 'disconnected' || state.phase === 'ended') return state;
+  return withNotice(
+    { ...state, phase: 'disconnected', stopping: false },
+    'info',
+    '연결이 끊어졌습니다. 서버에서는 작업이 계속되며, 다시 연결하면 이어서 봅니다.',
+  );
 }
 
-/** The commands whose name starts with what follows `/`, while the draft is only a command. */
-export function commandMatches(state: ChatState, draft: string) {
-  const typed = /^\/(\S*)$/.exec(draft);
-  if (!typed) return [];
-  const word = typed[1].toLowerCase();
-  return state.offers.commands.filter((c) => c.value.toLowerCase().startsWith(word));
-}
-
-/** Tokens as people read them: 980, 25.2k, 1.2M. */
-export function tokenText(tokens: number) {
-  if (tokens < 1000) return String(tokens);
-  if (tokens < 1_000_000) return `${(tokens / 1000).toFixed(tokens < 10_000 ? 1 : 0)}k`;
-  return `${(tokens / 1_000_000).toFixed(1)}M`;
-}
-
-/** The permission modes offered, in the agent's names, with what each means for this chat. */
-export const permissionModes: { value: string; label: string; detail: string; risky?: true }[] = [
-  {
-    value: 'default',
-    label: '기본',
-    detail: '파일 편집이나 명령 실행처럼 승인이 필요한 동작은 묻습니다.',
-  },
-  { value: 'acceptEdits', label: '편집 자동 승인', detail: '파일 편집은 묻지 않고 합니다.' },
-  { value: 'plan', label: '계획', detail: '읽기만 하고 계획을 제안합니다.' },
-  { value: 'auto', label: '자동', detail: '안전해 보이는 동작은 에이전트가 알아서 합니다.' },
-  {
-    value: 'bypassPermissions',
-    label: '권한 확인 생략',
-    detail: '묻지 않고 파일을 바꾸고 명령을 실행합니다.',
-    risky: true,
-  },
-];
-
-export const modeLabel = (mode: string) =>
-  permissionModes.find((m) => m.value === mode)?.label ?? mode;
-
-const effortNames: Record<string, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'XHigh',
-  max: 'Max',
-};
-export const effortLabel = (level: string) => effortNames[level] ?? level;
-
-/** The effort levels the model in use takes. */
-export function effortLevels(state: ChatState) {
-  const { models } = state.offers;
-  const current =
-    models.find((m) => m.value === state.chosen) ??
-    models.find((m) => m.hint === state.model && m.value !== 'default') ??
-    models.find((m) => m.hint === state.model);
-  return current?.levels ?? [];
-}
-
-export const limitLabel = (name: string) =>
-  name === 'five_hour' ? '5시간' : name === 'seven_day' ? '7일' : name;
-
-const two = (n: number) => String(n).padStart(2, '0');
-
-/** When a usage window starts over, as a short phrase. */
-export function resetText(resetsAt: string, now = Date.now()) {
-  const at = /^\d+$/.test(resetsAt) ? Number(resetsAt) * 1000 : Date.parse(resetsAt);
-  if (!Number.isFinite(at)) return '';
-  const minutes = Math.max(0, Math.round((at - now) / 60000));
-  if (minutes < 60) return `${minutes}분 후 초기화`;
-  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분 후 초기화`;
-  const date = new Date(at);
-  return `${date.getMonth() + 1}월 ${date.getDate()}일 ${two(date.getHours())}:${two(date.getMinutes())} 초기화`;
-}
-
-export const costText = (usd: number) => `$${usd < 1 ? usd.toFixed(3) : usd.toFixed(2)}`;
-
-/** The conversation as Markdown, for the clipboard. Tool output is left out; its line stays. */
-export function chatTranscript(state: ChatState) {
-  return state.items
-    .flatMap((item) => {
-      switch (item.kind) {
-        case 'user':
-          return [
-            `**나:** ${item.text}${item.files.length ? ` (첨부: ${item.files.join(', ')})` : ''}`,
-          ];
-        case 'agent':
-          return [item.text];
-        case 'tool':
-          return [`- \`${item.name}\` ${item.summary}`.trimEnd()];
-        case 'notice':
-          return [`> ${item.text.replace(/\n/g, '\n> ')}`];
-        case 'thinking':
-          return [];
-      }
-    })
-    .join('\n\n');
+/**
+ * Attached again. A turn may have ended while away; its end comes with the output read next, so
+ * until then the chat is taken to be working if it was, or if it waits for an answer.
+ */
+export function withReattached(state: ChatState, wasWorking: boolean): ChatState {
+  if (state.phase !== 'disconnected') return state;
+  const phase = wasWorking || waitsForUser(state) ? 'working' : 'ready';
+  return withNotice({ ...state, phase }, 'info', '다시 연결했습니다.');
 }
 
 /** Marks an approval as answered: allowed, refused, or allowed with a question's answer. */
@@ -524,26 +331,6 @@ export function withAnswered(
       item.kind === 'approval' && item.request === request ? { ...item, status, ...extra } : item,
     ),
   };
-}
-
-const editTools = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
-
-/**
- * What "allow for this chat" covers: every file edit, the same command again, or the same tool.
- * The agent's own way of widening a permission did not hold in this mode (AC.5 measurement), so
- * the app remembers it for the chat instead.
- */
-export function approvalScope(tool: string, summary: string) {
-  if (editTools.has(tool)) return 'edit';
-  if (tool === 'Bash') return `Bash ${summary}`;
-  return tool;
-}
-
-/** How a card names what "allow for this chat" will cover. */
-export function scopeText(tool: string) {
-  if (editTools.has(tool)) return '이 채팅에서 파일 편집은 묻지 않기';
-  if (tool === 'Bash') return '이 채팅에서 이 명령은 묻지 않기';
-  return `이 채팅에서 ${tool}은(는) 묻지 않기`;
 }
 
 /** Whether the agent is waiting for the user. */

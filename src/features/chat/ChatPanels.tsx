@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { ChatSession } from './chatSession';
+import type { ChatState } from './chatState';
 import {
   costText,
   effortLabel,
@@ -9,8 +10,7 @@ import {
   permissionModes,
   resetText,
   tokenText,
-  type ChatState,
-} from './chatState';
+} from './chatText';
 
 /** A list over the composer. It closes on Escape or a press anywhere else. */
 export function Popover({

@@ -1,19 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyChatEvent,
-  approvalScope,
   waitsForUser,
   withAnswered,
   canSend,
-  chatTranscript,
-  commandMatches,
-  modelLabel,
-  tokenText,
   initialChat,
+  withDisconnected,
   withLinkEnded,
+  withReattached,
   withSent,
   type ChatState,
 } from './chatState';
+import { approvalScope, chatTranscript, commandMatches, modelLabel, tokenText } from './chatText';
 
 const ready: ChatState = { ...initialChat, phase: 'ready' };
 
@@ -60,7 +58,9 @@ describe('chat state', () => {
 
   it('tells a broken connection from an exited agent, once', () => {
     const lost = applyChatEvent(ready, { kind: 'ended', reason: 'disconnected', detail: null });
+    expect(lost.phase).toBe('disconnected');
     expect(lost.items.at(-1)).toMatchObject({ tone: 'info' });
+    expect(withDisconnected(lost)).toBe(lost);
     expect(withLinkEnded(lost, '서버 연결이 끊어졌습니다.')).toBe(lost);
     expect(withLinkEnded(ready, '서버 연결이 끊어졌습니다.').phase).toBe('ended');
   });
@@ -209,5 +209,50 @@ describe('chat state', () => {
     expect(ended.items.at(-1)).toMatchObject({ kind: 'approval', status: 'expired' });
     expect(approvalScope('Edit', '/a')).toBe(approvalScope('Write', '/b'));
     expect(approvalScope('Bash', 'npm test')).not.toBe(approvalScope('Bash', 'rm -rf /'));
+  });
+
+  it('keeps a turn and its approval through a lost connection, to go on after reconnecting', () => {
+    const asked = applyChatEvent(
+      applyChatEvent(withSent(ready, 'x'), { kind: 'textDelta', text: '고치' }),
+      {
+        kind: 'approvalAsked',
+        request: 'r1',
+        tool: 'Edit',
+        summary: '/a',
+        detail: '',
+        edit: null,
+        questions: [],
+      },
+    );
+    const lost = withDisconnected(asked);
+    expect(lost.phase).toBe('disconnected');
+    expect(canSend(lost)).toBe(false);
+    // Nothing is settled: the card still waits and the reply is still being written.
+    expect(waitsForUser(lost)).toBe(true);
+    expect(lost.items.find((i) => i.kind === 'agent')).toMatchObject({ streaming: true });
+    // A late end of the old reading changes nothing.
+    expect(applyChatEvent(lost, { kind: 'ended', reason: 'disconnected', detail: null })).toBe(
+      lost,
+    );
+
+    const back = withReattached(lost, false);
+    expect(back.phase).toBe('working');
+    expect(back.items.at(-1)).toMatchObject({ kind: 'notice', text: '다시 연결했습니다.' });
+    const answered = withAnswered(back, 'r1', 'allowed');
+    const finished = applyChatEvent(answered, { kind: 'turnFinished', ok: true, detail: null });
+    expect(finished.phase).toBe('ready');
+    expect(withReattached(finished, true)).toBe(finished);
+  });
+
+  it('comes back ready when nothing was running', () => {
+    expect(withReattached(withDisconnected(ready), false).phase).toBe('ready');
+    expect(withReattached(withDisconnected(ready), true).phase).toBe('working');
+  });
+
+  it('ends for good when the agent exits, connected or not', () => {
+    const lost = withDisconnected(ready);
+    const exited = applyChatEvent(lost, { kind: 'ended', reason: 'exited', detail: 'bye' });
+    expect(exited.phase).toBe('ended');
+    expect(withDisconnected(exited)).toBe(exited);
   });
 });

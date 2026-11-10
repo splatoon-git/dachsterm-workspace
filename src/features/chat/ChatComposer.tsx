@@ -10,16 +10,15 @@ import {
 } from './chatAttachments';
 import type { ChatSession } from './chatSession';
 import { AgentsPanel, ContextPanel, ModelPanel, ModePanel, UsagePanel } from './ChatPanels';
+import { canSend, type ChatState } from './chatState';
 import {
-  canSend,
   commandMatches,
   effortLabel,
   limitLabel,
   modeLabel,
   modelLabel,
   permissionModes,
-  type ChatState,
-} from './chatState';
+} from './chatText';
 
 type Panel = 'model' | 'context' | 'agents' | 'mode' | 'usage' | null;
 
@@ -55,6 +54,8 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
   const form = useRef<HTMLFormElement>(null);
   const working = chat.phase === 'working';
   const ended = chat.phase === 'ended';
+  /** Settings would go nowhere until the chat is attached again; a draft can wait. */
+  const offline = chat.phase === 'disconnected';
   const remote = session.place.kind === 'ssh';
   const empty = !draft.trim() && !attachments.length;
   /** A server receives at most 20 MiB a file; this PC's files are only named. */
@@ -112,7 +113,7 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
       className="chat-chip"
       aria-label={label}
       aria-expanded={panel === name}
-      disabled={ended}
+      disabled={ended || offline}
       onClick={() => toggle(name)}
     >
       {children}
@@ -183,9 +184,11 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
         placeholder={
           ended
             ? '이 채팅은 끝났습니다.'
-            : working
-              ? '이어서 지시하기. 작업 중에도 보낼 수 있습니다'
-              : '에이전트에게 맡길 일을 적어 주세요. / 로 명령'
+            : offline
+              ? '연결이 끊어졌습니다. 다시 연결하면 보낼 수 있습니다'
+              : working
+                ? '이어서 지시하기. 작업 중에도 보낼 수 있습니다'
+                : '에이전트에게 맡길 일을 적어 주세요. / 로 명령'
         }
         aria-expanded={commands.length > 0}
         onChange={(e) => {

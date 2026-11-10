@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import { LazySshKeyDialog } from '../components/NewSshKey';
 import { ToolbarMenu } from '../components/ToolbarMenu';
@@ -119,9 +119,17 @@ export function HeaderMenus({
 }
 
 /** Right of the title bar: what used to sit in the view and tools menus, one icon each. */
-export function HeaderActions({ run }: { run: (shortcut: AppShortcut) => void }) {
+export function HeaderActions({
+  run,
+  chat,
+}: {
+  run: (shortcut: AppShortcut) => void;
+  /** The agent chat launcher, which keeps its own popover. */
+  chat: ReactNode;
+}) {
   return (
     <>
+      {chat}
       <IconButton
         icon="snippet"
         label="명령"

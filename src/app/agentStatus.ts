@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { emitTo } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { chatSummary } from '../features/chat/chatStatus';
+import { placeTitle, type ChatSession } from '../features/chat/chatSession';
 import { gitStatusText } from '../features/git/gitStatus';
 import { gitStatusOf } from '../features/git/useGitStatus';
 import { signWaiting } from '../features/terminal/agentSign';
@@ -15,7 +17,21 @@ import {
 } from './agentRows';
 
 /** When each tab entered the state it reports now. Kept per window, beside its sessions. */
-const began = new WeakMap<TerminalSession, { state: AgentState; since: number }>();
+const began = new WeakMap<object, { state: AgentState; since: number }>();
+
+/** When `owner` entered `state`, which is now if it was in another one. */
+function stateSince(owner: object, state: AgentState, now: number) {
+  let start = began.get(owner);
+  if (start?.state !== state) began.set(owner, (start = { state, since: now }));
+  return start.since;
+}
+
+/** One tab's report and how to hear of its changes, whatever kind of tab it is. */
+export type AgentSource = {
+  key: string;
+  read(): AgentReport | null;
+  watch(changed: () => void): () => void;
+};
 
 /**
  * What a tab reports, the way its tab shows it: a key sign request before the program's own
@@ -32,15 +48,28 @@ export function agentReportOf(session: TerminalSession, now = Date.now()): Agent
     began.delete(session);
     return null;
   }
-  let start = began.get(session);
-  if (start?.state !== summary.state)
-    began.set(session, (start = { state: summary.state, since: now }));
   const view = gitStatusOf(session)?.scheduler.view(directory);
   return {
     name: session.profile.name,
     state: summary.state,
-    since: start.since,
+    since: stateSince(session, summary.state, now),
     git: view && 'repo' in view ? gitStatusText(view.repo) : '',
+    detail: programSummaryText(summary),
+  };
+}
+
+/** What a chat tab reports (AC.4): waiting for an answer, or working on a turn. */
+export function chatReportOf(session: ChatSession, now = Date.now()): AgentReport | null {
+  const summary = chatSummary(session.snapshot());
+  if (!summary) {
+    began.delete(session);
+    return null;
+  }
+  return {
+    name: `채팅 · ${placeTitle(session.place)}`,
+    state: summary.state,
+    since: stateSince(session, summary.state, now),
+    git: '',
     detail: programSummaryText(summary),
   };
 }

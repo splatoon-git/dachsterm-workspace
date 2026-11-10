@@ -7,7 +7,11 @@ use crate::{
     storage::Result,
 };
 use russh::client;
-use std::{ops::ControlFlow, time::Duration};
+use std::{
+    ops::ControlFlow,
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
 
 /// Messages larger than this would not fit a command line; attachments go as uploaded paths.
 pub const MAX_MESSAGE: usize = 64 * 1024;
@@ -98,15 +102,17 @@ fn send_script(id: &str, line: &str) -> String {
 }
 
 /// Streams the output file from `offset` and ends once the agent has exited. The loop also stops
-/// when `tail` dies, which it does on its next write after this channel has closed.
+/// when `tail` dies, which it does on its next write after this channel has closed. An agent that
+/// exited while no one was attached still has its last output read.
 fn attach_script(id: &str, offset: u64) -> String {
     let dir = folder_of(id);
+    let from = offset + 1;
     format!(
-        "{}\ntail -c +{} -F {dir}/out.jsonl 2>/dev/null &\nt=$!\n\
+        "p=$(cat {dir}/pid 2>/dev/null) || exit {GONE}\n\
+         if ! kill -0 \"$p\" 2>/dev/null; then tail -c +{from} {dir}/out.jsonl 2>/dev/null; exit 0; fi\n\
+         tail -c +{from} -F {dir}/out.jsonl 2>/dev/null &\nt=$!\n\
          while kill -0 \"$p\" 2>/dev/null && kill -0 \"$t\" 2>/dev/null; do sleep 1; done\n\
-         sleep 1\nkill \"$t\" 2>/dev/null\nexit 0",
-        alive_check(&dir),
-        offset + 1
+         sleep 1\nkill \"$t\" 2>/dev/null\nexit 0"
     )
 }
 
@@ -175,31 +181,29 @@ pub enum Attached {
     Stopped,
 }
 
-/// Reads complete output lines from `offset`. `offset` moves past each line handed on, so a later
-/// attach starts exactly where this one stopped.
+/// Reads complete output lines from `offset`. `offset` moves past each line as it is handed on,
+/// with nothing to wait for in between, so a later attach starts exactly where this one stopped
+/// even if this one is cancelled.
 pub async fn attach(
     handle: &Handle,
     id: &str,
-    offset: &mut u64,
+    offset: &AtomicU64,
     mut on_line: impl FnMut(&str) -> ControlFlow<()> + Send,
 ) -> Result<Attached> {
     let mut lines = LineBuffer::default();
-    let start = *offset;
-    let mut consumed = 0;
     let mut stopped = false;
-    let result =
-        remote_exec::stream_refusable(handle, &attach_script(id, start), ATTACHED, |data| {
-            let flow = lines.feed(data, &mut |line| {
-                consumed += line.len() as u64 + 1;
-                on_line(&String::from_utf8_lossy(line))
-            });
-            if flow.is_break() {
-                stopped = true;
-            }
-            flow
-        })
-        .await;
-    *offset = start + consumed;
+    let script = attach_script(id, offset.load(Ordering::SeqCst));
+    let result = remote_exec::stream_refusable(handle, &script, ATTACHED, |data| {
+        let flow = lines.feed(data, &mut |line| {
+            offset.fetch_add(line.len() as u64 + 1, Ordering::SeqCst);
+            on_line(&String::from_utf8_lossy(line))
+        });
+        if flow.is_break() {
+            stopped = true;
+        }
+        flow
+    })
+    .await;
     if lines.too_long {
         return Err("에이전트 출력의 한 줄이 너무 깁니다.".into());
     }
@@ -311,6 +315,16 @@ mod tests {
     fn attach_starts_after_the_bytes_already_read() {
         assert!(attach_script(ID, 0).contains("tail -c +1 -F"));
         assert!(attach_script(ID, 41).contains("tail -c +42 -F"));
+    }
+
+    #[test]
+    fn attach_reads_what_an_agent_wrote_before_it_exited() {
+        let script = attach_script(ID, 41);
+        let dir = format!("\"$HOME/.cache/dachsterm/chat/{ID}\"");
+        assert!(script.contains(&format!(
+            "then tail -c +42 {dir}/out.jsonl 2>/dev/null; exit 0; fi"
+        )));
+        assert!(script.starts_with(&format!("p=$(cat {dir}/pid 2>/dev/null) || exit {GONE}")));
     }
 
     #[test]

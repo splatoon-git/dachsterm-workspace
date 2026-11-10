@@ -141,6 +141,8 @@
     "allow-net-disconnect",
     "allow-chat-open",
     "allow-chat-start",
+    "allow-chat-attach",
+    "allow-chat-disconnect",
     "allow-chat-start-local",
     "allow-chat-send",
     "allow-chat-interrupt",

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ChatSession } from './chatSession';
-import { scopeText, type ChatEdit, type ChatItem, type ChatQuestion } from './chatState';
+import type { ChatEdit, ChatItem, ChatQuestion } from './chatState';
+import { scopeText } from './chatText';
 
 /** A file edit as removed and added lines. */
 export function EditLines({ edit }: { edit: ChatEdit }) {
@@ -33,7 +34,15 @@ const titles: Record<string, string> = {
 };
 
 /** The agent's question tool: one choice per question, more where it allows several. */
-function Questions({ item, session }: { item: Approval; session: ChatSession }) {
+function Questions({
+  item,
+  session,
+  offline,
+}: {
+  item: Approval;
+  session: ChatSession;
+  offline: boolean;
+}) {
   const [picked, setPicked] = useState<Record<string, string[]>>({});
   const toggle = (question: ChatQuestion, label: string) =>
     setPicked((now) => {
@@ -71,7 +80,7 @@ function Questions({ item, session }: { item: Approval; session: ChatSession }) 
         <button
           type="button"
           className="primary"
-          disabled={!complete}
+          disabled={!complete || offline}
           onClick={() =>
             void session.answer(item.request, 'allow', {
               answers: Object.fromEntries(
@@ -82,7 +91,11 @@ function Questions({ item, session }: { item: Approval; session: ChatSession }) 
         >
           답하기
         </button>
-        <button type="button" onClick={() => void session.answer(item.request, 'deny')}>
+        <button
+          type="button"
+          disabled={offline}
+          onClick={() => void session.answer(item.request, 'deny')}
+        >
           답하지 않기
         </button>
       </div>
@@ -97,7 +110,16 @@ const settled = {
 } as const;
 
 /** An approval the agent waits for, or, once answered, one line saying how. */
-export function ApprovalCard({ item, session }: { item: Approval; session: ChatSession }) {
+export function ApprovalCard({
+  item,
+  session,
+  offline,
+}: {
+  item: Approval;
+  session: ChatSession;
+  /** The connection is lost; the agent still waits, and the card can be answered once back. */
+  offline: boolean;
+}) {
   const question = item.questions.length > 0;
   if (item.status !== 'pending')
     return (
@@ -117,21 +139,35 @@ export function ApprovalCard({ item, session }: { item: Approval; session: ChatS
       {!question && item.summary && <code className="chat-approval-what">{item.summary}</code>}
       {item.detail && <p className="chat-approval-detail">{item.detail}</p>}
       {item.edit && <EditLines edit={item.edit} />}
+      {offline && (
+        <p className="chat-approval-detail">
+          연결이 끊어져 지금은 답할 수 없습니다. 다시 연결하면 이 요청에 이어서 답합니다.
+        </p>
+      )}
       {question ? (
-        <Questions item={item} session={session} />
+        <Questions item={item} session={session} offline={offline} />
       ) : (
         <div className="chat-approval-actions">
           <button
             type="button"
             className="primary"
+            disabled={offline}
             onClick={() => void session.answer(item.request, 'allow')}
           >
             이번만 허용
           </button>
-          <button type="button" onClick={() => void session.answer(item.request, 'chat')}>
+          <button
+            type="button"
+            disabled={offline}
+            onClick={() => void session.answer(item.request, 'chat')}
+          >
             {scopeText(item.tool)}
           </button>
-          <button type="button" onClick={() => void session.answer(item.request, 'deny')}>
+          <button
+            type="button"
+            disabled={offline}
+            onClick={() => void session.answer(item.request, 'deny')}
+          >
             거부
           </button>
         </div>

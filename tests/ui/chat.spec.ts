@@ -330,3 +330,80 @@ test('approvals: once, for this chat, refused, and a question answered', async (
     { id: expect.any(String), request: 'r4', allow: true, answers: { 'Which colour?': 'Blue' } },
   ]);
 });
+
+test('a server chat waits through a lost connection and answers after reconnecting', async ({
+  page,
+}) => {
+  await page.goto('/tests/ui/fixtures/chat.html?ssh');
+  const calls = () => page.evaluate(() => window.__chat.calls);
+  // The terminal's connection is shared: no login of the chat's own.
+  await expect(page.getByRole('textbox', { name: '프롬프트' })).toBeEnabled();
+  const started = (await calls()).find((c) => c.command === 'chat_start');
+  expect(started?.args).toMatchObject({ connection: 'terminal-1', folder: '/srv/app' });
+  expect((await calls()).some((c) => c.command === 'chat_open')).toBe(false);
+  const id = started?.args.id;
+
+  const prompt = page.getByRole('textbox', { name: '프롬프트' });
+  await prompt.fill('배포 스크립트 실행해 줘');
+  await prompt.press('Enter');
+  await emit(page, [
+    {
+      kind: 'approvalAsked',
+      request: 'r1',
+      tool: 'Bash',
+      summary: './deploy.sh',
+      detail: '',
+      edit: null,
+      questions: [],
+    },
+    { kind: 'ended', reason: 'disconnected', detail: null },
+  ]);
+  const card = page.getByRole('group', { name: 'Bash 승인 요청' });
+  await expect(card.getByRole('button', { name: '이번만 허용' })).toBeDisabled();
+  await expect(card).toContainText('다시 연결하면 이 요청에 이어서 답합니다');
+  await expect(page.getByRole('button', { name: '보내기' })).toBeDisabled();
+  await page.screenshot({ path: 'test-results/chat-disconnected.png' });
+
+  // The terminal is back on a new connection; the chat attaches through it.
+  await page.evaluate(() => (window.__via = 'terminal-2'));
+  await page.getByRole('button', { name: '다시 연결' }).click();
+  const attached = (await calls()).find((c) => c.command === 'chat_attach');
+  expect(attached?.args).toEqual({ id, connection: 'terminal-2' });
+  await expect(page.getByText('다시 연결했습니다.')).toBeVisible();
+  await card.getByRole('button', { name: '이번만 허용' }).click();
+  expect((await calls()).at(-1)).toMatchObject({
+    command: 'chat_answer',
+    args: { id, request: 'r1', allow: true },
+  });
+  // What the agent wrote while away arrives on the new reading.
+  await emit(page, [
+    { kind: 'text', text: '배포했습니다.' },
+    { kind: 'turnFinished', ok: true, detail: null },
+  ]);
+  await expect(page.locator('.chat-markdown')).toHaveText('배포했습니다.');
+  await expect(prompt).toHaveAttribute('placeholder', /맡길 일/);
+});
+
+test('without a terminal to share, reconnecting logs in on its own', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/chat.html?ssh');
+  await expect(page.getByRole('textbox', { name: '프롬프트' })).toBeEnabled();
+  await emit(page, [{ kind: 'ended', reason: 'disconnected', detail: null }]);
+  await page.evaluate(() => (window.__via = null));
+  await page.getByRole('button', { name: '다시 연결' }).click();
+  const login = (await page.evaluate(() => window.__chat.calls)).find(
+    (c) => c.command === 'chat_open',
+  );
+  expect(login?.args).toMatchObject({ profileId: 'p1' });
+  await expect(page.getByRole('status')).toHaveText('서버에 연결하는 중…');
+  await page.evaluate(() => window.__linkEmit('connected', '연결됨'));
+  await expect(page.getByText('다시 연결했습니다.')).toBeVisible();
+  const attached = (await page.evaluate(() => window.__chat.calls)).find(
+    (c) => c.command === 'chat_attach',
+  );
+  expect(attached?.args.connection).toBe(login?.args.id);
+
+  // Losing that login's connection is noticed from the link too, once.
+  await page.evaluate(() => window.__linkEmit('closed', '연결이 끊어졌습니다.'));
+  await expect(page.getByRole('button', { name: '다시 연결' })).toBeVisible();
+  await expect(page.getByText(/서버에서는 작업이 계속되며/)).toHaveCount(2);
+});

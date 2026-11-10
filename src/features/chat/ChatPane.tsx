@@ -92,10 +92,13 @@ function Item({
   item,
   agents,
   session,
+  offline,
 }: {
   item: ChatItem;
   agents: ChatAgent[];
   session: ChatSession;
+  /** The connection is lost: an approval waits for it to come back. */
+  offline: boolean;
 }) {
   switch (item.kind) {
     case 'user':
@@ -124,7 +127,7 @@ function Item({
     case 'tool':
       return <Tool item={item} agent={agents.find((a) => a.call === item.call)} />;
     case 'approval':
-      return <ApprovalCard item={item} session={session} />;
+      return <ApprovalCard item={item} session={session} offline={offline} />;
     case 'notice':
       return (
         <li
@@ -158,7 +161,9 @@ export function ChatPane({
     const view = thread.current;
     if (view && stuck.current) view.scrollTop = view.scrollHeight;
   }, [chat.items.length, last]);
-  const status = chat.phase === 'connecting' ? link.message : waiting[chat.phase];
+  const offline = chat.phase === 'disconnected';
+  const reconnecting = offline && link.status === 'connecting';
+  const status = chat.phase === 'connecting' || reconnecting ? link.message : waiting[chat.phase];
   const working = chat.phase === 'working';
   // Not while the agent waits for the user, or while its reply is visibly being written.
   const busy = working && !waitsForUser(chat) && !(last?.kind === 'agent' && last.streaming);
@@ -187,7 +192,13 @@ export function ChatPane({
       >
         <ol className="chat-column" aria-label="대화" aria-live="polite">
           {chat.items.map((item) => (
-            <Item key={item.id} item={item} agents={chat.agents} session={session} />
+            <Item
+              key={item.id}
+              item={item}
+              agents={chat.agents}
+              session={session}
+              offline={offline}
+            />
           ))}
           {busy && (
             <li className="chat-step quiet running">
@@ -209,7 +220,7 @@ export function ChatPane({
                 host={link.profile?.host ?? ''}
                 prompt={link.authPrompt}
                 reply={(responses) => session.link.reply(responses)}
-                cancel={session.close}
+                cancel={session.cancelLogin}
               />
             )}
           </div>
@@ -218,6 +229,13 @@ export function ChatPane({
           <p className="chat-status" role="status">
             {status}
           </p>
+        )}
+        {offline && !reconnecting && !link.hostKey && !link.authPrompt && (
+          <div className="chat-reconnect">
+            <button type="button" className="primary" onClick={session.reconnect}>
+              다시 연결
+            </button>
+          </div>
         )}
       </div>
       <ChatComposer session={session} chat={chat} />

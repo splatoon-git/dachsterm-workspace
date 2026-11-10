@@ -55,7 +55,6 @@ import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { SessionTab } from './SessionTab';
 import { capabilities } from '../features/terminal/sessionKind';
-import type { CSSProperties } from 'react';
 import { SidebarViews } from './SidebarViews';
 import { PreviewTab, TerminalPreviewCell } from './TerminalPreviewCell';
 import { Icon } from '../components/Icon';
@@ -229,6 +228,7 @@ export function App() {
   }
   const keptByFile = (shortcut: AppShortcut) => files.keepsShortcut(shortcut);
   const runShortcut = (shortcut: AppShortcut) => {
+    if (shortcut.name === 'chat') return chats.toggleLauncher();
     switch (shortcut.name) {
       case 'fullscreen':
         return void toggleFullscreen();
@@ -321,7 +321,7 @@ export function App() {
       : requestConnect(savedProfile(t), undefined, { beside });
   const kubeTabs = useKubeTabs({ workspace, theme, tabs, setTabs, closeTab });
   const reviews = useReviewTabs({ workspace, sessions: tabs, narrow });
-  const chats = useChatTabs({ workspace });
+  const chats = useChatTabs({ workspace, sessions: tabs, profiles: snapshot.profiles });
   const files = useFileTabs({ workspace, sessions: tabs, narrow, fail: setError });
   const tools = useToolTabs({
     workspace,
@@ -355,7 +355,7 @@ export function App() {
   const hasPreview = allTabs(workspace.layout.root).some((tab) => tab.kind === 'preview');
   const selected = tabs.find((t) => sessionKey(t) === focusedKey);
   const owner = selected ?? files.owner(focusedKey);
-  const agents = useAgentBoard({ tabs, selected, open: workspace.open, fail: setError });
+  const agents = useAgentBoard({ tabs, chats, selected, open: workspace.open, fail: setError });
   const activeSession = (group: GroupNode) => tabs.find((t) => sessionKey(t) === group.active);
   // Only panes on screen take part: zoom and a narrow window leave one group in view.
   const input = useInputScope(
@@ -442,7 +442,7 @@ export function App() {
           전체화면 종료 · F11
         </button>
       )}
-      <TitleBar fail={setError} end={<HeaderActions run={runShortcut} />}>
+      <TitleBar fail={setError} end={<HeaderActions run={runShortcut} chat={chats.launcher} />}>
         <HeaderMenus
           sidebarOpen={sidebarOpen}
           toggleSidebar={() =>
@@ -472,7 +472,7 @@ export function App() {
         style={
           {
             '--sidebar-width': `${leftWidth}px`,
-          } as CSSProperties
+          } as React.CSSProperties
         }
       >
         {sidebarOpen && (

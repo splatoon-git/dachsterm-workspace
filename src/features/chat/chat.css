@@ -194,6 +194,11 @@
   max-width: var(--chat-width);
   margin: var(--space-lg) auto 0;
 }
+/* Shown while a server's agent works on with no connection to it. */
+.chat-reconnect {
+  max-width: var(--chat-width);
+  margin: var(--space-sm) auto 0;
+}
 .chat-composer {
   position: relative;
   display: flex;
