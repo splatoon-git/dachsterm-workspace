@@ -19,27 +19,44 @@ pub struct LocalAgent {
     child: std::sync::Mutex<Child>,
 }
 
-/// The program's file name as it is installed on this OS.
-fn file_name(program: &str) -> String {
+/// The program's file names as it may be installed on this OS, preferred first. On Windows an npm
+/// install (how `codex` is usually installed) leaves only a `.cmd` launcher; `Command` runs one
+/// through `cmd.exe` and refuses arguments it cannot quote safely, and the agents' are fixed.
+fn file_names(program: &str) -> Vec<String> {
     if cfg!(windows) {
-        format!("{program}.exe")
+        vec![format!("{program}.exe"), format!("{program}.cmd")]
     } else {
-        program.to_string()
+        vec![program.to_string()]
     }
 }
 
-/// The program on `PATH`, which `login_path` has already filled on macOS, or in `~/.local/bin`,
-/// where the official installer puts `claude` on every OS.
-pub fn locate(program: &str) -> Result<PathBuf> {
-    let name = file_name(program);
+/// Where to look: `PATH`, which `login_path` has already filled on macOS, `~/.local/bin`, where the
+/// official installer puts `claude` on every OS, and on Windows npm's global folder, which an app
+/// started before the install may not have on its `PATH`.
+fn search_dirs() -> Vec<PathBuf> {
     let path = std::env::var_os("PATH").unwrap_or_default();
-    std::env::split_paths(&path)
-        .chain(dirs::home_dir().map(|home| home.join(".local").join("bin")))
-        .map(|dir| dir.join(&name))
-        .find(|candidate| candidate.is_file())
-        .ok_or_else(|| {
-            format!("이 PC에서 {program}을(를) 찾을 수 없습니다. 설치하고 로그인한 뒤 다시 여세요.")
-        })
+    let mut dirs: Vec<PathBuf> = std::env::split_paths(&path).collect();
+    dirs.extend(dirs::home_dir().map(|home| home.join(".local").join("bin")));
+    if cfg!(windows) {
+        dirs.extend(std::env::var_os("APPDATA").map(|data| PathBuf::from(data).join("npm")));
+    }
+    dirs
+}
+
+/// The first of `names` found in `dirs`. An earlier name wins over an earlier folder, so a real
+/// executable anywhere is taken before a launcher script.
+fn find(names: &[String], dirs: &[PathBuf]) -> Option<PathBuf> {
+    names.iter().find_map(|name| {
+        dirs.iter()
+            .map(|dir| dir.join(name))
+            .find(|candidate| candidate.is_file())
+    })
+}
+
+pub fn locate(program: &str) -> Result<PathBuf> {
+    find(&file_names(program), &search_dirs()).ok_or_else(|| {
+        format!("이 PC에서 {program}을(를) 찾을 수 없습니다. 설치하고 로그인한 뒤 다시 여세요.")
+    })
 }
 
 /// The folder to start in. Empty means the home folder.
@@ -149,6 +166,22 @@ pub async fn error_tail(mut stderr: ChildStderr) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn takes_an_executable_before_a_launcher_script() {
+        let root = std::env::temp_dir().join(format!("dachsterm-locate-{}", uuid::Uuid::new_v4()));
+        let (npm, bin) = (root.join("npm"), root.join("bin"));
+        std::fs::create_dir_all(&npm).unwrap();
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(npm.join("codex.cmd"), "").unwrap();
+        let names = ["codex.exe".to_string(), "codex.cmd".to_string()];
+        let dirs = [npm.clone(), bin.clone()];
+        assert_eq!(find(&names, &dirs), Some(npm.join("codex.cmd")));
+        std::fs::write(bin.join("codex.exe"), "").unwrap();
+        assert_eq!(find(&names, &dirs), Some(bin.join("codex.exe")));
+        assert_eq!(find(&["claude.exe".to_string()], &dirs), None);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn rejects_relative_and_missing_folders() {
