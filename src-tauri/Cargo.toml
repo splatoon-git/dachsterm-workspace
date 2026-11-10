@@ -30,7 +30,7 @@ sha2 = "0.10"
 argon2 = { version = "=0.5.3", features = ["zeroize"] }
 aes-gcm = { version = "=0.10.3", features = ["zeroize"] }
 rfd = "0.15"
-rusqlite = { version = "0.38", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 keyring = { version = "3.6", features = ["windows-native", "apple-native"] }
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
