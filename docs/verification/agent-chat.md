@@ -90,4 +90,5 @@
 - **미실행:** 실제 앱에서의 채팅 왕복(Mac 실기기 확인 대기), Windows 네이티브 검사(`test-chat-native.mjs`는 아직 없음), CI.
 - **작업 폴더(`4b2ef0f`):** 사이드바 파일 트리의 폴더 우클릭 **여기서 채팅 열기**는 그 폴더에서 바로 연다. 연결 트리의 **채팅으로 열기…**는 폴더를 묻고 그 세션의 최근 폴더 8개를 제안한다(`dachsterm.chatFolders`). 폴더 검사는 에이전트 시작과 함께 `lib/shell.ts`의 `folderProblem`을 쓴다. 게이트: typecheck·lint·format 통과, Vitest 109파일 1335 통과, Playwright 521 통과. 실제 앱 확인은 대기.
 - **이 PC 채팅(`8408b60`):** 로컬 셸 탭(WSL 제외)의 파일 트리 폴더 우클릭 **여기서 채팅 열기**로 앱이 `claude`를 자식 프로세스로 실행한다(`chat_start_local`). 경로는 `PATH`(macOS는 `login_path` 적용분)와 `~/.local/bin`, 폴더는 절대 경로이면서 실제 폴더여야 한다. 게이트(Mac): format·typecheck·lint 통과, Vitest 1335, Playwright 521, `cargo test --workspace` 658, clippy 통과. 실제 앱 확인 대기. Windows에서는 `claude.exe`만 찾는다(npm 설치본의 `.cmd`는 미지원).
+- **로컬 폴더 메뉴 결함(`580cfbf`):** 사용자가 디버그 앱에서 로컬 폴더 우클릭에 **여기서 채팅 열기**가 없다고 알렸다. `LocalFilePanel`이 `folderMenu`를 쓰지 않아 앱이 넘긴 폴더 항목이 그려지지 않았다. 고친 뒤 `tests/ui/local-files.spec.ts`(새 fixture)가 수정 전 실패·수정 후 통과함을 확인했다. 게이트: typecheck·lint·format, Vitest 1335, Playwright 522 통과.
 
