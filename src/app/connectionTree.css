@@ -85,7 +85,8 @@
 }
 .conn-tree .profile-target,
 .conn-tree .profile-shortcut-target,
-.conn-tree .local-target {
+.conn-tree .local-target,
+.conn-tree .recent-chat-target {
   display: flex;
   justify-content: flex-start;
   width: 100%;
@@ -103,22 +104,26 @@
 }
 .conn-tree .profile-target:hover,
 .conn-tree .profile-shortcut-target:hover,
-.conn-tree .local-target:hover:enabled {
+.conn-tree .local-target:hover:enabled,
+.recent-chat:hover {
   background: var(--color-surface-panel);
 }
 .conn-tree .profile-target:focus-visible,
 .conn-tree .profile-shortcut-target:focus-visible,
-.conn-tree .local-target:focus-visible {
+.conn-tree .local-target:focus-visible,
+.conn-tree .recent-chat-target:focus-visible {
   outline-offset: calc(-1 * var(--border-width-focus));
 }
 .conn-tree .profile-target svg,
 .conn-tree .profile-shortcut-target svg,
-.conn-tree .local-target svg {
+.conn-tree .local-target svg,
+.conn-tree .recent-chat-target svg {
   flex-shrink: 0;
   color: var(--color-text-secondary);
 }
 .profile-target strong,
 .profile-shortcut-target strong,
+.recent-chat-target strong,
 .local-target span {
   flex: 0 1 auto;
   min-width: 0;
@@ -142,6 +147,46 @@
   border-radius: var(--radius-small);
   color: var(--color-text-secondary);
   font-size: var(--font-micro);
+}
+/* Recent chat workspaces: the row opens, the ✕ beside it shows on hover or focus. */
+.recent-chats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.recent-chat {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-small);
+}
+.conn-tree .recent-chat-target {
+  flex: 1;
+  min-width: 0;
+  padding-right: var(--space-xxs);
+}
+.recent-chat-open {
+  flex-shrink: 0;
+  color: var(--color-action-primary);
+  font-size: var(--font-micro);
+}
+.recent-chat-forget {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  margin-right: var(--space-xxs);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  opacity: 0;
+}
+.recent-chat:hover .recent-chat-forget,
+.recent-chat:focus-within .recent-chat-forget {
+  opacity: 1;
+}
+.recent-chat-forget:hover {
+  color: var(--color-text-primary);
 }
 .tree-note,
 .tree-empty {

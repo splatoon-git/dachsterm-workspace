@@ -122,3 +122,9 @@
 - **게이트(Mac, 미커밋 트리):** `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -D warnings` 통과, `cargo test --workspace --locked` 670 통과(무시 3)+1. `npm run format:check`, `lint`, `typecheck` 통과, Vitest 112파일 1357 통과, Playwright 532 통과. 새 검사: `chat.spec.ts`의 끊김 중 승인 유지·터미널 연결로 다시 붙기·새 로그인으로 다시 붙기, `chat-launcher.spec.ts`(단축키, 따라갈 탭 없음 안내, 고정 저장, Esc, 새 채팅 탭), 단위 테스트(`chatStatus`, `chatPlaces`, 재접속 상태 전이, 단축키, `attach_script`).
 - **`dev` 병합 후(`0565f11`, Mac):** format·lint·typecheck 통과, Vitest 112파일 1362, Playwright 533, `cargo fmt --check`·clippy 통과, `cargo test --workspace` 670+1. 늘어난 수는 병합 전 `dev`의 커밋(터미널 휠, Git 그래프) 몫이다.
 - **미실행:** 실제 앱의 russh 경로로 끊고 다시 붙기(컨테이너 `dachsterm-ac1`), 터미널 연결 공유로 실제 `claude` 시작, 탭 배지와 팝오버의 실제 앱 화면(Mac WKWebView, Windows), 조용한 망 끊김(keepalive가 끊김을 알리기 전 **다시 연결**을 누를 수 없음), CI.
+
+## 연결 트리의 최근 채팅 (2026-11-10, `6d4a8a3` 위 `feat/ac-recent-chats`)
+
+- **내용:** 연결 트리에 접을 수 있는 **최근 채팅** 섹션(`RecentChats.tsx`). 값은 제목 줄 팝오버와 같은 `dachsterm.chatLaunch`의 최근 작업 영역이다. 클릭은 그 작업 영역의 열린 채팅으로 이동하거나 새로 열고, 우클릭은 **새 채팅 열기**·**목록에서 제거**, ✕는 목록에서만 지운다(`withoutRecent`, 고정 위치 유지). `App.tsx`는 `openChat` 줄을 `chats` 줄로 바꿔 793줄 유지.
+- **게이트(Mac, 미커밋 트리):** `format:check`, `lint`, `typecheck` 통과, Vitest 112파일 1363 통과, Playwright 534 통과. 새 검사: `chat-launcher.spec.ts`의 최근 채팅(열기, 다시 클릭하면 같은 탭, 메뉴로 새 채팅, ✕ 제거와 저장, 접기), `chatPlaces.test.ts`의 `withoutRecent`. Rust 변경 없음.
+- **미실행:** 실제 앱(WKWebView, WebView2)에서의 표시.

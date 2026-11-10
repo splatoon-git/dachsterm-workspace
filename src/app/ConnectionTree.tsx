@@ -24,14 +24,15 @@ import {
   type LocalClusterProfile,
   type TreeFolder,
 } from './connectionSections';
+import { RecentChats, type ChatShortcuts } from './RecentChats';
 import './connectionTree.css';
 
 export type TreeActions = {
   connect: (profile: Profile) => void;
   /** Asks for a folder and a preset, then starts a CLI agent in a new SSH tab. */
   startAgent: (profile: Profile) => void;
-  /** Asks for a server folder, then opens the session as a chat with its agent (AC.1). */
-  openChat: (profile: Profile) => void;
+  /** Opening a session as a chat, and the workspaces chats were opened in. */
+  chats: ChatShortcuts;
   edit: (profile: Profile) => void;
   toggleFavorite: (profile: Profile) => void;
   duplicate: (profile: Profile) => void;
@@ -116,7 +117,7 @@ export function ConnectionTree({
     { label: '연결', shortcut: 'Enter', run: () => actions.connect(p) },
     ...((p.protocol ?? 'ssh') === 'ssh'
       ? [
-          { label: '채팅으로 열기…', run: () => actions.openChat(p) },
+          { label: '채팅으로 열기…', run: () => actions.chats.ask(p) },
           { label: '에이전트 시작…', run: () => actions.startAgent(p) },
         ]
       : []),
@@ -302,6 +303,14 @@ export function ConnectionTree({
               'clock',
               null,
               sections.recent.map((p) => row(p, 1, 'recent')),
+            )}
+          {actions.chats.recent.length > 0 &&
+            section(
+              'chats',
+              '최근 채팅',
+              'chat',
+              null,
+              <RecentChats rows={actions.chats.recent} />,
             )}
           {section('local', '로컬', 'terminal', local.targets.length, localRows, () => [
             {
