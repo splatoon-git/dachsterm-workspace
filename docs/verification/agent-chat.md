@@ -80,3 +80,11 @@
 - 분리 실행으로 띄운 `codex` 0.167.0은 Node 18(Debian bookworm)의 npm 설치본이다.
 - `pgrep -fc 'claude -p'`는 검사 명령의 셸 자신도 센다. 숫자는 그만큼 빼서 읽었다.
 - systemd의 `/run/user/<uid>`는 마지막 세션이 끝나면 지워질 수 있어 실행 폴더로 쓰지 않는다. 컨테이너에 systemd가 없어 재지 못했다. `KillUserProcesses=yes`인 서버에서는 분리 실행도 로그아웃 때 종료될 수 있다(tmux와 같음).
+
+## AC.1 첫 단위 구현 (2026-11-10, `1c1661b`)
+
+- **범위:** 연결 트리 SSH 세션 우클릭 **채팅으로 열기** → 로그인 전용 연결 → 서버에서 `claude` 경로 탐색과 분리 실행 → 텍스트 왕복. 탭을 닫으면 실행기를 끝내고 폴더를 지운다. 승인 화면이 없으므로 `--permission-prompts none`으로 실행해 승인이 필요한 동작은 CLI가 거부한다(AC.5에서 바꾼다).
+- **구조:** `net_tools::link`의 시작·유지를 `login_only.rs`로 옮겨 네트워크 도구와 채팅이 함께 쓴다(도구는 유휴 5분, 채팅은 제한 없음). 프런트엔드의 연결 관리자는 `lib/loginLink.ts`로 내리고 도구의 `SourceLink`는 이를 상속한다. `App.tsx` 793→791줄.
+- **자동 게이트(Mac, `1c1661b`):** `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` 통과, `cargo test --workspace` 655 통과. `npm run typecheck`, `lint`, `format:check` 통과, Vitest 108파일 1331 통과, Playwright 521 통과.
+- **새 단위 테스트:** 실행기 스크립트의 ID 검사·인용·오프셋·줄 버퍼(Rust 7), Claude 출력 읽기(Rust 5), 채팅 상태 축약(Vitest 5). 기존 `net_tools::link`의 유휴 시험 3건은 `login_only`로 옮겼다.
+- **미실행:** 실제 앱에서의 채팅 왕복(Mac 실기기 확인 대기), Windows 네이티브 검사(`test-chat-native.mjs`는 아직 없음), CI.
