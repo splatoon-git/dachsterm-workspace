@@ -103,3 +103,10 @@
 - **WebKit 정렬·Ultracode(`a196912`):** 사용자가 Mac 앱에서 모델 메뉴가 가운데 정렬로 보인다고 알렸다. WebKit 버튼이 내용을 가운데에 두기 때문이며 Chromium 테스트로는 드러나지 않았다. `playwright.config.ts`에 macOS에서만 도는 WebKit 프로젝트(`*.webkit.spec.ts`)를 두고 `macos.yml`이 WebKit을 설치한다. 새 검사는 수정 전 항목 글자가 351px 안쪽에서 시작해 실패, 수정 후 통과했다. Ultracode는 실측으로 `/effort ultracode on|off`를 사용자 턴으로 보내면 켜지고 꺼지며(세션 한정, `get_settings`에는 나오지 않음), 모델 메뉴의 스위치로 넣었다. 게이트: Vitest 1342, Playwright 527(WebKit 1 포함), `cargo test --workspace` 666, clippy·format·typecheck·lint 통과. Windows CI와 실제 앱 확인 대기.
 - **첨부(`3b803b4`):** 입력창 `+`(OS 파일 선택), 파일 끌어다 놓기(`useFileDrop`), 이미지 붙여넣기(`prompt_clipboard_inspect`로 확인한 이미지만, 보낼 때 같은 내용인지 다시 확인). 보낼 때 SSH 채팅은 AT.5의 `prompt_files_upload`·`prompt_clipboard_image`로 서버 `~/.cache/dachsterm/prompt/`에 올리고, 이 PC 채팅은 파일 경로를 그대로 쓰며 클립보드 이미지는 임시 폴더 `dachsterm-chat`(0700, 파일 0600, 7일 뒤 정리)에 저장한다. 메시지 끝에 "첨부한 파일:" 목록으로 경로를 붙인다. 게이트: Vitest 1345, Playwright 528(`chat.spec.ts` 5건), `cargo test --workspace` 667, clippy·format·typecheck·lint 통과. **대기:** 실제 앱의 OS 드래그, WKWebView에서 붙여넣기 이벤트에 이미지 파일이 실리는지, 원격 업로드 왕복.
 
+## AC.5 승인 카드 (2026-11-10, `04ecd29`)
+
+- **실측(로컬 `claude` 2.1.319, `sonnet`, `--setting-sources project`):** 질문 도구(`AskUserQuestion`)는 `can_use_tool`로 오고, `updatedInput`에 `answers: {질문: 고른 이름}`을 더해 허용하면 에이전트가 그 답을 받는다("Blue" 선택 → 답 "Blue"). 권한 제안(`permission_suggestions`, 원래 `destination: localSettings`)을 `session`으로 바꿔 `updatedPermissions`로 돌려보내도 다음 턴의 같은 명령을 다시 물었다. 설정 파일은 써지지 않았다.
+- **구현:** 시작 옵션을 `--permission-prompts none`에서 `--permission-prompt-tool stdio`로 바꿨다. 요청의 입력은 Rust가 채팅별로 보관하고(`asking`), `chat_answer`가 허용(같은 입력)·질문 답(입력+answers)·거부를 돌려보낸다. 카드는 명령이나 파일, 설명, 편집 전후를 보이고 이번만 허용·이 채팅에서 묻지 않기·거부를 고른다. "이 채팅에서 묻지 않기"는 위 실측 때문에 앱이 기억한다: 파일 편집 도구는 모두, `Bash`는 같은 명령, 그 밖에는 같은 도구. 답하지 않은 카드는 턴이 끝나면 "답하기 전에 끝남"이 된다.
+- **게이트(Mac, `04ecd29`):** Vitest 1346, Playwright 529(`chat.spec.ts` 6건: 이번만·채팅 동안·자동 허용·거부·질문 답), `cargo test --workspace` 669, clippy·format·typecheck·lint 통과.
+- **대기:** 실제 앱에서 카드로 허용·거부, 서버 채팅의 승인, 탭·현황판의 "입력 대기" 표시(AC.4), 끊긴 동안 대기한 승인의 복원(AC.9).
+
