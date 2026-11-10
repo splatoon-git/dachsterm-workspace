@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Icon } from '../components/Icon';
-import { sameWorkspace, type ChatLaunch, type ChatWorkspace } from '../features/chat/chatPlaces';
+import {
+  chatPrograms,
+  sameWorkspace,
+  type ChatLaunch,
+  type ChatProgram,
+  type ChatWorkspace,
+} from '../features/chat/chatPlaces';
 import { placeTitle, type ChatSession } from '../features/chat/chatSession';
 import { chatSummary } from '../features/chat/chatStatus';
 import { StatusBadge } from '../features/terminal/StatusBadge';
@@ -8,7 +14,7 @@ import { modKey } from '../lib/platform';
 import './chatLauncher.css';
 
 /** How a workspace reads in the launcher. */
-export type Described = { title: string; detail: string };
+export type Described = { title: string; detail: string; program: ChatProgram };
 /** Where "new chat" would open now, or why it cannot. */
 export type LaunchTarget = Described | { reason: string };
 
@@ -17,7 +23,7 @@ type Open = { id: string; session: ChatSession };
 function OpenChat({ chat, current, go }: { chat: Open; current: boolean; go: () => void }) {
   const state = useSyncExternalStore(chat.session.subscribe, chat.session.snapshot);
   const summary = chatSummary(state);
-  const { place, folder } = chat.session;
+  const { place, folder, program } = chat.session;
   return (
     <li>
       <button
@@ -28,6 +34,7 @@ function OpenChat({ chat, current, go }: { chat: Open; current: boolean; go: () 
       >
         <strong>{placeTitle(place)}</strong>
         <span className="chat-launch-detail">{folder || '기본 폴더'}</span>
+        <small className="chat-launch-program">{program}</small>
         {summary && <StatusBadge summary={summary} />}
         {state.phase === 'disconnected' && !summary && (
           <small className="chat-launch-away">연결 끊김</small>
@@ -154,6 +161,20 @@ export function ChatLauncher({
             </span>
           </button>
           <fieldset className="chat-launch-mode">
+            <legend>에이전트</legend>
+            {chatPrograms.map((program) => (
+              <label key={program}>
+                <input
+                  type="radio"
+                  name="chat-launch-program"
+                  checked={launch.program === program}
+                  onChange={() => setLaunch({ ...launch, program })}
+                />
+                <code>{program}</code>
+              </label>
+            ))}
+          </fieldset>
+          <fieldset className="chat-launch-mode">
             <legend>새 채팅 위치</legend>
             <label>
               <input
@@ -208,6 +229,7 @@ export function ChatLauncher({
                     >
                       <strong>{r.title}</strong>
                       <span className="chat-launch-detail">{r.detail}</span>
+                      <small className="chat-launch-program">{r.program}</small>
                     </button>
                   </li>
                 ))}

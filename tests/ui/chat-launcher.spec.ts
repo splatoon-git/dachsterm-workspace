@@ -7,7 +7,8 @@ test('the title bar opens chats with Ctrl/Cmd+Shift+A, following the tab or a fi
   const saved: ChatLaunch = {
     mode: 'follow',
     fixed: null,
-    recent: [{ kind: 'local', folder: '/Users/me/work' }],
+    recent: [{ kind: 'local', folder: '/Users/me/work', program: 'claude' }],
+    program: 'claude',
   };
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
     key: chatLaunchKey,
@@ -48,6 +49,16 @@ test('the title bar opens chats with Ctrl/Cmd+Shift+A, following the tab or a fi
   await expect(page.locator('.chat-pane').getByRole('alert')).toBeVisible();
   await icon.click();
   await expect(popover.getByRole('list', { name: '열린 채팅' })).toContainText('/Users/me/work');
+
+  // The agent is picked in the popover, kept, and named on the tab unless it is claude.
+  await popover.getByRole('radio', { name: 'codex' }).check();
+  await fresh.click();
+  await expect(page.getByRole('tab', { name: /채팅 · 이 PC · codex/ })).toBeVisible();
+  const now = await page.evaluate((key) => localStorage.getItem(key), chatLaunchKey);
+  expect(JSON.parse(now ?? '{}')).toMatchObject({
+    program: 'codex',
+    recent: [{ folder: '/Users/me/work', program: 'codex' }, saved.recent[0]],
+  });
 });
 
 test('the sidebar lists recent chat workspaces to reopen or forget', async ({ page }) => {
@@ -55,9 +66,10 @@ test('the sidebar lists recent chat workspaces to reopen or forget', async ({ pa
     mode: 'follow',
     fixed: null,
     recent: [
-      { kind: 'local', folder: '/Users/me/work' },
-      { kind: 'local', folder: '/Users/me/notes' },
+      { kind: 'local', folder: '/Users/me/work', program: 'claude' },
+      { kind: 'local', folder: '/Users/me/notes', program: 'codex' },
     ],
+    program: 'claude',
   };
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
     key: chatLaunchKey,
@@ -91,7 +103,9 @@ test('the sidebar lists recent chat workspaces to reopen or forget', async ({ pa
   await page.screenshot({ path: 'test-results/chat-recent-sidebar.png' });
 
   // The ✕ takes a row off the list and the choice is kept.
-  await list.getByRole('button', { name: '이 PC /Users/me/notes 최근 채팅에서 제거' }).click();
+  await list
+    .getByRole('button', { name: '이 PC /Users/me/notes codex 최근 채팅에서 제거' })
+    .click();
   await expect(list.getByRole('listitem')).toHaveCount(1);
   const kept = await page.evaluate((key) => localStorage.getItem(key), chatLaunchKey);
   expect(JSON.parse(kept ?? '{}').recent).toEqual([saved.recent[0]]);

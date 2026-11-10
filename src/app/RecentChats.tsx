@@ -7,6 +7,7 @@ import {
   type MenuPoint,
 } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
+import type { ChatProgram } from '../features/chat/chatPlaces';
 import type { Profile } from '../lib/ipc';
 
 /** A workspace a chat was opened in, as the connection tree lists it. */
@@ -14,6 +15,7 @@ export type RecentChat = {
   key: string;
   title: string;
   detail: string;
+  program: ChatProgram;
   /** Whether a chat is open there now: going to it then shows that chat. */
   open: boolean;
   /** Shows the open chat there, or opens one. */
@@ -58,16 +60,17 @@ export function RecentChats({ rows }: { rows: RecentChat[] }) {
                 e.preventDefault();
                 setMenu({ at: anchorBelow(e.currentTarget), row });
               }}
-              title={`${row.title} · ${row.detail}\n${row.open ? '클릭하면 열린 채팅으로 이동' : '클릭하면 이 폴더에서 채팅 열기'} · 우클릭으로 더 보기`}
+              title={`${row.program} · ${row.title} · ${row.detail}\n${row.open ? '클릭하면 열린 채팅으로 이동' : '클릭하면 이 폴더에서 채팅 열기'} · 우클릭으로 더 보기`}
             >
               <Icon name="chat" size={14} />
               <strong>{row.title}</strong>
               <span className="row-detail">{row.detail}</span>
+              <small className="recent-chat-program">{row.program}</small>
               {row.open && <small className="recent-chat-open">열림</small>}
             </button>
             <button
               className="recent-chat-forget"
-              aria-label={`${row.title} ${row.detail} 최근 채팅에서 제거`}
+              aria-label={`${row.title} ${row.detail} ${row.program} 최근 채팅에서 제거`}
               title="목록에서 제거"
               onClick={row.forget}
             >

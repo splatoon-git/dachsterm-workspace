@@ -11,14 +11,7 @@ import {
 import type { ChatSession } from './chatSession';
 import { AgentsPanel, ContextPanel, ModelPanel, ModePanel, UsagePanel } from './ChatPanels';
 import { canSend, type ChatState } from './chatState';
-import {
-  commandMatches,
-  effortLabel,
-  limitLabel,
-  modeLabel,
-  modelLabel,
-  permissionModes,
-} from './chatText';
+import { commandMatches, effortLabel, limitLabel, modeLabel, modeOf, modelLabel } from './chatText';
 
 type Panel = 'model' | 'context' | 'agents' | 'mode' | 'usage' | null;
 
@@ -87,7 +80,7 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
   const commands = dismissed === draft ? [] : commandMatches(chat, draft).slice(0, 8);
   const running = chat.agents.filter((a) => a.status === 'running').length;
   const agentsText = running ? `에이전트 ${running}개 실행 중` : `에이전트 ${chat.agents.length}`;
-  const risky = permissionModes.find((m) => m.value === chat.permissionMode)?.risky;
+  const risky = modeOf(chat.permissionMode)?.risky;
   const shortLimit = chat.limits.find((l) => l.name === 'five_hour') ?? chat.limits[0];
   const toggle = (next: Panel) => setPanel((open) => (open === next ? null : next));
   const close = () => setPanel(null);

@@ -10,9 +10,10 @@ import {
   withoutRecent,
   withRecent,
   type ChatLaunch,
+  type ChatProgram,
   type ChatWorkspace,
 } from '../features/chat/chatPlaces';
-import { ChatSession, placeTitle, type ChatPlace } from '../features/chat/chatSession';
+import { ChatSession, chatName, placeTitle, type ChatPlace } from '../features/chat/chatSession';
 import { chatSummary } from '../features/chat/chatStatus';
 import { chatTranscript } from '../features/chat/chatText';
 import type { TerminalSession } from '../features/terminal/session';
@@ -30,7 +31,7 @@ import { tabKey, type TabRef } from './workspaceLayout';
 
 type ChatRef = Extract<TabRef, { kind: 'chat' }>;
 type Chat = { id: string; session: ChatSession };
-type Target = { place: ChatPlace; folder: string };
+type Target = { place: ChatPlace; folder: string; program: ChatProgram };
 
 const refOf = (chat: Chat): ChatRef => ({ kind: 'chat', id: chat.id });
 const rowKey = (id: string) => `chat:${id}`;
@@ -40,23 +41,28 @@ const viaOf = (terminal: TerminalSession) => () =>
   !terminal.disposed && terminal.snapshot().status === 'connected' ? terminal.connectionId : null;
 
 /** A chat where a terminal tab is: its server and shell folder, or this PC for a local shell. */
-function targetOf(terminal: TerminalSession | undefined, folder?: string): Target | string {
+function targetOf(
+  terminal: TerminalSession | undefined,
+  program: ChatProgram,
+  folder?: string,
+): Target | string {
   if (!terminal) return '따라갈 터미널 탭이 없습니다. 터미널 탭을 고르거나 위치를 고정하세요.';
   const at = folder ?? terminal.snapshot().directory ?? '';
   const kind = sessionKind(terminal);
   if (kind === 'local' && terminal.localTarget?.kind === 'shell')
-    return { place: { kind: 'local', name: terminal.localTarget.name }, folder: at };
+    return { place: { kind: 'local', name: terminal.localTarget.name }, folder: at, program };
   if (kind !== 'ssh') return '이 탭에서는 채팅을 열 수 없습니다. SSH나 로컬 셸 탭을 고르세요.';
   return {
     place: { kind: 'ssh', profile: terminal.profile, via: viaOf(terminal) },
     folder: folderProblem(at) ? '' : at,
+    program,
   };
 }
 
-const workspaceOf = ({ place, folder }: Target): ChatWorkspace =>
+const workspaceOf = ({ place, folder, program }: Target): ChatWorkspace =>
   place.kind === 'ssh'
-    ? { kind: 'ssh', profileId: place.profile.id, folder }
-    : { kind: 'local', folder };
+    ? { kind: 'ssh', profileId: place.profile.id, folder, program }
+    : { kind: 'local', folder, program };
 
 function ChatTab({
   chat,
@@ -74,7 +80,7 @@ function ChatTab({
   return (
     <PlainTab
       tabKey={tabKey(refOf(chat))}
-      title={`채팅 · ${placeTitle(chat.session.place)}`}
+      title={chatName(chat.session)}
       hint={summary?.detail || undefined}
       badge={summary && <StatusBadge summary={summary} />}
       active={active}
@@ -109,10 +115,12 @@ export function useChatTabs({
     saveLaunch(next);
   };
   /** Opens a chat whose agent works in `folder`; empty means the login or home folder. */
-  const open = ({ place, folder }: Target) => {
-    const chat: Chat = { id: crypto.randomUUID(), session: new ChatSession(place, folder) };
+  const open = (target: Target) => {
+    const { place, folder, program } = target;
+    const session = new ChatSession(place, folder, program);
+    const chat: Chat = { id: crypto.randomUUID(), session };
     if (place.kind === 'ssh') rememberFolder(place.profile.id, folder);
-    setLaunch(withRecent(launch, workspaceOf({ place, folder })));
+    setLaunch(withRecent(launch, workspaceOf(target)));
     chat.session.open();
     setChats((old) => [...old, chat]);
     workspace.open(refOf(chat));
@@ -134,21 +142,26 @@ export function useChatTabs({
   );
   /** A saved workspace as a place to open in. Null when its session was deleted. */
   const resolve = (w: ChatWorkspace): Target | null => {
-    if (w.kind === 'local') return { place: { kind: 'local', name: '' }, folder: w.folder };
+    const { folder, program } = w;
+    if (w.kind === 'local') return { place: { kind: 'local', name: '' }, folder, program };
     const profile = profiles.find((p) => p.id === w.profileId);
-    return profile ? { place: { kind: 'ssh', profile }, folder: w.folder } : null;
+    return profile ? { place: { kind: 'ssh', profile }, folder, program } : null;
   };
   const describe = (w: ChatWorkspace): Described | null => {
     const target = resolve(w);
     if (!target) return null;
     const { place } = target;
     const home = place.kind === 'ssh' ? '로그인 폴더' : '홈 폴더';
-    return { title: placeTitle(place), detail: w.folder || home };
+    return { title: placeTitle(place), detail: w.folder || home, program: w.program };
   };
+  const { program } = launch;
   // With a chat in focus, following means beside it: the same place and folder.
-  const followed = focusedChat?.session ?? targetOf(focusedTerminal);
+  const followed: Target | string = focusedChat
+    ? { place: focusedChat.session.place, folder: focusedChat.session.folder, program }
+    : targetOf(focusedTerminal, program);
   const fixed = launch.mode === 'fixed' && launch.fixed ? resolve(launch.fixed) : null;
-  const target: Target | string = fixed ?? followed;
+  // The agent is the one picked in the launcher, wherever the chat opens.
+  const target: Target | string = fixed ? { ...fixed, program } : followed;
   const shown: LaunchTarget =
     typeof target === 'string'
       ? { reason: target }
@@ -223,7 +236,7 @@ export function useChatTabs({
     ),
     /** A chat in a folder of the tab's own place, sharing its connection (§9.7). */
     openFrom: (session: TerminalSession, folder: string) => {
-      const at = targetOf(session, folder);
+      const at = targetOf(session, program, folder);
       if (typeof at !== 'string') open(at);
     },
     /** What the connection tree offers: a chat from a session, and the recent workspaces. */
@@ -231,9 +244,10 @@ export function useChatTabs({
     dialog: asking && (
       <ChatOpenDialog
         profile={asking}
-        open={(folder) => {
+        program={program}
+        open={(folder, chosen) => {
           setAsking(null);
-          open({ place: { kind: 'ssh', profile: asking }, folder });
+          open({ place: { kind: 'ssh', profile: asking }, folder, program: chosen });
         }}
         close={() => setAsking(null)}
       />

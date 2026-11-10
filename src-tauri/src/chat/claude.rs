@@ -150,7 +150,7 @@ fn limits(windows: &Value, percent_of: impl Fn(&Value) -> Option<f64>, resets: &
         .collect()
 }
 
-fn cut(text: &str, limit: usize) -> String {
+pub(super) fn cut(text: &str, limit: usize) -> String {
     let mut kept: String = text.chars().take(limit).collect();
     if kept.len() < text.len() {
         kept.push('…');

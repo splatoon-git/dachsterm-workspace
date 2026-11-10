@@ -164,6 +164,12 @@
   min-width: 0;
   padding-right: var(--space-xxs);
 }
+.recent-chat-program {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-micro);
+}
 .recent-chat-open {
   flex-shrink: 0;
   color: var(--color-action-primary);

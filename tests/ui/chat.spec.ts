@@ -407,3 +407,57 @@ test('without a terminal to share, reconnecting logs in on its own', async ({ pa
   await expect(page.getByRole('button', { name: '다시 연결' })).toBeVisible();
   await expect(page.getByText(/서버에서는 작업이 계속되며/)).toHaveCount(2);
 });
+
+test('a codex chat starts codex and offers its own modes and efforts', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/chat.html?codex');
+  await expect(page.getByRole('textbox', { name: '프롬프트' })).toBeEnabled();
+  const started = await page.evaluate(() =>
+    window.__chat.calls.find((c) => c.command === 'chat_start_local'),
+  );
+  expect(started?.args).toMatchObject({ program: 'codex', folder: '/Users/me/work/app' });
+  await expect(page.locator('.chat-head')).toContainText('codex · zsh · 기본 셸');
+  await emit(page, [
+    { kind: 'started', session: 'th1', model: 'gpt-x' },
+    { kind: 'mode', mode: 'default' },
+    { kind: 'effort', level: 'high' },
+    {
+      kind: 'capabilities',
+      models: [
+        {
+          value: 'gpt-x',
+          label: 'GPT-X',
+          detail: 'Big.',
+          hint: 'gpt-x',
+          levels: ['low', 'high', 'ultra'],
+        },
+      ],
+      commands: [],
+      agents: [],
+      permissionMode: 'default',
+      account: { plan: 'pro', email: '' },
+    },
+    {
+      kind: 'limits',
+      limits: [{ name: 'seven_day', percent: 64, resetsAt: '4102444800' }],
+    },
+  ]);
+  const calls = () => page.evaluate(() => window.__chat.calls.map((c) => c.command));
+
+  await page.getByRole('button', { name: '모델 GPT-X' }).click();
+  const efforts = page.getByRole('group', { name: '노력 수준' });
+  await expect(efforts.getByRole('button', { name: 'Ultra' })).toBeVisible();
+  await expect(page.getByRole('switch', { name: /Ultracode/ })).toHaveCount(0);
+  await efforts.getByRole('button', { name: 'Low' }).click();
+  expect(await calls()).toContain('chat_set_effort');
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('button', { name: '권한 모드 기본' }).click();
+  const modes = page.getByRole('dialog', { name: '권한 모드' });
+  await expect(modes.getByRole('button', { name: /편집 자동 승인/ })).toHaveCount(0);
+  await modes.getByRole('button', { name: /읽기 전용/ }).click();
+  expect(await calls()).toContain('chat_set_mode');
+  await emit(page, [{ kind: 'mode', mode: 'readOnly' }]);
+  await expect(page.getByRole('button', { name: '권한 모드 읽기 전용' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /사용량 7일 64%/ })).toBeVisible();
+  await page.screenshot({ path: 'test-results/chat-codex.png' });
+});

@@ -76,7 +76,7 @@ enum ChatEvent {
 | 승인 | `control_request can_use_tool` | `item/*/requestApproval` |
 | 승인 해소 | 같은 `tool_use_id`의 `tool_result` | `serverRequest/resolved` |
 | 턴 끝 | `result` | **메인 `threadId`의** `turn/completed` |
-| 작업 중 입력 | 사용자 메시지 전송(같은 턴에 합쳐짐) | `turn/steer` |
+| 작업 중 입력 | 사용자 메시지 전송(같은 턴에 합쳐짐) | 진행 중에도 `turn/start`(같은 턴 ID로 합쳐짐, AC.3 실측). `turn/steer`는 쓰지 않는다 |
 | 중단 | `control_request interrupt` | `turn/interrupt` |
 | 이어가기 | `--resume <id>` | `thread/resume` |
 
@@ -106,6 +106,7 @@ enum ChatEvent {
 | 기본 | `--permission-mode manual` | `approvalPolicy:on-request`, `sandbox:workspace-write` |
 | 편집 자동 승인 | `--permission-mode acceptEdits` | (없음) |
 | 계획 | `--permission-mode plan` | (없음) |
+| 읽기 전용 (Codex만) | (없음) | `sandboxPolicy:readOnly`, `on-request` |
 | 자동 | `--permission-mode auto` | `approvalsReviewer:auto_review`, `workspace-write` (CLI의 `--approve-for-me`와 같은지 AC.3에서 확인) |
 | 권한 확인 생략 (위험) | `--dangerously-skip-permissions` | `approvalPolicy:never`, `sandbox:danger-full-access` |
 
@@ -147,7 +148,7 @@ engineering-rules §4는 제품 코드가 호출하지 않는 명령과 함수�
 | AC.0 | 실측 | **완료.** Mac 로컬 파이프와 실제 SSH(시스템 `ssh`) 실측 |
 | AC.1 | 첫 단위: 연결 트리 **채팅으로 열기** → `claude` 텍스트 대화 왕복. 로그인 전용 연결, 분리 실행기(시작·붙기·보내기·닫기), Claude 어댑터의 본문·턴 끝, 최소 채팅 탭(대화 목록과 입력창) | 앱의 russh 경로로 실제 SSH 왕복, 탭을 닫으면 서버 정리, 연결이 끊겨도 서버의 턴 유지 |
 | AC.2 | 도구·생각·diff 표시, 스트리밍, 긴 대화 | 기록한 스트림 단위 테스트, 500턴 대화 스크롤 |
-| AC.3 | `codex` 어댑터 | `threadId` 분리 포함 단위 테스트, 실제 CLI 왕복, 샌드박스 실패 안내 |
+| AC.3 | `codex` 어댑터 | **구현(2026-11-10).** `threadId` 분리 포함 단위 테스트, 실제 CLI 왕복(이 PC 완료, SSH 대기), 샌드박스 실패 안내(대기) |
 | AC.4 | 채팅 탭 배치: 분할·이동·독립 창, 현황판·알림 보고 | 탭 이동 시 재마운트 없음, 독립 창 상태 보고 |
 | AC.5 | 승인·권한 전환·중단 | 허용·거부·세션 허용·위험 전환 오류 처리 |
 | AC.6 | 전역 설정과 시작 화면, 세션별 열기 방식, 모델 목록 | 설정 저장·검증 |
@@ -221,6 +222,16 @@ engineering-rules §4는 제품 코드가 호출하지 않는 명령과 함수�
 - 긴 대화: 최근 200개 항목만 그리고, 위로 스크롤하면 200개씩 더 그린다. 접힌 도구 결과는 펼칠 때 그린다.
 - 진입점: §9.7을 따른다.
 - 모델 목록: `claude`는 `--help`의 별칭(`opus`, `sonnet`, `haiku`, `fable`)을 `agentOptions.ts`에 둔다. `codex`는 앱 서버의 `model/list`로 받는다(AC.6).
+
+### 9.8 Codex 어댑터 (AC.3, 2026-11-10)
+
+- 프로그램 분기는 `chat/program.rs` 한 곳에 둔다. `Program`(`claude`/`codex`)이 실행 인자와 읽기 상태를 정하고, `chat.rs`의 명령은 두 프로그램에 같다. `chat_start`·`chat_start_local`이 `program` 인자를 받는다(새 명령 없음).
+- Codex는 앱이 요청 ID로 묻고 답을 받으므로 읽기 상태(`codex::Reader`)가 요청을 만든다: 각 요청의 용도, 대화 `threadId`, 실행 중 턴 ID, 다음 턴에 실을 모델·노력·권한 모드. 시작 줄 `initialize` → `initialized` → `thread/start` → `account/read` → `model/list`를 답을 기다리지 않고 차례로 쓴다(실제 CLI에서 확인).
+- 모델·노력·권한 모드는 Codex가 다음 `turn/start`에서 받는다. 그래서 바꾸면 앱이 바로 `Effort`·`Mode` 이벤트를 채팅에 보낸다(`Chat.events`). Ultracode는 Codex에 없어 숨기고 명령은 거부한다.
+- 승인: `item/commandExecution/requestApproval`(Bash), `item/fileChange/requestApproval`(Edit, 파일 이름은 앞선 `fileChange` 항목에서), `item/permissions/requestApproval`, `item/tool/requestUserInput`(질문, 답은 질문 ID로), `mcpServer/elicitation/request`을 승인 카드로 보인다. 거부는 `decline`이다. 앱이 답할 수 없는 요청(토큰 갱신 등)은 무시한다.
+- 서브에이전트 스레드의 항목·턴은 메인 대화에 넣지 않고, `subAgentActivity`로 시작·끝만 보인다. 서브의 승인 요청은 답해야 진행되므로 카드로 보인다.
+- 사용량: `thread/tokenUsage/updated`로 컨텍스트 사용률과 턴 사용량을, `account/rateLimits/*`로 사용량 창(기간으로 5시간·7일 이름)을 보인다. 비용은 Codex가 주지 않아 0이다.
+- 진입점: 제목 줄 팝오버의 **에이전트**(`claude`/`codex`)가 새 채팅의 프로그램이다(파일 트리 **여기서 채팅 열기** 포함). **채팅으로 열기…** 대화상자는 프로그램을 따로 고른다. 최근 작업 영역은 프로그램까지 기억하고(`dachsterm.chatLaunch`, 프로그램이 없는 이전 값은 `claude`), 탭 이름은 `codex`일 때만 `채팅 · <위치> · codex`다.
 
 ### 9.7 진입점과 작업 영역 (2026-11-10 사용자 결정)
 

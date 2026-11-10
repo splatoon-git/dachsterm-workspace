@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { emitTo } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { chatSummary } from '../features/chat/chatStatus';
-import { placeTitle, type ChatSession } from '../features/chat/chatSession';
+import { chatName, type ChatSession } from '../features/chat/chatSession';
 import { gitStatusText } from '../features/git/gitStatus';
 import { gitStatusOf } from '../features/git/useGitStatus';
 import { signWaiting } from '../features/terminal/agentSign';
@@ -66,7 +66,7 @@ export function chatReportOf(session: ChatSession, now = Date.now()): AgentRepor
     return null;
   }
   return {
-    name: `채팅 · ${placeTitle(session.place)}`,
+    name: chatName(session),
     state: summary.state,
     since: stateSince(session, summary.state, now),
     git: '',

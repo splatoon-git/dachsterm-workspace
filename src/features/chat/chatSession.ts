@@ -2,6 +2,7 @@ import { Channel } from '@tauri-apps/api/core';
 import { call, errorText, type Profile } from '../../lib/ipc';
 import { LoginLink } from '../../lib/loginLink';
 import { withAttachments, type ChatAttachment } from './chatAttachments';
+import type { ChatProgram } from './chatPlaces';
 import {
   applyChatEvent,
   withAnswered,
@@ -30,6 +31,9 @@ export const placeTitle = (place: ChatPlace) =>
   place.kind === 'ssh' ? place.profile.name : '이 PC';
 export const placeDetail = (place: ChatPlace) =>
   place.kind === 'ssh' ? `${place.profile.username}@${place.profile.host}` : place.name;
+/** A chat's name in tabs and lists: `claude` is the default and goes unsaid. */
+export const chatName = ({ place, program }: { place: ChatPlace; program: ChatProgram }) =>
+  `채팅 · ${placeTitle(place)}${program === 'claude' ? '' : ` · ${program}`}`;
 
 /**
  * One chat tab (AC.1). Over SSH the agent runs detached on the server and the chat reaches it
@@ -62,6 +66,7 @@ export class ChatSession {
   constructor(
     readonly place: ChatPlace,
     readonly folder = '',
+    readonly program: ChatProgram = 'claude',
   ) {
     this.link.subscribe(this.follow);
   }
@@ -165,7 +170,8 @@ export class ChatSession {
     // Taken before the channel, which cannot be made outside the desktop app.
     const token = this.reading + 1;
     try {
-      const args = { id: this.id, folder: this.folder, onEvent: this.channel() };
+      const { id, folder, program } = this;
+      const args = { id, folder, program, onEvent: this.channel() };
       if (connection) await call('chat_start', { ...args, connection });
       else await call('chat_start_local', args);
       this.started = true;
