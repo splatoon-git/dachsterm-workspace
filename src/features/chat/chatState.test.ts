@@ -138,12 +138,14 @@ describe('chat state', () => {
     expect(modelLabel(state)).toBe('Sonnet');
     state = applyChatEvent(state, {
       kind: 'context',
+      model: 'claude-sonnet-5-5',
       percentage: 13,
       used: 25200,
       max: 200000,
       parts: [],
     });
     expect(state.context?.percentage).toBe(13);
+    expect(state.model).toBe('claude-sonnet-5-5');
     state = applyChatEvent(state, { kind: 'agentStarted', id: 'a', role: 'Explore', task: 'look' });
     state = applyChatEvent(state, { kind: 'agentFinished', id: 'a', ok: true, summary: 'found' });
     expect(state.agents).toEqual([

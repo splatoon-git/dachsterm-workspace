@@ -36,8 +36,10 @@ pub enum ChatEvent {
         agents: Vec<Choice>,
         permission_mode: String,
     },
-    /// How full the context window is, in whole percent, with what takes the room.
+    /// How full the context window is, in whole percent, with what takes the room. `model` is the
+    /// one in use, known here before the first turn reports it.
     Context {
+        model: String,
         percentage: u32,
         used: u64,
         max: u64,

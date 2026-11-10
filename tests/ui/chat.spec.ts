@@ -88,6 +88,7 @@ test('the composer offers commands, models, context use and subagents', async ({
     },
     {
       kind: 'context',
+      model: 'claude-opus-5-5',
       percentage: 13,
       used: 25200,
       max: 200000,

@@ -190,6 +190,7 @@ fn answer(response: &Value) -> Vec<ChatEvent> {
                 .collect();
             let percentage = body["percentage"].as_f64().unwrap_or_default();
             vec![ChatEvent::Context {
+                model: body["model"].as_str().unwrap_or_default().to_string(),
                 percentage: percentage.round().clamp(0.0, 100.0) as u32,
                 used: body["totalTokens"].as_u64().unwrap_or_default(),
                 max: body["maxTokens"].as_u64().unwrap_or_default(),

@@ -35,7 +35,7 @@ export type ChatEvent =
       agents: ChatChoice[];
       permissionMode: string;
     }
-  | ({ kind: 'context' } & ChatContext)
+  | ({ kind: 'context'; model: string } & ChatContext)
   | { kind: 'agentStarted'; id: string; role: string; task: string }
   | { kind: 'agentFinished'; id: string; ok: boolean; summary: string }
   | { kind: 'problem'; text: string }
@@ -163,7 +163,12 @@ export function applyChatEvent(state: ChatState, event: ChatEvent, now = Date.no
       };
     case 'context': {
       const { percentage, used, max, parts } = event;
-      return { ...state, context: { percentage, used, max, parts } };
+      // Known here before the first turn names it.
+      return {
+        ...state,
+        model: state.model || event.model,
+        context: { percentage, used, max, parts },
+      };
     }
     case 'agentStarted':
       return {
