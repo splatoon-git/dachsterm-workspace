@@ -268,7 +268,7 @@ export function App() {
         return setSettingsOpen(true);
     }
   };
-  useAppShortcuts(keptByFile, runShortcut);
+  useAppShortcuts(keptByFile, runShortcut, () => tabMenu.closeFocused());
   function requestConnect(profile: Profile, existing?: TerminalSession, opening?: Opening) {
     if (existing?.podTerminal) {
       void kubeTabs.reconnect(existing);

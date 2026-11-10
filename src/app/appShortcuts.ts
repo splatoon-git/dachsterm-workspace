@@ -1,4 +1,6 @@
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useEffect, useEffectEvent } from 'react';
+import { desktop } from '../lib/ipc';
 import type { Side } from './workspaceLayout';
 
 /** App-wide shortcuts. Each takes Ctrl, or Command on a Mac, so typing in a shell never hits one. */
@@ -49,6 +51,23 @@ const withShift: Record<string, AppShortcut> = {
 
 type Keys = Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>;
 
+/**
+ * Command+W closes the focused tab, as in other Mac apps, and with no tab left the window. The menu
+ * has no Close Window (`macos_menu.rs`): it closed the window, and so quit, on the first press.
+ * Ctrl+W stays with the shell, where it deletes a word.
+ */
+export const closesTab = (e: Keys) =>
+  e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'KeyW';
+
+/** Closes this window through its usual checks (`useWindowClose`). */
+export function closeWindow() {
+  // A refused close is the user's answer to those checks, and nothing else can go wrong here.
+  if (desktop)
+    void getCurrentWindow()
+      .close()
+      .catch(() => {});
+}
+
 /** The shortcut a key press means, by physical key so a keyboard layout does not change it. */
 export function appShortcut(e: Keys): AppShortcut | null {
   if (e.code === 'F11') return { name: 'fullscreen' };
@@ -69,9 +88,19 @@ export function useAppShortcuts(
   /** A shortcut the focused content uses itself right now. */
   keptByContent: (shortcut: AppShortcut) => boolean,
   run: (shortcut: AppShortcut) => void,
+  /** False when there was no tab to close. */
+  closeTab: () => boolean,
 ) {
   const handle = useEffectEvent((e: KeyboardEvent) => {
+    const close = closesTab(e);
+    // Even under a dialog, or the menu would still quit the app.
+    if (close) e.preventDefault();
     if (document.querySelector('dialog[open]')) return;
+    if (close) {
+      e.stopPropagation();
+      if (!closeTab()) closeWindow();
+      return;
+    }
     const shortcut = appShortcut(e);
     if (!shortcut || keptByContent(shortcut)) return;
     e.preventDefault();

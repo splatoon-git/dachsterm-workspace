@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appShortcut } from './appShortcuts';
+import { appShortcut, closesTab } from './appShortcuts';
 
 const key = (
   code: string,
@@ -63,5 +63,14 @@ describe('app shortcuts', () => {
 
   it('keeps F11 for full screen', () => {
     expect(appShortcut(key('F11'))).toEqual({ name: 'fullscreen' });
+  });
+
+  it('closes a tab with Command+W only, and leaves Ctrl+W to the shell', () => {
+    expect(closesTab(key('KeyW', { meta: true }))).toBe(true);
+    expect(closesTab(key('KeyW', { ctrl: true }))).toBe(false);
+    expect(closesTab(key('KeyW', { meta: true, shift: true }))).toBe(false);
+    expect(closesTab(key('KeyW', { meta: true, alt: true }))).toBe(false);
+    expect(closesTab(key('KeyQ', { meta: true }))).toBe(false);
+    expect(appShortcut(key('KeyW', { meta: true }))).toBeNull();
   });
 });
