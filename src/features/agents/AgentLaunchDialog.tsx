@@ -29,7 +29,9 @@ export function AgentLaunchDialog({
   const preset = presets[index] ?? presets[0];
   const folder = (fixedFolder ?? typedFolder).trim();
   const command = presetCommand(preset, name);
-  const folderError = fixedFolder === undefined ? folderProblem(folder) : null;
+  // A picked folder's name comes from the server. Control characters in it would edit the line
+  // at the prompt, where quoting no longer helps.
+  const folderError = folderProblem(folder);
   const launch = command && !folderError ? { folder, command } : null;
   const tmux = profile.tmuxSession;
   const danger = isDangerousCommand(preset.command);
@@ -50,6 +52,7 @@ export function AgentLaunchDialog({
           <div className="agent-launch-folder">
             <span>폴더</span>
             <code>{fixedFolder}</code>
+            {folderError && <span className="field-help agent-launch-error">{folderError}</span>}
           </div>
         ) : (
           <label>

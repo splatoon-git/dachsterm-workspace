@@ -113,5 +113,11 @@ export function useTabMenu({
   const element = menu && (
     <ContextMenu label="탭 메뉴" at={menu.at} items={menu.items} close={() => setMenu(null)} />
   );
-  return { open, element };
+  /** The tab menu's Close for the focused tab, for Command+W. False when no tab is open. */
+  const closeFocused = () => {
+    const key = workspace.focusedGroup.active;
+    if (key) actions.close(key);
+    return !!key;
+  };
+  return { open, element, closeFocused };
 }

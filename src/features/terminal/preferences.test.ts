@@ -32,9 +32,16 @@ describe('terminal paths and clipboard safety', () => {
   it('accepts drive and share paths only for local Windows shells', () => {
     expect(directoryFromOsc('C:\\Users\\me', false, true)).toBe('C:\\Users\\me');
     expect(directoryFromOsc('D:/work', false, true)).toBe('D:/work');
-    expect(directoryFromOsc('\\\\wsl.localhost\\Ubuntu\\app', false, true)).toBe(
-      '\\\\wsl.localhost\\Ubuntu\\app',
-    );
+    for (const share of [
+      '\\\\attacker\\share',
+      '//attacker/share',
+      '/\\attacker\\share',
+      '\\/attacker/share',
+    ])
+      expect(directoryFromOsc(share, false, true)).toBeNull();
+    expect(directoryFromOsc('file:////attacker/share', true, true)).toBeNull();
+    // An SSH tab's `//srv` is an ordinary server path and opens nothing on this PC.
+    expect(directoryFromOsc('//srv/app', false)).toBe('//srv/app');
     expect(directoryFromOsc('file://host/C:/Users/me', true, true)).toBe('C:/Users/me');
     expect(directoryFromOsc('/usr/local', false, true)).toBe('/usr/local');
     expect(directoryFromOsc('C:\\Users\\me', false)).toBeNull();

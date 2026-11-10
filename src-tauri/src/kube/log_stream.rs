@@ -28,6 +28,8 @@ const MAX_TAIL: u32 = 2000;
 const MAX_FILTER_CHARS: usize = 200;
 /// What `substr` keeps of a line on a server (`PREFIX_LINES`), and a local stream the same.
 const MAX_LINE_BYTES: usize = 3800;
+/// Far above a cut line. An output with no newline must not grow in memory for 12 hours.
+const MAX_PENDING_BYTES: usize = 64 * 1024;
 /// A board left open overnight should not follow forever.
 const LIMITS: Limits = Limits {
     timeout: Duration::from_secs(12 * 60 * 60),
@@ -187,6 +189,10 @@ impl Reader {
         let mut parsed = Parsed::default();
         self.pending.extend_from_slice(piece);
         let Some(last) = self.pending.iter().rposition(|byte| *byte == b'\n') else {
+            // The server cuts every line, so only a server that ignores the script gets here.
+            if self.pending.len() > MAX_PENDING_BYTES {
+                self.pending.clear();
+            }
             return parsed;
         };
         let rest = self.pending.split_off(last + 1);
@@ -402,6 +408,19 @@ mod tests {
             ..source("api-1")
         };
         assert!(check(&[bad_filter]).is_err());
+    }
+
+    #[test]
+    fn an_endless_line_cannot_grow_the_buffer() {
+        let mut reader = Reader::new(1);
+        let piece = vec![b'x'; 32 * 1024];
+        for _ in 0..1000 {
+            assert_eq!(reader.push(&piece), Parsed::default());
+            assert!(reader.pending.len() <= MAX_PENDING_BYTES + piece.len());
+        }
+        reader.push(b"\n");
+        let line = format!("0 {TIME} after\n");
+        assert_eq!(reader.push(line.as_bytes()).lines.len(), 1);
     }
 
     #[test]

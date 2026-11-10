@@ -56,6 +56,16 @@ for (const [name, height, width] of [
   });
 }
 
+test('the terminal input refuses inline predictions, which would resend the line', async ({
+  page,
+}) => {
+  await page.goto('/tests/ui/fixtures/terminal-pane.html');
+  await expect(page.locator('.xterm-helper-textarea')).toHaveAttribute(
+    'writingsuggestions',
+    'false',
+  );
+});
+
 test('a terminal scrolled back by the user keeps its place when resized', async ({ page }) => {
   await page.evaluate(() => window.__terminalPane.session.terminal.scrollLines(-40));
   const before = await position(page);

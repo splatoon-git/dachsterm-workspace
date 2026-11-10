@@ -27,6 +27,7 @@ const rows: [string, string][] = [
   ['터미널 이전 / 다음 프롬프트로 이동', `${modKey('Shift+↑')} / ↓`],
   ['TUI 마우스 모드에서 선택 / 붙여넣기', 'Shift + 드래그 / 우클릭'],
   ['메뉴 / 대화상자 닫기', 'Esc'],
+  ...(isMac ? [['탭 닫기 · 탭이 없으면 창 닫기', '⌘W'] as [string, string]] : []),
 ];
 
 export function ShortcutList() {

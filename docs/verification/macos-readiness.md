@@ -114,6 +114,64 @@ M.2~M.4는 수정했고(`0fcf569`), 나머지는 미착수다. Mac 실기기에�
 
 미실행: Windows 게이트와 CI, LAN 권한 창, 앱 화면 조작.
 
+## 실제 앱 조작 1차 (2026-11-09, `17cc876`)
+
+macOS 26.5, Apple Silicon, Node 26.0.0, Rust 1.99.1, Docker 29.8.0. 패키지 앱을 `open`으로 실행하고 `DACHSTERM_TEST_DATA_DIR`로 앱 데이터를 격리했다. 입력은 System Events와 CGEvent, 판정은 창 캡처·디스크 내용·서버 프로세스다. **사람의 직접 조작이 아니다.**
+
+**도중에 중단했다.** 같은 Mac을 사람이 쓰고 있어 맨 앞 앱이 두 번 바뀌었고, 보내지 않은 글자가 입력됐다(`채`, 터미널의 `기`, 사용자 이름에서 빠진 `o`). 입력이 섞일 수 있어 그 뒤의 키보드 조작은 하지 않았다.
+
+| 명령 | 결과 |
+|---|---|
+| `npm ci`, `bash scripts/verify-macos.sh --package` | 종료 0. Vitest 1325, Playwright 519, Rust 637(무시 3)+1, `npm audit` 0, 의존성 감사 0(대상 밖 5), 고지 505개, debug `.app` |
+| `npm run probe`, `npm run probe:phase1`, `npm run probe:ftp` | 모두 종료 0 |
+
+| ID | 실제 앱에서 확인 | 남은 것 |
+|---|---|---|
+| Phase 1 | 최초 지문 카드(서버 `ssh-keygen -lf`와 일치), `known_hosts` 저장, 비밀번호 연결, 틀린 값의 인증 거부 안내와 재접속 카드, Keychain 저장과 새 값 교체(항목은 UUID 하나), 앱 데이터 폴더에 비밀번호 평문 0건 | 지문 거부·변경 키, 키 인증, 세션 삭제의 Keychain 정리(시험 항목은 `security`로 지웠다), 5개 연결, vim·top, KeepAlive |
+| M.2 | `probe:phase1` 전송 통과 | 앱 화면의 전송 |
+| M.12 | Zsh 로컬 탭의 `cd` 따라가기, 파일 트리, 입력 잔상 없음 | 복사·삭제, Bash 3.2 |
+| M.14 | 신호등 세로 위치, 앱 이름과 겹치지 않음, Control+클릭·우클릭 메뉴 | 끌기, 전체화면, 독립 창, 단축키 |
+| M.18 | 파일 탭 한글 2벌식 `안녕 값이 닭을` 일치(2회 중 1회 온전, 1회는 위 혼입), 조합 중 `Cmd+S`가 조합 글자까지 저장, diff 좌우 표시 | 커밋 메시지 한글(입력기 자동 전환이 불안정해 판정 불가), Markdown·이미지 미리보기, 다른 이름 저장, SFTP·FTP 저장, `Cmd+Q` |
+| M.19 | 로컬 Git 보기, 변경 목록, 그래프, diff 탭, Control+클릭 메뉴, 스테이지, `Cmd+Enter` 커밋 | 브랜치·stash, 변경 버리기, fetch·pull·push, 명령줄 도구 없는 환경 |
+
+찾은 문제(수정 전):
+
+- `Welcome.tsx:49` 시작 화면 카드가 Mac에서도 `이 컴퓨터의 셸 · WSL`로 표시한다.
+- 연결 트리의 로컬 셸 항목을 더블클릭하면 탭이 2개 열린다.
+- 세션을 우클릭하면 이름 글자가 선택돼 파랗게 표시된다.
+- `GitCommitBox.tsx`의 `Cmd+Enter`는 `isComposing`을 확인하지 않는다(코드 확인, 실제 조합 동작은 미판정).
+- `generate-notices.mjs`가 고지 파일을 CRLF로 써서 게이트 뒤 작업 트리가 수정 상태가 된다(내용 차이는 없음).
+
+미실행: M.3~M.8, M.13, M.15, M.17, M.20~M.22의 앱 조작, Keychain 승인 창, LAN 권한 창, Finder 끌기, 파일 대화상자, 장시간·절전.
+
+보안 점검 결과는 [security-review](security-review.md)에 있다.
+
+## 실제 앱 조작 2차 (2026-11-09, `17cc876` + `fix/s1-s5-security` 미커밋 트리)
+
+환경과 방법은 1차와 같다. 입력 장치가 14분 이상 유휴일 때 시작했다. 1차의 글자 혼입은 없었다.
+
+| 명령 | 결과 |
+|---|---|
+| `bash scripts/verify-macos.sh --package` | 종료 0. Rust 643(무시 3) |
+| `npm run probe:phase1`, `npm run probe:ftp` | 종료 0 |
+| 터미널 수정 뒤 typecheck, lint, format, Vitest, build, Playwright, `cargo fmt --check` | 종료 0. Vitest 1325, Playwright 521 |
+
+| ID | 실제 앱에서 확인 | 남은 것 |
+|---|---|---|
+| Phase 1 | SSH 연결 5개 동시(서버 `pts` 5개), `stty size` 41 114, UTF-8 한글 출력, 서버 교체 뒤 **변경된 호스트키 차단**(known_hosts 그대로), 세션 삭제와 확인 창, `credential_gc` 기록 | 지문 거부, 키 인증, vim·htop 화면 판정, KeepAlive. Keychain 삭제는 아래 암호 창에서 멈춰 시험 항목을 `security`로 지웠다 |
+
+**M.26 터미널 입력이 망가짐 (수정, 실제 앱 확인):** 영어 단어를 치면 일부 글자가 사라지고 그때까지 친 줄 전체가 다시 입력돼 잘못된 명령이 실행됐다. `echo connected-5`가 `echo conneecho conneed-5`가 됐다. Zsh 로컬 탭 5/5, SSH 탭 1/1 재현, Monaco에서는 재현되지 않았다. 원인은 macOS 입력 예측이 xterm의 보조 입력칸 전체를 조합 영역으로 잡는 동작으로 본다. `TerminalPane.tsx`에서 `writingsuggestions="false"`를 설정한 빌드에서는 같은 문장 4개가 모두 정확했다. 이어서 사람이 패키지 앱(격리 데이터) 터미널에 `echo connected tomorrow`를 직접 쳐 그대로 출력됨을 확인했다(2026-11-10). 회귀 테스트는 속성만 본다(`terminal-visibility.spec.ts`).
+
+찾은 문제(수정 전):
+
+| ID | 영향 | 내용 |
+|---|---|---|
+| M.27 | 높음 | `Cmd+W`가 탭이 아니라 **앱 전체를 확인 없이 종료**한다. 탭 9개가 있는 상태에서 재현했고 크래시 기록은 없다. 코드에 `Cmd+W` 처리가 없어 macOS 기본 창 닫기로 가는 것으로 본다. **수정:** macOS 메뉴를 Tauri 기본에서 창 닫기만 뺀 것으로 바꿨다(`macos_menu.rs`). 키 이벤트만 막은 첫 시도에서는 탭이 닫히지 않았다. `Cmd+W`는 포커스된 탭을 탭 메뉴의 닫기와 같은 경로로 닫고, 탭이 없으면 창 닫기 확인(`useWindowClose`)을 거쳐 창을 닫는다. 분리 창은 그 창을 닫는다. 대화상자가 열려 있으면 아무것도 하지 않고, `Ctrl+W`는 셸로 간다. 사람이 패키지 앱에서 탭 닫기와 탭이 없을 때의 창 닫기를 확인했다(2026-11-10). 분리 창의 `Cmd+W`는 실기기 대기 |
+| M.28 | 낮음 | 로컬 셸 항목을 더블클릭하면 탭이 2개 열린다(더블클릭 4회에 8개). SSH 세션은 더블클릭에 1개다 |
+| M.29 | 중간 | ad hoc 서명 앱은 다시 빌드하면 이전 빌드가 만든 Keychain 항목에 접근할 때 로그인 암호 창을 띄운다. 세션 삭제에서 실제로 떴다. Developer ID 서명 전까지 업데이트마다 생긴다(M.6) |
+
+미실행: M.3~M.8, M.13, M.15, M.17, M.20~M.22의 앱 조작, 커밋 메시지 한글, 독립 창, 전체화면, Finder 끌기, 파일 대화상자, LAN 권한 창, 장시간·절전. Keychain 암호 창이 화면에 남아 자동 조작을 멈췄다.
+
 ## 다음 첫 행동
 
 1. MacBook에서 `mac-verify` 스킬로 실기기 검증을 시작한다. M.2~M.4의 위 표부터 확인한다.

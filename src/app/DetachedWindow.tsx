@@ -1,6 +1,7 @@
 import { InputScopeControl } from '../features/terminal/InputScope';
 import { useInputScope } from '../features/terminal/useInputScope';
 import { useFullscreen } from './useFullscreen';
+import { closeWindow, closesTab } from './appShortcuts';
 import { useEffect, useState } from 'react';
 import { useTheme } from '../themes/useTheme';
 import { call, errorText, type Profile } from '../lib/ipc';
@@ -42,6 +43,11 @@ export function DetachedWindow({ id }: { id: string }) {
         e.preventDefault();
         e.stopPropagation();
         session?.view.set({ search: true });
+      } else if (closesTab(e)) {
+        // This window is its one tab.
+        e.preventDefault();
+        e.stopPropagation();
+        closeWindow();
       }
     };
     window.addEventListener('keydown', key, true);

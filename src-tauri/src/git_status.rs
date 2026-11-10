@@ -1,12 +1,12 @@
 //! Read-only Git status of one folder (DX.5), with the query of a local or WSL tab in `local`
 //! (DX.15) and the sidebar Git view's fuller listing in `view` (GE.7). All of them run Git through
-//! `git_run`, so its program-free settings apply to every query.
+//! `git_read`, so its program-free settings apply to every query.
 pub mod local;
 pub mod view;
 
 use crate::{
     AppState,
-    git_run::{GitHost, args, git_run},
+    git_run::{GitHost, args, git_read},
     remote_exec::{Failure, Limits, Output},
     storage::Result,
 };
@@ -244,7 +244,7 @@ pub async fn query(host: &GitHost, folder: &str, untracked_files: bool) -> Resul
     } else {
         &[]
     };
-    let output = match git_run(host, folder, &status_commands(extra), limits).await {
+    let output = match git_read(host, folder, &status_commands(extra), limits).await {
         Ok(output) => output,
         Err(Failure::TimedOut) => {
             return Ok(GitStatus::Stopped {

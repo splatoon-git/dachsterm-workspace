@@ -33,6 +33,8 @@ mod local_files;
 mod local_links;
 #[cfg(target_os = "macos")]
 mod login_path;
+#[cfg(target_os = "macos")]
+mod macos_menu;
 mod maintenance;
 pub mod monitoring;
 pub mod net_tools;
@@ -114,6 +116,8 @@ pub fn run() {
         // Only desktop_bridge uses this. The webview gets no notification permission.
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_menu(macos_menu::build(app.handle())?)?;
             let directory = app.path().app_data_dir()?;
             // Integration tests isolate all local state; release builds ignore this variable.
             #[cfg(debug_assertions)]
