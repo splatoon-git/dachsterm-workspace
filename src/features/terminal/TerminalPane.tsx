@@ -90,8 +90,12 @@ export function TerminalPane({
   }, [attachImage, session]);
   useEffect(() => {
     const element = host.current!;
-    if (!session.terminal.element) session.terminal.open(element);
-    else element.appendChild(session.terminal.element);
+    if (!session.terminal.element) {
+      session.terminal.open(element);
+      // WebKit's inline predictions compose over the helper textarea's whole text, which xterm then
+      // sends again as input and corrupts the command line.
+      session.terminal.textarea?.setAttribute('writingsuggestions', 'false');
+    } else element.appendChild(session.terminal.element);
     let cancelFit = () => {};
     const fit = throttleTrailing(() => {
       cancelFit();
