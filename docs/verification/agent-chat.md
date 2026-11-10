@@ -88,3 +88,4 @@
 - **자동 게이트(Mac, `1c1661b`):** `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` 통과, `cargo test --workspace` 655 통과. `npm run typecheck`, `lint`, `format:check` 통과, Vitest 108파일 1331 통과, Playwright 521 통과.
 - **새 단위 테스트:** 실행기 스크립트의 ID 검사·인용·오프셋·줄 버퍼(Rust 7), Claude 출력 읽기(Rust 5), 채팅 상태 축약(Vitest 5). 기존 `net_tools::link`의 유휴 시험 3건은 `login_only`로 옮겼다.
 - **미실행:** 실제 앱에서의 채팅 왕복(Mac 실기기 확인 대기), Windows 네이티브 검사(`test-chat-native.mjs`는 아직 없음), CI.
+- **작업 폴더(`4b2ef0f`):** 사이드바 파일 트리의 폴더 우클릭 **여기서 채팅 열기**는 그 폴더에서 바로 연다. 연결 트리의 **채팅으로 열기…**는 폴더를 묻고 그 세션의 최근 폴더 8개를 제안한다(`dachsterm.chatFolders`). 폴더 검사는 에이전트 시작과 함께 `lib/shell.ts`의 `folderProblem`을 쓴다. 게이트: typecheck·lint·format 통과, Vitest 109파일 1335 통과, Playwright 521 통과. 실제 앱 확인은 대기.
