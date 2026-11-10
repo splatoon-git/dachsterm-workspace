@@ -39,7 +39,12 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         channel = (onEvent as { id: number }).id;
         return null;
       }
-      if (['chat_send', 'chat_interrupt', 'chat_close'].includes(command)) return null;
+      if (
+        ['chat_send', 'chat_interrupt', 'chat_close', 'chat_context', 'chat_set_model'].includes(
+          command,
+        )
+      )
+        return null;
       throw `unexpected ${command}`;
     },
   },

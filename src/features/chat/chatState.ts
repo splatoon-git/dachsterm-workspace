@@ -1,6 +1,25 @@
 /** A file edit the agent asked for, cut short by the backend. `before` is empty for a new file. */
 export type ChatEdit = { path: string; before: string; after: string };
 
+/**
+ * A model, command or agent the agent offers. `hint` is a command's arguments, or the full model
+ * name a model choice stands for.
+ */
+export type ChatChoice = { value: string; label: string; detail: string; hint: string };
+export type ChatContext = {
+  percentage: number;
+  used: number;
+  max: number;
+  parts: { name: string; tokens: number; free: boolean }[];
+};
+export type ChatAgent = {
+  id: string;
+  role: string;
+  task: string;
+  status: 'running' | 'done' | 'failed';
+  summary: string;
+};
+
 /** What the backend sends a chat tab (src-tauri/src/chat/event.rs). */
 export type ChatEvent =
   | { kind: 'started'; session: string; model: string }
@@ -9,6 +28,17 @@ export type ChatEvent =
   | { kind: 'thinking'; done: boolean }
   | { kind: 'toolStarted'; id: string; name: string; summary: string; edit: ChatEdit | null }
   | { kind: 'toolFinished'; id: string; ok: boolean; output: string }
+  | {
+      kind: 'capabilities';
+      models: ChatChoice[];
+      commands: ChatChoice[];
+      agents: ChatChoice[];
+      permissionMode: string;
+    }
+  | ({ kind: 'context' } & ChatContext)
+  | { kind: 'agentStarted'; id: string; role: string; task: string }
+  | { kind: 'agentFinished'; id: string; ok: boolean; summary: string }
+  | { kind: 'problem'; text: string }
   | { kind: 'turnFinished'; ok: boolean; detail: string | null }
   | {
       kind: 'ended';
@@ -41,7 +71,14 @@ export type ChatItem =
 export type ChatPhase = 'connecting' | 'starting' | 'ready' | 'working' | 'ended';
 export type ChatState = {
   phase: ChatPhase;
+  /** The model the agent reported. `chosen` is what the user picked since, until it reports. */
   model: string;
+  chosen: string;
+  offers: { models: ChatChoice[]; commands: ChatChoice[]; agents: ChatChoice[] };
+  permissionMode: string;
+  context: ChatContext | null;
+  /** Subagents of this chat, newest last. */
+  agents: ChatAgent[];
   items: ChatItem[];
   next: number;
   /** The user asked to stop the running turn, so its failure is not an error. */
@@ -51,6 +88,11 @@ export type ChatState = {
 export const initialChat: ChatState = {
   phase: 'connecting',
   model: '',
+  chosen: '',
+  offers: { models: [], commands: [], agents: [] },
+  permissionMode: '',
+  context: null,
+  agents: [],
   items: [],
   next: 1,
   stopping: false,
@@ -112,7 +154,36 @@ const endings: Record<Extract<ChatEvent, { kind: 'ended' }>['reason'], [string, 
 export function applyChatEvent(state: ChatState, event: ChatEvent, now = Date.now()): ChatState {
   switch (event.kind) {
     case 'started':
-      return { ...state, model: event.model };
+      return { ...state, model: event.model, chosen: '' };
+    case 'capabilities':
+      return {
+        ...state,
+        offers: { models: event.models, commands: event.commands, agents: event.agents },
+        permissionMode: event.permissionMode,
+      };
+    case 'context': {
+      const { percentage, used, max, parts } = event;
+      return { ...state, context: { percentage, used, max, parts } };
+    }
+    case 'agentStarted':
+      return {
+        ...state,
+        agents: [
+          ...state.agents,
+          { id: event.id, role: event.role, task: event.task, status: 'running', summary: '' },
+        ],
+      };
+    case 'agentFinished':
+      return {
+        ...state,
+        agents: state.agents.map((agent) =>
+          agent.id === event.id
+            ? { ...agent, status: event.ok ? 'done' : 'failed', summary: event.summary }
+            : agent,
+        ),
+      };
+    case 'problem':
+      return withNotice({ ...state, chosen: '' }, 'error', event.text);
     case 'textDelta': {
       const last = state.items.at(-1);
       if (last?.kind === 'agent' && last.streaming)
@@ -213,4 +284,30 @@ export function withLinkEnded(
 ): ChatState {
   if (state.phase === 'ended') return state;
   return withNotice({ ...settle(state), phase: 'ended' }, tone, message);
+}
+
+/** The model's name for the composer: what the user just picked, else what the agent runs. */
+export function modelLabel(state: ChatState) {
+  const { models } = state.offers;
+  if (state.chosen) return models.find((m) => m.value === state.chosen)?.label ?? state.chosen;
+  // A model choice's hint is the full name it stands for. `default` stands for one of the others.
+  const named =
+    models.find((m) => m.hint === state.model && m.value !== 'default') ??
+    models.find((m) => m.hint === state.model);
+  return named?.label ?? state.model;
+}
+
+/** The commands whose name starts with what follows `/`, while the draft is only a command. */
+export function commandMatches(state: ChatState, draft: string) {
+  const typed = /^\/(\S*)$/.exec(draft);
+  if (!typed) return [];
+  const word = typed[1].toLowerCase();
+  return state.offers.commands.filter((c) => c.value.toLowerCase().startsWith(word));
+}
+
+/** Tokens as people read them: 980, 25.2k, 1.2M. */
+export function tokenText(tokens: number) {
+  if (tokens < 1000) return String(tokens);
+  if (tokens < 1_000_000) return `${(tokens / 1000).toFixed(tokens < 10_000 ? 1 : 0)}k`;
+  return `${(tokens / 1_000_000).toFixed(1)}M`;
 }

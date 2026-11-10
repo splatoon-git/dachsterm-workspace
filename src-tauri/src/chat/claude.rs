@@ -1,9 +1,9 @@
 //! `claude -p` in stream-json mode (docs/verification/agent-chat.md, AC.0). The CLI's message
 //! shapes change between versions, so everything about them stays in this file and anything
 //! unrecognised is skipped rather than shown.
-use super::event::{ChatEvent, Edit};
+use super::event::{ChatEvent, Choice, ContextPart, Edit};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub const PROGRAM: &str = "claude";
 const MAX_DETAIL: usize = 500;
@@ -40,14 +40,42 @@ pub fn user_message(text: &str) -> String {
     .to_string()
 }
 
-/// Stops the running turn. The CLI answers with a failed `result`.
-pub fn interrupt_message() -> String {
+/// A control request. The ID's prefix tells the reader what the answer is for.
+fn control(kind: &str, request: Value) -> String {
     json!({
         "type": "control_request",
-        "request_id": format!("interrupt-{}", uuid::Uuid::new_v4().simple()),
-        "request": { "subtype": "interrupt" },
+        "request_id": format!("{kind}-{}", uuid::Uuid::new_v4().simple()),
+        "request": request,
     })
     .to_string()
+}
+
+/// Stops the running turn. The CLI answers with a failed `result`.
+pub fn interrupt_message() -> String {
+    control("interrupt", json!({ "subtype": "interrupt" }))
+}
+
+/// Asks what the agent offers: models, commands and agents.
+pub fn initialize_message() -> String {
+    control("init", json!({ "subtype": "initialize", "hooks": null }))
+}
+
+pub fn context_message() -> String {
+    control("context", json!({ "subtype": "get_context_usage" }))
+}
+
+/// A model name as the CLI lists them: `default`, an alias or a full name with a variant.
+pub fn model_problem(model: &str) -> Option<&'static str> {
+    let fine = !model.is_empty()
+        && model.len() <= 64
+        && model
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._-[]".contains(c));
+    (!fine).then_some("모델 이름을 확인하세요.")
+}
+
+pub fn model_message(model: &str) -> String {
+    control("model", json!({ "subtype": "set_model", "model": model }))
 }
 
 fn cut(text: &str, limit: usize) -> String {
@@ -104,10 +132,87 @@ fn output_of(content: &Value) -> String {
     cut(&text, MAX_OUTPUT)
 }
 
+fn choices(list: &Value, value: &str, label: &str, detail: &str, hint: &str) -> Vec<Choice> {
+    let field = |item: &Value, key: &str| item[key].as_str().unwrap_or_default().to_string();
+    list.as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item[value].is_string())
+        .map(|item| Choice {
+            value: field(item, value),
+            label: field(item, label),
+            detail: cut(&field(item, detail), MAX_SUMMARY),
+            hint: field(item, hint),
+        })
+        .collect()
+}
+
+/// The CLI's answer to one of the app's control requests, found by the request ID's prefix.
+fn answer(response: &Value) -> Vec<ChatEvent> {
+    let id = response["request_id"].as_str().unwrap_or_default();
+    let body = &response["response"];
+    let failed = response["subtype"] == "error";
+    match (id.split('-').next().unwrap_or_default(), failed) {
+        ("init", false) => vec![ChatEvent::Capabilities {
+            models: choices(
+                &body["models"],
+                "value",
+                "displayName",
+                "description",
+                "resolvedModel",
+            ),
+            commands: choices(
+                &body["commands"],
+                "name",
+                "name",
+                "description",
+                "argumentHint",
+            ),
+            agents: choices(&body["agents"], "name", "name", "description", ""),
+            permission_mode: body["current_permission_mode"]
+                .as_str()
+                .unwrap_or_default()
+                .into(),
+        }],
+        ("context", false) => {
+            let parts = body["categories"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|c| c["kind"] == "used" || c["kind"] == "free")
+                .filter_map(|c| {
+                    Some(ContextPart {
+                        name: c["name"].as_str()?.to_string(),
+                        tokens: c["tokens"].as_u64()?,
+                        free: c["kind"] == "free",
+                    })
+                })
+                .collect();
+            let percentage = body["percentage"].as_f64().unwrap_or_default();
+            vec![ChatEvent::Context {
+                percentage: percentage.round().clamp(0.0, 100.0) as u32,
+                used: body["totalTokens"].as_u64().unwrap_or_default(),
+                max: body["maxTokens"].as_u64().unwrap_or_default(),
+                parts,
+            }]
+        }
+        ("model", true) => vec![ChatEvent::Problem {
+            text: format!(
+                "모델을 바꾸지 못했습니다. {}",
+                cut(response["error"].as_str().unwrap_or_default(), MAX_DETAIL)
+            ),
+        }],
+        _ => vec![],
+    }
+}
+
 /// Turns output lines into chat events, remembering what it needs across lines.
 #[derive(Default)]
 pub struct Reader {
     session: Option<String>,
+    model: Option<String>,
+    /// Background tasks that are subagents, as opposed to commands run in the background.
+    agents: HashSet<String>,
     /// The kind of each content block of the message being streamed, by index.
     blocks: HashMap<u64, String>,
 }
@@ -125,15 +230,35 @@ impl Reader {
         match (text("type"), text("subtype")) {
             (Some("system"), Some("init")) => {
                 let session = text("session_id").unwrap_or_default().to_string();
-                if self.session.as_deref() == Some(session.as_str()) {
+                let model = text("model").unwrap_or_default().to_string();
+                if self.session.as_deref() == Some(session.as_str())
+                    && self.model.as_deref() == Some(model.as_str())
+                {
                     return vec![];
                 }
                 self.session = Some(session.clone());
-                vec![ChatEvent::Started {
-                    session,
-                    model: text("model").unwrap_or_default().to_string(),
+                self.model = Some(model.clone());
+                vec![ChatEvent::Started { session, model }]
+            }
+            (Some("system"), Some("task_started")) if value["task_type"] == "local_agent" => {
+                let id = text("task_id").unwrap_or_default().to_string();
+                self.agents.insert(id.clone());
+                vec![ChatEvent::AgentStarted {
+                    id,
+                    role: text("subagent_type").unwrap_or("agent").to_string(),
+                    task: cut(text("description").unwrap_or_default(), MAX_SUMMARY),
                 }]
             }
+            (Some("system"), Some("task_notification"))
+                if self.agents.remove(text("task_id").unwrap_or_default()) =>
+            {
+                vec![ChatEvent::AgentFinished {
+                    id: text("task_id").unwrap_or_default().to_string(),
+                    ok: value["status"] == "completed",
+                    summary: cut(text("summary").unwrap_or_default(), MAX_DETAIL),
+                }]
+            }
+            (Some("control_response"), _) => answer(&value["response"]),
             (Some("stream_event"), _) => self.stream(&value["event"]),
             (Some("assistant"), _) => value["message"]["content"]
                 .as_array()
@@ -360,6 +485,93 @@ mod tests {
         let input = json!({ "command": "cd /w\nnpm test", "description": "run" });
         assert_eq!(summary("Bash", &input), "cd /w");
         assert_eq!(summary("Unknown", &json!({ "x": "y" })), "y");
+    }
+
+    #[test]
+    fn reads_what_the_agent_offers_without_the_account() {
+        let line = json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": "init-1",
+                "response": {
+                    "account": { "email": "someone@example.com" },
+                    "models": [{ "value": "default", "displayName": "Default", "description": "Opus" }],
+                    "commands": [{ "name": "review", "description": "Review", "argumentHint": "[pr]" }],
+                    "agents": [{ "name": "Explore", "description": "Looks around" }],
+                    "current_permission_mode": "default"
+                }
+            }
+        })
+        .to_string();
+        let events = Reader::default().read(&line);
+        let ChatEvent::Capabilities {
+            models,
+            commands,
+            agents,
+            permission_mode,
+        } = &events[0]
+        else {
+            panic!("{events:?}");
+        };
+        assert_eq!(models[0].label, "Default");
+        assert_eq!(commands[0].hint, "[pr]");
+        assert_eq!(agents[0].value, "Explore");
+        assert_eq!(permission_mode, "default");
+        assert!(!format!("{events:?}").contains("someone@example.com"));
+    }
+
+    #[test]
+    fn reads_context_use_and_a_failed_model_change() {
+        let context = json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "context-1", "response": {
+                "percentage": 12.6, "totalTokens": 25200, "maxTokens": 200000,
+                "categories": [
+                    { "name": "System prompt", "tokens": 3593, "kind": "used" },
+                    { "name": "Deferred tools", "tokens": 9, "kind": "deferred" },
+                    { "name": "Free space", "tokens": 170000, "kind": "free" }
+                ]
+            }}
+        })
+        .to_string();
+        let events = Reader::default().read(&context);
+        let ChatEvent::Context {
+            percentage, parts, ..
+        } = &events[0]
+        else {
+            panic!("{events:?}");
+        };
+        assert_eq!(*percentage, 13);
+        assert_eq!(parts.len(), 2);
+        assert!(parts[1].free);
+        let refused = r#"{"type":"control_response","response":{"subtype":"error","request_id":"model-1","error":"unknown model"}}"#;
+        assert!(matches!(
+            &Reader::default().read(refused)[0],
+            ChatEvent::Problem { text } if text.contains("unknown model")
+        ));
+        assert!(model_problem("claude-opus-5-5[1m]").is_none());
+        assert!(model_problem("opus; rm").is_some());
+    }
+
+    #[test]
+    fn follows_subagents_but_not_background_commands() {
+        let mut reader = Reader::default();
+        let agent = r#"{"type":"system","subtype":"task_started","task_id":"a1","tool_use_id":"t","description":"Look","subagent_type":"Explore","task_type":"local_agent"}"#;
+        let bash = r#"{"type":"system","subtype":"task_started","task_id":"b1","description":"sleep","task_type":"local_bash"}"#;
+        assert_eq!(reader.read(agent).len(), 1);
+        assert!(reader.read(bash).is_empty());
+        let done = r#"{"type":"system","subtype":"task_notification","task_id":"a1","status":"completed","summary":"found"}"#;
+        assert_eq!(
+            reader.read(done),
+            [ChatEvent::AgentFinished {
+                id: "a1".into(),
+                ok: true,
+                summary: "found".into()
+            }]
+        );
+        let other = r#"{"type":"system","subtype":"task_notification","task_id":"b1","status":"completed"}"#;
+        assert!(reader.read(other).is_empty());
     }
 
     #[test]

@@ -1,7 +1,8 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AuthPromptCard, HostKeyCard } from '../../components/ConnectionCards';
 import { placeDetail, placeTitle, type ChatSession } from './chatSession';
-import { canSend, type ChatEdit, type ChatItem, type ChatPhase } from './chatState';
+import { ChatComposer } from './ChatComposer';
+import { type ChatEdit, type ChatItem, type ChatPhase } from './chatState';
 import './chat.css';
 
 // The Markdown renderer is its own chunk, loaded with the first reply.
@@ -95,7 +96,6 @@ function Item({ item }: { item: ChatItem }) {
 export function ChatPane({ session }: { session: ChatSession }) {
   const chat = useSyncExternalStore(session.subscribe, session.snapshot);
   const link = useSyncExternalStore(session.link.subscribe, session.link.snapshot);
-  const [draft, setDraft] = useState('');
   const thread = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const { place, folder } = session;
@@ -106,12 +106,6 @@ export function ChatPane({ session }: { session: ChatSession }) {
     const view = thread.current;
     if (view && stuck.current) view.scrollTop = view.scrollHeight;
   }, [chat.items.length, last]);
-  const submit = async () => {
-    const text = draft;
-    if (!text.trim() || !canSend(chat)) return;
-    setDraft('');
-    if (!(await session.send(text))) setDraft(text);
-  };
   const status = chat.phase === 'connecting' ? link.message : waiting[chat.phase];
   const working = chat.phase === 'working';
   const busy = working && !(last?.kind === 'agent' && last.streaming);
@@ -164,65 +158,7 @@ export function ChatPane({ session }: { session: ChatSession }) {
           </p>
         )}
       </div>
-      <form
-        className="chat-composer"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
-        <textarea
-          aria-label="프롬프트"
-          rows={2}
-          value={draft}
-          disabled={chat.phase === 'ended'}
-          placeholder={
-            chat.phase === 'ended'
-              ? '이 채팅은 끝났습니다.'
-              : working
-                ? '이어서 지시하기. 작업 중에도 보낼 수 있습니다'
-                : '에이전트에게 맡길 일을 적어 주세요'
-          }
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter sends; Shift+Enter is a new line. Never while an input method is composing.
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-        />
-        <div className="chat-composer-row">
-          {chat.model && <span className="chat-chip">{chat.model}</span>}
-          <span className="chat-spacer" />
-          {working && !draft.trim() ? (
-            <button
-              type="button"
-              className="chat-send"
-              aria-label="작업 중지"
-              title="작업 중지"
-              disabled={chat.stopping}
-              onClick={() => void session.interrupt()}
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <rect x="4" y="4" width="8" height="8" rx="1" />
-              </svg>
-            </button>
-          ) : (
-            <button
-              type="submit"
-              className="chat-send"
-              aria-label="보내기"
-              title="보내기 (Enter)"
-              disabled={!canSend(chat) || !draft.trim()}
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </form>
+      <ChatComposer session={session} chat={chat} />
     </section>
   );
 }

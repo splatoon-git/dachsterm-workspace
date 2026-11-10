@@ -63,3 +63,67 @@ test('a finished block replaces what was streamed for it', async ({ page }) => {
   await expect(page.locator('.chat-markdown')).toHaveCount(1);
   await expect(page.locator('.chat-markdown')).toHaveText('안녕하세요');
 });
+
+test('the composer offers commands, models, context use and subagents', async ({ page }) => {
+  await open(page);
+  await emit(page, [
+    {
+      kind: 'capabilities',
+      models: [
+        {
+          value: 'default',
+          label: 'Default (recommended)',
+          detail: 'Opus 5.5',
+          hint: 'claude-opus-5-5',
+        },
+        { value: 'opus', label: 'Opus', detail: 'Opus 5.5', hint: 'claude-opus-5-5' },
+        { value: 'sonnet', label: 'Sonnet', detail: 'Sonnet 5.5', hint: 'claude-sonnet-5-5' },
+      ],
+      commands: [
+        { value: 'review', label: 'review', detail: 'Review a pull request', hint: '[pr]' },
+        { value: 'compact', label: 'compact', detail: 'Compact the conversation', hint: '' },
+      ],
+      agents: [],
+      permissionMode: 'default',
+    },
+    {
+      kind: 'context',
+      percentage: 13,
+      used: 25200,
+      max: 200000,
+      parts: [
+        { name: 'System prompt', tokens: 3593, free: false },
+        { name: 'Free space', tokens: 170000, free: true },
+      ],
+    },
+    { kind: 'agentStarted', id: 'a1', role: 'Explore', task: '결제 모듈 탐색' },
+  ]);
+
+  // The model chip names the model by its label, and picking another asks the agent.
+  await expect(page.getByRole('button', { name: '모델 Opus' })).toBeVisible();
+  await page.getByRole('button', { name: '모델 Opus' }).click();
+  await page
+    .getByRole('dialog', { name: '모델' })
+    .getByRole('button', { name: /Sonnet/ })
+    .click();
+  expect(await page.evaluate(() => window.__chat.calls.at(-1))).toEqual({
+    command: 'chat_set_model',
+    args: { id: expect.any(String), model: 'sonnet' },
+  });
+  await expect(page.getByRole('button', { name: '모델 Sonnet' })).toBeVisible();
+
+  // A slash at the start lists the commands; Enter takes the highlighted one.
+  const prompt = page.getByRole('textbox', { name: '프롬프트' });
+  await prompt.fill('/re');
+  await expect(page.getByRole('listbox', { name: '명령' }).getByRole('option')).toHaveCount(1);
+  await prompt.press('Enter');
+  await expect(prompt).toHaveValue('/review ');
+  await expect(page.getByRole('listbox', { name: '명령' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: '컨텍스트 13% 사용' }).click();
+  await expect(page.getByRole('dialog', { name: '컨텍스트' })).toContainText('25k / 200k');
+  await page.screenshot({ path: 'test-results/chat-composer.png' });
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '에이전트 1개 실행 중' }).click();
+  await expect(page.getByRole('dialog', { name: '서브에이전트' })).toContainText('결제 모듈 탐색');
+});

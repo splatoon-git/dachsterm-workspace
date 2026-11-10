@@ -194,6 +194,7 @@
   margin: var(--space-lg) auto 0;
 }
 .chat-composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -228,13 +229,139 @@
   flex: 1;
 }
 .chat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 0;
   padding: var(--space-xxs) var(--space-sm);
+  border: 0;
   border-radius: var(--radius-full);
   background: var(--color-surface-header);
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
   font-size: var(--font-caption);
   white-space: nowrap;
+  cursor: pointer;
+}
+.chat-chip:hover:not(:disabled),
+.chat-chip[aria-expanded='true'] {
+  background: var(--color-action-hover);
+  color: var(--color-text-primary);
+}
+.chat-chip:disabled {
+  cursor: default;
+}
+.chat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+.chat-icon:hover:not(:disabled) {
+  background: var(--color-action-hover);
+  color: var(--color-text-primary);
+}
+.chat-ring {
+  width: 14px;
+  height: 14px;
+  transform: rotate(-90deg);
+  fill: none;
+  stroke-width: 2.5;
+  stroke: var(--color-border-default);
+}
+.chat-ring .used {
+  stroke: var(--color-action-primary);
+}
+/* Lists that open over the composer: commands, models, context and subagents. */
+.chat-popover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + var(--space-xs));
+  z-index: var(--layer-popover);
+  max-height: 320px;
+  margin: 0;
+  padding: var(--space-xs);
+  overflow: auto;
+  list-style: none;
+  border: var(--border-width-default) solid var(--color-border-default);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface-panel);
+  box-shadow: var(--shadow-popup);
+}
+.chat-popover > button,
+.chat-commands > li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--color-text-primary);
+  font-size: var(--font-small);
+  text-align: left;
+  cursor: pointer;
+}
+.chat-popover > button:hover,
+.chat-popover > button.on,
+.chat-commands > li:hover,
+.chat-commands > li[aria-selected='true'] {
+  background: var(--color-action-selected);
+}
+.chat-popover b,
+.chat-commands b {
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+.chat-hint {
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.chat-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+.chat-popover-title {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-small);
+  font-weight: var(--font-weight-semibold);
+}
+.chat-parts {
+  margin: 0;
+  padding: 0 var(--space-sm) var(--space-xs);
+  list-style: none;
+  font-size: var(--font-small);
+}
+.chat-parts li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-xxs) 0;
+}
+.chat-parts li > span:last-child {
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.chat-parts li.free {
+  color: var(--color-text-secondary);
 }
 .chat-send {
   display: inline-flex;

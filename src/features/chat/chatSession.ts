@@ -86,7 +86,11 @@ export class ChatSession {
     this.set({ ...this.state, phase: 'starting' });
     const channel = new Channel<ChatEvent>();
     channel.onmessage = (event) => {
-      if (this.started === id) this.set(applyChatEvent(this.state, event));
+      if (this.started !== id) return;
+      this.set(applyChatEvent(this.state, event));
+      // The context use changes with every turn; the agent answers in its own time.
+      if (event.kind === 'turnFinished' || event.kind === 'capabilities')
+        void this.refreshContext();
     };
     try {
       await call(command, { id, folder: this.folder, onEvent: channel });
@@ -97,6 +101,24 @@ export class ChatSession {
         this.set(withNotice({ ...this.state, phase: 'ended' }, 'error', errorText(e)));
     }
   }
+
+  private refreshContext = async () => {
+    const id = this.started;
+    // Not worth a message in the conversation: the indicator just keeps its last value.
+    if (id) await call('chat_context', { id }).catch(() => {});
+  };
+
+  /** Switches the model for the next turns. A refusal comes back as a problem in the chat. */
+  setModel = async (model: string) => {
+    const id = this.started;
+    if (!id || this.state.phase === 'ended') return;
+    this.set({ ...this.state, chosen: model });
+    try {
+      await call('chat_set_model', { id, model });
+    } catch (e) {
+      this.set(withNotice({ ...this.state, chosen: '' }, 'error', errorText(e)));
+    }
+  };
 
   /** Stops the running turn. The agent stays for the next message. */
   interrupt = async () => {

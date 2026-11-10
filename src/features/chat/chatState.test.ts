@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   applyChatEvent,
   canSend,
+  commandMatches,
+  modelLabel,
+  tokenText,
   initialChat,
   withLinkEnded,
   withSent,
@@ -111,5 +114,48 @@ describe('chat state', () => {
     });
     expect(state.items.at(-1)).toMatchObject({ tone: 'info', text: '중지했습니다.' });
     expect(state.stopping).toBe(false);
+  });
+
+  it('keeps what the agent offers, its context and its subagents', () => {
+    let state = applyChatEvent(ready, {
+      kind: 'capabilities',
+      models: [
+        { value: 'default', label: 'Default', detail: '', hint: 'claude-opus-5-5' },
+        { value: 'opus', label: 'Opus', detail: '', hint: 'claude-opus-5-5' },
+        { value: 'sonnet', label: 'Sonnet', detail: 'Sonnet 5.5', hint: 'claude-sonnet-5-5' },
+      ],
+      commands: [
+        { value: 'review', label: 'review', detail: '', hint: '[pr]' },
+        { value: 'compact', label: 'compact', detail: '', hint: '' },
+      ],
+      agents: [],
+      permissionMode: 'default',
+    });
+    expect(commandMatches(state, '/re').map((c) => c.value)).toEqual(['review']);
+    expect(commandMatches(state, '/re now')).toEqual([]);
+    expect(modelLabel({ ...state, model: 'claude-opus-5-5' })).toBe('Opus');
+    state = { ...state, chosen: 'sonnet' };
+    expect(modelLabel(state)).toBe('Sonnet');
+    state = applyChatEvent(state, {
+      kind: 'context',
+      percentage: 13,
+      used: 25200,
+      max: 200000,
+      parts: [],
+    });
+    expect(state.context?.percentage).toBe(13);
+    state = applyChatEvent(state, { kind: 'agentStarted', id: 'a', role: 'Explore', task: 'look' });
+    state = applyChatEvent(state, { kind: 'agentFinished', id: 'a', ok: true, summary: 'found' });
+    expect(state.agents).toEqual([
+      { id: 'a', role: 'Explore', task: 'look', status: 'done', summary: 'found' },
+    ]);
+    expect(tokenText(25200)).toBe('25k');
+    expect(tokenText(9800)).toBe('9.8k');
+  });
+
+  it('a refused model change says why and drops the pick', () => {
+    const state = applyChatEvent({ ...ready, chosen: 'x' }, { kind: 'problem', text: '안 됨' });
+    expect(state.chosen).toBe('');
+    expect(state.items.at(-1)).toMatchObject({ tone: 'error', text: '안 됨' });
   });
 });

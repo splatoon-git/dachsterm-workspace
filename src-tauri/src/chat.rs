@@ -132,7 +132,7 @@ pub async fn chat_start(
     };
     let task = tauri::async_runtime::spawn(read(handle, name, on_event));
     *chat.reading.lock().unwrap() = Some(task);
-    Ok(())
+    deliver(&state, &id, &claude::initialize_message()).await
 }
 
 /// Starts the agent on this PC in `folder` (empty: the home folder).
@@ -161,7 +161,7 @@ pub async fn chat_start_local(
     };
     let task = tauri::async_runtime::spawn(read_local(stdout, stderr, on_event));
     *chat.reading.lock().unwrap() = Some(task);
-    Ok(())
+    deliver(&state, &id, &claude::initialize_message()).await
 }
 
 /// Hands the agent one user message. Messages queue on the server while a turn is running.
@@ -181,6 +181,21 @@ pub async fn chat_send(state: State<'_, AppState>, id: String, text: String) -> 
 #[tauri::command]
 pub async fn chat_interrupt(state: State<'_, AppState>, id: String) -> Result<()> {
     deliver(&state, &id, &claude::interrupt_message()).await
+}
+
+/// Asks how full the context window is. The answer comes as a `Context` event.
+#[tauri::command]
+pub async fn chat_context(state: State<'_, AppState>, id: String) -> Result<()> {
+    deliver(&state, &id, &claude::context_message()).await
+}
+
+/// Switches the model for the next turns. A refusal comes as a `Problem` event.
+#[tauri::command]
+pub async fn chat_set_model(state: State<'_, AppState>, id: String, model: String) -> Result<()> {
+    if let Some(problem) = claude::model_problem(&model) {
+        return Err(problem.into());
+    }
+    deliver(&state, &id, &claude::model_message(&model)).await
 }
 
 /// One line to the agent's input, in the order lines were given.

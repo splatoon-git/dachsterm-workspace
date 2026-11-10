@@ -29,6 +29,33 @@ pub enum ChatEvent {
         ok: bool,
         output: String,
     },
+    /// What the agent offers, from its answer to `initialize`. Account details are never passed on.
+    Capabilities {
+        models: Vec<Choice>,
+        commands: Vec<Choice>,
+        agents: Vec<Choice>,
+        permission_mode: String,
+    },
+    /// How full the context window is, in whole percent, with what takes the room.
+    Context {
+        percentage: u32,
+        used: u64,
+        max: u64,
+        parts: Vec<ContextPart>,
+    },
+    /// A subagent started. `role` is its type, `task` what it was asked.
+    AgentStarted {
+        id: String,
+        role: String,
+        task: String,
+    },
+    AgentFinished {
+        id: String,
+        ok: bool,
+        summary: String,
+    },
+    /// A request to the agent failed, such as a model change. `text` says which and why.
+    Problem { text: String },
     /// The turn is over. `detail` says why when it failed.
     TurnFinished { ok: bool, detail: Option<String> },
     /// The agent will say nothing more on this attach: it exited, or the connection went.
@@ -56,4 +83,24 @@ pub struct Edit {
     pub path: String,
     pub before: String,
     pub after: String,
+}
+
+/// One thing the user can pick: a model, a command or an agent. `hint` is a command's arguments,
+/// or the full model name a model choice stands for.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Choice {
+    pub value: String,
+    pub label: String,
+    pub detail: String,
+    pub hint: String,
+}
+
+/// A share of the context window. `free` marks room still unused.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextPart {
+    pub name: String,
+    pub tokens: u64,
+    pub free: bool,
 }

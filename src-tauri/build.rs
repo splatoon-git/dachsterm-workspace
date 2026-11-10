@@ -90,6 +90,8 @@ fn main() {
             "chat_start_local",
             "chat_send",
             "chat_interrupt",
+            "chat_context",
+            "chat_set_model",
             "chat_close",
             "net_port_check",
             "net_listeners",

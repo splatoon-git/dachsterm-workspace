@@ -322,6 +322,8 @@ pub fn run() {
             chat::chat_start_local,
             chat::chat_send,
             chat::chat_interrupt,
+            chat::chat_context,
+            chat::chat_set_model,
             chat::chat_close,
             net_tools::net_port_check,
             net_tools::net_listeners,
