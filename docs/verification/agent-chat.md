@@ -98,4 +98,5 @@
 - **실측(로컬 `claude` 2.1.319, `sonnet`):** 부분 메시지 `content_block_start`·`text_delta`·`input_json_delta`·`content_block_stop`, 도구 결과의 `content`가 문자열로 왔다. 생각 블록은 이번 실행에서 나오지 않아 표준 형식(`thinking`)으로 구현하고 단위 테스트만 했다.
 - **게이트(Mac, `2467421`):** format·typecheck·lint 통과, Vitest 1339, Playwright 524(새 `chat.spec.ts` 2건: 스트리밍·도구·diff·중지, 완성본 교체), `cargo test --workspace` 662, clippy 통과. fixture 스크린샷으로 배치를 확인했다.
 - **대기:** 실제 앱 확인, 생각 블록 실측, 승인 카드와 권한 칩(AC.5).
+- **입력창 도구(`c58e644`):** 시작할 때 `initialize`로 모델 14개·명령 58개·에이전트·권한 모드를 받는다(계정 정보는 넘기지 않고 단위 테스트로 확인). 턴마다 `get_context_usage`로 사용률과 항목별 토큰을 받는다. 모델 변경은 `set_model`(실측 성공), 추론 강도의 대화 중 변경(`set_effort`)은 CLI가 지원하지 않아 넣지 않았다. 서브에이전트는 `task_started`의 `local_agent`만 센다. `/`로 시작하면 명령 목록(화살표·Enter·Tab·Esc), 모델 칩 메뉴, 컨텍스트 원과 내역, 서브에이전트 목록. 게이트: Vitest 1341, Playwright 525(`chat.spec.ts` 3건), `cargo test --workspace` 665, clippy·format·typecheck·lint 통과. 실제 앱 확인 대기.
 
