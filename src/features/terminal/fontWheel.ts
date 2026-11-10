@@ -1,22 +1,42 @@
 import { clampFontSize, saveTerminalDisplay, terminalDisplay } from './preferences';
 
-const wheelPixelsPerStep = 40;
+/** A pause this long ends a wheel gesture; the next event starts a new one. */
+export const wheelGestureGapMs = 120;
+/** Less than this in a gesture is a resting finger's jitter, not a request. */
+const minimumPixels = 4;
+/** How far one line or page of a non-pixel wheel event counts, so any notch reaches the minimum. */
+const pixelsPerUnit = 16;
 
 /**
- * One mouse notch changes the size by one step, whatever its delta is. Trackpads and
- * high-resolution wheels emit small deltas, which add up to a step instead of each making one.
+ * One gesture changes the size by one step, however far it scrolls. A smooth-scrolling mouse turns
+ * one notch into a burst of events, and a trackpad keeps sending its momentum after the fingers
+ * lift; counting their distance made one notch jump several sizes. A pause or a reversal starts the
+ * next gesture, so notch by notch still moves step by step.
  */
 export function fontSizeWheelStepper() {
+  let direction = 0;
+  let last = -Infinity;
   let pending = 0;
-  return (deltaY: number, size: number) => {
-    // A reversal responds at once instead of first cancelling what the last direction left over.
-    pending = Math.sign(pending) === -Math.sign(deltaY) ? deltaY : pending + deltaY;
-    if (Math.abs(pending) < wheelPixelsPerStep) return size;
-    const next = clampFontSize(size - Math.sign(pending));
-    pending = 0;
-    return next;
+  let stepped = false;
+  return (deltaY: number, size: number, time: number) => {
+    const sign = Math.sign(deltaY);
+    if (!sign) return size;
+    if (time - last > wheelGestureGapMs || sign !== direction) {
+      pending = 0;
+      stepped = false;
+    }
+    direction = sign;
+    last = time;
+    if (stepped) return size;
+    pending += Math.abs(deltaY);
+    if (pending < minimumPixels) return size;
+    stepped = true;
+    return clampFontSize(size - sign);
   };
 }
+
+const wheelPixels = (event: WheelEvent) =>
+  event.deltaMode === 0 ? event.deltaY : event.deltaY * pixelsPerUnit;
 
 /** Ctrl/Cmd+wheel over a terminal changes the font size shared by all terminals. */
 export function attachFontSizeWheel(element: HTMLElement, onSaveError: () => void) {
@@ -28,7 +48,7 @@ export function attachFontSizeWheel(element: HTMLElement, onSaveError: () => voi
     event.preventDefault();
     event.stopPropagation();
     const current = terminalDisplay().fontSize;
-    const fontSize = step(event.deltaY, current);
+    const fontSize = step(wheelPixels(event), current, event.timeStamp);
     if (fontSize === current) return;
     try {
       saveTerminalDisplay({ fontSize });

@@ -1,31 +1,45 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { attachFontSizeWheel, fontSizeWheelStepper } from './fontWheel';
+import { attachFontSizeWheel, fontSizeWheelStepper, wheelGestureGapMs } from './fontWheel';
 import { maxFontSize, minFontSize, saveTerminalDisplay, terminalDisplay } from './preferences';
 
 describe('font size wheel stepper', () => {
-  it('moves one step per mouse notch and grows when scrolling up', () => {
+  const gap = wheelGestureGapMs + 1;
+  it('moves one step per notch whatever its delta, and grows when scrolling up', () => {
     const step = fontSizeWheelStepper();
-    expect(step(-100, 14)).toBe(15);
-    expect(step(-600, 15)).toBe(16);
-    expect(step(100, 16)).toBe(15);
+    expect(step(-100, 14, 0)).toBe(15);
+    expect(step(-600, 15, gap)).toBe(16);
+    expect(step(100, 16, 2 * gap)).toBe(15);
   });
-  it('adds small trackpad deltas up to one step', () => {
+  it('takes a burst of events from one notch or a trackpad flick as one step', () => {
+    // A smooth-scrolling mouse: one notch, many events a frame apart, adding up to 300px.
     const step = fontSizeWheelStepper();
-    expect(step(-15, 14)).toBe(14);
-    expect(step(-15, 14)).toBe(14);
-    expect(step(-15, 14)).toBe(15);
-    expect(step(-15, 15)).toBe(15);
+    let size = 14;
+    for (const [i, delta] of [-10, -40, -80, -70, -50, -30, -15, -5].entries())
+      size = step(delta, size, i * 16);
+    expect(size).toBe(15);
+    // The momentum tail keeps coming without a pause and still counts as the same gesture.
+    for (let t = 200; t < 1200; t += 16) size = step(-2, size, t);
+    expect(size).toBe(15);
+    expect(step(-40, size, 1200 + gap)).toBe(16);
   });
-  it('drops the leftover of the previous direction on a reversal', () => {
+  it('ignores jitter below the minimum but adds it up within a gesture', () => {
     const step = fontSizeWheelStepper();
-    expect(step(-30, 14)).toBe(14);
-    expect(step(40, 14)).toBe(13);
+    expect(step(-1, 14, 0)).toBe(14);
+    expect(step(-2, 14, 10)).toBe(14);
+    expect(step(-1, 14, 20)).toBe(15);
+    expect(step(-3, 14, 20 + gap)).toBe(14);
+  });
+  it('answers a reversal at once, even inside a burst', () => {
+    const step = fontSizeWheelStepper();
+    expect(step(-100, 14, 0)).toBe(15);
+    expect(step(100, 15, 16)).toBe(14);
+    expect(step(100, 14, 32)).toBe(14);
   });
   it('stays within the supported range', () => {
     const step = fontSizeWheelStepper();
-    expect(step(-100, maxFontSize)).toBe(maxFontSize);
-    expect(step(100, minFontSize)).toBe(minFontSize);
+    expect(step(-100, maxFontSize, 0)).toBe(maxFontSize);
+    expect(step(100, minFontSize, gap)).toBe(minFontSize);
   });
 });
 
@@ -47,9 +61,12 @@ describe('font size wheel listener', () => {
     inner.dispatchEvent(wheel({ metaKey: true, deltaY: 100 }));
     expect(terminalDisplay().fontSize).toBe(14);
     expect(reachedTerminal).not.toHaveBeenCalled();
+    // A line-based wheel reports 1 or 3 per notch; that is still a notch, not jitter.
+    inner.dispatchEvent(wheel({ ctrlKey: true, deltaY: -1, deltaMode: 1 }));
+    expect(terminalDisplay().fontSize).toBe(15);
     detach();
-    inner.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100 }));
-    expect(terminalDisplay().fontSize).toBe(14);
+    inner.dispatchEvent(wheel({ ctrlKey: true, deltaY: 100 }));
+    expect(terminalDisplay().fontSize).toBe(15);
   });
   it('leaves plain scrolling to the terminal', () => {
     const parent = document.createElement('div');
