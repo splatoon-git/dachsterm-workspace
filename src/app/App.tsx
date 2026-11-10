@@ -527,7 +527,7 @@ export function App() {
                 actions={{
                   connect: (p) => requestConnect(p),
                   startAgent: (p) => agent.ask(p),
-                  openChat: chats.ask,
+                  chats: chats.tree,
                   edit: setForm,
                   toggleFavorite: (p) =>
                     void action('save_session', {

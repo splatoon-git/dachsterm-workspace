@@ -6,6 +6,7 @@ import {
   readLaunch,
   saveLaunch,
   withoutMissing,
+  withoutRecent,
   withRecent,
   type ChatWorkspace,
 } from './chatPlaces';
@@ -48,5 +49,15 @@ describe('chat launch choice', () => {
   it('forgets workspaces of deleted sessions', () => {
     const launch = withoutMissing({ mode: 'fixed', fixed: web, recent: [web, here] }, new Set());
     expect(launch).toEqual({ mode: 'follow', fixed: null, recent: [here] });
+  });
+
+  it('forgets one recent workspace and keeps the fixed one', () => {
+    const launch = { mode: 'fixed' as const, fixed: web, recent: [web, here] };
+    expect(withoutRecent(launch, { ...web })).toEqual({
+      mode: 'fixed',
+      fixed: web,
+      recent: [here],
+    });
+    expect(withoutRecent(launch, { kind: 'local', folder: '/other' })).toEqual(launch);
   });
 });

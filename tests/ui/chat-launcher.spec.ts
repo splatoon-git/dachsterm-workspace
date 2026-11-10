@@ -49,3 +49,57 @@ test('the title bar opens chats with Ctrl/Cmd+Shift+A, following the tab or a fi
   await icon.click();
   await expect(popover.getByRole('list', { name: '열린 채팅' })).toContainText('/Users/me/work');
 });
+
+test('the sidebar lists recent chat workspaces to reopen or forget', async ({ page }) => {
+  const saved: ChatLaunch = {
+    mode: 'follow',
+    fixed: null,
+    recent: [
+      { kind: 'local', folder: '/Users/me/work' },
+      { kind: 'local', folder: '/Users/me/notes' },
+    ],
+  };
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: chatLaunchKey,
+    value: JSON.stringify(saved),
+  });
+  await page.goto('/');
+  const section = page.getByRole('region', { name: '최근 채팅' });
+  const list = section.getByRole('list', { name: '최근 채팅' });
+  await expect(list.getByRole('listitem')).toHaveCount(2);
+
+  // One click opens a chat there; a second click goes back to it instead of opening another.
+  await list
+    .getByRole('button', { name: /\/Users\/me\/work/ })
+    .first()
+    .click();
+  const tabs = page.getByRole('tab', { name: /채팅 · 이 PC/ });
+  await expect(tabs).toHaveCount(1);
+  await expect(list.getByRole('listitem').first()).toContainText('열림');
+  await list
+    .getByRole('button', { name: /\/Users\/me\/work/ })
+    .first()
+    .click();
+  await expect(tabs).toHaveCount(1);
+  // The menu still opens another one in the same place.
+  await list
+    .getByRole('button', { name: /\/Users\/me\/work/ })
+    .first()
+    .click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '새 채팅 열기' }).click();
+  await expect(tabs).toHaveCount(2);
+  await page.screenshot({ path: 'test-results/chat-recent-sidebar.png' });
+
+  // The ✕ takes a row off the list and the choice is kept.
+  await list.getByRole('button', { name: '이 PC /Users/me/notes 최근 채팅에서 제거' }).click();
+  await expect(list.getByRole('listitem')).toHaveCount(1);
+  const kept = await page.evaluate((key) => localStorage.getItem(key), chatLaunchKey);
+  expect(JSON.parse(kept ?? '{}').recent).toEqual([saved.recent[0]]);
+
+  // The section folds like the others.
+  await section
+    .getByRole('button', { name: /최근 채팅/ })
+    .first()
+    .click();
+  await expect(list).toBeHidden();
+});

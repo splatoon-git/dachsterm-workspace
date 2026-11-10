@@ -83,3 +83,9 @@ export function withoutMissing(launch: ChatLaunch, profileIds: ReadonlySet<strin
     recent: launch.recent.filter(known),
   };
 }
+
+/** Takes a workspace off the recent list. The fixed one stays: it is chosen, not remembered. */
+export const withoutRecent = (launch: ChatLaunch, gone: ChatWorkspace): ChatLaunch => ({
+  ...launch,
+  recent: launch.recent.filter((r) => !sameWorkspace(r, gone)),
+});

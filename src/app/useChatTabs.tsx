@@ -7,6 +7,7 @@ import {
   sameWorkspace,
   saveLaunch,
   withoutMissing,
+  withoutRecent,
   withRecent,
   type ChatLaunch,
   type ChatWorkspace,
@@ -22,6 +23,7 @@ import { folderProblem } from '../lib/shell';
 import { chatReportOf, type AgentSource } from './agentStatus';
 import { ChatLauncher, type Described, type LaunchTarget } from './ChatLauncher';
 import { PlainTab } from './GroupTabBar';
+import type { ChatShortcuts } from './RecentChats';
 import type { BoardTabs } from './useAgentBoard';
 import type { Workspace } from './useWorkspaceLayout';
 import { tabKey, type TabRef } from './workspaceLayout';
@@ -156,6 +158,26 @@ export function useChatTabs({
     ...(launch.fixed ? [launch.fixed] : []),
     ...launch.recent,
   ].filter((w, i, all) => all.findIndex((o) => sameWorkspace(o, w)) === i);
+  const show = (chat: Chat) => workspace.open(refOf(chat));
+  const tree: ChatShortcuts = {
+    ask: setAsking,
+    recent: launch.recent.flatMap((w, i) => {
+      const at = resolve(w);
+      const described = describe(w);
+      if (!at || !described) return [];
+      const there = chats.find((c) => sameWorkspace(workspaceOf(c.session), w));
+      return [
+        {
+          key: `${i}:${w.kind === 'ssh' ? w.profileId : ''}:${w.folder}`,
+          ...described,
+          open: !!there,
+          go: () => (there ? show(there) : open(at)),
+          again: () => open(at),
+          forget: () => setLaunch(withoutRecent(launch, w)),
+        },
+      ];
+    }),
+  };
   const board = useMemo<BoardTabs>(
     () => ({
       sources: chats.map((chat): AgentSource => ({
@@ -204,8 +226,8 @@ export function useChatTabs({
       const at = targetOf(session, folder);
       if (typeof at !== 'string') open(at);
     },
-    /** Asks for the folder first, for a chat opened from the session list. */
-    ask: setAsking,
+    /** What the connection tree offers: a chat from a session, and the recent workspaces. */
+    tree,
     dialog: asking && (
       <ChatOpenDialog
         profile={asking}
