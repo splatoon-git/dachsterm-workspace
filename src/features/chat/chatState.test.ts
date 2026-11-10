@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyChatEvent,
   canSend,
+  chatTranscript,
   commandMatches,
   modelLabel,
   tokenText,
@@ -120,16 +121,23 @@ describe('chat state', () => {
     let state = applyChatEvent(ready, {
       kind: 'capabilities',
       models: [
-        { value: 'default', label: 'Default', detail: '', hint: 'claude-opus-5-5' },
-        { value: 'opus', label: 'Opus', detail: '', hint: 'claude-opus-5-5' },
-        { value: 'sonnet', label: 'Sonnet', detail: 'Sonnet 5.5', hint: 'claude-sonnet-5-5' },
+        { value: 'default', label: 'Default', detail: '', hint: 'claude-opus-5-5', levels: [] },
+        { value: 'opus', label: 'Opus', detail: '', hint: 'claude-opus-5-5', levels: [] },
+        {
+          value: 'sonnet',
+          label: 'Sonnet',
+          detail: 'Sonnet 5.5',
+          hint: 'claude-sonnet-5-5',
+          levels: [],
+        },
       ],
       commands: [
-        { value: 'review', label: 'review', detail: '', hint: '[pr]' },
-        { value: 'compact', label: 'compact', detail: '', hint: '' },
+        { value: 'review', label: 'review', detail: '', hint: '[pr]', levels: [] },
+        { value: 'compact', label: 'compact', detail: '', hint: '', levels: [] },
       ],
       agents: [],
       permissionMode: 'default',
+      account: { plan: 'Claude Max', email: 'me@example.com' },
     });
     expect(commandMatches(state, '/re').map((c) => c.value)).toEqual(['review']);
     expect(commandMatches(state, '/re now')).toEqual([]);
@@ -146,10 +154,16 @@ describe('chat state', () => {
     });
     expect(state.context?.percentage).toBe(13);
     expect(state.model).toBe('claude-sonnet-5-5');
-    state = applyChatEvent(state, { kind: 'agentStarted', id: 'a', role: 'Explore', task: 'look' });
+    state = applyChatEvent(state, {
+      kind: 'agentStarted',
+      id: 'a',
+      call: 't1',
+      role: 'Explore',
+      task: 'look',
+    });
     state = applyChatEvent(state, { kind: 'agentFinished', id: 'a', ok: true, summary: 'found' });
     expect(state.agents).toEqual([
-      { id: 'a', role: 'Explore', task: 'look', status: 'done', summary: 'found' },
+      { id: 'a', call: 't1', role: 'Explore', task: 'look', status: 'done', summary: 'found' },
     ]);
     expect(tokenText(25200)).toBe('25k');
     expect(tokenText(9800)).toBe('9.8k');
@@ -159,5 +173,20 @@ describe('chat state', () => {
     const state = applyChatEvent({ ...ready, chosen: 'x' }, { kind: 'problem', text: '안 됨' });
     expect(state.chosen).toBe('');
     expect(state.items.at(-1)).toMatchObject({ tone: 'error', text: '안 됨' });
+  });
+
+  it('copies the conversation as Markdown without tool output or thinking', () => {
+    let state = withSent(ready, '고쳐 줘');
+    state = applyChatEvent(state, { kind: 'thinking', done: false }, 0);
+    state = applyChatEvent(state, {
+      kind: 'toolStarted',
+      id: 't',
+      name: 'Read',
+      summary: '/a.txt',
+      edit: null,
+    });
+    state = applyChatEvent(state, { kind: 'toolFinished', id: 't', ok: true, output: 'secret' });
+    state = applyChatEvent(state, { kind: 'text', text: '고쳤습니다.' });
+    expect(chatTranscript(state)).toBe('**나:** 고쳐 줘\n\n- `Read` /a.txt\n\n고쳤습니다.');
   });
 });

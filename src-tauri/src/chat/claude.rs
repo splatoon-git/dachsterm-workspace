@@ -1,7 +1,7 @@
 //! `claude -p` in stream-json mode (docs/verification/agent-chat.md, AC.0). The CLI's message
 //! shapes change between versions, so everything about them stays in this file and anything
 //! unrecognised is skipped rather than shown.
-use super::event::{ChatEvent, Choice, ContextPart, Edit};
+use super::event::{Account, ChatEvent, Choice, ContextPart, Edit, Limit};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 
@@ -24,6 +24,8 @@ pub fn arguments() -> Vec<String> {
         "--include-partial-messages",
         "--permission-prompts",
         "none",
+        // Lets the user pick "skip permission checks" during the chat; it does not turn it on.
+        "--allow-dangerously-skip-permissions",
     ]
     .map(String::from)
     .to_vec()
@@ -76,6 +78,65 @@ pub fn model_problem(model: &str) -> Option<&'static str> {
 
 pub fn model_message(model: &str) -> String {
     control("model", json!({ "subtype": "set_model", "model": model }))
+}
+
+/// The effective settings, read once at start for the effort level in use.
+pub fn settings_message() -> String {
+    control("settings", json!({ "subtype": "get_settings" }))
+}
+
+pub const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+
+/// Changes the effort for the next turns. The CLI has no request of its own for it; it takes the
+/// setting as a flag setting during the session (measured with 2.1.319).
+pub fn effort_message(level: &str) -> Option<String> {
+    EFFORTS.contains(&level).then(|| {
+        control(
+            "effort",
+            json!({ "subtype": "apply_flag_settings", "settings": { "effortLevel": level } }),
+        )
+    })
+}
+
+/// The permission modes the chat offers. Skipping checks works because the agent was started with
+/// `--allow-dangerously-skip-permissions`.
+pub const MODES: [&str; 5] = [
+    "default",
+    "acceptEdits",
+    "plan",
+    "auto",
+    "bypassPermissions",
+];
+
+pub fn mode_message(mode: &str) -> Option<String> {
+    MODES.contains(&mode).then(|| {
+        control(
+            "mode",
+            json!({ "subtype": "set_permission_mode", "mode": mode }),
+        )
+    })
+}
+
+pub fn usage_message() -> String {
+    control("usage", json!({ "subtype": "get_usage" }))
+}
+
+fn limits(windows: &Value, percent_of: impl Fn(&Value) -> Option<f64>, resets: &str) -> Vec<Limit> {
+    ["five_hour", "seven_day"]
+        .into_iter()
+        .filter_map(|name| {
+            let window = &windows[name];
+            Some(Limit {
+                name: name.into(),
+                percent: percent_of(window)?,
+                resets_at: match &window[resets] {
+                    Value::String(at) => at.clone(),
+                    Value::Number(at) => at.to_string(),
+                    _ => String::new(),
+                },
+            })
+        })
+        .collect()
 }
 
 fn cut(text: &str, limit: usize) -> String {
@@ -143,6 +204,12 @@ fn choices(list: &Value, value: &str, label: &str, detail: &str, hint: &str) -> 
             label: field(item, label),
             detail: cut(&field(item, detail), MAX_SUMMARY),
             hint: field(item, hint),
+            levels: item["supportedEffortLevels"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|l| l.as_str().map(String::from))
+                .collect(),
         })
         .collect()
 }
@@ -173,6 +240,45 @@ fn answer(response: &Value) -> Vec<ChatEvent> {
                 .as_str()
                 .unwrap_or_default()
                 .into(),
+            account: Account {
+                plan: body["account"]["subscriptionType"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .into(),
+                email: body["account"]["email"].as_str().unwrap_or_default().into(),
+            },
+        }],
+        ("settings", false) => body["effective"]["effortLevel"]
+            .as_str()
+            .map(|level| ChatEvent::Effort {
+                level: level.into(),
+            })
+            .into_iter()
+            .collect(),
+        ("mode", false) => vec![ChatEvent::Mode {
+            mode: body["mode"].as_str().unwrap_or_default().into(),
+        }],
+        ("usage", false) => vec![ChatEvent::Usage {
+            cost: body["session"]["total_cost_usd"]
+                .as_f64()
+                .unwrap_or_default(),
+            added: body["session"]["total_lines_added"]
+                .as_u64()
+                .unwrap_or_default(),
+            removed: body["session"]["total_lines_removed"]
+                .as_u64()
+                .unwrap_or_default(),
+            limits: limits(
+                &body["rate_limits"],
+                |w| w["utilization"].as_f64(),
+                "resets_at",
+            ),
+        }],
+        ("effort" | "mode", true) => vec![ChatEvent::Problem {
+            text: format!(
+                "설정을 바꾸지 못했습니다. {}",
+                cut(response["error"].as_str().unwrap_or_default(), MAX_DETAIL)
+            ),
         }],
         ("context", false) => {
             let parts = body["categories"]
@@ -246,6 +352,7 @@ impl Reader {
                 self.agents.insert(id.clone());
                 vec![ChatEvent::AgentStarted {
                     id,
+                    call: text("tool_use_id").unwrap_or_default().to_string(),
                     role: text("subagent_type").unwrap_or("agent").to_string(),
                     task: cut(text("description").unwrap_or_default(), MAX_SUMMARY),
                 }]
@@ -260,6 +367,18 @@ impl Reader {
                 }]
             }
             (Some("control_response"), _) => answer(&value["response"]),
+            // Utilization comes as a fraction here and as a percentage from `get_usage`.
+            (Some("rate_limit_event"), _) => {
+                let limits = limits(
+                    &value["rate_limit_info"]["unifiedWindows"],
+                    |w| Some(w["utilization"].as_f64()? * 100.0),
+                    "resetsAt",
+                );
+                if limits.is_empty() {
+                    return vec![];
+                }
+                vec![ChatEvent::Limits { limits }]
+            }
             (Some("stream_event"), _) => self.stream(&value["event"]),
             (Some("assistant"), _) => value["message"]["content"]
                 .as_array()
@@ -299,10 +418,21 @@ impl Reader {
                 let failed = value["is_error"].as_bool().unwrap_or(true);
                 let detail =
                     failed.then(|| cut(text("result").or(subtype).unwrap_or("오류"), MAX_DETAIL));
-                vec![ChatEvent::TurnFinished {
-                    ok: !failed,
-                    detail,
-                }]
+                let usage = &value["usage"];
+                let count = |key: &str| usage[key].as_u64().unwrap_or_default();
+                vec![
+                    ChatEvent::TurnUsage {
+                        input: count("input_tokens"),
+                        cache_read: count("cache_read_input_tokens"),
+                        cache_write: count("cache_creation_input_tokens"),
+                        output: count("output_tokens"),
+                        cost: value["total_cost_usd"].as_f64().unwrap_or_default(),
+                    },
+                    ChatEvent::TurnFinished {
+                        ok: !failed,
+                        detail,
+                    },
+                ]
             }
             _ => vec![],
         }
@@ -380,11 +510,11 @@ mod tests {
             ]
         );
         assert_eq!(
-            reader.read(DONE),
-            [ChatEvent::TurnFinished {
+            reader.read(DONE).last(),
+            Some(&ChatEvent::TurnFinished {
                 ok: true,
                 detail: None
-            }]
+            })
         );
     }
 
@@ -413,11 +543,11 @@ mod tests {
     fn a_failed_turn_says_why() {
         let mut reader = Reader::default();
         assert_eq!(
-            reader.read(FAILED),
-            [ChatEvent::TurnFinished {
+            reader.read(FAILED).last(),
+            Some(&ChatEvent::TurnFinished {
                 ok: false,
                 detail: Some("error_during_execution".into())
-            }]
+            })
         );
     }
 
@@ -496,7 +626,7 @@ mod tests {
                 "subtype": "success",
                 "request_id": "init-1",
                 "response": {
-                    "account": { "email": "someone@example.com" },
+                    "account": { "email": "someone@example.com", "subscriptionType": "Claude Max", "organization": "Acme" },
                     "models": [{ "value": "default", "displayName": "Default", "description": "Opus" }],
                     "commands": [{ "name": "review", "description": "Review", "argumentHint": "[pr]" }],
                     "agents": [{ "name": "Explore", "description": "Looks around" }],
@@ -511,6 +641,7 @@ mod tests {
             commands,
             agents,
             permission_mode,
+            account,
         } = &events[0]
         else {
             panic!("{events:?}");
@@ -519,7 +650,48 @@ mod tests {
         assert_eq!(commands[0].hint, "[pr]");
         assert_eq!(agents[0].value, "Explore");
         assert_eq!(permission_mode, "default");
-        assert!(!format!("{events:?}").contains("someone@example.com"));
+        assert_eq!(account.email, "someone@example.com");
+        // Nothing else of the account, such as the organisation, reaches the screen.
+        assert!(!format!("{events:?}").contains("Acme"));
+    }
+
+    #[test]
+    fn reads_usage_limits_and_what_a_turn_used() {
+        let usage = json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "usage-1", "response": {
+                "session": { "total_cost_usd": 0.5, "total_lines_added": 12, "total_lines_removed": 3 },
+                "rate_limits": {
+                    "five_hour": { "utilization": 21, "resets_at": "2026-11-10T18:00:00Z" },
+                    "seven_day": { "utilization": 81, "resets_at": "2026-11-12T00:00:00Z" }
+                }
+            }}
+        })
+        .to_string();
+        let events = Reader::default().read(&usage);
+        let ChatEvent::Usage { added, limits, .. } = &events[0] else {
+            panic!("{events:?}");
+        };
+        assert_eq!(*added, 12);
+        assert_eq!(limits[0].percent, 21.0);
+        let live = r#"{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{"five_hour":{"utilization":0.21,"resetsAt":1794286200}}}}"#;
+        let events = Reader::default().read(live);
+        let ChatEvent::Limits { limits } = &events[0] else {
+            panic!("{events:?}");
+        };
+        assert_eq!(limits[0].resets_at, "1794286200");
+        assert!((limits[0].percent - 21.0).abs() < 1e-9);
+        let turn = r#"{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.002,"usage":{"input_tokens":2,"cache_read_input_tokens":24142,"cache_creation_input_tokens":8509,"output_tokens":4}}"#;
+        assert!(matches!(
+            &Reader::default().read(turn)[0],
+            ChatEvent::TurnUsage {
+                cache_read: 24142,
+                cache_write: 8509,
+                ..
+            }
+        ));
+        assert!(effort_message("max").is_some() && effort_message("turbo").is_none());
+        assert!(mode_message("bypassPermissions").is_some() && mode_message("x").is_none());
     }
 
     #[test]

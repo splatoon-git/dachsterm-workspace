@@ -132,7 +132,8 @@ pub async fn chat_start(
     };
     let task = tauri::async_runtime::spawn(read(handle, name, on_event));
     *chat.reading.lock().unwrap() = Some(task);
-    deliver(&state, &id, &claude::initialize_message()).await
+    deliver(&state, &id, &claude::initialize_message()).await?;
+    deliver(&state, &id, &claude::settings_message()).await
 }
 
 /// Starts the agent on this PC in `folder` (empty: the home folder).
@@ -161,7 +162,8 @@ pub async fn chat_start_local(
     };
     let task = tauri::async_runtime::spawn(read_local(stdout, stderr, on_event));
     *chat.reading.lock().unwrap() = Some(task);
-    deliver(&state, &id, &claude::initialize_message()).await
+    deliver(&state, &id, &claude::initialize_message()).await?;
+    deliver(&state, &id, &claude::settings_message()).await
 }
 
 /// Hands the agent one user message. Messages queue on the server while a turn is running.
@@ -196,6 +198,26 @@ pub async fn chat_set_model(state: State<'_, AppState>, id: String, model: Strin
         return Err(problem.into());
     }
     deliver(&state, &id, &claude::model_message(&model)).await
+}
+
+/// Changes the effort level for the next turns.
+#[tauri::command]
+pub async fn chat_set_effort(state: State<'_, AppState>, id: String, level: String) -> Result<()> {
+    let line = claude::effort_message(&level).ok_or("알 수 없는 노력 수준입니다.")?;
+    deliver(&state, &id, &line).await
+}
+
+/// Changes the permission mode. The new mode comes back as a `Mode` event.
+#[tauri::command]
+pub async fn chat_set_mode(state: State<'_, AppState>, id: String, mode: String) -> Result<()> {
+    let line = claude::mode_message(&mode).ok_or("알 수 없는 권한 모드입니다.")?;
+    deliver(&state, &id, &line).await
+}
+
+/// Asks for the session's cost and the account's usage limits; they come as a `Usage` event.
+#[tauri::command]
+pub async fn chat_usage(state: State<'_, AppState>, id: String) -> Result<()> {
+    deliver(&state, &id, &claude::usage_message()).await
 }
 
 /// One line to the agent's input, in the order lines were given.

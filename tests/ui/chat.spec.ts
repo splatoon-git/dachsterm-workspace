@@ -75,16 +75,36 @@ test('the composer offers commands, models, context use and subagents', async ({
           label: 'Default (recommended)',
           detail: 'Opus 5.5',
           hint: 'claude-opus-5-5',
+          levels: [],
         },
-        { value: 'opus', label: 'Opus', detail: 'Opus 5.5', hint: 'claude-opus-5-5' },
-        { value: 'sonnet', label: 'Sonnet', detail: 'Sonnet 5.5', hint: 'claude-sonnet-5-5' },
+        { value: 'opus', label: 'Opus', detail: 'Opus 5.5', hint: 'claude-opus-5-5', levels: [] },
+        {
+          value: 'sonnet',
+          label: 'Sonnet',
+          detail: 'Sonnet 5.5',
+          hint: 'claude-sonnet-5-5',
+          levels: [],
+        },
       ],
       commands: [
-        { value: 'review', label: 'review', detail: 'Review a pull request', hint: '[pr]' },
-        { value: 'compact', label: 'compact', detail: 'Compact the conversation', hint: '' },
+        {
+          value: 'review',
+          label: 'review',
+          detail: 'Review a pull request',
+          hint: '[pr]',
+          levels: [],
+        },
+        {
+          value: 'compact',
+          label: 'compact',
+          detail: 'Compact the conversation',
+          hint: '',
+          levels: [],
+        },
       ],
       agents: [],
       permissionMode: 'default',
+      account: { plan: 'Claude Max', email: 'me@example.com' },
     },
     {
       kind: 'context',
@@ -97,7 +117,7 @@ test('the composer offers commands, models, context use and subagents', async ({
         { name: 'Free space', tokens: 170000, free: true },
       ],
     },
-    { kind: 'agentStarted', id: 'a1', role: 'Explore', task: '결제 모듈 탐색' },
+    { kind: 'agentStarted', id: 'a1', call: 't9', role: 'Explore', task: '결제 모듈 탐색' },
   ]);
 
   // The model chip names the model by its label, and picking another asks the agent.
@@ -127,4 +147,80 @@ test('the composer offers commands, models, context use and subagents', async ({
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '에이전트 1개 실행 중' }).click();
   await expect(page.getByRole('dialog', { name: '서브에이전트' })).toContainText('결제 모듈 탐색');
+});
+
+test('permission mode, effort, usage, a new chat beside and copying', async ({ page }) => {
+  await open(page);
+  await emit(page, [
+    {
+      kind: 'capabilities',
+      models: [
+        {
+          value: 'opus',
+          label: 'Opus',
+          detail: 'Opus 5.5',
+          hint: 'claude-opus-5-5',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        },
+      ],
+      commands: [],
+      agents: [{ value: 'Explore', label: 'Explore', detail: '', hint: '', levels: [] }],
+      permissionMode: 'default',
+      account: { plan: 'Claude Max', email: 'me@example.com' },
+    },
+    { kind: 'effort', level: 'high' },
+    {
+      kind: 'usage',
+      cost: 0.42,
+      added: 12,
+      removed: 3,
+      limits: [
+        { name: 'five_hour', percent: 21, resetsAt: '4102444800' },
+        { name: 'seven_day', percent: 81, resetsAt: '4102444800' },
+      ],
+    },
+  ]);
+  const calls = () => page.evaluate(() => window.__chat.calls.map((c) => c.command));
+
+  await expect(page.getByRole('button', { name: '모델 Opus' })).toHaveText('Opus · High');
+  await page.getByRole('button', { name: '모델 Opus' }).click();
+  await page.getByRole('group', { name: '노력 수준' }).getByRole('button', { name: 'Max' }).click();
+  expect(await calls()).toContain('chat_set_effort');
+  await expect(page.getByRole('button', { name: '모델 Opus' })).toHaveText('Opus · Max');
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('button', { name: '권한 모드 기본' }).click();
+  await page
+    .getByRole('dialog', { name: '권한 모드' })
+    .getByRole('button', { name: /편집 자동 승인/ })
+    .click();
+  expect(await calls()).toContain('chat_set_mode');
+  await emit(page, [{ kind: 'mode', mode: 'acceptEdits' }]);
+  await expect(page.getByRole('button', { name: '권한 모드 편집 자동 승인' })).toBeVisible();
+
+  await page.getByRole('button', { name: '사용량 5시간 21%' }).click();
+  const usage = page.getByRole('dialog', { name: '계정과 사용량' });
+  await expect(usage).toContainText('Claude Max');
+  await expect(usage).toContainText('81%');
+  await expect(usage).toContainText('$0.420 · +12 −3줄');
+  await page.screenshot({ path: 'test-results/chat-usage.png' });
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('button', { name: '같은 위치에서 새 채팅' }).click();
+  expect(await calls()).toContain('again');
+
+  const prompt = page.getByRole('textbox', { name: '프롬프트' });
+  await prompt.fill('복사할 질문');
+  await prompt.press('Enter');
+  await emit(page, [
+    { kind: 'text', text: '복사할 답' },
+    { kind: 'turnFinished', ok: true, detail: null },
+  ]);
+  await page.locator('.chat-reply').hover();
+  await page.locator('.chat-reply').getByRole('button', { name: '복사' }).click();
+  expect(await page.evaluate(() => window.__chat.calls.at(-1))).toEqual({
+    command: 'clipboard_write_text',
+    args: { text: '복사할 답' },
+  });
+  await expect(page.locator('.chat-reply').getByRole('button', { name: '복사됨' })).toBeVisible();
 });

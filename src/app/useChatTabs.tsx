@@ -4,7 +4,8 @@ import { ChatOpenDialog } from '../features/chat/ChatOpenDialog';
 import { ChatPane } from '../features/chat/ChatPane';
 import { ChatSession, placeTitle, type ChatPlace } from '../features/chat/chatSession';
 import type { TerminalSession } from '../features/terminal/session';
-import type { Profile } from '../lib/ipc';
+import { chatTranscript } from '../features/chat/chatState';
+import { call, type Profile } from '../lib/ipc';
 import { PlainTab } from './GroupTabBar';
 import type { Workspace } from './useWorkspaceLayout';
 import { tabKey, type TabRef } from './workspaceLayout';
@@ -62,6 +63,22 @@ export function useChatTabs({ workspace }: { workspace: Workspace }) {
       />
     ),
     close,
+    /** What the tab menu offers on a chat tab. */
+    menu: {
+      owns: (key: string) => chats.some((c) => tabKey(refOf(c)) === key),
+      again: (key: string) => {
+        const chat = chats.find((c) => tabKey(refOf(c)) === key);
+        if (chat) open(chat.session.place, chat.session.folder);
+      },
+      copy: (key: string) => {
+        const chat = chats.find((c) => tabKey(refOf(c)) === key);
+        // A failed copy has nowhere better to be said than the chat itself, which shows nothing.
+        if (chat)
+          void call('clipboard_write_text', {
+            text: chatTranscript(chat.session.snapshot()),
+          }).catch(() => {});
+      },
+    },
     renderTab: (tab: ChatRef, active: boolean, select: () => void) => {
       const chat = find(tab);
       return (
@@ -78,7 +95,14 @@ export function useChatTabs({ workspace }: { workspace: Workspace }) {
     },
     renderCell: (tab: ChatRef) => {
       const chat = find(tab);
-      return chat && <ChatPane session={chat.session} />;
+      return (
+        chat && (
+          <ChatPane
+            session={chat.session}
+            again={() => open(chat.session.place, chat.session.folder)}
+          />
+        )
+      );
     },
   };
 }

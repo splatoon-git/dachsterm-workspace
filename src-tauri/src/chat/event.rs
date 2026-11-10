@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 /// What a chat tab shows, the same whichever agent CLI produced it (design §2.2).
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
@@ -29,12 +29,35 @@ pub enum ChatEvent {
         ok: bool,
         output: String,
     },
-    /// What the agent offers, from its answer to `initialize`. Account details are never passed on.
+    /// What the agent offers, from its answer to `initialize`. Of the account only the plan and the
+    /// address reach the screen, as the CLI's own status shows them.
     Capabilities {
         models: Vec<Choice>,
         commands: Vec<Choice>,
         agents: Vec<Choice>,
         permission_mode: String,
+        account: Account,
+    },
+    /// The effort level in use: `low` to `max`.
+    Effort { level: String },
+    /// The permission mode in use after a change.
+    Mode { mode: String },
+    /// The session's cost and edits so far, and the account's usage limits.
+    Usage {
+        cost: f64,
+        added: u64,
+        removed: u64,
+        limits: Vec<Limit>,
+    },
+    /// The account's usage limits as the agent reports them during a turn.
+    Limits { limits: Vec<Limit> },
+    /// What the last turn used, cache included.
+    TurnUsage {
+        input: u64,
+        cache_read: u64,
+        cache_write: u64,
+        output: u64,
+        cost: f64,
     },
     /// How full the context window is, in whole percent, with what takes the room. `model` is the
     /// one in use, known here before the first turn reports it.
@@ -48,6 +71,8 @@ pub enum ChatEvent {
     /// A subagent started. `role` is its type, `task` what it was asked.
     AgentStarted {
         id: String,
+        /// The tool call that started it, so the chat can show it under that step.
+        call: String,
         role: String,
         task: String,
     },
@@ -96,6 +121,26 @@ pub struct Choice {
     pub label: String,
     pub detail: String,
     pub hint: String,
+    /// A model's effort levels. Empty for anything else.
+    pub levels: Vec<String>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Account {
+    /// The subscription, such as `Claude Max`. Empty when the agent uses an API key.
+    pub plan: String,
+    pub email: String,
+}
+
+/// One usage window: `five_hour` or `seven_day`, how much is used and when it starts over.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Limit {
+    pub name: String,
+    pub percent: f64,
+    /// RFC 3339, or Unix seconds as the agent's own events give it.
+    pub resets_at: String,
 }
 
 /// A share of the context window. `free` marks room still unused.

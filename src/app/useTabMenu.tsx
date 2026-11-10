@@ -18,9 +18,14 @@ export type TabActions = {
   reconnect: (session: TerminalSession) => void;
   /** Closes any tab by its key, with the checks each kind needs. */
   close: (key: string) => void;
-  reloadable: (key: string) => boolean;
-  /** Reads a file tab's file again. */
-  reload: (key: string) => void;
+  /** File tabs, which can read their file again. */
+  files: { reloadable: (key: string) => boolean; reload: (key: string) => void };
+  /** Chat tabs, which can open another chat in the same place and copy their conversation. */
+  chat: {
+    owns: (key: string) => boolean;
+    again: (key: string) => void;
+    copy: (key: string) => void;
+  };
   /** After the window's tabs were laid out again, to put focus back on a terminal. */
   arranged: () => void;
 };
@@ -78,7 +83,9 @@ export function useTabMenu({
       disconnect: () => void session?.disconnect(),
       reconnect: () => session && actions.reconnect(session),
       close: () => actions.close(key),
-      reload: () => actions.reload(key),
+      reload: () => actions.files.reload(key),
+      newChat: () => actions.chat.again(key),
+      copyChat: () => actions.chat.copy(key),
       kube: () => {
         select();
         if (session) session.view.set({ kube: !session.view.snapshot().kube, kubeTerminal: false });
@@ -95,7 +102,8 @@ export function useTabMenu({
         session && capabilities(session).kube
           ? kubeMenu(session.profile.workspace, session.view.snapshot().kube)
           : null,
-      reload: actions.reloadable(key),
+      reload: actions.files.reloadable(key),
+      chat: actions.chat.owns(key),
       review: reviewable(session),
       connection: !session ? null : ['closed', 'error'].includes(status!) ? 'ended' : 'live',
       recording: !!session && isRecording(logStatusOf(session.connectionId)),

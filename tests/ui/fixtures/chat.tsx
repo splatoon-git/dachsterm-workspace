@@ -40,9 +40,17 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         return null;
       }
       if (
-        ['chat_send', 'chat_interrupt', 'chat_close', 'chat_context', 'chat_set_model'].includes(
-          command,
-        )
+        [
+          'chat_send',
+          'chat_interrupt',
+          'chat_close',
+          'chat_context',
+          'chat_set_model',
+          'chat_set_effort',
+          'chat_set_mode',
+          'chat_usage',
+          'clipboard_write_text',
+        ].includes(command)
       )
         return null;
       throw `unexpected ${command}`;
@@ -58,6 +66,9 @@ const session = new ChatSession({ kind: 'local', name: 'zsh · 기본 셸' }, '/
 session.open();
 createRoot(document.getElementById('root')!).render(
   <div style={{ width: 900, height: 640, display: 'flex' }}>
-    <ChatPane session={session} />
+    <ChatPane
+      session={session}
+      again={() => window.__chat.calls.push({ command: 'again', args: {} })}
+    />
   </div>,
 );

@@ -18,6 +18,8 @@ export type TabCommand =
   | 'closeOthers'
   | 'reload'
   | 'kube'
+  | 'newChat'
+  | 'copyChat'
   | Preset;
 export type TabMenuState = {
   /** What the tab's session supports, or null for a game or the preview. */
@@ -26,6 +28,8 @@ export type TabMenuState = {
   kube?: KubeMenu | null;
   /** A file tab, which can read its file again. */
   reload?: boolean;
+  /** An agent chat, which can open another chat in the same place or copy its conversation. */
+  chat?: boolean;
   /** Change review: null when the tab has none (not SSH), false while it cannot open yet. */
   review: boolean | null;
   /** The state of the tab's connection, or null for a tab without one. */
@@ -65,6 +69,11 @@ export function tabMenuEntries(state: TabMenuState): TabMenuEntry[] {
       disabled: !state.review,
     });
   if (state.reload) view.push({ command: 'reload', label: '파일 다시 읽기' });
+  if (state.chat)
+    view.push(
+      { command: 'newChat', label: '같은 위치에서 새 채팅' },
+      { command: 'copyChat', label: '대화 복사' },
+    );
   if (state.kube === 'open' || state.kube === 'close')
     view.push({
       command: 'kube',

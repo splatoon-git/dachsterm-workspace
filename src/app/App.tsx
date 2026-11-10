@@ -344,8 +344,8 @@ export function App() {
       review: (t) => reviews.open(t),
       reconnect: reconnectTab,
       close: closeKey,
-      reload: files.reload,
-      reloadable: files.reloadable,
+      files,
+      chat: chats.menu,
       arranged: focusActiveTerminal,
     },
   });

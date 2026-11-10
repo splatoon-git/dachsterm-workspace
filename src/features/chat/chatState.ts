@@ -5,7 +5,23 @@ export type ChatEdit = { path: string; before: string; after: string };
  * A model, command or agent the agent offers. `hint` is a command's arguments, or the full model
  * name a model choice stands for.
  */
-export type ChatChoice = { value: string; label: string; detail: string; hint: string };
+export type ChatChoice = {
+  value: string;
+  label: string;
+  detail: string;
+  hint: string;
+  /** A model's effort levels. */
+  levels: string[];
+};
+/** A usage window: `five_hour` or `seven_day`. `resetsAt` is RFC 3339 or Unix seconds. */
+export type ChatLimit = { name: string; percent: number; resetsAt: string };
+export type ChatTurnUsage = {
+  input: number;
+  cacheRead: number;
+  cacheWrite: number;
+  output: number;
+  cost: number;
+};
 export type ChatContext = {
   percentage: number;
   used: number;
@@ -14,6 +30,8 @@ export type ChatContext = {
 };
 export type ChatAgent = {
   id: string;
+  /** The tool call that started it. */
+  call: string;
   role: string;
   task: string;
   status: 'running' | 'done' | 'failed';
@@ -34,9 +52,15 @@ export type ChatEvent =
       commands: ChatChoice[];
       agents: ChatChoice[];
       permissionMode: string;
+      account: { plan: string; email: string };
     }
+  | { kind: 'effort'; level: string }
+  | { kind: 'mode'; mode: string }
+  | { kind: 'usage'; cost: number; added: number; removed: number; limits: ChatLimit[] }
+  | { kind: 'limits'; limits: ChatLimit[] }
+  | ({ kind: 'turnUsage' } & ChatTurnUsage)
   | ({ kind: 'context'; model: string } & ChatContext)
-  | { kind: 'agentStarted'; id: string; role: string; task: string }
+  | { kind: 'agentStarted'; id: string; call: string; role: string; task: string }
   | { kind: 'agentFinished'; id: string; ok: boolean; summary: string }
   | { kind: 'problem'; text: string }
   | { kind: 'turnFinished'; ok: boolean; detail: string | null }
@@ -79,6 +103,12 @@ export type ChatState = {
   context: ChatContext | null;
   /** Subagents of this chat, newest last. */
   agents: ChatAgent[];
+  account: { plan: string; email: string } | null;
+  effort: string;
+  /** The session's cost and edits, and the account's usage windows. */
+  usage: { cost: number; added: number; removed: number } | null;
+  limits: ChatLimit[];
+  lastTurn: ChatTurnUsage | null;
   items: ChatItem[];
   next: number;
   /** The user asked to stop the running turn, so its failure is not an error. */
@@ -93,6 +123,11 @@ export const initialChat: ChatState = {
   permissionMode: '',
   context: null,
   agents: [],
+  account: null,
+  effort: '',
+  usage: null,
+  limits: [],
+  lastTurn: null,
   items: [],
   next: 1,
   stopping: false,
@@ -160,7 +195,24 @@ export function applyChatEvent(state: ChatState, event: ChatEvent, now = Date.no
         ...state,
         offers: { models: event.models, commands: event.commands, agents: event.agents },
         permissionMode: event.permissionMode,
+        account: event.account,
       };
+    case 'effort':
+      return { ...state, effort: event.level };
+    case 'mode':
+      return { ...state, permissionMode: event.mode };
+    case 'usage':
+      return {
+        ...state,
+        usage: { cost: event.cost, added: event.added, removed: event.removed },
+        limits: event.limits.length ? event.limits : state.limits,
+      };
+    case 'limits':
+      return { ...state, limits: event.limits };
+    case 'turnUsage': {
+      const { input, cacheRead, cacheWrite, output, cost } = event;
+      return { ...state, lastTurn: { input, cacheRead, cacheWrite, output, cost } };
+    }
     case 'context': {
       const { percentage, used, max, parts } = event;
       // Known here before the first turn names it.
@@ -175,7 +227,14 @@ export function applyChatEvent(state: ChatState, event: ChatEvent, now = Date.no
         ...state,
         agents: [
           ...state.agents,
-          { id: event.id, role: event.role, task: event.task, status: 'running', summary: '' },
+          {
+            id: event.id,
+            call: event.call,
+            role: event.role,
+            task: event.task,
+            status: 'running',
+            summary: '',
+          },
         ],
       };
     case 'agentFinished':
@@ -315,4 +374,82 @@ export function tokenText(tokens: number) {
   if (tokens < 1000) return String(tokens);
   if (tokens < 1_000_000) return `${(tokens / 1000).toFixed(tokens < 10_000 ? 1 : 0)}k`;
   return `${(tokens / 1_000_000).toFixed(1)}M`;
+}
+
+/** The permission modes offered, in the agent's names, with what each means for this chat. */
+export const permissionModes: { value: string; label: string; detail: string; risky?: true }[] = [
+  {
+    value: 'default',
+    label: '기본',
+    detail: '승인이 필요한 동작은 묻습니다. 승인 화면이 생기기 전까지는 거부됩니다.',
+  },
+  { value: 'acceptEdits', label: '편집 자동 승인', detail: '파일 편집은 묻지 않고 합니다.' },
+  { value: 'plan', label: '계획', detail: '읽기만 하고 계획을 제안합니다.' },
+  { value: 'auto', label: '자동', detail: '안전해 보이는 동작은 에이전트가 알아서 합니다.' },
+  {
+    value: 'bypassPermissions',
+    label: '권한 확인 생략',
+    detail: '묻지 않고 파일을 바꾸고 명령을 실행합니다.',
+    risky: true,
+  },
+];
+
+export const modeLabel = (mode: string) =>
+  permissionModes.find((m) => m.value === mode)?.label ?? mode;
+
+const effortNames: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'XHigh',
+  max: 'Max',
+};
+export const effortLabel = (level: string) => effortNames[level] ?? level;
+
+/** The effort levels the model in use takes. */
+export function effortLevels(state: ChatState) {
+  const { models } = state.offers;
+  const current =
+    models.find((m) => m.value === state.chosen) ??
+    models.find((m) => m.hint === state.model && m.value !== 'default') ??
+    models.find((m) => m.hint === state.model);
+  return current?.levels ?? [];
+}
+
+export const limitLabel = (name: string) =>
+  name === 'five_hour' ? '5시간' : name === 'seven_day' ? '7일' : name;
+
+const two = (n: number) => String(n).padStart(2, '0');
+
+/** When a usage window starts over, as a short phrase. */
+export function resetText(resetsAt: string, now = Date.now()) {
+  const at = /^\d+$/.test(resetsAt) ? Number(resetsAt) * 1000 : Date.parse(resetsAt);
+  if (!Number.isFinite(at)) return '';
+  const minutes = Math.max(0, Math.round((at - now) / 60000));
+  if (minutes < 60) return `${minutes}분 후 초기화`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분 후 초기화`;
+  const date = new Date(at);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일 ${two(date.getHours())}:${two(date.getMinutes())} 초기화`;
+}
+
+export const costText = (usd: number) => `$${usd < 1 ? usd.toFixed(3) : usd.toFixed(2)}`;
+
+/** The conversation as Markdown, for the clipboard. Tool output is left out; its line stays. */
+export function chatTranscript(state: ChatState) {
+  return state.items
+    .flatMap((item) => {
+      switch (item.kind) {
+        case 'user':
+          return [`**나:** ${item.text}`];
+        case 'agent':
+          return [item.text];
+        case 'tool':
+          return [`- \`${item.name}\` ${item.summary}`.trimEnd()];
+        case 'notice':
+          return [`> ${item.text.replace(/\n/g, '\n> ')}`];
+        case 'thinking':
+          return [];
+      }
+    })
+    .join('\n\n');
 }

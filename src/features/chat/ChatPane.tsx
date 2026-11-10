@@ -1,8 +1,9 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AuthPromptCard, HostKeyCard } from '../../components/ConnectionCards';
+import { call } from '../../lib/ipc';
 import { placeDetail, placeTitle, type ChatSession } from './chatSession';
 import { ChatComposer } from './ChatComposer';
-import { type ChatEdit, type ChatItem, type ChatPhase } from './chatState';
+import { type ChatAgent, type ChatEdit, type ChatItem, type ChatPhase } from './chatState';
 import './chat.css';
 
 // The Markdown renderer is its own chunk, loaded with the first reply.
@@ -40,11 +41,18 @@ function EditLines({ edit }: { edit: ChatEdit }) {
 
 const toolStates = { running: '실행 중', done: '완료', failed: '실패' } as const;
 
-function Tool({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
+function Tool({
+  item,
+  agent,
+}: {
+  item: Extract<ChatItem, { kind: 'tool' }>;
+  /** The subagent this call started, if it started one. */
+  agent?: ChatAgent;
+}) {
   const [open, setOpen] = useState(false);
   const hasBody = !!item.edit || !!item.output;
   return (
-    <li className={`chat-step tool ${item.status}`}>
+    <li className={`chat-step tool ${agent?.status ?? item.status}`}>
       <button
         type="button"
         className="chat-tool"
@@ -52,24 +60,65 @@ function Tool({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
         disabled={!hasBody}
         onClick={() => setOpen((v) => !v)}
       >
-        <b>{item.name}</b>
-        <span className="chat-tool-summary">{item.summary}</span>
-        <span className="sr-only">{toolStates[item.status]}</span>
+        <b>{agent ? `${agent.role} 에이전트` : item.name}</b>
+        <span className="chat-tool-summary">{agent?.task ?? item.summary}</span>
+        <span className="sr-only">{toolStates[agent?.status ?? item.status]}</span>
       </button>
+      {agent && (
+        <p className={`chat-subagent ${agent.status}`}>
+          {agent.status === 'running' ? '서브에이전트가 작업 중입니다' : agent.summary}
+        </p>
+      )}
       {open && item.edit && <EditLines edit={item.edit} />}
       {open && item.output && <pre className="chat-output">{item.output}</pre>}
     </li>
   );
 }
 
-function Item({ item }: { item: ChatItem }) {
+/** Copies one message. It says so for a moment, since the clipboard itself shows nothing. */
+function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className="chat-copy"
+      aria-label={done ? '복사됨' : '복사'}
+      title={done ? '복사됨' : '복사'}
+      onClick={() =>
+        void call('clipboard_write_text', { text }).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        })
+      }
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        {done ? (
+          <path d="M3.5 8.5l3 3 6-7" />
+        ) : (
+          <>
+            <rect x="5" y="5" width="8" height="8" rx="1.5" />
+            <path d="M3 10.5V4a1 1 0 0 1 1-1h6.5" />
+          </>
+        )}
+      </svg>
+    </button>
+  );
+}
+
+function Item({ item, agents }: { item: ChatItem; agents: ChatAgent[] }) {
   switch (item.kind) {
     case 'user':
-      return <li className="chat-you">{item.text}</li>;
+      return (
+        <li className="chat-you">
+          {item.text}
+          <CopyButton text={item.text} />
+        </li>
+      );
     case 'agent':
       return (
-        <li className="chat-step">
+        <li className="chat-step chat-reply">
           <Reply text={item.text} streaming={item.streaming} />
+          {!item.streaming && <CopyButton text={item.text} />}
         </li>
       );
     case 'thinking':
@@ -79,7 +128,7 @@ function Item({ item }: { item: ChatItem }) {
         </li>
       );
     case 'tool':
-      return <Tool item={item} />;
+      return <Tool item={item} agent={agents.find((a) => a.call === item.call)} />;
     case 'notice':
       return (
         <li
@@ -93,7 +142,14 @@ function Item({ item }: { item: ChatItem }) {
 }
 
 /** A conversation with the agent of a server or of this PC, in the manner of an editor's chat. */
-export function ChatPane({ session }: { session: ChatSession }) {
+export function ChatPane({
+  session,
+  again,
+}: {
+  session: ChatSession;
+  /** Opens another chat in the same place and folder. */
+  again: () => void;
+}) {
   const chat = useSyncExternalStore(session.subscribe, session.snapshot);
   const link = useSyncExternalStore(session.link.subscribe, session.link.snapshot);
   const thread = useRef<HTMLDivElement>(null);
@@ -114,6 +170,15 @@ export function ChatPane({ session }: { session: ChatSession }) {
       <header className="chat-head">
         <strong>{title}</strong>
         <span>{[placeDetail(place), folder].filter(Boolean).join(' · ')}</span>
+        <button
+          type="button"
+          className="chat-icon chat-new"
+          aria-label="같은 위치에서 새 채팅"
+          title="같은 위치에서 새 채팅"
+          onClick={again}
+        >
+          +
+        </button>
       </header>
       <div
         className="chat-thread"
@@ -125,7 +190,7 @@ export function ChatPane({ session }: { session: ChatSession }) {
       >
         <ol className="chat-column" aria-label="대화" aria-live="polite">
           {chat.items.map((item) => (
-            <Item key={item.id} item={item} />
+            <Item key={item.id} item={item} agents={chat.agents} />
           ))}
           {busy && (
             <li className="chat-step quiet running">

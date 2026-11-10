@@ -104,8 +104,34 @@ export class ChatSession {
 
   private refreshContext = async () => {
     const id = this.started;
-    // Not worth a message in the conversation: the indicator just keeps its last value.
-    if (id) await call('chat_context', { id }).catch(() => {});
+    if (!id) return;
+    // Not worth a message in the conversation: the indicators just keep their last values.
+    await call('chat_context', { id }).catch(() => {});
+    await call('chat_usage', { id }).catch(() => {});
+  };
+
+  /** Changes the effort for the next turns. */
+  setEffort = async (level: string) => {
+    const id = this.started;
+    if (!id || this.state.phase === 'ended') return;
+    const before = this.state.effort;
+    this.set({ ...this.state, effort: level });
+    try {
+      await call('chat_set_effort', { id, level });
+    } catch (e) {
+      this.set(withNotice({ ...this.state, effort: before }, 'error', errorText(e)));
+    }
+  };
+
+  /** Changes the permission mode. The agent confirms it, or the chat says why not. */
+  setMode = async (mode: string) => {
+    const id = this.started;
+    if (!id || this.state.phase === 'ended') return;
+    try {
+      await call('chat_set_mode', { id, mode });
+    } catch (e) {
+      this.set(withNotice(this.state, 'error', errorText(e)));
+    }
   };
 
   /** Switches the model for the next turns. A refusal comes back as a problem in the chat. */

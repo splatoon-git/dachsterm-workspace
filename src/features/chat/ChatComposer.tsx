@@ -1,44 +1,18 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState } from 'react';
 import type { ChatSession } from './chatSession';
-import { canSend, commandMatches, modelLabel, tokenText, type ChatState } from './chatState';
+import { AgentsPanel, ContextPanel, ModelPanel, ModePanel, UsagePanel } from './ChatPanels';
+import {
+  canSend,
+  commandMatches,
+  effortLabel,
+  limitLabel,
+  modeLabel,
+  modelLabel,
+  permissionModes,
+  type ChatState,
+} from './chatState';
 
-type Panel = 'model' | 'context' | 'agents' | null;
-
-/** A list over the composer. It closes on Escape or a press anywhere else. */
-function Popover({
-  label,
-  close,
-  children,
-}: {
-  label: string;
-  close: () => void;
-  children: ReactNode;
-}) {
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const outside = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) close();
-    };
-    document.addEventListener('pointerdown', outside, true);
-    return () => document.removeEventListener('pointerdown', outside, true);
-  }, [close]);
-  return (
-    <div
-      ref={root}
-      className="chat-popover"
-      role="dialog"
-      aria-label={label}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.stopPropagation();
-          close();
-        }
-      }}
-    >
-      {children}
-    </div>
-  );
-}
+type Panel = 'model' | 'context' | 'agents' | 'mode' | 'usage' | null;
 
 /** How full the context window is, as a ring. */
 function ContextRing({ percentage }: { percentage: number }) {
@@ -57,9 +31,10 @@ function ContextRing({ percentage }: { percentage: number }) {
   );
 }
 
-const agentStates = { running: '실행 중', done: '완료', failed: '실패' } as const;
-
-/** The prompt box with its row of controls: commands, subagents, context, model, send or stop. */
+/**
+ * The prompt box with its row of controls, as an editor's chat has them: commands, subagents,
+ * permission mode, usage, context, model with effort, and send or stop.
+ */
 export function ChatComposer({ session, chat }: { session: ChatSession; chat: ChatState }) {
   const [draft, setDraft] = useState('');
   const [panel, setPanel] = useState<Panel>(null);
@@ -68,8 +43,12 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
   const box = useRef<HTMLTextAreaElement>(null);
   const working = chat.phase === 'working';
   const ended = chat.phase === 'ended';
+  const known = !!chat.account;
   const commands = dismissed === draft ? [] : commandMatches(chat, draft).slice(0, 8);
   const running = chat.agents.filter((a) => a.status === 'running').length;
+  const agentsText = running ? `에이전트 ${running}개 실행 중` : `에이전트 ${chat.agents.length}`;
+  const risky = permissionModes.find((m) => m.value === chat.permissionMode)?.risky;
+  const shortLimit = chat.limits.find((l) => l.name === 'five_hour') ?? chat.limits[0];
   const toggle = (next: Panel) => setPanel((open) => (open === next ? null : next));
   const close = () => setPanel(null);
   const submit = async () => {
@@ -83,6 +62,18 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
     setPick(0);
     box.current?.focus();
   };
+  const chip = (name: Exclude<Panel, null>, label: string, children: React.ReactNode) => (
+    <button
+      type="button"
+      className="chat-chip"
+      aria-label={label}
+      aria-expanded={panel === name}
+      disabled={ended}
+      onClick={() => toggle(name)}
+    >
+      {children}
+    </button>
+  );
   return (
     <form
       className="chat-composer"
@@ -110,54 +101,11 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
           ))}
         </ul>
       )}
-      {panel === 'model' && (
-        <Popover label="모델" close={close}>
-          {chat.offers.models.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              className={m.label === modelLabel(chat) ? 'on' : undefined}
-              onClick={() => {
-                close();
-                void session.setModel(m.value);
-              }}
-            >
-              <b>{m.label}</b>
-              <span className="chat-detail">{m.detail}</span>
-            </button>
-          ))}
-        </Popover>
-      )}
-      {panel === 'context' && chat.context && (
-        <Popover label="컨텍스트" close={close}>
-          <p className="chat-popover-title">
-            컨텍스트 {tokenText(chat.context.used)} / {tokenText(chat.context.max)} (
-            {chat.context.percentage}%)
-          </p>
-          <ul className="chat-parts">
-            {chat.context.parts.map((part) => (
-              <li key={part.name} className={part.free ? 'free' : undefined}>
-                <span>{part.name}</span>
-                <span>{tokenText(part.tokens)}</span>
-              </li>
-            ))}
-          </ul>
-        </Popover>
-      )}
-      {panel === 'agents' && (
-        <Popover label="서브에이전트" close={close}>
-          <ul className="chat-parts">
-            {chat.agents.map((agent) => (
-              <li key={agent.id} title={agent.summary || undefined}>
-                <span>
-                  <b>{agent.role}</b> {agent.task}
-                </span>
-                <span>{agentStates[agent.status]}</span>
-              </li>
-            ))}
-          </ul>
-        </Popover>
-      )}
+      {panel === 'model' && <ModelPanel session={session} chat={chat} close={close} />}
+      {panel === 'mode' && <ModePanel session={session} chat={chat} close={close} />}
+      {panel === 'usage' && <UsagePanel chat={chat} close={close} />}
+      {panel === 'context' && <ContextPanel chat={chat} close={close} />}
+      {panel === 'agents' && <AgentsPanel chat={chat} close={close} />}
       <textarea
         ref={box}
         aria-label="프롬프트"
@@ -219,41 +167,37 @@ export function ChatComposer({ session, chat }: { session: ChatSession; chat: Ch
         >
           /
         </button>
-        {chat.agents.length > 0 && (
-          <button
-            type="button"
-            className="chat-chip"
-            aria-expanded={panel === 'agents'}
-            onClick={() => toggle('agents')}
-          >
-            {running ? `에이전트 ${running}개 실행 중` : `에이전트 ${chat.agents.length}`}
-          </button>
-        )}
+        {known && chip('agents', agentsText, agentsText)}
         <span className="chat-spacer" />
-        {chat.context && (
-          <button
-            type="button"
-            className="chat-chip"
-            aria-label={`컨텍스트 ${chat.context.percentage}% 사용`}
-            aria-expanded={panel === 'context'}
-            onClick={() => toggle('context')}
-          >
-            <ContextRing percentage={chat.context.percentage} />
-            {chat.context.percentage}%
-          </button>
-        )}
-        {(chat.model || chat.chosen) && (
-          <button
-            type="button"
-            className="chat-chip"
-            aria-label={`모델 ${modelLabel(chat)}`}
-            aria-expanded={panel === 'model'}
-            disabled={ended || !chat.offers.models.length}
-            onClick={() => toggle('model')}
-          >
-            {modelLabel(chat)}
-          </button>
-        )}
+        {chat.permissionMode &&
+          chip(
+            'mode',
+            `권한 모드 ${modeLabel(chat.permissionMode)}`,
+            <span className={risky ? 'chat-risky' : undefined}>
+              {modeLabel(chat.permissionMode)}
+            </span>,
+          )}
+        {shortLimit &&
+          chip(
+            'usage',
+            `사용량 ${limitLabel(shortLimit.name)} ${Math.round(shortLimit.percent)}%`,
+            `${limitLabel(shortLimit.name)} ${Math.round(shortLimit.percent)}%`,
+          )}
+        {chat.context &&
+          chip(
+            'context',
+            `컨텍스트 ${chat.context.percentage}% 사용`,
+            <>
+              <ContextRing percentage={chat.context.percentage} />
+              {chat.context.percentage}%
+            </>,
+          )}
+        {(chat.model || chat.chosen) &&
+          chip(
+            'model',
+            `모델 ${modelLabel(chat)}`,
+            chat.effort ? `${modelLabel(chat)} · ${effortLabel(chat.effort)}` : modelLabel(chat),
+          )}
         {working && !draft.trim() ? (
           <button
             type="button"
