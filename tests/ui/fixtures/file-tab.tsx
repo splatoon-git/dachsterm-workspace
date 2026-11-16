@@ -116,6 +116,7 @@ let snapshot = { status: state.status };
 const sessionListeners = new Set<() => void>();
 const session = {
   tabId: 't1',
+  kind: 'ssh',
   connectionId: 'c1',
   profile: { protocol: 'ssh', name: '서버' },
   subscribe: (listener: () => void) => {

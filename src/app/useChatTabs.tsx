@@ -17,7 +17,6 @@ import { ChatSession, chatName, placeTitle, type ChatPlace } from '../features/c
 import { chatSummary } from '../features/chat/chatStatus';
 import { chatTranscript } from '../features/chat/chatText';
 import type { TerminalSession } from '../features/terminal/session';
-import { sessionKind } from '../features/terminal/sessionKind';
 import { StatusBadge } from '../features/terminal/StatusBadge';
 import { call, type Profile } from '../lib/ipc';
 import { folderProblem } from '../lib/shell';
@@ -48,7 +47,7 @@ function targetOf(
 ): Target | string {
   if (!terminal) return '따라갈 터미널 탭이 없습니다. 터미널 탭을 고르거나 위치를 고정하세요.';
   const at = folder ?? terminal.snapshot().directory ?? '';
-  const kind = sessionKind(terminal);
+  const kind = terminal.kind;
   if (kind === 'local' && terminal.localTarget?.kind === 'shell')
     return { place: { kind: 'local', name: terminal.localTarget.name }, folder: at, program };
   if (kind !== 'ssh') return '이 탭에서는 채팅을 열 수 없습니다. SSH나 로컬 셸 탭을 고르세요.';

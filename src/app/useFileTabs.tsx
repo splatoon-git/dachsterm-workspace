@@ -9,7 +9,7 @@ import { repoFilePath, type GitRow } from '../features/git/gitViewModel';
 import { FileStatusItems } from '../features/editor/FileStatusItems';
 import { fileDocument, unsavedFileIds, useFileDirty } from '../features/editor/fileDocuments';
 import type { TerminalSession } from '../features/terminal/session';
-import { sessionKind, sessionSource } from '../features/terminal/sessionKind';
+import { sessionSource } from '../features/terminal/sessionKind';
 import { errorText } from '../lib/ipc';
 import { sameSource, type Source } from '../lib/source';
 import type { AppShortcut } from './appShortcuts';
@@ -206,7 +206,7 @@ export function useFileTabs({
     const tab: DocumentRef = { kind: 'file', id, preview: !pinned };
     // An FTP tab is its own file list, which a click must not cover.
     const placement: DocumentPlacement =
-      sessionKind(session) === 'ftp' && !narrow
+      session.kind === 'ftp' && !narrow
         ? { keepVisible: tabKey({ kind: 'session', tabId: session.tabId }) }
         : {};
     show(tab, placement, { id, source, path, name: nameOf(path), owner: ownedBy(session) });

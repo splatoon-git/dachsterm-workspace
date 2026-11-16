@@ -4,7 +4,6 @@ import { call, errorText } from '../../lib/ipc';
 import { commandMarksOf } from '../terminal/commandMarks';
 import { terminalPreferences, useTerminalPreferences } from '../terminal/preferences';
 import type { TerminalSession } from '../terminal/session';
-import { sessionKind } from '../terminal/sessionKind';
 import {
   GitScheduler,
   gitPath,
@@ -130,7 +129,7 @@ const stores = new WeakMap<TerminalSession, GitStatusStore>();
 
 /** Tabs with a shell folder. FTP and pod tabs have none. */
 export function gitStatusOf(session: TerminalSession | undefined) {
-  const kind = session && sessionKind(session);
+  const kind = session?.kind;
   if (!session || (kind !== 'ssh' && kind !== 'local')) return null;
   let store = stores.get(session);
   if (!store) stores.set(session, (store = new GitStatusStore(session)));

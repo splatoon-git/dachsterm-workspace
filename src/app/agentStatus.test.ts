@@ -24,6 +24,7 @@ function tab() {
   let items: PendingSign[] = [];
   let state = { status: 'connected', directory: null as string | null };
   const session = {
+    kind: 'ftp',
     profile: { name: '배포 서버', protocol: 'ftp' },
     connectionId: 'c1',
     programStatus: new ProgramStatus(),

@@ -76,6 +76,7 @@ const notify = () => listeners.forEach((listener) => listener());
 
 // A stand-in for the part of a terminal session the view reads.
 const session = {
+  kind: state.tab === 'none' ? 'ssh' : state.tab,
   connectionId: 'c1',
   profile: { protocol: state.tab === 'ftp' ? 'ftp' : 'ssh', name: '서버' },
   localTarget: state.tab === 'local' ? { id: 'wsl:U', kind: 'wsl' } : undefined,
