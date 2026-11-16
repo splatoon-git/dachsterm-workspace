@@ -6,6 +6,7 @@ import { isMacPlatform } from './preferences';
 import {
   approveClipboard,
   clipboardApproved,
+  dropShell,
   insideRect,
   localDropText,
   posixQuote,
@@ -95,7 +96,7 @@ export function usePromptAttachments(
       const local = session.localTarget;
       try {
         // Checked first, because looking up a network path can block for seconds on Windows.
-        const text = local ? localDropText(paths, local.kind, isMacPlatform) : null;
+        const text = local ? localDropText(paths, dropShell(local, isMacPlatform)) : null;
         if (local && text === null) return session.notice('이 터미널에서 쓸 수 없는 경로입니다.');
         const items = await call<AttachItem[]>('prompt_files_inspect', { paths, upload: !local });
         if (text === null) setPending({ id, kind: 'files', items, paths });

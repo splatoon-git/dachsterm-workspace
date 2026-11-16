@@ -1,6 +1,6 @@
 {
   "identifier": "main",
-  "description": "Main window only; no filesystem, shell or network plugin access.",
+  "description": "Main and detached terminal windows; no filesystem, shell or network plugin access.",
   "windows": ["main", "terminal-*"],
   "permissions": [
     "core:default",

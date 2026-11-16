@@ -178,7 +178,7 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
     if format != "dachsterm" {
         result.warn("외부 형식의 지원 범위는 아래 보고서를 확인하세요. 자동 명령·호스트키 신뢰·암호·개인키 내용은 이전하지 않습니다. 터널 자동 시작은 꺼집니다. 적용 전 접속 대상을 확인하세요.");
     }
-    Ok(result)
+    crate::settings::check_import_paths(&result.bundle).map(|_| result)
 }
 
 #[tauri::command]
@@ -219,7 +219,7 @@ pub fn config_apply(
         return Err("설정 파일은 2MiB 이하여야 합니다.".into());
     }
     let bundle: Bundle = serde_json::from_str(&data).map_err(|_| "DachsTerm JSON 스키마 오류")?;
-    crate::settings::validate_bundle(&bundle)?;
+    crate::settings::validate_import(&bundle)?;
     let _guard = state.mutation.lock().unwrap();
     crate::maintenance::snapshot(&state.store, &state.directory)?;
     let mut bundle = bundle;

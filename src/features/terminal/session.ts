@@ -157,6 +157,7 @@ export class TerminalSession {
               status: this.programStatus,
               replaying: () => this.replaying,
               copy: (text) => this.copyText(text),
+              notice: (message) => this.notice(message),
               tmuxMissing: () => this.notice('서버에 tmux가 없어 일반 셸로 시작했습니다.'),
               attention: programNotifier({
                 terminal: this.terminal,

@@ -113,6 +113,7 @@ pub async fn connect(
     launch: Option<crate::terminal_start::Launch>,
     on_event: Channel<Event>,
 ) -> Result<()> {
+    let secret = secret.map(Zeroizing::new);
     let state = app.state::<AppState>();
     let save_app = app.clone();
     if state.closing.load(std::sync::atomic::Ordering::SeqCst) {
@@ -142,7 +143,7 @@ pub async fn connect(
         && matches!(profile.auth.as_str(), "password" | "key");
     let original_ref = state.store.secret_ref(&profile_id)?;
     let secret = match secret {
-        Some(s) if s.len() <= 16384 => Zeroizing::new(s),
+        Some(s) if s.len() <= 16384 => s,
         Some(_) => return Err("인증정보가 너무 깁니다.".into()),
         None => saved_secret(&state, &profile_id)?.unwrap_or_default(),
     };
@@ -393,4 +394,84 @@ pub fn terminal_ack(
             }
         });
     Ok(())
+}
+/// engineering-rules §5: a command wraps every secret argument in `Zeroizing` before anything else,
+/// so no early return leaves the plain text in memory. S.11 found `connect` returning first.
+#[cfg(test)]
+mod secret_argument_tests {
+    const SECRETS: &[&str] = &["secret", "password", "new_password", "passphrase"];
+
+    fn sources(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        for entry in std::fs::read_dir(dir).unwrap().map(Result::unwrap) {
+            let path = entry.path();
+            if path.is_dir() {
+                sources(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let text = std::fs::read_to_string(&path).unwrap();
+                out.push((path.display().to_string(), text));
+            }
+        }
+    }
+
+    /// Secret parameters of each command that are not wrapped by its first statements.
+    fn unwrapped(source: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        for command in source.split("#[tauri::command]").skip(1) {
+            let Some(body) = command.find('{') else {
+                continue;
+            };
+            let (signature, body) = command.split_at(body);
+            let name = signature
+                .split("fn ")
+                .nth(1)
+                .and_then(|s| s.split('(').next());
+            let secrets: Vec<_> = (signature.split(['(', ',']))
+                .filter_map(|param| param.trim().split_once(':'))
+                .filter(|(name, ty)| SECRETS.contains(&name.trim()) && ty.contains("String"))
+                .map(|(name, _)| name.trim())
+                .collect();
+            let first: Vec<_> = (body[1..].lines().map(str::trim))
+                .filter(|l| !l.is_empty())
+                .take(secrets.len())
+                .collect();
+            for secret in secrets {
+                let wrapped = first.iter().any(|line| {
+                    line.starts_with(&format!("let {secret} = ")) && line.contains("Zeroizing")
+                });
+                if !wrapped {
+                    found.push(format!("{}({secret})", name.unwrap_or("?")));
+                }
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn every_command_wraps_its_secrets_before_anything_else() {
+        let mut files = Vec::new();
+        sources(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut files,
+        );
+        let found: Vec<_> = (files.iter())
+            .flat_map(|(path, text)| {
+                unwrapped(text)
+                    .into_iter()
+                    .map(move |f| format!("{path}: {f}"))
+            })
+            .collect();
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    #[test]
+    fn an_early_return_before_the_wrap_is_found() {
+        let before = "#[tauri::command]\npub async fn connect(\n    id: String,\n    secret: Option<String>,\n) -> Result<()> {\n    if id.is_empty() {\n        return Err(\"id\".into());\n    }\n    let secret = secret.map(Zeroizing::new);\n}\n";
+        assert_eq!(unwrapped(before), ["connect(secret)"]);
+        let after = before.replacen(
+            "    if id",
+            "    let secret = secret.map(Zeroizing::new);\n    if id",
+            1,
+        );
+        assert!(unwrapped(&after).is_empty());
+    }
 }

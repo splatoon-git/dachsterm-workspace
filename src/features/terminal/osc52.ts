@@ -18,3 +18,16 @@ export function parseOsc52(value: string): string | null {
     return null;
   }
 }
+
+/**
+ * What the status bar says after a program replaced the clipboard. A write is never silent, so a
+ * server cannot swap in a command between the user's copy and paste without the user seeing it.
+ */
+export function osc52Notice(text: string) {
+  const chars = [...text].length;
+  // Any line break runs the text when it is pasted at a prompt, a trailing one included.
+  const breaks = text.match(/\r\n|\r|\n/g)?.length ?? 0;
+  return breaks > 0
+    ? `프로그램이 클립보드를 바꿨습니다(${chars}자, 줄바꿈 ${breaks}개). 붙여넣기 전에 내용을 확인하세요.`
+    : `프로그램이 클립보드를 바꿨습니다(${chars}자).`;
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   approveClipboard,
   clipboardApproved,
+  dropShell,
   insideRect,
   localDropText,
   posixQuote,
@@ -26,17 +27,44 @@ describe('prompt attachments', () => {
   });
 
   it('writes dropped paths in the form the local shell expects', () => {
-    expect(localDropText(['C:\\a b\\c.txt', 'C:\\d.txt'], 'shell', false)).toBe(
+    expect(localDropText(['C:\\a b\\c.txt', 'C:\\d.txt'], 'cmd')).toBe(
       '"C:\\a b\\c.txt" C:\\d.txt',
     );
-    expect(localDropText(['C:\\a b\\c.txt'], 'wsl', false)).toBe("'/mnt/c/a b/c.txt'");
-    expect(localDropText(['/Users/u/a b.png'], 'shell', true)).toBe("'/Users/u/a b.png'");
+    expect(localDropText(['C:\\a b\\c.txt', 'C:\\d.txt'], 'powershell')).toBe(
+      "'C:\\a b\\c.txt' C:\\d.txt",
+    );
+    expect(localDropText(['C:\\a b\\c.txt'], 'wsl')).toBe("'/mnt/c/a b/c.txt'");
+    expect(localDropText(['/Users/u/a b.png'], 'posix')).toBe("'/Users/u/a b.png'");
+  });
+
+  // S.6: double quotes, which suit cmd, let PowerShell run `$()` once the user presses Enter.
+  it('keeps PowerShell from running anything in a dropped file name', () => {
+    expect(localDropText(['C:\\dl\\$(calc).txt'], 'powershell')).toBe("'C:\\dl\\$(calc).txt'");
+    expect(localDropText(['C:\\dl\\a`$b $env:X.txt'], 'powershell')).toBe(
+      "'C:\\dl\\a`$b $env:X.txt'",
+    );
+    // A straight or typographic quote would otherwise end the string early.
+    expect(localDropText(["C:\\dl\\'; calc; '.txt"], 'powershell')).toBe(
+      "'C:\\dl\\''; calc; ''.txt'",
+    );
+    expect(localDropText(['C:\\dl\\\u2019; calc; \u2018.txt'], 'powershell')).toBe(
+      "'C:\\dl\\\u2019\u2019; calc; \u2018\u2018.txt'",
+    );
+  });
+
+  it('picks the quoting of the tab it is dropped on', () => {
+    expect(dropShell({ id: 'pwsh', kind: 'shell' }, false)).toBe('powershell');
+    expect(dropShell({ id: 'powershell', kind: 'shell' }, false)).toBe('powershell');
+    expect(dropShell({ id: 'cmd', kind: 'shell' }, false)).toBe('cmd');
+    expect(dropShell({ id: 'wsl:Ubuntu', kind: 'wsl' }, false)).toBe('wsl');
+    expect(dropShell({ id: 'default-shell', kind: 'shell' }, true)).toBe('posix');
   });
 
   it('refuses network paths on every local tab', () => {
-    expect(localDropText(['\\\\server\\share\\a'], 'shell', false)).toBeNull();
-    expect(localDropText(['C:\\a', '\\\\server\\b'], 'wsl', false)).toBeNull();
-    expect(localDropText(['//server/share/a'], 'shell', true)).toBeNull();
+    expect(localDropText(['\\\\server\\share\\a'], 'powershell')).toBeNull();
+    expect(localDropText(['\\\\server\\share\\a'], 'cmd')).toBeNull();
+    expect(localDropText(['C:\\a', '\\\\server\\b'], 'wsl')).toBeNull();
+    expect(localDropText(['//server/share/a'], 'posix')).toBeNull();
   });
 
   it('remembers approval for one connection only', () => {

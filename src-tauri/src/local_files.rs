@@ -418,6 +418,7 @@ pub async fn local_file_pick() -> Result<Option<String>> {
 }
 #[tauri::command]
 pub async fn local_files_edit(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     target_id: String,
     path: String,
@@ -425,6 +426,7 @@ pub async fn local_files_edit(
     args: Vec<String>,
 ) -> Result<()> {
     let location = locate(&state.locals.target(&target_id)?, &path)?;
+    crate::editor_launch::check(&app, &program, &args).await?;
     blocking(move || {
         // Never interpolate a shell command. The file argument is always a separate argument.
         let mut command = std::process::Command::new(crate::editor_location::resolve(&program));
