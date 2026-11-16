@@ -89,4 +89,57 @@ impl client::Handler for Host {
         crate::git_credential::open(&self.manager, &self.id, path, channel, reply);
         Ok(())
     }
+    // The app never asks the server for these channels, and russh accepts them by default, which
+    // lets a server keep channels open on the connection (S.12). CG.9 will take X11 only when the
+    // connection asked for forwarding.
+    async fn server_channel_open_session(
+        &mut self,
+        _: russh::Channel<client::Msg>,
+        reply: client::ChannelOpenHandle,
+        _: &mut client::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        refuse(reply).await
+    }
+    async fn server_channel_open_direct_tcpip(
+        &mut self,
+        _: russh::Channel<client::Msg>,
+        _: &str,
+        _: u32,
+        _: &str,
+        _: u32,
+        reply: client::ChannelOpenHandle,
+        _: &mut client::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        refuse(reply).await
+    }
+    async fn server_channel_open_direct_streamlocal(
+        &mut self,
+        _: russh::Channel<client::Msg>,
+        _: &str,
+        reply: client::ChannelOpenHandle,
+        _: &mut client::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        refuse(reply).await
+    }
+    async fn server_channel_open_x11(
+        &mut self,
+        _: russh::Channel<client::Msg>,
+        _: &str,
+        _: u32,
+        reply: client::ChannelOpenHandle,
+        _: &mut client::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        refuse(reply).await
+    }
 }
+
+async fn refuse(reply: client::ChannelOpenHandle) -> std::result::Result<(), russh::Error> {
+    reply
+        .reject(ChannelOpenFailure::AdministrativelyProhibited)
+        .await;
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "host_tests.rs"]
+mod tests;
