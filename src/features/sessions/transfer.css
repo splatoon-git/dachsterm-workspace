@@ -70,3 +70,10 @@
     grid-template-columns: 1fr;
   }
 }
+.proxy-command-approval code {
+  display: block;
+  margin-top: var(--space-xs);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

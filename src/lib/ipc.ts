@@ -49,13 +49,16 @@ export type SerialSettings = {
   flow: 'none' | 'software' | 'hardware';
 };
 /** Only the backend sets `secretRef`; a form's value is ignored. */
-export type Proxy = {
+export type NetworkProxy = {
   kind: 'http' | 'socks5';
   host: string;
   port: number;
   username: string;
   secretRef?: string | null;
 };
+/** A `ProxyCommand`: `%h`, `%p`, `%r`, `%n` and `%%` are replaced when it runs. */
+export type CommandProxy = { kind: 'command'; command: string };
+export type Proxy = NetworkProxy | CommandProxy;
 /** Paths and names on the server; a kubeconfig's contents never reach the app. */
 export type KubeSettings = {
   context: string;

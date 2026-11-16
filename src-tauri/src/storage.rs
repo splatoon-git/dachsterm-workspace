@@ -8,7 +8,7 @@ mod proxy;
 mod serial;
 pub use git_credentials::GitCredential;
 pub use login::AGENT_SOURCES;
-pub use proxy::{Endpoint, MAX_PROXY_FIELD, Proxy};
+pub use proxy::{Endpoint, MAX_COMMAND, MAX_PROXY_FIELD, Proxy, check_command, command_program};
 pub(crate) use serial::native_device;
 pub use serial::{Flow, Parity, SerialSettings};
 

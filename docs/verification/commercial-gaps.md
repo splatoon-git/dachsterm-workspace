@@ -273,6 +273,40 @@ PASS certificate checks: expired (named: local error; beside: skipped, key refus
 - 실서버(`npm run probe:telnet`, `connect:fixture`의 inetutils telnetd, Mac): 터미널에서 `probe`와 암호를 입력해 로그인(암호가 화면에 되돌아오지 않음), 크기 변경 뒤 `stty size` = `43 132`, `TERM=xterm-256color`, 스니펫 명령 형식(`snippets::payload`) 입력, 한글 왕복, 세션 로그 파일에 출력 기록·암호 없음, `exit` 뒤 `closed`. 3회 실행 모두 통과.
 - **대기:** 실제 앱 화면에서의 Telnet 탭(Mac 패키지 앱, Windows 네이티브 검사)은 CG.10. Docker가 응답하지 않아 `connect:fixture -- status`는 시간 초과였고, 이미 떠 있던 포트에 직접 연결해 검사했다.
 
+## CG.2 ProxyCommand (2026-11-16, `feat/cg2-proxy-command`)
+
+### 구현
+
+- 프로필: `proxy`에 `{kind: "command", command}`를 더했다(`storage/proxy.rs`). 한 줄, 4096바이트, 토큰은 `%h`·`%p`·`%r`·`%n`·`%%`만(그 밖의 `%x`는 저장 거부). 암호 참조가 없다. 상태 메시지는 `명령으로 연결: <프로그램 이름>`(따옴표 경로 포함).
+- 실행(`ssh/proxy_command.rs`): 토큰을 바꾼 뒤 macOS는 `/bin/sh -c "exec <명령>"`(셸이 남지 않음, `PATH`는 앱 시작 때 합친 값), Windows는 `cmd.exe` 없이 첫 단어를 프로그램으로, 나머지를 `raw_arg`로 넘기고 `CREATE_NO_WINDOW`. 표준 입출력이 SSH 스트림이 되고, 스트림을 버리면 프로세스를 죽인다(`kill_on_drop` + `start_kill`). 표준 오류는 마지막 4KiB만 메모리에 두고, 연결이 실패하면 상태 메시지에 `명령 표준 오류: …`(제어 문자 제거, 300자)로 붙인다. 세션 로그에는 쓰지 않는다.
+- 가져오기 승인(`session_transfer/approval.rs`): 모든 미리보기(`config_preview`, `config_include_preview`)가 명령을 쓰는 세션과 명령 전문을 `commandPlan`(일회용 토큰, 10분)으로 돌려준다. `config_apply`(이 모듈로 옮김)는 저장할 명령마다 사용자가 체크했는지, 미리보기 때와 바이트 단위로 같은지 확인하고 토큰을 한 번 쓴다. 화면은 `ProxyCommandApproval`: 명령을 고정폭으로 보이고 기본 해제, `전체 선택`도 명령 세션은 고르지 않는다, 필요한 경유지의 명령이 승인되지 않으면 이유를 보이고 추가 버튼을 막는다. 세션 폼에서 직접 입력한 명령은 그 자체가 승인이다(`ProxyField`의 `명령 (ProxyCommand)`).
+- OpenSSH 가져오기: `ProxyCommand`는 줄의 나머지를 그대로(따옴표 포함) 한 값으로 읽는다(`proxy::keyword`). nc 형식은 CG.1처럼 프록시로, SOCKS4는 제외, 그 밖은 명령 프록시로 승인 대기, 허용하지 않는 토큰이면 제외. `ProxyJump`가 있으면 명령은 버리고 경고(OpenSSH와 같이 `ProxyJump` 우선). `session_transfer.rs` 비테스트 786 → 771줄.
+- 세션 교환 v4: `proxy.kind = "command"`를 내보내고, 가져올 때 같은 승인을 거친다. 스키마에 `commandProxy`를 더했다.
+
+### 검증 (Mac, 미커밋 트리)
+
+| 검사 | 결과 |
+|---|---|
+| 단위 `storage::proxy` | 명령 검증(토큰·길이·줄바꿈), JSON, 이름 표시, 같은 대상 판정, 암호 없음 |
+| 단위 `ssh::proxy_command` | 토큰 치환, 표준 오류 꼬리(4KiB·300자·제어 문자), 실제 `sh`로 표준 입출력 왕복·표준 오류 보관·없는 프로그램, 스트림을 버리면 프로세스 종료 |
+| 단위 `session_transfer::approval`·`proxy` | 승인 없음·체크 안 함·명령 바뀜 거부, 실패한 시도도 토큰 소모, 한 번만 사용, 명령 없는 미리보기는 승인 불필요. 원문 유지(`=`·따옴표), 명령 프록시·SOCKS4·허용 안 되는 토큰 |
+| Vitest·Playwright | `proxyApproval.test.ts`, `session-transfer.spec.ts`(명령 세션 기본 해제·전체 선택에서도 제외·승인 ID 전달), `session-form.spec.ts`(명령 칸) |
+| **실제 환경 `npm run probe:connect`** | 아래 출력(CG.1·CG.3 여섯 줄도 같은 실행에서 통과) |
+
+```text
+PASS ProxyCommand: nc to the jump host (process ends with the tab), ssh -W to target with SFTP, Local tunnel, monitoring
+PASS ProxyCommand failure shows the command's standard error: 1홉 missing (target:22) 실패 · SSH 협상에 실패했습니다. · 명령 표준 오류: /bin/sh: line 0: exec: dachsterm-no-such-proxy: not found
+```
+
+- 게이트(미커밋 트리): typecheck·lint·format, Vitest 1416/1416(`--testTimeout=60000`), build, Playwright 544, `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` 740(무시 5)+1, `npm audit` 0건, 의존성 감사, 고지 532개.
+- `dev`(CG.5 병합 d0fca8d)를 합친 트리에서 다시: Vitest 1419/1419, Playwright 545, `cargo test --workspace` 745(무시 6)+1, clippy·fmt, `npm audit` 0, 의존성 감사, 고지 537개, `probe:connect` 여덟 줄 모두 통과.
+- `nc 127.0.0.1 42222`: 연결 중에는 `pgrep`에 보이고 탭을 닫고 1초 뒤에는 없다. `ssh -W %h:%p … probe@127.0.0.1`(키 `plain`)로 내부 `target`에 닿아 터미널·SFTP·Local 터널·모니터링 통과.
+
+### 대기
+
+- Finder로 실행한 패키지 앱에서 Homebrew 프로그램 이름(`socat`)으로 `PATH` 문제가 없는지(CG.0에서 최소 `PATH`는 `not found`). 이 검사는 터미널에서 띄운 프로세스라 대신하지 못한다(CG.10).
+- Windows 전부: `cfg(windows)` 실행 경로 컴파일·`ssh.exe -W` 실행·콘솔 창 없음(이 Mac에서는 Windows 대상 컴파일 불가, CG.3 기록).
+
 ## CG.5 시리얼 탭 (2026-11-16, 브랜치 `feat/cg5-serial`)
 
 ### 구현

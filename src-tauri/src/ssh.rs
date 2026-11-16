@@ -16,6 +16,7 @@ mod event;
 mod first_hop;
 mod host;
 mod host_key;
+mod proxy_command;
 pub(crate) mod route;
 pub use event::{AuthPrompt, Event};
 pub use host::Host;

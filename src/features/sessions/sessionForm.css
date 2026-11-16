@@ -67,6 +67,9 @@
   flex: 1;
   min-width: 0;
 }
+.session-advanced input.mono {
+  font-family: var(--font-mono);
+}
 /* A serial device's name and the button that lists the devices again. */
 .serial-device {
   display: flex;

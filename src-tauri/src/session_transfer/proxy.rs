@@ -1,5 +1,6 @@
-//! Proxies in other tools' session settings (CG.1). Only what can be done without running a
-//! command becomes a proxy: OpenSSH's `nc -X` forms and PuTTY's SOCKS5 and HTTP methods. A proxy
+//! Proxies in other tools' session settings. OpenSSH's `nc -X` forms and PuTTY's SOCKS5 and HTTP
+//! methods become proxies without running anything (CG.1); any other `ProxyCommand` becomes a
+//! command proxy that the preview asks the user to approve (CG.2, `approval.rs`). A proxy
 //! password is never read.
 use super::{Preview, endpoint};
 use crate::storage::Proxy;
@@ -46,23 +47,45 @@ pub(super) fn openssh(
         out.warn(NOT_NC);
         return None;
     }
-    let (command, jump) = (values.get("proxycommand").copied(), get("proxyjump"));
-    let Some(command) = command.filter(|c| !matches!(c, [none] if none == "none")) else {
+    let command = get("proxycommand");
+    if matches!(command, "" | "none") {
         return Some(None);
-    };
-    let converted = netcat(command);
-    if !matches!(jump, "" | "none") {
+    }
+    if !matches!(get("proxyjump"), "" | "none") {
         out.warn("ProxyJump와 ProxyCommand가 함께 있는 세션은 OpenSSH처럼 ProxyJump만 씁니다.");
         return Some(None);
     }
-    match converted {
-        Ok(proxy) => Some(Some(proxy)),
-        Err(reason) => {
-            out.skipped += 1;
-            out.warn(reason);
-            None
+    let reason = match netcat(&super::words(command).unwrap_or_default()) {
+        Ok(proxy) => return Some(Some(proxy)),
+        Err(SOCKS4) => SOCKS4,
+        // Anything else runs as written once the user approves it on the preview.
+        Err(_) if crate::storage::check_command(command).is_ok() => {
+            return Some(Some(Proxy::Command {
+                command: command.into(),
+            }));
         }
+        Err(_) => "%h·%p·%r·%n·%% 외의 토큰을 쓰거나 너무 긴 ProxyCommand 세션을 제외했습니다.",
+    };
+    out.skipped += 1;
+    out.warn(reason);
+    None
+}
+
+/// Lowercases a directive's keyword. `ProxyCommand` keeps the rest of its line as one value,
+/// as written: OpenSSH hands it to the shell unsplit, and the preview shows exactly that.
+pub(super) fn keyword(w: &mut Vec<String>, line: &str) {
+    w[0] = w[0].to_ascii_lowercase();
+    if w[0] != "proxycommand" || w.len() < 2 {
+        return;
     }
+    let line = line.trim();
+    let after = &line[line
+        .find(|c: char| c.is_whitespace() || c == '=')
+        .unwrap_or(line.len())..];
+    let after = after.trim_start();
+    let value = after.strip_prefix('=').unwrap_or(after).trim();
+    w.truncate(1);
+    w.push(value.into());
 }
 /// `nc [-X 5|connect] -x host[:port] [-P user] %h %p`: the netcat that ships with macOS and
 /// OpenBSD. Without `-X` it speaks SOCKS5.
@@ -146,6 +169,22 @@ mod tests {
         netcat(&words(text))
     }
     #[test]
+    fn proxycommand_keeps_its_line_as_written() {
+        let mut w =
+            crate::session_transfer::words("ProxyCommand ssh -W '%h:%p' \"jump host\"").unwrap();
+        keyword(&mut w, "  ProxyCommand ssh -W '%h:%p' \"jump host\"  ");
+        assert_eq!(w, ["proxycommand", "ssh -W '%h:%p' \"jump host\""]);
+        let mut w = crate::session_transfer::words("proxycommand=nc %h %p").unwrap();
+        keyword(&mut w, "proxycommand=nc %h %p");
+        assert_eq!(w, ["proxycommand", "nc %h %p"]);
+        let mut w = crate::session_transfer::words("ProxyCommand = nc %h %p").unwrap();
+        keyword(&mut w, "ProxyCommand = nc %h %p");
+        assert_eq!(w[1], "nc %h %p");
+        let mut w = crate::session_transfer::words("User Alice").unwrap();
+        keyword(&mut w, "User Alice");
+        assert_eq!(w, ["user", "Alice"]);
+    }
+    #[test]
     fn netcat_forms_become_proxies() {
         assert_eq!(
             nc("nc -X 5 -x proxy:1080 %h %p").unwrap(),
@@ -181,7 +220,10 @@ mod tests {
     fn openssh_and_putty_report_what_they_leave_out() {
         let mut out = Preview::new();
         let host = |pairs: &[(&'static str, &'static str)]| {
-            let pairs: Vec<_> = pairs.iter().map(|(k, v)| (*k, words(v))).collect();
+            let pairs: Vec<_> = pairs
+                .iter()
+                .map(|(k, v)| (*k, vec![v.to_string()]))
+                .collect();
             let mut out = Preview::new();
             let map: HashMap<&str, &[String]> =
                 pairs.iter().map(|(k, v)| (*k, v.as_slice())).collect();
@@ -198,8 +240,17 @@ mod tests {
         ]);
         assert_eq!(found, Some(None));
         assert!(report.warnings[0].contains("ProxyJump만"));
+        let (found, report) = host(&[("proxycommand", "socat - %h:%p")]);
+        assert_eq!(
+            found,
+            Some(Some(Proxy::Command {
+                command: "socat - %h:%p".into()
+            }))
+        );
+        assert!(report.warnings.is_empty());
         for left_out in [
-            [("proxycommand", "socat - %h:%p")],
+            [("proxycommand", "nc -X 4 -x p:1 %h %p")],
+            [("proxycommand", "corkscrew proxy 8080 %h %p %d")],
             [("hostkeyalias", "other")],
             [("canonicalizehostname", "yes")],
         ] {

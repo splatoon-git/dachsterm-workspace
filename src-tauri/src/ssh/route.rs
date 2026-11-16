@@ -125,6 +125,7 @@ pub(crate) async fn open(
             message: format!("{description} · {label} 연결 중"),
         })?;
         manager.control(id)?.trust.send_replace(None);
+        let mut stderr = None;
         let work = async {
             let stream: Box<dyn Transport> = if let Some(parent) = owned.last() {
                 Box::new(
@@ -143,7 +144,11 @@ pub(crate) async fn open(
                     .into_stream(),
                 )
             } else {
-                first_hop::open(&hop, proxy_secret.take(), &hop_sink, &mut channels.replies).await?
+                let opened =
+                    first_hop::open(&hop, proxy_secret.take(), &hop_sink, &mut channels.replies)
+                        .await?;
+                stderr = opened.stderr;
+                opened.stream
             };
             let last = hop.id == p.id;
             let secret = match secret {
@@ -176,8 +181,21 @@ pub(crate) async fn open(
             )
             .await
         }
-        .await
-        .map_err(|e| format!("{label} 실패 · {e}"))?;
+        .await;
+        let work = match work {
+            Ok(session) => session,
+            // What a proxy command printed is usually the reason (`not found`, a refusal).
+            Err(e) => {
+                let detail = match &stderr {
+                    Some(stderr) => stderr
+                        .text()
+                        .await
+                        .map(|t| format!(" · 명령 표준 오류: {t}")),
+                    None => None,
+                };
+                return Err(format!("{label} 실패 · {e}{}", detail.unwrap_or_default()));
+            }
+        };
         owned.push(work);
     }
     let session = owned.pop().ok_or("경유 경로가 비어 있습니다.")?;

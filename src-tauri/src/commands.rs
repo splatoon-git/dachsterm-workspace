@@ -100,7 +100,7 @@ fn check_proxy_secret(
     value: Option<Zeroizing<String>>,
 ) -> Result<Zeroizing<String>> {
     let proxy = (profile.proxy.as_ref()).ok_or("프록시를 지정해야 암호를 저장할 수 있습니다.")?;
-    if proxy.endpoint().username.is_empty() {
+    if proxy.endpoint().is_none_or(|e| e.username.is_empty()) {
         return Err("프록시 사용자 이름을 입력해야 암호를 저장할 수 있습니다.".into());
     }
     let value = value.ok_or("저장할 프록시 암호를 입력하세요.")?;

@@ -539,6 +539,16 @@
       }
     },
     "proxy": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/networkProxy"
+        },
+        {
+          "$ref": "#/$defs/commandProxy"
+        }
+      ]
+    },
+    "networkProxy": {
       "type": "object",
       "description": "HTTP CONNECT or SOCKS5 proxy. The password is never exported; it is asked at connect time or saved on this PC.",
       "additionalProperties": false,
@@ -563,6 +573,24 @@
           "maxLength": 255,
           "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
           "default": ""
+        }
+      }
+    },
+    "commandProxy": {
+      "type": "object",
+      "description": "ProxyCommand run on this PC for each connection. Imports show it in full and save it only for sessions the user approves.",
+      "additionalProperties": false,
+      "required": ["kind", "command"],
+      "properties": {
+        "kind": {
+          "const": "command"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
+          "description": "%h host, %p port, %r user, %n original host name, %% a literal %. No other % tokens."
         }
       }
     }

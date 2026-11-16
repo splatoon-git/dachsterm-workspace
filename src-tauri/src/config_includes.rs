@@ -181,7 +181,7 @@ fn expand(plan: &Pending, approved: &HashSet<String>) -> Result<String> {
 pub fn config_include_preview(
     token: String,
     files: Vec<String>,
-) -> Result<crate::session_transfer::Preview> {
+) -> Result<crate::session_transfer::approval::Reviewed> {
     let mut plans = pending().lock().unwrap();
     let plan = plans
         .get(&token)
@@ -195,7 +195,7 @@ pub fn config_include_preview(
     let text = zeroize::Zeroizing::new(expand(plan, &files.into_iter().collect())?);
     let result = crate::session_transfer::parse(text.as_bytes(), "openssh", "utf-8")?;
     plans.remove(&token);
-    Ok(result)
+    Ok(crate::session_transfer::approval::review(result))
 }
 #[cfg(test)]
 mod tests {

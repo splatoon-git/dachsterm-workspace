@@ -358,7 +358,71 @@ async fn run(dir: &Path) -> Result<()> {
     println!(
         "PASS proxy errors: wrong password (HTTP 401, SOCKS 01 02), auth required (407, 05 FF), port refused (403), unknown host (500, SOCKS 1), closed proxy port"
     );
-    certificates(&run).await
+    certificates(&run).await?;
+    commands(&run).await
+}
+
+/// CG.2: ProxyCommand. `nc` reaches the jump host; `ssh -W` through it reaches the internal
+/// server; a missing program shows its standard error; a closed connection leaves no process.
+async fn commands(run: &Run<'_>) -> Result<()> {
+    let plain = run.fx.dir.join("plain").to_string_lossy().into_owned();
+    let with_command = |name: &str, host: &str, command: String| {
+        let mut p = target(Some(Proxy::Command { command }));
+        p.name = name.into();
+        p.host = host.into();
+        run.store.save(p, None)
+    };
+    let pids = |pattern: &str| {
+        let out = std::process::Command::new("pgrep")
+            .args(["-f", pattern])
+            .output();
+        out.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default()
+    };
+    let nc = with_command("nc", "jump", "nc 127.0.0.1 42222".into())?;
+    let mut c = run.start(nc, Secrets::default())?;
+    let (message, _) = run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    assert!(
+        message.contains("명령으로 연결: nc → nc (jump:22)"),
+        "{message}"
+    );
+    assert!(
+        !pids("nc 127.0.0.1 42222").is_empty(),
+        "nc runs while connected"
+    );
+    c.send("stty -echo; printf '\\nHOST=%s\\n' \"$(hostname)\"\n")
+        .await?;
+    c.marker("HOST=jump\r\n").await?;
+    c.stop().await?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(
+        pids("nc 127.0.0.1 42222").is_empty(),
+        "nc is gone after the tab closes"
+    );
+    let ssh = format!(
+        "ssh -i {plain} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no \
+         -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p 42222 -W %h:%p probe@127.0.0.1"
+    );
+    let through = with_command("ssh -W", "target", ssh)?;
+    let mut c = run.start(through.clone(), Secrets::default())?;
+    run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    services(&mut c, &through.id).await?;
+    c.stop().await?;
+    println!(
+        "PASS ProxyCommand: nc to the jump host (process ends with the tab), ssh -W to target with SFTP, Local tunnel, monitoring"
+    );
+    let missing = with_command("missing", "target", "dachsterm-no-such-proxy %h %p".into())?;
+    let mut c = run.start(missing, Secrets::default())?;
+    let error = run
+        .ready(&mut c)
+        .await
+        .expect_err("a missing program connected");
+    assert!(
+        error.contains("명령 표준 오류:") && error.contains("dachsterm-no-such-proxy"),
+        "{error}"
+    );
+    println!("PASS ProxyCommand failure shows the command's standard error: {error}");
+    Ok(())
 }
 
 /// CG.3: user certificates from the fixture CA. The `cert_*` keys are not in `authorized_keys`,
