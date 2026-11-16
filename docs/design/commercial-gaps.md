@@ -279,6 +279,7 @@ v3 이하 파일이 위 필드를 쓰면 "v4가 필요합니다"로 거부한다
 
 | 명령 | 작업 | 내용 |
 |---|---|---|
+| `highlight_rules`, `highlight_rules_save` | CG.7 | 규칙 읽기·저장(revision 비교, 저장 뒤 `highlight-rules` 이벤트로 모든 창이 다시 읽음). 설계 때 빠뜨려 구현에서 추가 |
 | `serial_ports` | CG.5 | 포트 목록(이름, USB 제조사·제품) |
 | `terminal_send_break` | CG.5 | 시리얼 탭에 Break |
 | `inband_transfer_answer` | CG.8 | 저장 폴더·업로드 파일 선택 결과 또는 취소 |

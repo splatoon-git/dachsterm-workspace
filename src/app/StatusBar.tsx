@@ -41,6 +41,11 @@ function Target({ session }: { session: TerminalSession }) {
       {capabilities(session).terminal && (
         <span className="status-tag">{profile.encoding?.toUpperCase() ?? 'UTF-8'}</span>
       )}
+      {state.highlightPaused && (
+        <span className="status-tag" title="출력이 빨라 하이라이트 규칙 검사를 잠시 멈췄습니다">
+          하이라이트 일시 중지
+        </span>
+      )}
       {profile.tmuxSession && (
         <span className="status-tag" title="탭을 닫아도 서버의 tmux 세션은 유지됩니다">
           tmux {profile.tmuxSession}

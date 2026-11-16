@@ -10,6 +10,7 @@ import { ProgramStatus } from './programStatus';
 import { PaneView } from './paneView';
 import { AgentSignQueue } from './agentSign';
 import { InputQueue } from './inputQueue';
+import { Highlighter } from './highlighter';
 import type { SessionEvent as Event, SessionState } from './sessionTypes';
 export type { LocalCatalog, LocalTarget, SessionState } from './sessionTypes';
 import { podTransport, remoteTransport, type TerminalTransport } from './transport';
@@ -101,6 +102,7 @@ export class TerminalSession {
   readonly programStatus = new ProgramStatus();
   readonly agentSign = new AgentSignQueue(this);
   readonly view = new PaneView();
+  readonly highlighter: Highlighter;
   enterSequence(event: KeyboardEvent) {
     const flags = this.keyboard.flags(this.terminal.buffer.active.type);
     return modifiedEnter(event, flags, this.keyboard.otherKeys);
@@ -137,7 +139,8 @@ export class TerminalSession {
       ...terminalDisplay(),
       cursorBlink: true,
       screenReaderMode: true,
-      allowProposedApi: false,
+      // Decorations, which highlight rules color matches with, are a proposed API in xterm 6.
+      allowProposedApi: true,
     });
     this.terminal.loadAddon(this.fit);
     this.terminal.loadAddon(this.search);
@@ -173,6 +176,19 @@ export class TerminalSession {
         server: (serverLink) => this.update({ ...this.current, serverLink }),
         notice: (message) => this.notice(message),
       });
+    this.highlighter = new Highlighter(
+      {
+        terminal: this.terminal,
+        target: () => ({ profileId: this.profile.id || null, tags: this.profile.tags ?? [] }),
+        sessionName: () => this.profile.name,
+        connectionId: () => this.connectionId,
+        replaying: () => this.replaying,
+        notice: (message) => this.notice(message),
+        send: (data) => this.send(data),
+        paused: (highlightPaused) => this.update({ ...this.current, highlightPaused }),
+      },
+      theme,
+    );
     this.terminal.onData((data) => this.send(data));
     this.terminal.onResize(({ cols, rows }) => {
       if (this.current.status === 'connected') this.resizeRemote(this.connectionId, cols, rows);
@@ -226,6 +242,7 @@ export class TerminalSession {
   applyTheme(theme: ThemeDefinition) {
     this.terminal.options.theme = terminalTheme(theme);
     this.terminal.options.fontFamily = terminalFontFamily(theme);
+    this.highlighter.setTheme(theme);
   }
   configure(fontSize: number, scrollback: number) {
     if (this.terminal.options.fontSize !== fontSize) this.terminal.options.fontSize = fontSize;
@@ -275,6 +292,7 @@ export class TerminalSession {
           });
         }
       } else if (event.type === 'data') {
+        this.highlighter.output(event.bytes.length);
         const text = decoder.push(event.bytes);
         if (text.includes('\uFFFD'))
           this.notice('일부 문자가 대체 표시되었습니다. 세션 인코딩과 서버 로케일을 확인하세요.');
@@ -331,6 +349,7 @@ export class TerminalSession {
     this.disposed = true;
     this.directoryHookInstaller.cancel();
     this.input.clear();
+    this.highlighter.dispose();
     this.terminal.dispose();
     this.listeners.clear();
   }

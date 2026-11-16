@@ -119,6 +119,15 @@ describe('tabMenuEntries', () => {
     expect(entries.find((e) => e.command === 'kube')?.disabled).toBe(true);
   });
 
+  it('turns highlight rules off or on for one terminal tab, only when rules exist', () => {
+    const label = (state: Partial<TabMenuState>) =>
+      tabMenuEntries({ ...base, ...state }).find((e) => e.command === 'highlight')?.label;
+    expect(label({ highlight: true })).toBe('이 탭에서 하이라이트 끄기');
+    expect(label({ highlight: false })).toBe('이 탭에서 하이라이트 켜기');
+    expect(label({ highlight: null })).toBeUndefined();
+    expect(label({ highlight: true, capabilities: capabilities(ftp) })).toBeUndefined();
+  });
+
   it('disables what cannot apply', () => {
     const entries = tabMenuEntries({ ...base, groupCount: 1, otherTabs: 0, narrow: true });
     const disabled = entries.filter((e) => e.disabled).map((e) => e.command);

@@ -154,3 +154,28 @@ Node 26.0.0(V8, WebView2와 같은 엔진 계열). ANSI 색이 섞인 로그형 
 - Windows: Pageant(PuTTY 0.75 이상 파이프, 이전 `WM_COPYDATA`), `connect_pageant` 호출부 컴파일, Windows ProxyCommand(`CreateProcessW`, `ssh.exe -W`), com0com·실제 COM 포트, VcXsrv 인증 없는 X11.
 - Mac: 실제 USB 시리얼 장치의 속도·Break, XQuartz Unix 소켓 `DISPLAY`, 패키지 앱(Finder 실행)의 ProxyCommand `PATH`.
 - 실제 업데이트 동작(서명 없는 앱의 Keychain·Gatekeeper·SmartScreen)은 CG.6 구현 뒤.
+
+## CG.7 하이라이트·트리거 (2026-11-16, 브랜치 `feat/cg7-highlight-triggers`)
+
+### 구현
+
+- 규칙 저장: `highlights.rs`(`settings` 표 `highlight_rules_v1`, 최대 64개, revision 비교). 새 명령 `highlight_rules`, `highlight_rules_save`(engineering-rules §5 네 곳 등록). 저장 뒤 `highlight-rules` 이벤트로 모든 창이 다시 읽는다. 손상된 저장 값은 빈 목록이 아니라 오류.
+- 입력 보내기 제한(백엔드·프런트엔드 둘 다): 확인 시각(`confirmedAt`)이 없으면 거부, 패턴에 `password`·`passwd`·`passphrase`·`암호`·`비밀번호`·`비번` 글자가 있으면 거부(정규식 기호를 걷어낸 뒤 비교, `p.ssword`·`pass(word)?`도 잡힘). 프런트엔드는 추가로 패턴을 실제 프롬프트 표본(`Password:`, `[sudo] password for user:`, `Enter passphrase…`, `Verification code:`, `암호:` 등)에 돌려 일치하면 끈다. 보낼 텍스트는 1KiB, Tab·줄바꿈 외 제어문자 거부. 비밀 참조를 넣을 방법은 없다.
+- 그리기: xterm `registerDecoration`의 `foregroundColor`. xterm 6에서 이 API가 proposed라 `allowProposedApi: true`로 바꿨다. 출력 바이트는 바꾸지 않는다. 색은 테마의 터미널 팔레트 토큰(위험=red, 주의=yellow, 성공=green, 정보=blue, 강조=magenta)에서 얻고, 테마를 바꾸면 기존 데코레이션을 다시 등록한다.
+- 매칭: `onWriteParsed` 뒤 16ms로 묶어, 지난 묶음의 커서 줄부터 지금 커서 줄까지(최대 1,000행) 버퍼에서 논리 줄(줄바꿈된 행 결합, 넓은 글자 셀 위치)을 읽어 창 공용 Web Worker로 보낸다. 커서 줄은 다음 묶음에서 다시 읽고, 그 줄의 알림·입력은 한 번만 낸다. 대체 화면 버퍼(vim 등)에서는 하지 않는다.
+- 상한: 묶음당 데코레이션 200개, 탭당 2,000개(오래된 것부터 제거), 초당 4MiB를 넘으면 일시 중지하고 상태바에 `하이라이트 일시 중지`(규칙이 있는 탭만). Worker 묶음이 첫 규칙 시작부터 100ms를 넘으면 Worker를 종료하고 그때 돌던 규칙을 끄고(저장된 규칙도 `enabled: false`로 저장) 탭에 알린다. 저장 때 표본 출력(로그형 줄과 같은 글자 512개 반복)으로 같은 제한을 미리 재서 `^(a+)+$` 같은 패턴은 저장을 거부한다.
+- 알림: 탭 상태 메시지 + 이 터미널에 포커스가 없을 때 OS 알림(`appNotificationLimiter`, `notificationBody`). 입력 보내기: 같은 탭 10초에 1번, `broadcast_status`를 그때 물어 동시 입력 그룹에 든 탭이면 보내지 않음, 출력 재생 중 보내지 않음, 보낸 뒤 `트리거 입력: <규칙 이름>`.
+- 화면: 설정 → 터미널의 `하이라이트` 절(목록·켜기·수정·삭제, 편집 폼, 입력 보내기 경고 확인), 탭 헤더 우클릭 `이 탭에서 하이라이트 끄기/켜기`(규칙이 있을 때만). 다시 켜면 그 시점 커서부터 본다.
+
+### 측정 (`npm run measure:highlight`, Mac, 부하 평균 약 40에서)
+
+앱의 터미널 창(`tests/ui/fixtures/terminal-pane`)에 ANSI 색·한글이 섞인 로그 줄을 32KiB 프레임으로, 쓰기 콜백 뒤 다음 프레임(ACK 방식)으로 보냈다. 규칙 10개는 모든 줄에 여러 개가 일치하는 최악 쪽 구성이다.
+
+| 엔진 | 규칙 | 연속 32MiB | 일정 속도 3MiB/s 5초: 달성, 프레임 p50/p95 |
+|---|---|---|---|
+| Chromium | 0 | 5.7 MiB/s | 3.00 MiB/s, 5.1/6.7ms |
+| Chromium | 10 | 3.2 MiB/s(일시 중지 안 걸림) | 2.99 MiB/s, 8.8/13.7ms |
+| WebKit | 0 | 3.6 MiB/s | 3.00 MiB/s, 8.0/11.0ms |
+| WebKit | 10 | 2.1 MiB/s | 1.89 MiB/s, 16.0/25.0ms |
+
+해석: 다른 세션의 빌드로 부하가 매우 높아 절대값은 낮다. 규칙을 켜면 일치가 많은 출력에서 그리기 비용(셀마다 따로 그려지는 데코레이션)이 늘어 Chromium 약 45%, WebKit 약 40% 느려졌다. 연속 출력이 하이라이트 비용 때문에 4MiB/s 아래로 내려가면 일시 중지가 걸리지 않는다(속도 기준이 출력 속도라서). 부하가 낮은 환경에서 다시 재고, 필요하면 일시 중지 기준을 프레임 지연으로 바꾸는 것을 검토한다(대기). 실제 WKWebView 앱 안의 값은 CG.10.
