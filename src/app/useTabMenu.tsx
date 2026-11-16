@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ContextMenu, type MenuPoint, type MenuRequest } from '../components/ContextMenu';
 import { kubeMenu } from '../features/kube/kubeModel';
+import { highlightLibrary } from '../features/terminal/highlightStore';
 import { isRecording, logStatusOf } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
 import { capabilities } from '../features/terminal/sessionKind';
@@ -72,6 +73,7 @@ export function useTabMenu({
         select();
         session?.view.set({ guide: true });
       },
+      highlight: () => session?.highlighter.setEnabled(!session.highlighter.enabled),
       review: () => session && actions.review(session),
       splitRight: () => session && actions.split(session, { groupId: group.id, side: 'right' }),
       splitDown: () => session && actions.split(session, { groupId: group.id, side: 'bottom' }),
@@ -107,6 +109,7 @@ export function useTabMenu({
       review: reviewable(session),
       connection: !session ? null : ['closed', 'error'].includes(status!) ? 'ended' : 'live',
       recording: !!session && isRecording(logStatusOf(session.connectionId)),
+      highlight: session && highlightLibrary().items.length ? session.highlighter.enabled : null,
       groupCount: groups(workspace.layout.root).length,
       zoomed: workspace.zoomed,
       otherTabs: group.tabs.length - 1,

@@ -4,6 +4,9 @@ import { createRoot } from 'react-dom/client';
 import { TerminalPane } from '../../../src/features/terminal/TerminalPane';
 import { TerminalSession } from '../../../src/features/terminal/session';
 import { TerminalSettings } from '../../../src/features/terminal/TerminalSettings';
+import { applyHighlightLibrary } from '../../../src/features/terminal/highlightStore';
+import type { HighlightRule } from '../../../src/features/terminal/highlightRules';
+import { themes } from '../../../src/themes/registry';
 import type { Profile } from '../../../src/lib/ipc';
 import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
@@ -16,6 +19,10 @@ declare global {
       session: TerminalSession;
       sent: string[];
       setActive: (active: boolean) => void;
+      /** Rules as if the backend returned them, since this page has none. */
+      highlight: (items: HighlightRule[]) => void;
+      /** Applies a theme by ID, as the app does when the user picks one. */
+      applyTheme: (id: string) => void;
     };
   }
 }
@@ -49,7 +56,13 @@ function Fixture() {
   const [active, setActive] = useState(true);
   const [settings, setSettings] = useState(false);
   useEffect(() => {
-    window.__terminalPane = { session, sent, setActive };
+    window.__terminalPane = {
+      session,
+      sent,
+      setActive,
+      highlight: (items) => applyHighlightLibrary({ revision: 1, items }),
+      applyTheme: (id) => session.applyTheme(themes.find((t) => t.id === id)!),
+    };
   }, []);
   return (
     <>

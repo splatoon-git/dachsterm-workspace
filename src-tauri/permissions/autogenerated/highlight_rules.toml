@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-highlight-rules"
+description = "Enables the highlight_rules command without any pre-configured scope."
+commands.allow = ["highlight_rules"]
+
+[[permission]]
+identifier = "deny-highlight-rules"
+description = "Denies the highlight_rules command without any pre-configured scope."
+commands.deny = ["highlight_rules"]

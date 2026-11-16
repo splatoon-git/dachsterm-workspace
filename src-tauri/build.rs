@@ -161,6 +161,8 @@ fn main() {
             "snippet_list",
             "snippet_save",
             "snippet_send",
+            "highlight_rules",
+            "highlight_rules_save",
             "save_session",
             "delete_session",
             "duplicate_session",

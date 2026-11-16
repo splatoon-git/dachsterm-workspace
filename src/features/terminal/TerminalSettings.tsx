@@ -1,6 +1,7 @@
 import { Dialog } from '../../components/Dialog';
 import { SettingGroup as Group, SettingRow as Row } from '../../components/SettingRows';
 import { AgentHookGuide } from './AgentHookGuide';
+import { HighlightSettings } from './HighlightSettings';
 import {
   fontSizeChoices,
   isMacPlatform,
@@ -166,6 +167,7 @@ export function TerminalSettingsPanel({ openGit }: { openGit?: () => void }) {
           </select>
         </Row>
       </Group>
+      <HighlightSettings />
       <section className="dialog-section" aria-label="CLI 에이전트">
         <h3>CLI 에이전트</h3>
         <AgentHookGuide notice={setMessage} />

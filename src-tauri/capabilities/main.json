@@ -22,6 +22,8 @@
     "allow-snippet-list",
     "allow-snippet-save",
     "allow-snippet-send",
+    "allow-highlight-rules",
+    "allow-highlight-rules-save",
     "allow-save-session",
     "allow-delete-session",
     "allow-duplicate-session",

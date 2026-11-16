@@ -27,6 +27,7 @@ pub mod git_diff;
 pub mod git_graph;
 pub mod git_run;
 pub mod git_status;
+mod highlights;
 pub mod hostkeys;
 pub mod kube;
 pub mod local;
@@ -400,6 +401,8 @@ pub fn run() {
             snippets::snippet_list,
             snippets::snippet_save,
             snippets::snippet_send,
+            highlights::highlight_rules,
+            highlights::highlight_rules_save,
             commands::terminal_ack
         ])
         .build(context);

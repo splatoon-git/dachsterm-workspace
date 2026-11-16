@@ -7,6 +7,7 @@ export type TabCommand =
   | 'search'
   | 'log'
   | 'guide'
+  | 'highlight'
   | 'review'
   | 'splitRight'
   | 'splitDown'
@@ -35,6 +36,8 @@ export type TabMenuState = {
   /** The state of the tab's connection, or null for a tab without one. */
   connection: 'live' | 'ended' | null;
   recording: boolean;
+  /** Highlight rules run in this tab, or null when no rule exists or the tab has no terminal. */
+  highlight?: boolean | null;
   groupCount: number;
   zoomed: boolean;
   /** Other tabs in the same group. */
@@ -61,6 +64,11 @@ export function tabMenuEntries(state: TabMenuState): TabMenuEntry[] {
   if (can?.log)
     view.push({ command: 'log', label: state.recording ? '세션 기록 · 기록 중…' : '세션 기록…' });
   if (can?.guide) view.push({ command: 'guide', label: '조작표 보기·고정' });
+  if (can?.terminal && typeof state.highlight === 'boolean')
+    view.push({
+      command: 'highlight',
+      label: state.highlight ? '이 탭에서 하이라이트 끄기' : '이 탭에서 하이라이트 켜기',
+    });
   if (state.review !== null)
     view.push({
       command: 'review',

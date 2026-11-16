@@ -64,4 +64,6 @@ export type SessionState = {
   replaying?: boolean;
   /** A server's own address the user asked to open, waiting for their choice. */
   serverLink?: string;
+  /** Output runs too fast to match highlight rules, so they wait. */
+  highlightPaused?: boolean;
 };
