@@ -149,7 +149,7 @@ pub fn snippet_send(
                     }
                     (c.input.clone(), data.into_bytes())
                 } else {
-                    state.connections.handle(&t.id)?;
+                    state.connections.terminal_ready(&t.id)?;
                     let c = state.connections.control(&t.id)?;
                     c.broker.check(window.label())?;
                     (

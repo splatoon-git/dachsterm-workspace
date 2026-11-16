@@ -15,6 +15,14 @@ export function SidebarFiles({
     return (
       <LocalFilePanel key={session.connectionId} session={session} target={session.localTarget} />
     );
+  if (session?.kind === 'telnet')
+    return (
+      <div className="file-empty">
+        <Icon name="folder" size={32} />
+        <h3>파일 패널 없음</h3>
+        <p>Telnet 연결은 파일을 다루지 않습니다.</p>
+      </div>
+    );
   if (session && session.profile.protocol !== 'ssh')
     return (
       <div className="file-empty">

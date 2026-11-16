@@ -84,15 +84,14 @@
         },
         "username": {
           "type": "string",
-          "minLength": 1,
           "maxLength": 256,
-          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
         },
         "auth": {
           "enum": ["password", "key", "agent", "interactive"]
         },
         "protocol": {
-          "enum": ["ssh", "ftp", "ftps"],
+          "enum": ["ssh", "ftp", "ftps", "telnet"],
           "default": "ssh"
         },
         "tlsCaPath": {
@@ -196,6 +195,33 @@
             "properties": {
               "auth": {
                 "const": "password"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["protocol"],
+            "properties": {
+              "protocol": {
+                "const": "telnet"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "auth": {
+                "const": "interactive"
+              },
+              "keyPath": {
+                "maxLength": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "username": {
+                "minLength": 1
               }
             }
           }

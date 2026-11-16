@@ -536,7 +536,7 @@ pub fn log_start(
         }
         c.name.clone()
     } else {
-        state.connections.handle(&id)?;
+        state.connections.terminal_ready(&id)?;
         state.connections.control(&id)?.profile.name.clone()
     };
     state.connections.logs.start(&id, &name, options, masks)

@@ -1,7 +1,7 @@
 import type { Source } from '../../lib/source';
 import type { LocalTarget } from './sessionTypes';
 
-export type SessionKind = 'ssh' | 'local' | 'pod' | 'ftp';
+export type SessionKind = 'ssh' | 'local' | 'pod' | 'ftp' | 'telnet';
 export type SessionCapabilities = {
   /** Has a terminal, so search, copy and paste apply. */
   terminal: boolean;
@@ -50,6 +50,15 @@ const table: Record<SessionKind, SessionCapabilities> = {
     monitor: false,
     kube: false,
   },
+  telnet: {
+    terminal: true,
+    log: true,
+    guide: false,
+    split: true,
+    detach: true,
+    monitor: false,
+    kube: false,
+  },
   ftp: {
     terminal: false,
     log: false,
@@ -69,6 +78,7 @@ export function sessionSource(
 ): Source | null {
   switch (session.kind) {
     case 'pod':
+    case 'telnet':
       return null;
     case 'local':
       return session.localTarget ? { kind: 'local', targetId: session.localTarget.id } : null;

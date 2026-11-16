@@ -8,6 +8,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use tauri::State;
 mod proxy;
+mod putty;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -276,19 +277,18 @@ fn putty(text: &str) -> Result<Preview> {
                 values.clear();
                 return Ok(());
             }
-            if get("Protocol") != "ssh" {
-                out.skipped += 1;
-                out.warn("PuTTY의 SSH 외 프로토콜 세션을 제외했습니다.");
-            } else if let Some(proxy) = proxy::putty(out, get) {
+            if let Some((protocol, default_port, proxy)) = putty::kind(out, get) {
                 let port = if get("PortNumber").is_empty() {
-                    22
+                    default_port
                 } else {
                     get("PortNumber").parse().unwrap_or(0)
                 };
                 let mut p = profile(&name, get("HostName"), get("UserName"), port);
                 p.proxy = proxy;
                 let key = get("PublicKeyFile");
-                if !key.is_empty() && !key.to_ascii_lowercase().ends_with(".ppk") {
+                if protocol == "telnet" {
+                    putty::telnet(&mut p);
+                } else if !key.is_empty() && !key.to_ascii_lowercase().ends_with(".ppk") {
                     p.auth = "key".into();
                     p.key_path = key.into();
                 } else if !key.is_empty() {
@@ -296,24 +296,8 @@ fn putty(text: &str) -> Result<Preview> {
                 }
                 let id = p.id.clone();
                 out.add(p, "PuTTY")?;
-                if out.bundle.profiles.iter().any(|p| p.id == id) {
-                    if ["LocalPortAcceptAll", "RemotePortAcceptAll"]
-                        .iter()
-                        .any(|k| !matches!(get(k), "" | "0"))
-                    {
-                        out.warn("PuTTY 비루프백 수신 터널은 제외했습니다.");
-                    } else {
-                        for entry in get("PortForwardings").split(',').filter(|v| !v.is_empty()) {
-                            let (listen, target) = entry.split_once('=').unwrap_or((entry, ""));
-                            let parsed = match listen.as_bytes().first() {
-                                Some(b'L') => tunnel(&id, "local", &listen[1..], Some(target)),
-                                Some(b'R') => tunnel(&id, "remote", &listen[1..], Some(target)),
-                                Some(b'D') => tunnel(&id, "dynamic", &listen[1..], None),
-                                _ => Err("지원하지 않는 PuTTY 터널".into()),
-                            };
-                            match parsed {Ok(c)=>out.bundle.tunnels.push(c),Err(_)=>out.warn("PuTTY 터널의 주소·이스케이프·IPv6 수신 형식을 변환하지 못해 제외했습니다.")}
-                        }
-                    }
+                if protocol == "ssh" && out.bundle.profiles.iter().any(|p| p.id == id) {
+                    putty::forwards(out, &id, values);
                 }
             }
         }
@@ -890,6 +874,17 @@ mod tests {
         assert_eq!(s.auth, "password");
         assert!(s.key_path.is_empty());
         assert!(p.warnings.iter().any(|s| s.contains("PPK")));
+    }
+    #[test]
+    fn putty_telnet_comes_in_without_a_key_or_password() {
+        let text = "[HKEY_CURRENT_USER\\Software\\SimonTatham\\PuTTY\\Sessions\\switch]\n\"Protocol\"=\"telnet\"\n\"HostName\"=\"sw1.example\"\n\"PublicKeyFile\"=\"C:\\\\k\"\n\"PortForwardings\"=\"L8080=localhost:80\"";
+        let p = parse(text.as_bytes(), "putty", "utf-8").unwrap();
+        let s = &p.bundle.profiles[0];
+        assert_eq!(
+            (s.protocol.as_str(), s.port, s.auth.as_str()),
+            ("telnet", 23, "interactive")
+        );
+        assert!(s.key_path.is_empty() && p.bundle.tunnels.is_empty());
     }
     #[test]
     fn putty_proxy_and_non_ssh_are_skipped() {
