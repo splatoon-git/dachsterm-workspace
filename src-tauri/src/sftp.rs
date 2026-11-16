@@ -20,9 +20,16 @@ pub fn path(value: &str) -> Result<()> {
 pub fn failure(e: impl std::fmt::Display) -> String {
     format!("SFTP 작업 실패: {e}")
 }
+/// One SFTP request waits while its connection lives. A lost connection is found by keepalive,
+/// which counts unanswered probes rather than elapsed time, and ending it ends the transfers on
+/// it. The library's 10s per request, measured on the clock, failed transfers on a 12s network
+/// stall and on every wake from sleep where the clock counts sleep (Windows); see
+/// docs/verification/endurance.md. This hour only stops a server that answers keepalives but
+/// never answers SFTP.
+const REQUEST_BACKSTOP_SECS: u64 = 3600;
 pub async fn open(connections: &Connections, id: &str) -> Result<SftpSession> {
     let handle = connections.handle(id)?;
-    tokio::time::timeout(Duration::from_secs(15), async {
+    let session = tokio::time::timeout(Duration::from_secs(15), async {
         let channel = handle.channel_open_session().await.map_err(failure)?;
         channel
             .request_subsystem(true, "sftp")
@@ -33,7 +40,9 @@ pub async fn open(connections: &Connections, id: &str) -> Result<SftpSession> {
             .map_err(failure)
     })
     .await
-    .map_err(|_| "SFTP 연결 시간 초과")?
+    .map_err(|_| "SFTP 연결 시간 초과")??;
+    session.set_timeout(REQUEST_BACKSTOP_SECS);
+    Ok(session)
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -57,4 +57,6 @@ windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Netw
 drag = "=2.1.1"
 
 [dev-dependencies]
+# Paused time for the output pump's sleep and stall tests.
+tokio = { version = "1", features = ["test-util"] }
 

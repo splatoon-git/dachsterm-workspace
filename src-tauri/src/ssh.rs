@@ -1,4 +1,5 @@
 use crate::storage::{Profile, Result, Store};
+use crate::terminal_output::{Other, pump};
 use russh::{ChannelMsg, Disconnect, client};
 use std::{
     collections::HashMap,
@@ -308,35 +309,20 @@ async fn run(
     })?;
     let (mut reader, writer) = channel.split();
     let output = async {
-        let mut seq = 0_u64;
-        while let Some(message) = reader.wait().await {
-            match message {
-                ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
-                    for chunk in data.chunks(32768) {
-                        seq += 1;
-                        manager.logs.data(&id, chunk);
-                        sink(Event::Data {
-                            seq,
-                            bytes: chunk.to_vec(),
-                        })?;
-                        timeout(Duration::from_secs(30), async {
-                            while *ack.borrow_and_update() < seq {
-                                ack.changed().await.map_err(|_| "출력 구독 종료")?;
-                            }
-                            Ok::<_, String>(())
-                        })
-                        .await
-                        .map_err(|_| "터미널 렌더링 응답이 없어 연결을 종료했습니다.")??;
-                    }
-                }
-                ChannelMsg::Close => break,
-                // A refused shell keeps its old behavior. tmux cannot run without its PTY and exec.
-                ChannelMsg::Failure if !p.tmux_session.is_empty() => {
-                    return Err("서버가 tmux 시작을 거부했습니다.".to_string());
-                }
-                _ => {}
+        let send = |seq, bytes: Vec<u8>| {
+            manager.logs.data(&id, &bytes);
+            sink(Event::Data { seq, bytes })
+        };
+        // A refused shell keeps its old behavior. tmux cannot run without its PTY and exec.
+        let other = |message| match message {
+            ChannelMsg::Close => Other::End,
+            ChannelMsg::Failure if !p.tmux_session.is_empty() => {
+                Other::Fail("서버가 tmux 시작을 거부했습니다.".to_string())
             }
-        }
+            _ => Other::Ignore,
+        };
+        let stalled = "터미널 렌더링 응답이 없어 연결을 종료했습니다.";
+        pump(&mut reader, &mut ack, send, other, stalled).await?;
         if session.is_closed() {
             Err(crate::terminal_start::lost_message(&p).to_string())
         } else {

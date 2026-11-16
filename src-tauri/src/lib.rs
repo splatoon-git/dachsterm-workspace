@@ -60,6 +60,7 @@ mod ssh_auth;
 pub mod ssh_keygen;
 pub mod ssh_keys;
 pub mod storage;
+mod terminal_output;
 pub mod terminal_start;
 pub mod transfer_queue;
 pub mod tunnels;

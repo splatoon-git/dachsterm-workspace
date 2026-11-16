@@ -46,7 +46,7 @@
 
 | ID | 심각도 | 상태 | 내용 | 조치 | 규모 |
 |---|---|---|---|---|---|
-| B1 | 높음 | 확인 | **터미널 세션 3중 구현과 동작 차이.** ACK: SSH는 `seq > current`, Local은 `seq == ack + 1`. ACK 대기: SSH·PodTree는 30초, Local은 종료 전까지 무기한. rows 상한 500/1000. 입력 상한 16KiB/32KiB(broadcast). 공유 가능량은 추정 70~80%. | 차이를 먼저 결정한 뒤 `terminal` 모듈로 통합. SSH의 `>`는 창 인계 재생과 관련될 수 있어 확인 필요 | M |
+| B1 | 높음 | 확인 | **터미널 세션 3중 구현과 동작 차이.** ACK: SSH는 `seq > current`, Local은 `seq == ack + 1`. ACK 대기: SSH·PodTree는 30초(5.1에서 두 출력 루프를 `terminal_output.rs`로 합치고 1초×30회 진척 없음으로 바꿨다, [endurance](verification/endurance.md)), Local은 종료 전까지 무기한. rows 상한 500/1000. 입력 상한 16KiB/32KiB(broadcast). 공유 가능량은 추정 70~80%. | 차이를 먼저 결정한 뒤 `terminal` 모듈로 통합. SSH의 `>`는 창 인계 재생과 관련될 수 있어 확인 필요 | M |
 | B2 | 높음 | 확인 | **UI 스레드 차단.** 명령 81개 중 약 52개가 sync다. `save_session` → `snapshot` → `whoami.exe`·`icacls`를 메인 스레드에서 실행한다. `Broker::send`는 락을 쥔 채 sink를 호출하고, sink는 keyring 저장까지 한다. | I/O 명령 비동기화, sink를 락 밖에서 호출 | M |
 | B3 | 중간 | 일부 확인 | **명령 배치 불일치.** `commands.rs` 12개, `workspace.rs` 17개, 터널은 `settings.rs`, 나머지는 각 모듈. `connect`는 125줄이다. 수기 목록 3곳은 현재 81개로 일치한다(확인). | 도메인별 정리, 필요하면 목록 생성 자동화 | M |
 | B4 | 중간 | 일부 확인 | **전송 엔진 분기.** `Backend`가 Option 쌍으로 17곳에서 분기하고, `.dachsterm-` 이름 규약이 16곳에 흩어져 있다(보고). `sftp.rs`↔`ftp.rs` 재개 전송 16줄 복제(jscpd 확인). | `RemoteFs` trait, `staging.rs`. 복구 규약을 건드리므로 실제 재개 회귀 필수 | L |

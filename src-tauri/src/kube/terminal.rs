@@ -194,35 +194,18 @@ async fn start_ssh(
         let (mut reader, writer) = channel.split();
         emit(&sink, "connected", &labels.title);
         let output = async {
-            let mut seq = 0;
-            while let Some(m) = reader.wait().await {
-                match m {
-                    russh::ChannelMsg::Data { data }
-                    | russh::ChannelMsg::ExtendedData { data, .. } => {
-                        for bytes in data.chunks(32768) {
-                            seq += 1;
-                            sink.send(Event::Data {
-                                seq,
-                                bytes: bytes.to_vec(),
-                            })
-                            .map_err(|_| "출력 구독 종료")?;
-                            tokio::time::timeout(Duration::from_secs(30), async {
-                                while *ack.borrow_and_update() < seq {
-                                    ack.changed().await.map_err(|_| "출력 ACK 종료")?;
-                                }
-                                Ok::<_, String>(())
-                            })
-                            .await
-                            .map_err(|_| "출력 ACK 시간 초과")??;
-                        }
-                    }
-                    russh::ChannelMsg::ExitStatus { exit_status } if exit_status != 0 => {
-                        return Err(labels.failed.to_string());
-                    }
-                    _ => {}
+            let send = |seq, bytes| {
+                sink.send(Event::Data { seq, bytes })
+                    .map_err(|_| "출력 구독 종료".to_string())
+            };
+            let other = |m| match m {
+                russh::ChannelMsg::ExitStatus { exit_status } if exit_status != 0 => {
+                    crate::terminal_output::Other::Fail(labels.failed.to_string())
                 }
-            }
-            Ok::<_, String>(())
+                _ => crate::terminal_output::Other::Ignore,
+            };
+            crate::terminal_output::pump(&mut reader, &mut ack, send, other, "출력 ACK 시간 초과")
+                .await
         };
         let input = async {
             while let Some(v) = rx.recv().await {
