@@ -1,6 +1,7 @@
 import type { AuthPrompt, HostKeyRequest } from '../../components/ConnectionCards';
 import type { DirectoryHookStatus } from './directoryHook';
 import type { GuideProgram } from './guideData';
+import type { InbandNotice } from './inbandTransfer';
 
 export type LocalTarget = {
   id: string;
@@ -49,6 +50,7 @@ export type SessionEvent =
   | AgentSignRequest
   | GitCredentialRequest
   | { type: 'agentNotice'; message: string }
+  | InbandNotice
   | HostKeyRequest
   | { type: 'state'; status: string; message: string }
   | { type: 'data'; seq: number; bytes: number[] };

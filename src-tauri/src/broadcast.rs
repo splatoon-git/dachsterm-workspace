@@ -125,6 +125,7 @@ impl Broadcast {
                 encoded.push(data.as_bytes().to_vec());
             } else {
                 let c = connections.control(id)?;
+                connections.inband.check_input(id)?;
                 queues.push(c.input.clone());
                 encoded.push(crate::encoding::encode(data, &c.profile.encoding)?);
             }

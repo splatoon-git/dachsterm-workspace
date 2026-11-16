@@ -29,6 +29,7 @@ import { AgentSignCard } from './AgentSignCard';
 import { GitCredentialCard } from './GitCredentialCard';
 import { currentSign } from './agentSign';
 import { EditSaveCard } from './EditSaveCard';
+import { InbandCard } from './InbandCard';
 import { editSaves, useEditSavePrompt } from './editSave';
 const FIT_INTERVAL_MS = 60;
 const hasImage = (data: DataTransfer | null) =>
@@ -260,6 +261,7 @@ export function TerminalPane({
           />
         )
       )}
+      {!ended && <InbandCard transfer={session.inband} />}
       {/* A signature times out and a saved edit does not, so the saved edit waits its turn. */}
       {editSave && state.status === 'connected' && !sign && (
         <EditSaveCard

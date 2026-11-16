@@ -30,6 +30,7 @@ pub mod git_run;
 pub mod git_status;
 mod highlights;
 pub mod hostkeys;
+pub mod inband;
 pub mod kube;
 pub mod local;
 mod local_agent;
@@ -410,6 +411,7 @@ pub fn run() {
             highlights::highlight_rules_save,
             serial::serial_ports,
             serial::terminal_send_break,
+            inband::inband_transfer_answer,
             commands::terminal_ack
         ])
         .build(context);

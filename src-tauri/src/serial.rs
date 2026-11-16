@@ -208,7 +208,7 @@ async fn run_port(
         .name("serial-read".into())
         .spawn(move || read_loop(reader, chunks, stop))
         .map_err(|_| "시리얼 읽기를 시작하지 못했습니다.".to_string())?;
-    let mut reader = Reader {
+    let reader = Reader {
         chunks: received,
         lost: false,
     };
@@ -235,7 +235,8 @@ async fn run_port(
             sink(Event::Data { seq, bytes })
         };
         let stalled = "터미널 렌더링 응답이 없어 연결을 종료했습니다.";
-        pump(&mut reader, &mut ack, send, |_| Other::Ignore, stalled).await?;
+        let mut source = crate::inband::Inband::new(reader, manager.inband_context(&id, &sink)?);
+        pump(&mut source, &mut ack, send, |_| Other::Ignore, stalled).await?;
         Err(LOST.to_string())
     };
     let input_loop = async {

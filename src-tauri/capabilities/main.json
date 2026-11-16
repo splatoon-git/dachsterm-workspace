@@ -26,6 +26,7 @@
     "allow-highlight-rules-save",
     "allow-serial-ports",
     "allow-terminal-send-break",
+    "allow-inband-transfer-answer",
     "allow-save-session",
     "allow-delete-session",
     "allow-duplicate-session",

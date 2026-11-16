@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-inband-transfer-answer"
+description = "Enables the inband_transfer_answer command without any pre-configured scope."
+commands.allow = ["inband_transfer_answer"]
+
+[[permission]]
+identifier = "deny-inband-transfer-answer"
+description = "Denies the inband_transfer_answer command without any pre-configured scope."
+commands.deny = ["inband_transfer_answer"]

@@ -11,6 +11,7 @@ import { PaneView } from './paneView';
 import { AgentSignQueue } from './agentSign';
 import { InputQueue } from './inputQueue';
 import { Highlighter } from './highlighter';
+import { InbandTransfer } from './inbandTransfer';
 import type { SessionEvent as Event, SessionState } from './sessionTypes';
 export type { LocalCatalog, LocalTarget, SessionState } from './sessionTypes';
 import { podTransport, remoteTransport, type TerminalTransport } from './transport';
@@ -103,6 +104,7 @@ export class TerminalSession {
   readonly agentSign = new AgentSignQueue(this);
   readonly view = new PaneView();
   readonly highlighter: Highlighter;
+  readonly inband = new InbandTransfer(this);
   enterSequence(event: KeyboardEvent) {
     const flags = this.keyboard.flags(this.terminal.buffer.active.type);
     return modifiedEnter(event, flags, this.keyboard.otherKeys);
@@ -309,6 +311,7 @@ export class TerminalSession {
       else if (event.type === 'agentSign' || event.type === 'gitCredential')
         this.agentSign.add(event, id);
       else if (event.type === 'agentNotice') this.notice(event.message);
+      else if (event.type === 'inband') this.inband.update(event);
       else if (event.type === 'hostKey')
         this.update({
           status: 'trust',
