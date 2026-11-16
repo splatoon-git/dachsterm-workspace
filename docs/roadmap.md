@@ -745,7 +745,7 @@ Phase 6 전체 완료는 일곱 작업의 구현과 위 검증 결과를 모두 
 
 - 상용 SSH 클라이언트와 비교해 사용자가 바로 막히는 접속·인증 기능과 출시에 필요한 업데이트를 채운다. 기능 폭(쿠버네티스, Git, 에이전트 채팅, 네트워크 도구)은 이미 넓으므로 새 영역을 늘리지 않고 SSH 클라이언트의 기본기를 보완한다. 설계안은 CG.0에서 `design/commercial-gaps.md`로 작성한다.
 - 범위:
-  - CG.0 실측과 설계: 아래 항목의 russh 0.65.1 지원 확인(`connect_stream`, `AgentClient::connect_pageant`, `authenticate_openssh_cert`, `request_x11`·`server_channel_open_x11`은 존재 확인, Pageant 활성화 조건은 미확인), Docker 검사 환경(HTTP·SOCKS 프록시, Telnet 서버, `socat` 가상 시리얼, X 클라이언트) 준비, 순서 확정.
+  - CG.0 실측과 설계: russh 0.65.1의 `connect_stream` 경유 접속, Pageant 활성화 조건(기능 플래그 없이 `cfg(windows)`), `authenticate_openssh_cert`, X11 채널 API를 확인하고 Docker 검사 환경(`npm run connect:fixture`: HTTP·SOCKS5 프록시, 경유지, Telnet, `socat` 가상 시리얼, Xvfb)을 만든다. 결과는 [설계안](design/commercial-gaps.md)과 [검증 기록](verification/commercial-gaps.md). Windows 항목은 대기.
   - CG.1 프록시 경유 접속: HTTP CONNECT와 SOCKS5(사용자 인증 포함)를 세션별로 지정한다. 점프 호스트와 함께 쓸 수 있고, SFTP·터널·모니터링도 같은 경로를 쓴다. 프록시 암호는 OS 저장소나 금고에 둔다.
   - CG.2 ProxyCommand: 외부 명령의 표준 입출력으로 접속한다. 명령 실행이므로 가져오기에서 자동 허용하지 않고 Include처럼 사용자 승인을 거친다. Finder 실행 앱의 `PATH` 문제(engineering-rules §11)를 패키지된 앱으로 확인한다. 현재 OpenSSH 가져오기에서 제외하는 `ProxyCommand` 세션(`session_transfer.rs`)을 이 기능으로 받는다.
   - CG.3 인증 확장: Windows Pageant 에이전트, OpenSSH 인증서 파일(`CertificateFile`) 직접 지정과 가져오기 반영.
@@ -757,5 +757,5 @@ Phase 6 전체 완료는 일곱 작업의 구현과 위 검증 결과를 모두 
   - CG.9 X11 포워딩: 사용자가 실행한 외부 X 서버(XQuartz, VcXsrv 등)로 채널을 중계만 한다. 앱 안의 X 서버는 §1의 제외 범위를 유지한다.
   - CG.10 문서·회귀·Mac: 사용 안내서, Windows 네이티브 검사 연결, Mac 실기기 확인.
 - 이 절에 ID를 두지 않고 기존 ID로 진행하는 것: 장시간·대용량·절전 복귀·네트워크 변경 검증과 출시(5.1~5.3), 열린 보안 항목 S.6~S.9·S.11([보안 점검](verification/security-review.md)), UI 스레드 차단과 터미널 3벌(B2, B1, [구조 검토](architecture-review.md)).
-- 제안 순서(사용자 확정 전): 5.1의 장시간 검증과 S.8 → CG.1 → CG.3 → CG.2 → CG.6 → CG.4·CG.5 → CG.7 → CG.8 → CG.9.
+- 순서(2026-11-16 사용자 확정): CG.0·CG.6 다음에 연결 트랙(CG.1 → CG.3 → CG.2 → CG.9)과 터미널 트랙(U4 병합 후 CG.7 → CG.4 → CG.5 → CG.8)을 병렬로 진행하고, 마지막에 CG.10. 결정 사항은 [설계안 §8](design/commercial-gaps.md#8-순서와-사용자-결정).
 - 제외: Mosh, GSSAPI/Kerberos, 터미널 이미지 표시(Sixel 등), UI 다국어, Linux·Intel Mac·Windows ARM 지원. 클라우드 동기화는 §1의 제외를 유지한다. WebGL 렌더러는 5.1의 대량 출력 측정 결과로 판단한다.

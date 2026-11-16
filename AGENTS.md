@@ -100,6 +100,7 @@ npm run probe:phase1           제품 엔진을 실제 OpenSSH로 검사. 이름
 npm run test:native            Windows 전용. 앱 빌드 후 WebView2 UI로 실제 SSH 접속
 npm run probe:ftp              FTP/FTPS/CP949. Python 환경 .tools/ftp-fixture 필요(scripts/ftp-fixture-requirements.txt). --native 계열은 Windows 전용
 node scripts/test-<기능>-native.mjs    Windows 전용 개별 검사. target/debug/dachsterm.exe가 먼저 필요
+npm run connect:fixture -- <up|status|serial|down>    CG 검사 환경(HTTP·SOCKS5 프록시, 경유지, Telnet, X 서버, 가상 시리얼). serial은 macOS·socat 필요
 npm run kube:fixture -- <클러스터> [up|down|status]    kind와 SSH 서버 검사 환경. WSL Ubuntu-24.04의 ~/.local/bin/kind 필요
 npm run test:kube-detect       앱 빌드 후 KV.1 합격 시나리오. 위 환경을 자동으로 올리고 내린다(--keep로 유지)
 ```
