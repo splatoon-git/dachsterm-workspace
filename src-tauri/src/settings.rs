@@ -112,6 +112,8 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
         p.forward_keys.clear();
         p.forward_system_agent = true;
         p.forward_git_credentials = false;
+        p.forward_x11 = false;
+        p.x11_display.clear();
         p.workspace = Default::default();
         p.kube = None;
         if let Some(proxy) = &mut p.proxy {
@@ -430,6 +432,8 @@ pub(crate) fn apply_bundle(store: &Store, bundle: &mut Bundle, merges: &[Merge])
         p.forward_keys = saved.map_or_else(Vec::new, |old| old.forward_keys.clone());
         p.forward_system_agent = saved.is_none_or(|old| old.forward_system_agent);
         p.forward_git_credentials = saved.is_some_and(|old| old.forward_git_credentials);
+        p.forward_x11 = saved.is_some_and(|old| old.forward_x11);
+        p.x11_display = saved.map_or_else(String::new, |old| old.x11_display.clone());
         p.workspace = saved.map_or_else(Default::default, |old| old.workspace);
         p.kube = saved.and_then(|old| old.kube.clone());
         if let Some(proxy) = &mut p.proxy {
@@ -902,5 +906,25 @@ mod tests {
         bundle.version = 5;
         bundle.profiles[0].proxy.as_mut().unwrap().clear_secret();
         assert!(validate_bundle(&bundle).is_err(), "a newer file");
+    }
+    #[test]
+    fn x11_forwarding_never_travels_in_a_session_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("db")).unwrap();
+        let mut p = crate::storage::tests::profile();
+        p.forward_x11 = true;
+        p.x11_display = "localhost:0.0".into();
+        store.save(p, None).unwrap();
+        let data = export(&store).unwrap();
+        let text = String::from_utf8(data.clone()).unwrap();
+        assert!(!text.contains("forwardX11") && !text.contains("x11Display"));
+        let mut bundle: Bundle = serde_json::from_slice(&data).unwrap();
+        bundle.profiles[0].forward_x11 = true;
+        let other = Store::open(&dir.path().join("other")).unwrap();
+        apply_bundle(&other, &mut bundle, &[]).unwrap();
+        assert!(
+            !other.list().unwrap().profiles[0].forward_x11,
+            "a file cannot turn it on"
+        );
     }
 }

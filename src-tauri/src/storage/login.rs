@@ -25,6 +25,17 @@ impl Profile {
         if !self.cert_path.is_empty() && self.auth != "key" {
             return Err("인증서 파일은 개인키 인증에서만 쓸 수 있습니다.".into());
         }
+        if self.forward_x11 && self.protocol != "ssh" {
+            return Err("X11 포워딩은 SSH 연결에서만 사용할 수 있습니다.".into());
+        }
+        if self.x11_display.len() > 255
+            || self
+                .x11_display
+                .chars()
+                .any(|c| c.is_control() || c.is_whitespace())
+        {
+            return Err("X11 디스플레이 값을 확인하세요. 예: :0, localhost:0.0".into());
+        }
         Ok(())
     }
 }

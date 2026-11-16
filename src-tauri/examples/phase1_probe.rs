@@ -187,6 +187,8 @@ fn base() -> Profile {
         agent_source: "system".into(),
         cert_path: String::new(),
         serial: None,
+        forward_x11: false,
+        x11_display: String::new(),
     }
 }
 fn stress_seconds() -> u64 {

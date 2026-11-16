@@ -359,7 +359,80 @@ async fn run(dir: &Path) -> Result<()> {
         "PASS proxy errors: wrong password (HTTP 401, SOCKS 01 02), auth required (407, 05 FF), port refused (403), unknown host (500, SOCKS 1), closed proxy port"
     );
     certificates(&run).await?;
-    commands(&run).await
+    commands(&run).await?;
+    x11(&run).await
+}
+
+/// CG.9: X11 to the fixture's Xvfb (`127.0.0.1:40000`, cookie in the runner's `XAUTHORITY`).
+async fn x11(run: &Run<'_>) -> Result<()> {
+    let session = |forward: bool, display: &str| {
+        let mut p = target(None);
+        p.host = "127.0.0.1".into();
+        p.port = 42222;
+        p.name = format!("x11 {display}");
+        p.forward_x11 = forward;
+        p.x11_display = display.into();
+        run.store.save(p, None)
+    };
+    // Runs `script` and returns the output up to `marker`, with any notices on the way.
+    let shell =
+        async |c: &mut Client, script: &str, marker: &str| -> Result<(String, Vec<String>)> {
+            c.send(&format!("stty -echo; {script}; printf '\\n{marker}\\n'\n"))
+                .await?;
+            let mut notices = vec![];
+            loop {
+                if let Some(at) = String::from_utf8_lossy(&c.bytes).find(&format!("{marker}\r\n")) {
+                    let out = String::from_utf8_lossy(&c.bytes)[..at].to_string();
+                    c.bytes.clear();
+                    return Ok((out, notices));
+                }
+                if let Event::AgentNotice { message } = c.event().await? {
+                    notices.push(message);
+                }
+            }
+        };
+    let mut c = run.start(session(true, "127.0.0.1:40000")?, Secrets::default())?;
+    run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    let (out, notices) = shell(
+        &mut c,
+        "echo DISPLAY=$DISPLAY; xdpyinfo 2>&1 | grep -m1 'vendor string'",
+        "X11_DONE",
+    )
+    .await?;
+    assert!(out.contains("DISPLAY=localhost:1"), "{out}");
+    assert!(out.contains("The X.Org Foundation"), "{out}");
+    assert!(notices.is_empty(), "{notices:?}");
+    c.stop().await?;
+    let mut c = run.start(session(false, "")?, Secrets::default())?;
+    run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    let (out, _) = shell(&mut c, "echo \"D=[$DISPLAY]\"", "NO_X11").await?;
+    assert!(out.contains("D=[]"), "{out}");
+    c.stop().await?;
+    // Nothing listens on port 65000: the X client fails and the tab is told once.
+    let mut c = run.start(session(true, "127.0.0.1:59000")?, Secrets::default())?;
+    run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    let (out, mut notices) =
+        shell(&mut c, "xdpyinfo >/dev/null 2>&1; echo rc=$?", "X11_NONE").await?;
+    assert!(out.contains("rc=1"), "{out}");
+    if notices.is_empty()
+        && let Ok(Ok(Some(Event::AgentNotice { message }))) =
+            timeout(Duration::from_secs(5), c.rx.recv())
+                .await
+                .map(Ok::<_, ()>)
+    {
+        notices.push(message);
+    }
+    assert!(
+        notices
+            .iter()
+            .any(|n| n.contains("X 서버(XQuartz, VcXsrv 등)를 먼저 실행하세요.")),
+        "{notices:?}"
+    );
+    c.stop().await?;
+    println!(
+        "PASS X11: xdpyinfo through the fake cookie reaches Xvfb, no DISPLAY without forwarding, a missing X server is told"
+    );
+    Ok(())
 }
 
 /// CG.2: ProxyCommand. `nc` reaches the jump host; `ssh -W` through it reaches the internal

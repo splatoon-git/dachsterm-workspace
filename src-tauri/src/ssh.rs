@@ -245,8 +245,7 @@ async fn run(
     let session = &route.session;
     let git = crate::git_credential::start(session, &manager, &id).await;
     let channel = timeout(Duration::from_secs(p.timeout), async {
-        let mut channel = session.channel_open_session().await?;
-        crate::agent_forward::request(&mut channel, &manager, &id).await;
+        let channel = route.open_shell(&manager, &id).await?;
         channel
             .request_pty(
                 true,

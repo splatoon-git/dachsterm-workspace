@@ -17,10 +17,17 @@ pub(super) fn certificate(out: &mut Preview, p: &mut Profile, path: &str) {
     }
 }
 
-/// OpenSSH's `CertificateFile` (its first value) and an `IdentityAgent` that points at Pageant,
-/// which a session chooses itself instead (`agent_source`).
+/// OpenSSH's `CertificateFile` (its first value), and what a session chooses itself instead of a
+/// file: an `IdentityAgent` that points at Pageant (`agent_source`) and `ForwardX11` (CG.9, never
+/// turned on by an import, like agent forwarding).
 pub(super) fn openssh<'a>(out: &mut Preview, p: &mut Profile, get: impl Fn(&str) -> &'a str) {
     certificate(out, p, get("certificatefile"));
+    if matches!(
+        get("forwardx11").to_ascii_lowercase().as_str(),
+        "yes" | "true"
+    ) {
+        out.warn("ForwardX11은 켜지 않았습니다. 필요한 세션은 고급 옵션에서 X11 포워딩을 켜세요.");
+    }
     if get("identityagent")
         .to_ascii_lowercase()
         .contains("pageant")
@@ -63,11 +70,13 @@ mod tests {
         let values = |k: &str| match k {
             "certificatefile" => "/k/id-cert.pub",
             "identityagent" => r"\\.\pipe\pageant.user.abc",
+            "forwardx11" => "yes",
             _ => "",
         };
         openssh(&mut out, &mut p, values);
         assert_eq!(p.cert_path, "/k/id-cert.pub");
         assert!(out.warnings.last().unwrap().contains("Pageant"));
+        assert!(out.warnings.iter().any(|w| w.starts_with("ForwardX11")) && !p.forward_x11);
         p.auth = "agent".into();
         p.agent_source = "pageant".into();
         out.bundle.profiles.push(p);

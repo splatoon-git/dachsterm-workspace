@@ -66,8 +66,23 @@ pub(crate) struct Route {
     pub session: SessionGuard,
     hops: Vec<SessionGuard>,
     pub description: String,
+    x11: Option<Arc<crate::x11::Forward>>,
 }
 impl Route {
+    /// The shell's session channel with the forwarding the session asked for: X11 first, so its
+    /// reply is the next one on the channel, then the agent.
+    pub async fn open_shell(
+        &self,
+        manager: &Connections,
+        id: &str,
+    ) -> std::result::Result<russh::Channel<client::Msg>, russh::Error> {
+        let mut channel = self.session.channel_open_session().await?;
+        if let Some(x11) = &self.x11 {
+            x11.request(&mut channel).await;
+        }
+        crate::agent_forward::request(&mut channel, manager, id).await;
+        Ok(channel)
+    }
     /// Makes the connection reachable through `Connections::handle`.
     pub fn publish(&self, manager: &Connections, id: &str) {
         manager.live.lock().unwrap().insert(
@@ -96,6 +111,7 @@ pub(crate) async fn open(
         forward_agent,
     } = target;
     let mut proxy_secret = proxy;
+    let x11 = crate::x11::Forward::new(p, sink.clone())?;
     sink(Event::State {
         status: "connecting".into(),
         message: "서버에 연결하고 있습니다.".into(),
@@ -177,6 +193,7 @@ pub(crate) async fn open(
                 manager,
                 &handler_id,
                 last && forward_agent,
+                x11.clone().filter(|_| last),
                 &mut channels.replies,
             )
             .await
@@ -203,6 +220,7 @@ pub(crate) async fn open(
         session,
         hops: owned,
         description,
+        x11,
     })
 }
 
@@ -219,6 +237,7 @@ async fn authenticate_hop(
     manager: &Arc<Connections>,
     id: &str,
     forward_agent: bool,
+    x11: Option<Arc<crate::x11::Forward>>,
     replies: &mut mpsc::Receiver<AuthReply>,
 ) -> Result<SessionGuard> {
     let mut preferred = russh::Preferred::default();
@@ -258,6 +277,7 @@ async fn authenticate_hop(
         waiting: waiting_tx,
         stop: stop.clone(),
         forward_agent,
+        x11,
     };
     let handshake = client::connect_stream(Arc::new(config), stream, handler);
     tokio::pin!(handshake);
