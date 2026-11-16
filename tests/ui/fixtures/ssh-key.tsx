@@ -61,6 +61,7 @@ applyTheme(getCurrentTheme());
 // Loaded after the bridge above: `lib/ipc` decides whether it is on the desktop at import time.
 const { KeyFileList } = await import('../../../src/components/KeyFileList');
 const { LoginKeyField } = await import('../../../src/features/sessions/LoginKeyField');
+const { blankProfile } = await import('../../../src/lib/ipc');
 
 function Harness() {
   const [keyPath, setKeyPath] = useState('');
@@ -76,7 +77,10 @@ function Harness() {
       }}
     >
       <div className="form-grid">
-        <LoginKeyField value={keyPath} change={setKeyPath} />
+        <LoginKeyField
+          profile={{ ...blankProfile(), auth: 'key', keyPath }}
+          field={(key, value) => key === 'keyPath' && setKeyPath(value)}
+        />
         <div className="wide">
           <KeyFileList keys={keys} change={setKeys} placeholder="키 경로" />
         </div>

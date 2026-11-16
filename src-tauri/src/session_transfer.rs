@@ -7,6 +7,7 @@ use crate::{
 use serde::Serialize;
 use std::collections::HashMap;
 use tauri::State;
+mod login;
 mod proxy;
 mod putty;
 
@@ -177,6 +178,7 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
     for c in &mut result.bundle.tunnels {
         c.auto_start = false;
     }
+    login::pageant_elsewhere(&mut result);
     if format != "dachsterm" {
         result.warn("외부 형식의 지원 범위는 아래 보고서를 확인하세요. 자동 명령·호스트키 신뢰·암호·개인키 내용은 이전하지 않습니다. 터널 자동 시작은 꺼집니다. 적용 전 접속 대상을 확인하세요.");
     }
@@ -294,6 +296,7 @@ fn putty(text: &str) -> Result<Preview> {
                 } else if !key.is_empty() {
                     out.warn("PuTTY PPK 키는 자동 변환하지 않습니다. PuTTYgen에서 OpenSSH 키로 내보낸 후 세션의 키 경로를 지정하세요.");
                 }
+                login::certificate(out, &mut p, get("DetachedCertificate"));
                 let id = p.id.clone();
                 out.add(p, "PuTTY")?;
                 if protocol == "ssh" && out.bundle.profiles.iter().any(|p| p.id == id) {
@@ -322,6 +325,7 @@ fn putty(text: &str) -> Result<Preview> {
                 "HostName",
                 "UserName",
                 "PublicKeyFile",
+                "DetachedCertificate",
                 "PortNumber",
                 "ProxyMethod",
                 "ProxyHost",
@@ -345,7 +349,7 @@ fn putty(text: &str) -> Result<Preview> {
         }
     }
     flush(&mut result, name, &mut values)?;
-    result.warn("PuTTY reg: 기본 접속·OpenSSH 키 경로·루프백 L/R/D 터널·SOCKS5/HTTP 프록시를 변환합니다. PPK·그 밖의 프록시·명령·신뢰·암호는 이전하지 않습니다. reg에는 제품 버전이 없어 버전별 실제 내보내기 검증이 별도로 필요합니다.");
+    result.warn("PuTTY reg: 기본 접속·OpenSSH 키 경로·인증서 경로·루프백 L/R/D 터널·SOCKS5/HTTP 프록시를 변환합니다. PPK·그 밖의 프록시·명령·신뢰·암호는 이전하지 않습니다. reg에는 제품 버전이 없어 버전별 실제 내보내기 검증이 별도로 필요합니다.");
     Ok(result)
 }
 
@@ -654,6 +658,7 @@ fn openssh(text: &str) -> Result<Preview> {
                 p.key_path = key.into();
             }
         }
+        login::openssh(&mut result, &mut p, get);
         for (name, slot) in [
             ("connecttimeout", &mut p.timeout),
             ("serveraliveinterval", &mut p.keepalive),
@@ -775,7 +780,7 @@ fn openssh(text: &str) -> Result<Preview> {
         .bundle
         .tunnels
         .retain(|t| result.bundle.profiles.iter().any(|p| p.id == t.profile_id));
-    result.warn("OpenSSH 명시적 Host와 첫 설정값, ProxyJump, nc 형식 ProxyCommand 프록시, 루프백 Local/Remote/DynamicForward를 변환합니다. 추가 IdentityFile·Match·임의 명령·agent forwarding·신뢰 설정은 이전하지 않습니다. 파일에 제품 버전이 없어 원본 버전은 확인할 수 없습니다.");
+    result.warn("OpenSSH 명시적 Host와 첫 설정값, ProxyJump, nc 형식 ProxyCommand 프록시, 첫 CertificateFile, 루프백 Local/Remote/DynamicForward를 변환합니다. 추가 IdentityFile·Match·임의 명령·agent forwarding·신뢰 설정은 이전하지 않습니다. 파일에 제품 버전이 없어 원본 버전은 확인할 수 없습니다.");
     Ok(result)
 }
 

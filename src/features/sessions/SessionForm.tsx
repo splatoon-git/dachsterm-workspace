@@ -6,6 +6,7 @@ import { TmuxField } from './TmuxField';
 import { WorkspaceField } from './WorkspaceField';
 import { AgentForwardField } from './AgentForwardField';
 import { LoginKeyField } from './LoginKeyField';
+import { AgentLoginField } from './AgentLoginField';
 import { ProtocolField } from './ProtocolField';
 import { switchProtocol } from './protocol';
 import { ProxyField } from './ProxyField';
@@ -196,15 +197,9 @@ export function SessionForm({
               </select>
             </label>
           )}
-          {profile.auth === 'key' && (
-            <LoginKeyField value={profile.keyPath} change={(path) => field('keyPath', path)} />
-          )}
+          {profile.auth === 'key' && <LoginKeyField profile={profile} field={field} />}
           {profile.protocol === 'ssh' && ['agent', 'interactive'].includes(profile.auth) && (
-            <p className="muted wide">
-              에이전트는 등록된 키로 서명하며 개인키를 앱에 저장하지 않습니다. 서버의 OTP·추가 인증
-              질문은 연결 중 표시되고 응답은 저장하지 않습니다. 키 인증 뒤 추가 MFA도 자동으로
-              표시합니다.
-            </p>
+            <AgentLoginField profile={profile} field={field} />
           )}
           {['key', 'password'].includes(profile.auth) && (
             <>

@@ -34,6 +34,10 @@ export type Profile = {
   hasSecret: boolean;
   /** The proxy the first TCP connection goes through. SSH without jump hosts only. */
   proxy?: Proxy | null;
+  /** Which agent signs for `agent` logins and forwarding. Absent means `system`. */
+  agentSource?: 'system' | 'pageant';
+  /** An OpenSSH certificate for the key file. Empty uses `<key>-cert.pub` beside it. */
+  certPath?: string;
 };
 /** Only the backend sets `secretRef`; a form's value is ignored. */
 export type Proxy = {

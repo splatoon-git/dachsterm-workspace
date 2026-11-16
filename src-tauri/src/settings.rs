@@ -174,8 +174,13 @@ pub(crate) fn validate_bundle(bundle: &Bundle) -> Result<()> {
     {
         return Err("계층·태그·템플릿·경유 설정에는 JSON v3이 필요합니다.".into());
     }
-    if bundle.version < 4 && bundle.profiles.iter().any(|p| p.proxy.is_some()) {
-        return Err("프록시 설정에는 JSON v4가 필요합니다.".into());
+    if bundle.version < 4
+        && bundle
+            .profiles
+            .iter()
+            .any(|p| p.proxy.is_some() || !p.cert_path.is_empty() || p.agent_source != "system")
+    {
+        return Err("프록시·인증서·Pageant 설정에는 JSON v4가 필요합니다.".into());
     }
     if bundle.version < 4 && bundle.profiles.iter().any(|p| p.protocol == "telnet") {
         return Err("Telnet 세션에는 JSON v4가 필요합니다.".into());
@@ -245,7 +250,7 @@ fn network_path(path: &str) -> bool {
 pub(crate) fn check_import_paths(bundle: &Bundle) -> Result<()> {
     let profile = bundle.profiles.iter().find(|p| {
         let forward_keys = p.forward_keys.iter().map(|k| &k.path);
-        [&p.key_path, &p.tls_ca_path]
+        [&p.key_path, &p.tls_ca_path, &p.cert_path]
             .into_iter()
             .chain(forward_keys)
             .any(|path| network_path(path))
@@ -871,6 +876,13 @@ mod tests {
         let mut bundle: Bundle = serde_json::from_slice(&data).unwrap();
         bundle.version = 3;
         assert!(validate_bundle(&bundle).is_err_and(|e| e.contains("v4")));
+        let mut older = bundle.clone();
+        older.profiles[0].proxy = None;
+        older.profiles[0].auth = "agent".into();
+        older.profiles[0].agent_source = "pageant".into();
+        assert!(validate_bundle(&older).is_err_and(|e| e.contains("v4")));
+        older.profiles[0].agent_source = "system".into();
+        assert!(validate_bundle(&older).is_ok());
         bundle.version = 4;
         let proxy = bundle.profiles[0].proxy.as_mut().unwrap();
         *proxy.secret_slot() = Some("forged".into());

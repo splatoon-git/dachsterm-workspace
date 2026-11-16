@@ -163,6 +163,18 @@
         },
         "proxy": {
           "$ref": "#/$defs/proxy"
+        },
+        "agentSource": {
+          "enum": ["system", "pageant"],
+          "default": "system",
+          "description": "Which agent signs for agent logins and forwarding. Pageant works on Windows only."
+        },
+        "certPath": {
+          "type": "string",
+          "maxLength": 4096,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
+          "default": "",
+          "description": "OpenSSH user certificate for the key file. Empty uses <keyPath>-cert.pub when it exists."
         }
       },
       "allOf": [
@@ -241,6 +253,23 @@
             }
           },
           "description": "A proxy belongs to the SSH session that opens the TCP connection: the first jump host when there is one."
+        },
+        {
+          "if": {
+            "required": ["certPath"],
+            "properties": {
+              "certPath": {
+                "minLength": 1
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "auth": {
+                "const": "key"
+              }
+            }
+          }
         }
       ]
     },

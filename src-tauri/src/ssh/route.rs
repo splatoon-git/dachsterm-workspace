@@ -268,7 +268,7 @@ async fn authenticate_hop(
                 .await
                 .map_err(|_| "인증 협상 실패".to_string())
         } else if p.auth == "agent" {
-            crate::ssh_auth::agent(&mut session, &p.username).await
+            crate::ssh_auth::agent(&mut session, &p.username, &p.agent_source).await
         } else if p.auth == "password" {
             session
                 .authenticate_password(&p.username, secret.as_str())
@@ -279,7 +279,8 @@ async fn authenticate_hop(
             if forward_agent {
                 crate::agent_keys::keep_login(manager, id, &key);
             }
-            crate::ssh_auth::key(&mut session, &p.username, key).await
+            let cert = crate::ssh_cert::for_login(p, &key, &sink)?;
+            crate::ssh_auth::key(&mut session, &p.username, key, cert).await
         }
     };
     let auth = timeout(Duration::from_secs(p.timeout), authentication)

@@ -237,7 +237,11 @@ where
     // Owned by the tab: ends with the client or when the tab closes.
     tokio::spawn(async move {
         let _slot = slot;
-        let mut relay = relay(context, agent_relay::connect_system().await, stop.clone());
+        let mut relay = relay(
+            context,
+            agent_relay::connect_system("system").await,
+            stop.clone(),
+        );
         tokio::select! {
             _ = stop.wait_for(|stopped| *stopped) => {}
             _ = run(&mut relay, &mut stream) => {}
