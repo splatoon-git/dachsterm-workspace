@@ -757,5 +757,5 @@ Phase 6 전체 완료는 일곱 작업의 구현과 위 검증 결과를 모두 
   - CG.9 X11 포워딩: 사용자가 실행한 외부 X 서버(XQuartz, VcXsrv 등)로 채널을 중계만 한다. 앱 안의 X 서버는 §1의 제외 범위를 유지한다.
   - CG.10 문서·회귀·Mac: 사용 안내서, Windows 네이티브 검사 연결, Mac 실기기 확인.
 - 이 절에 ID를 두지 않고 기존 ID로 진행하는 것: 장시간·대용량·절전 복귀·네트워크 변경 검증과 출시(5.1~5.3), 열린 보안 항목 S.6~S.9·S.11([보안 점검](verification/security-review.md)), UI 스레드 차단과 터미널 3벌(B2, B1, [구조 검토](architecture-review.md)).
-- 제안 순서(사용자 확정 전): 5.1의 장시간 검증과 S.8 → CG.1 → CG.3 → CG.2 → CG.6 → CG.4·CG.5 → CG.7 → CG.8 → CG.9.
+- 순서(2026-11-16 사용자 확정): CG.0·CG.6 다음에 연결 트랙(CG.1 → CG.3 → CG.2 → CG.9)과 터미널 트랙(U4 병합 후 CG.7 → CG.4 → CG.5 → CG.8)을 병렬로 진행하고, 마지막에 CG.10. 결정 사항은 [설계안 §8](design/commercial-gaps.md#8-순서와-사용자-결정).
 - 제외: Mosh, GSSAPI/Kerberos, 터미널 이미지 표시(Sixel 등), UI 다국어, Linux·Intel Mac·Windows ARM 지원. 클라우드 동기화는 §1의 제외를 유지한다. WebGL 렌더러는 5.1의 대량 출력 측정 결과로 판단한다.
