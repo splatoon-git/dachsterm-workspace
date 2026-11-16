@@ -179,6 +179,8 @@ pub fn base() -> Profile {
         last_connected: None,
         has_secret: false,
         proxy: None,
+        agent_source: "system".into(),
+        cert_path: String::new(),
     }
 }
 

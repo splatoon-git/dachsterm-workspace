@@ -5,7 +5,7 @@ use crate::{
 use russh::{
     client::{self, KeyboardInteractiveAuthResponse as Response},
     keys::{
-        HashAlg, PrivateKey, PrivateKeyWithHashAlg,
+        Certificate, HashAlg, PrivateKey, PrivateKeyWithHashAlg,
         agent::{AgentIdentity, client::AgentClient},
     },
 };
@@ -71,24 +71,34 @@ pub async fn ask_one(
     .map_err(|_| "인증 입력 시간이 초과되었습니다.")?
 }
 
-pub async fn agent(session: &mut client::Handle<Host>, user: &str) -> Result<client::AuthResult> {
-    #[cfg(windows)]
-    let mut agent = AgentClient::connect_named_pipe(agent_pipe()).await
-        .map_err(|_| "Windows OpenSSH 인증 에이전트에 연결할 수 없습니다. ssh-agent 서비스와 ssh-add 등록을 확인하세요.")?;
-    #[cfg(unix)]
-    let mut agent = AgentClient::connect_env()
-        .await
-        .map_err(|_| "SSH_AUTH_SOCK 인증 에이전트에 연결할 수 없습니다.")?;
+/// Pageant opens without being found; a failed or empty key list is how it shows (CG.0).
+pub const PAGEANT_MISSING: &str = "Pageant가 실행 중이 아니거나 키가 없습니다.";
+
+pub async fn agent(
+    session: &mut client::Handle<Host>,
+    user: &str,
+    source: &str,
+) -> Result<client::AuthResult> {
+    let mut agent = AgentClient::connect(crate::agent_relay::open(source).await?);
+    let pageant = source == "pageant";
     if let Some(binding) = session.agent_session_binding() {
         // Older agents do not implement session binding. No agent forwarding is enabled.
         let _ = agent.bind_session(binding, false).await;
     }
-    let identities = agent
-        .request_identities()
-        .await
-        .map_err(|_| "에이전트 키 목록을 읽을 수 없습니다.")?;
+    let identities = agent.request_identities().await.map_err(|_| {
+        if pageant {
+            PAGEANT_MISSING
+        } else {
+            "에이전트 키 목록을 읽을 수 없습니다."
+        }
+    })?;
     if identities.is_empty() {
-        return Err("에이전트에 등록된 키가 없습니다. ssh-add로 키를 등록하세요.".into());
+        return Err(if pageant {
+            PAGEANT_MISSING
+        } else {
+            "에이전트에 등록된 키가 없습니다. ssh-add로 키를 등록하세요."
+        }
+        .into());
     }
     let mut last = None;
     // Bound attempts: OpenSSH commonly permits six failures per connection.
@@ -154,12 +164,30 @@ pub async fn agent(session: &mut client::Handle<Host>, user: &str) -> Result<cli
     last.ok_or("에이전트 인증에 실패했습니다.".into())
 }
 
-/// Public key login with a decoded key file. RSA signs through ring with SHA-2 only.
+fn partial(result: &client::AuthResult) -> bool {
+    matches!(
+        result,
+        client::AuthResult::Failure {
+            partial_success: true,
+            ..
+        }
+    )
+}
+
+/// Public key login with a decoded key file. RSA signs through ring with SHA-2 only. A
+/// certificate goes first; when the server refuses it the key is tried alone, as OpenSSH does.
 pub async fn key(
     session: &mut client::Handle<Host>,
     user: &str,
     key: PrivateKey,
+    cert: Option<Certificate>,
 ) -> Result<client::AuthResult> {
+    if let Some(cert) = cert {
+        let result = certificate(session, user, &key, cert).await?;
+        if result.success() || partial(&result) {
+            return Ok(result);
+        }
+    }
     if !key.algorithm().is_rsa() {
         return session
             .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(key), None))
@@ -196,6 +224,41 @@ pub async fn key(
             )
             .await
             .map_err(failed);
+    }
+    Ok(result)
+}
+
+/// `authenticate_openssh_cert` names an RSA certificate with SHA-1, which servers refuse (CG.0),
+/// so RSA signs through ring with the SHA-2 the server offers.
+async fn certificate(
+    session: &mut client::Handle<Host>,
+    user: &str,
+    key: &PrivateKey,
+    cert: Certificate,
+) -> Result<client::AuthResult> {
+    const FAILED: &str = "인증서 인증에 실패했습니다.";
+    if !key.algorithm().is_rsa() {
+        return session
+            .authenticate_openssh_cert(user, Arc::new(key.clone()), cert)
+            .await
+            .map_err(|_| FAILED.into());
+    }
+    let mut signer = crate::rsa_auth::RsaSigner::new(key)?;
+    let hash = session
+        .best_supported_rsa_hash()
+        .await
+        .map_err(|_| "RSA SHA-2 협상에 실패했습니다.")?
+        .flatten()
+        .unwrap_or(HashAlg::Sha512);
+    let result = session
+        .authenticate_certificate_with(user, cert.clone(), Some(hash), &mut signer)
+        .await
+        .map_err(|_| FAILED)?;
+    if hash == HashAlg::Sha512 && !result.success() && !partial(&result) {
+        return session
+            .authenticate_certificate_with(user, cert, Some(HashAlg::Sha256), &mut signer)
+            .await
+            .map_err(|_| FAILED.into());
     }
     Ok(result)
 }

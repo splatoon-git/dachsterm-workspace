@@ -38,19 +38,36 @@ const SHA1_REFUSED_LOCAL: &str = "RSA 키의 SHA-1 서명 요청을 거부했습
 
 pub type LocalStream = Box<dyn AgentStream + Send + Unpin>;
 
-/// This PC's SSH agent, if it answers. Never the app's own pipe or socket.
-pub async fn connect_system() -> Option<LocalStream> {
-    let connect = async {
-        #[cfg(windows)]
-        let client = AgentClient::connect_named_pipe(crate::ssh_auth::agent_pipe()).await;
-        #[cfg(unix)]
-        let client = AgentClient::connect_env().await;
-        client.ok().map(AgentClient::into_inner)
-    };
-    timeout(Duration::from_secs(5), connect)
+/// This PC's SSH agent of the given source (`storage::AGENT_SOURCES`), if it answers. Never the
+/// app's own pipe or socket.
+pub async fn connect_system(source: &str) -> Option<LocalStream> {
+    timeout(Duration::from_secs(5), open(source))
         .await
         .ok()
-        .flatten()
+        .and_then(Result::ok)
+}
+
+/// Opens this PC's agent: OpenSSH's (`system`), or PuTTY's Pageant on Windows (CG.3). Pageant
+/// "opens" even when it is not running; its absence shows on the first request.
+pub async fn open(source: &str) -> crate::storage::Result<LocalStream> {
+    if source == "pageant" {
+        #[cfg(windows)]
+        return AgentClient::connect_pageant()
+            .await
+            .map(AgentClient::into_inner)
+            .map_err(|_| crate::ssh_auth::PAGEANT_MISSING.into());
+        #[cfg(not(windows))]
+        return Err("Pageant는 Windows에서만 쓸 수 있습니다.".into());
+    }
+    #[cfg(windows)]
+    let client = AgentClient::connect_named_pipe(crate::ssh_auth::agent_pipe())
+        .await
+        .map_err(|_| "Windows OpenSSH 인증 에이전트에 연결할 수 없습니다. ssh-agent 서비스와 ssh-add 등록을 확인하세요.");
+    #[cfg(unix)]
+    let client = AgentClient::connect_env()
+        .await
+        .map_err(|_| "SSH_AUTH_SOCK 인증 에이전트에 연결할 수 없습니다.");
+    Ok(client.map(AgentClient::into_inner)?)
 }
 
 pub struct Relay {

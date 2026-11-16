@@ -58,6 +58,7 @@ pub mod snippets;
 pub mod source;
 pub mod ssh;
 mod ssh_auth;
+mod ssh_cert;
 pub mod ssh_keygen;
 pub mod ssh_keys;
 pub mod storage;

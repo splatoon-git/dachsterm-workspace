@@ -5,7 +5,8 @@ use super::{Preview, endpoint};
 use crate::storage::Proxy;
 use std::collections::HashMap;
 
-const NOT_NC: &str = "ProxyCommand·HostKeyAlias·KnownHostsCommand·CertificateFile·호스트 정규화 조건 세션을 제외했습니다.";
+const NOT_NC: &str =
+    "ProxyCommand·HostKeyAlias·KnownHostsCommand·호스트 정규화 조건 세션을 제외했습니다.";
 const SOCKS4: &str = "SOCKS4 프록시는 지원하지 않아 해당 세션을 제외했습니다.";
 
 fn proxy(socks: bool, host: String, port: u16, username: String) -> Proxy {
@@ -36,7 +37,7 @@ pub(super) fn openssh(
     values: &HashMap<&str, &[String]>,
 ) -> Option<Option<Proxy>> {
     let get = |key: &str| values.get(key).map_or("", |v| v[0].as_str());
-    if ["hostkeyalias", "knownhostscommand", "certificatefile"]
+    if ["hostkeyalias", "knownhostscommand"]
         .iter()
         .any(|k| !matches!(get(k), "" | "none"))
         || !matches!(get("canonicalizehostname"), "" | "no" | "false")

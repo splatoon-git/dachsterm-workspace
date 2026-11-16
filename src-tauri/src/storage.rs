@@ -3,8 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::Mutex};
 use uuid::Uuid;
 mod git_credentials;
+mod login;
 mod proxy;
 pub use git_credentials::GitCredential;
+pub use login::AGENT_SOURCES;
 pub use proxy::{Endpoint, MAX_PROXY_FIELD, Proxy};
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -67,6 +69,12 @@ pub struct Profile {
     /// hosts has one; with jump hosts, the first jump host's proxy is used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy: Option<Proxy>,
+    /// Which agent signs for `auth = agent` and for forwarding this PC's agent (CG.3).
+    #[serde(default = "login::system", skip_serializing_if = "login::is_system")]
+    pub agent_source: String,
+    /// An OpenSSH certificate for the key file. Empty uses `<key>-cert.pub` when it exists.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub cert_path: String,
 }
 /// A host name or address without spaces, separators or brackets.
 pub(crate) fn valid_host(host: &str) -> bool {
@@ -144,6 +152,8 @@ impl Profile {
             last_connected: None,
             has_secret: false,
             proxy: None,
+            agent_source: "system".into(),
+            cert_path: String::new(),
         }
     }
     /// Stored Passphrase references of the forwarded key files.
@@ -165,6 +175,7 @@ impl Profile {
         }
         check_forward_keys(&self.forward_keys)?;
         self.check_proxy()?;
+        self.check_login()?;
         if self.protocol != "ssh" && (!self.workspace.is_terminal() || self.kube.is_some()) {
             return Err("쿠버네티스 화면은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
@@ -585,6 +596,8 @@ pub(crate) mod tests {
             last_connected: None,
             has_secret: false,
             proxy: None,
+            agent_source: "system".into(),
+            cert_path: String::new(),
         }
     }
     #[test]

@@ -219,3 +219,36 @@ PASS proxy errors: wrong password (HTTP 401, SOCKS 01 02), auth required (407, 0
 - Windows: 네이티브 검사 `test-proxy-native.mjs`와 `verify-windows.ps1 -Native` 연결, Windows 실행.
 - Mac 패키지 앱에서 사람이 세션 폼으로 프록시를 지정해 터미널·SFTP·터널·모니터링을 여는 확인(WKWebView 자동 검사 경로 없음, CG.10).
 
+
+## CG.3 인증 확장: 인증서 파일·Pageant (2026-11-16, `feat/cg3-auth`)
+
+### 구현
+
+- 프로필 `certPath`(개인키 세션만, 4096바이트)와 `agentSource`(`system`|`pageant`, 기본 `system`, SSH만)를 더했다(`storage/login.rs`). 세션 교환 v4에 그대로 내보내고, v3 이하 파일에 있으면 거부한다. `certPath`는 다른 키 경로처럼 네트워크 경로를 가져오지 않는다. 열린 탭과 둘 중 하나가 다르면 `connect`가 거부한다.
+- 인증서(`ssh_cert.rs`): `certPath`, 없으면 `<keyPath>-cert.pub`. 연결 전에 사용자 인증서인지, 개인키와 짝인지, 유효 기간(`valid_after ≤ 지금 < valid_before`)을 확인한다. 주체 목록에 사용자가 없으면 경고만 하고 시도한다. **지정한 인증서**가 맞지 않으면 연결하지 않고, **키 옆에서 찾은 인증서**가 맞지 않으면 알린 뒤 키만으로 로그인한다(OpenSSH와 같은 동작, 설계안보다 구체화). 서명: Ed25519·ECDSA는 `authenticate_openssh_cert`, RSA는 `authenticate_certificate_with` + `RsaSigner` + SHA-512(거부되면 SHA-256). 서버가 인증서를 거부하면 키만으로 다시 시도한다.
+- Pageant(`agent_relay::open`): `pageant`이면 Windows에서 `AgentClient::connect_pageant`, 다른 OS에서는 `Pageant는 Windows에서만 쓸 수 있습니다.` 키 목록 실패나 빈 목록은 `Pageant가 실행 중이 아니거나 키가 없습니다.` 에이전트 전달(`agent_forward`)도 같은 출처를 쓰고, 로컬 탭의 에이전트(DX.13)는 지금처럼 `system`이다.
+- 가져오기(`session_transfer/login.rs`): OpenSSH `CertificateFile`(첫 값) → `certPath`(제외 목록에서 뺐다), PuTTY `DetachedCertificate` → `certPath`. 개인키가 없는 세션이나 `%`·`$`·`~` 경로는 경고 후 비운다. OpenSSH `IdentityAgent`가 Pageant를 가리키면 경고만, Windows가 아닌 PC에서 `pageant` 세션을 가져오면 경고한다. `CertificateFile`이 여러 줄이어도 경고는 하지 않는다(가져오기가 지시문마다 첫 값만 읽는 구조라 설계안의 "여러 줄 경고"는 넣지 않았다). `session_transfer.rs` 비테스트는 802줄 그대로다.
+- 화면: 개인키 칸 아래 `인증서 파일 경로 (선택)`(`LoginKeyField`), 인증 방식이 에이전트일 때 `인증 에이전트: OpenSSH ssh-agent | Pageant · Windows 전용`(`AgentLoginField`).
+
+### 검증 (Mac, 미커밋 트리)
+
+| 검사 | 결과 |
+|---|---|
+| 단위 `ssh_cert` | ssh-keygen으로 만든 CA·인증서: 정상, 주체 경고, 만료, 시작 전, 주체 없음, 호스트 인증서, 다른 키. 지정 인증서는 오류, 키 옆 인증서는 건너뜀·알림, 없는 파일·형식 오류, UTC 날짜 |
+| 단위 `storage/login`, `settings`, `session_transfer/login` | 필드 검증·JSON, v3 파일의 `agentSource` 거부, 인증서 가져오기 조건과 Pageant 경고 |
+| Playwright `session-form.spec.ts` | 개인키에서만 인증서 칸, 에이전트에서만 Pageant 선택 |
+| **실제 환경 `npm run probe:connect`** | 아래 출력. `cert_*` 키는 `authorized_keys`에 없어 인증서로만 로그인된다 |
+
+```text
+PASS certificates: Ed25519 beside the key, RSA named (SHA-2), Ed25519 through SOCKS5
+PASS certificate checks: expired (named: local error; beside: skipped, key refused), other principal (warning, refused), wrong pair
+```
+
+- 게이트(미커밋 트리, `verify-macos.sh`와 같은 단계): typecheck·lint·format, Vitest 1410/1410(부하 때문에 처음부터 `--testTimeout=60000`), build, Playwright 542, `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` 722(무시 4)+1, `npm audit` 0건, 의존성 감사, 고지 532개.
+
+(같은 실행에서 CG.1의 네 줄도 통과.) 이번 실행에서 검사 환경의 tinyproxy가 CONNECT마다 18~37초(직접 잰 값, CG.0은 6~16초)를 써서, 검사 프로필의 시간 제한을 30초에서 최대값 120초로, 검사의 이벤트 대기를 150초로 늘렸다. 제품 코드의 문제는 아니다(SOCKS5와 경유지는 빠르다).
+
+### 대기
+
+- **Pageant 전부(Windows):** `cfg(windows)` 경로 컴파일, PuTTY 0.75 이상(이름 있는 파이프)과 이전 방식(`WM_COPYDATA`) 로그인, Pageant 없음 문구, 확인 창 동안의 동작, 에이전트 전달. 이 Mac에서 `cargo check --target x86_64-pc-windows-msvc`는 `ring`의 C 빌드가 Windows 헤더(`assert.h`)를 찾지 못해 실행할 수 없었다.
+- Mac 패키지 앱에서 사람이 인증서 세션을 만들고 연결하는 확인(CG.10).

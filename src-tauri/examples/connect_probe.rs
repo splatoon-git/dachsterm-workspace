@@ -65,7 +65,8 @@ fn target(proxy: Option<Proxy>) -> Profile {
         host: "target".into(),
         port: 22,
         name: "target".into(),
-        timeout: 30,
+        // The fixture's tinyproxy took 18-37 s per CONNECT under load (CG.1), so the longest.
+        timeout: 120,
         keepalive: 15,
         ..base()
     };
@@ -81,9 +82,15 @@ struct Run<'a> {
 }
 impl Run<'_> {
     fn start(&self, profile: Profile, route: Secrets) -> Result<Client> {
+        // A key file login takes the secret as its Passphrase; the fixture keys have none.
+        let secret = if profile.auth == "key" {
+            String::new()
+        } else {
+            self.fx.user.clone()
+        };
         let id = uuid::Uuid::new_v4().to_string();
         let (tx, rx) = mpsc::channel(256);
-        let secret = Zeroizing::new(self.fx.user.clone());
+        let secret = Zeroizing::new(secret);
         self.manager.start_route(
             id.clone(),
             profile,
@@ -105,7 +112,17 @@ impl Run<'_> {
     async fn ready(&self, c: &mut Client) -> std::result::Result<(String, Vec<String>), String> {
         let mut prompts = vec![];
         loop {
-            match c.event().await.map_err(|e| e.to_string())? {
+            // Longer than the profiles' 120-second timeout, so the product's own error arrives.
+            let event = timeout(Duration::from_secs(150), c.rx.recv())
+                .await
+                .map_err(|_| "no event for 150 seconds")?
+                .ok_or("event stream ended")?;
+            if let Event::Data { seq, bytes } = &event {
+                let control = c.manager.control(&c.id).map_err(|e| e.to_string())?;
+                control.ack.send(*seq).map_err(|e| e.to_string())?;
+                c.bytes.extend(bytes);
+            }
+            match event {
                 Event::HostKey { fingerprint, .. } => {
                     assert!(self.fx.host_key(&fingerprint), "unknown host key");
                     let control = c.manager.control(&c.id).map_err(|e| e.to_string())?;
@@ -131,6 +148,12 @@ impl Run<'_> {
                         .map_err(|e| e.to_string())?;
                 }
                 Event::State { status, message } if status == "error" => return Err(message),
+                // Notices other than the routine one, such as a certificate warning.
+                Event::State { status, message }
+                    if status == "authenticating" && !message.ends_with("인증 중입니다.") =>
+                {
+                    prompts.push(message)
+                }
                 Event::State { status, message } if status == "connected" => {
                     return Ok((message, prompts));
                 }
@@ -144,7 +167,10 @@ impl Run<'_> {
             .ready(&mut c)
             .await
             .expect_err("connected unexpectedly");
-        assert!(error.contains(expected), "unexpected error: {error}");
+        assert!(
+            error.contains(expected),
+            "expected {expected:?}, got {error:?}"
+        );
         Ok(())
     }
 }
@@ -331,6 +357,96 @@ async fn run(dir: &Path) -> Result<()> {
     .await?;
     println!(
         "PASS proxy errors: wrong password (HTTP 401, SOCKS 01 02), auth required (407, 05 FF), port refused (403), unknown host (500, SOCKS 1), closed proxy port"
+    );
+    certificates(&run).await
+}
+
+/// CG.3: user certificates from the fixture CA. The `cert_*` keys are not in `authorized_keys`,
+/// so only their certificate can log in.
+async fn certificates(run: &Run<'_>) -> Result<()> {
+    let key = |name: &str| run.fx.dir.join(name).to_string_lossy().into_owned();
+    let login = |name: &str, cert: &str| {
+        let mut p = target(None);
+        p.host = "127.0.0.1".into();
+        p.port = 42222;
+        p.name = format!("jump {name}");
+        p.auth = "key".into();
+        p.key_path = key(name);
+        p.cert_path = cert.into();
+        run.store.save(p, None)
+    };
+    let hostname = async |c: &mut Client, expected: &str| -> Result<()> {
+        c.send("stty -echo; printf '\\nHOST=%s\\n' \"$(hostname)\"\n")
+            .await?;
+        c.marker(&format!("HOST={expected}\r\n")).await?;
+        c.stop().await
+    };
+    // Ed25519 beside its key (`-cert.pub`), RSA named in the session: SHA-2, not SHA-1.
+    for (name, cert) in [
+        ("cert_ed25519", String::new()),
+        ("cert_rsa", key("cert_rsa-cert.pub")),
+    ] {
+        let mut c = run.start(login(name, &cert)?, Secrets::default())?;
+        run.ready(&mut c)
+            .await
+            .map_err(|e| format!("{name}: {e}"))?;
+        hostname(&mut c, "jump").await?;
+    }
+    // Through the SOCKS5 proxy to the internal server as well.
+    let mut through = login("cert_ed25519", "")?;
+    through.host = "target".into();
+    through.port = 22;
+    through.proxy = Some(proxy(true, "probe"));
+    let through = run.store.save(through, None)?;
+    let route = Secrets {
+        hops: vec![],
+        proxy: Some(Zeroizing::new(run.fx.proxy.clone())),
+    };
+    let mut c = run.start(through, route)?;
+    run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    hostname(&mut c, "target").await?;
+    println!(
+        "PASS certificates: Ed25519 beside the key, RSA named (SHA-2), Ed25519 through SOCKS5"
+    );
+
+    // Expired: named stops before the server; beside the key it is skipped and the key alone is refused.
+    let named = login("cert_expired", &key("cert_expired-cert.pub"))?;
+    run.failure(named, Secrets::default(), "인증서가 만료되었습니다(만료 ")
+        .await?;
+    let beside = login("cert_expired", "")?;
+    let mut c = run.start(beside, Secrets::default())?;
+    let error = run
+        .ready(&mut c)
+        .await
+        .expect_err("an expired certificate logged in");
+    assert!(error.contains("인증이 거부되었습니다"), "{error}");
+    // Another principal: a warning first, then the server's refusal.
+    let other = login("cert_other", "")?;
+    let mut c = run.start(other, Secrets::default())?;
+    let mut notices = vec![];
+    let error = loop {
+        match c.event().await? {
+            Event::HostKey { .. } => c.manager.control(&c.id)?.trust.send(Some(true))?,
+            Event::State { status, message } if status == "authenticating" => notices.push(message),
+            Event::State { status, message } if status == "error" => break message,
+            Event::State { status, .. } if status == "connected" => panic!("logged in"),
+            _ => {}
+        }
+    };
+    assert!(
+        notices
+            .iter()
+            .any(|n| n.contains("인증서 주체(someone-else)에 사용자 'probe'가 없어")),
+        "{notices:?}"
+    );
+    assert!(error.contains("인증이 거부되었습니다"), "{error}");
+    let mut mismatch = login("cert_ed25519", &key("cert_rsa-cert.pub"))?;
+    mismatch.name = "mismatch".into();
+    let mismatch = run.store.save(mismatch, None)?;
+    run.failure(mismatch, Secrets::default(), "짝이 맞지 않습니다")
+        .await?;
+    println!(
+        "PASS certificate checks: expired (named: local error; beside: skipped, key refused), other principal (warning, refused), wrong pair"
     );
     Ok(())
 }

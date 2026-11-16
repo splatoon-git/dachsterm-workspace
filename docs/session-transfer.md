@@ -16,11 +16,14 @@ PuTTY는 `HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions`를 레지스트
 
 ## JSON v4 규약
 
-현재 내보내기는 [v4 JSON Schema](session-format.schema.json)를 사용한다. v3에 프로필의 `proxy`를 더했다.
+현재 내보내기는 [v4 JSON Schema](session-format.schema.json)를 사용한다. v3에 프로필의 `proxy`, `certPath`, `agentSource`를 더했다.
 
 - `proxy`: `{ "kind": "http" | "socks5", "host", "port", "username" }`. SSH 세션에만 쓰고, 경유지가 있는 세션에는 쓸 수 없다(첫 TCP 연결을 여는 첫 경유지 세션에 지정한다). 프록시 암호는 내보내지 않으며, 파일에 암호 참조(`secretRef`)가 있으면 거부한다. 가져온 세션은 연결할 때 암호를 묻는다.
-- v3 이하 파일에 `proxy`가 있으면 "JSON v4가 필요합니다"로 거부한다.
+- `certPath`: 개인키(`auth: "key"`) 세션의 OpenSSH 사용자 인증서 경로. 비어 있으면 개인키 옆의 `<keyPath>-cert.pub`를 쓴다. 다른 키 경로처럼 네트워크 경로는 가져오지 않는다.
+- `agentSource`: `system`(기본, 이 PC의 OpenSSH 에이전트) 또는 `pageant`(Windows 전용). Windows가 아닌 PC에서 `pageant` 세션을 가져오면 경고한다.
+- v3 이하 파일에 `proxy`·`certPath`·`agentSource`가 있으면 "JSON v4가 필요합니다"로 거부한다.
 - 외부 설정에서는 OpenSSH `ProxyCommand nc -X 5|connect -x 호스트[:포트] [-P 사용자] %h %p` 형식과 PuTTY `ProxyMethod` 2(SOCKS5)·3(HTTP)의 `ProxyHost`·`ProxyPort`·`ProxyUsername`만 프록시로 바꾼다. SOCKS4와 그 밖의 프록시 방식은 경고와 함께 해당 세션을 제외한다. `ProxyJump`와 `ProxyCommand`가 함께 있으면 `ProxyJump`만 쓴다. PuTTY `ProxyPassword`는 읽지 않는다.
+- OpenSSH `CertificateFile`(첫 값)과 PuTTY `DetachedCertificate`는 개인키 세션의 `certPath`가 된다. 환경변수·`~`·토큰이 든 경로는 경고 후 비운다. OpenSSH `IdentityAgent`가 Pageant를 가리키면 경고만 한다.
 
 ## JSON v3 규약
 

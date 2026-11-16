@@ -275,6 +275,7 @@ pub fn open(
     };
     let mut stop = control.stop.subscribe();
     let use_system = control.profile.forward_system_agent;
+    let source = control.profile.agent_source.clone();
     let mut relay = Relay {
         agent: control.agent.clone(),
         events: control.broker.clone(),
@@ -290,7 +291,7 @@ pub fn open(
     tokio::spawn(async move {
         let _slot = slot;
         if use_system {
-            relay.system = agent_relay::connect_system().await;
+            relay.system = agent_relay::connect_system(&source).await;
         }
         // Without this PC's agent the app's keys are enough. Only having none at all is reported.
         if relay.system.is_none() && relay.app_identities().await.is_empty() {

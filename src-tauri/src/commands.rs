@@ -166,6 +166,8 @@ pub async fn connect(
         || profile.auth != expected.auth
         || profile.key_path != expected.key_path
         || profile.jump_ids != expected.jump_ids
+        || profile.cert_path != expected.cert_path
+        || profile.agent_source != expected.agent_source
         || !same_proxy(&profile, &expected)
     {
         return Err("저장된 연결 대상이 변경되었습니다. 세션 목록에서 다시 연결하세요.".into());

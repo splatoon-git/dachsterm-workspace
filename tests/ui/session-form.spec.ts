@@ -149,3 +149,19 @@ test('a proxy asks for its address, and its password only for a named account', 
   await dialog.getByLabel('프로토콜').selectOption('ssh');
   await expect(dialog.getByLabel('프록시 종류')).toHaveValue('');
 });
+
+test('a key login offers a certificate and an agent login offers Pageant', async ({ page }) => {
+  const dialog = await openForm(page);
+  const auth = dialog.getByLabel('인증 방식', { exact: true });
+  await expect(dialog.getByLabel('인증서 파일 경로 (선택)')).toHaveCount(0);
+  await auth.selectOption('key');
+  await expect(dialog.getByLabel('인증서 파일 경로 (선택)')).toBeVisible();
+  await expect(dialog.getByLabel('인증 에이전트')).toHaveCount(0);
+  await auth.selectOption('agent');
+  const source = dialog.getByLabel('인증 에이전트');
+  await expect(source).toHaveValue('system');
+  await source.selectOption('pageant');
+  await expect(source).toHaveValue('pageant');
+  await auth.selectOption('interactive');
+  await expect(dialog.getByLabel('인증 에이전트')).toHaveCount(0);
+});
