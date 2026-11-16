@@ -153,7 +153,8 @@ pub fn base() -> Profile {
         id: String::new(),
         name: "fixture".into(),
         host: "127.0.0.1".into(),
-        port: env("PORT").parse().unwrap(),
+        // The connect fixture probe gives each profile its own port.
+        port: std::env::var("DACHSTERM_PROBE_PORT").map_or(22, |p| p.parse().unwrap()),
         username: "probe".into(),
         auth: "password".into(),
         protocol: "ssh".into(),
@@ -177,6 +178,7 @@ pub fn base() -> Profile {
         forward_git_credentials: false,
         last_connected: None,
         has_secret: false,
+        proxy: None,
     }
 }
 

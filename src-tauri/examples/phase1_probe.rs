@@ -183,6 +183,7 @@ fn base() -> Profile {
         forward_git_credentials: false,
         last_connected: None,
         has_secret: false,
+        proxy: None,
     }
 }
 fn stress_seconds() -> u64 {

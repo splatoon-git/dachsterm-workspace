@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "DachsTerm Session Exchange v3",
+  "title": "DachsTerm Session Exchange v4",
   "description": "Portable connection metadata. No passwords, private key contents, credential references, or host trust. Runtime validation additionally checks UTF-8 byte lengths and ID references.",
   "type": "object",
   "additionalProperties": false,
@@ -10,7 +10,7 @@
       "const": "dachsterm.sessions"
     },
     "version": {
-      "const": 3
+      "const": 4
     },
     "profiles": {
       "type": "array",
@@ -161,6 +161,9 @@
           "type": "integer",
           "minimum": -2147483648,
           "maximum": 2147483647
+        },
+        "proxy": {
+          "$ref": "#/$defs/proxy"
         }
       },
       "allOf": [
@@ -196,6 +199,22 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "required": ["proxy"]
+          },
+          "then": {
+            "properties": {
+              "protocol": {
+                "const": "ssh"
+              },
+              "jumpIds": {
+                "maxItems": 0
+              }
+            }
+          },
+          "description": "A proxy belongs to the SSH session that opens the TCP connection: the first jump host when there is one."
         }
       ]
     },
@@ -413,6 +432,34 @@
               "maxLength": 200
             }
           }
+        }
+      }
+    },
+    "proxy": {
+      "type": "object",
+      "description": "HTTP CONNECT or SOCKS5 proxy. The password is never exported; it is asked at connect time or saved on this PC.",
+      "additionalProperties": false,
+      "required": ["kind", "host", "port"],
+      "properties": {
+        "kind": {
+          "enum": ["http", "socks5"]
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[^\\s/\\\\,\\[\\]\\u0000-\\u001f\\u007f]+$"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "username": {
+          "type": "string",
+          "maxLength": 255,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
+          "default": ""
         }
       }
     }

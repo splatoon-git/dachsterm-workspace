@@ -23,7 +23,7 @@ pub struct Start {
     pub id: String,
     pub profile: Profile,
     pub secret: Option<Zeroizing<String>>,
-    pub hops: Vec<(Profile, Option<Zeroizing<String>>)>,
+    pub route: route::Secrets,
     pub paths: Vec<PathBuf>,
     pub sink: Sink,
     pub store: Arc<Store>,
@@ -52,11 +52,11 @@ pub async fn request(
 ) -> Result<Start> {
     let reader = app.clone();
     let target = profile.clone();
-    let (secret, hops) = blocking(move || {
+    let (secret, route) = blocking(move || {
         let state = reader.state::<AppState>();
         let secret = crate::commands::saved_secret(&state, &target.id)?;
-        let hops = crate::commands::hop_secrets(&state, &target)?;
-        Ok((secret, hops))
+        let route = crate::commands::route_secrets(&state, &target)?;
+        Ok((secret, route))
     })
     .await?;
     let state = app.state::<AppState>();
@@ -65,7 +65,7 @@ pub async fn request(
         id,
         profile,
         secret,
-        hops,
+        route,
         paths: state.known_hosts.clone(),
         sink,
         store: state.store.clone(),
@@ -90,12 +90,12 @@ pub fn start(
         id,
         profile,
         secret,
-        hops,
+        route: secrets,
         paths,
         sink,
         store,
     } = request;
-    let (sink, mut channels) = connections.register(&id, &profile, &hops, sink, &store)?;
+    let (sink, mut channels) = connections.register(&id, &profile, &secrets.hops, sink, &store)?;
     registered();
     let mut stopped = channels.stop.clone();
     tokio::spawn(async move {
@@ -104,7 +104,7 @@ pub fn start(
                 route::Target {
                     profile: &profile,
                     secret,
-                    hops,
+                    route: secrets,
                     paths: &paths,
                     forward_agent: false,
                 },

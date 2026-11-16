@@ -7,6 +7,7 @@ use crate::{
 use serde::Serialize;
 use std::collections::HashMap;
 use tauri::State;
+mod proxy;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +22,7 @@ impl Preview {
         Self {
             bundle: Bundle {
                 format: Some("dachsterm.sessions".into()),
-                version: 3,
+                version: crate::settings::CURRENT_VERSION,
                 profiles: vec![],
                 groups: vec![],
                 tunnels: vec![],
@@ -275,16 +276,17 @@ fn putty(text: &str) -> Result<Preview> {
                 values.clear();
                 return Ok(());
             }
-            if get("Protocol") != "ssh" || !matches!(get("ProxyMethod"), "" | "0") {
+            if get("Protocol") != "ssh" {
                 out.skipped += 1;
-                out.warn("PuTTY의 SSH 외 프로토콜 또는 프록시 세션을 제외했습니다.");
-            } else {
+                out.warn("PuTTY의 SSH 외 프로토콜 세션을 제외했습니다.");
+            } else if let Some(proxy) = proxy::putty(out, get) {
                 let port = if get("PortNumber").is_empty() {
                     22
                 } else {
                     get("PortNumber").parse().unwrap_or(0)
                 };
                 let mut p = profile(&name, get("HostName"), get("UserName"), port);
+                p.proxy = proxy;
                 let key = get("PublicKeyFile");
                 if !key.is_empty() && !key.to_ascii_lowercase().ends_with(".ppk") {
                     p.auth = "key".into();
@@ -338,6 +340,9 @@ fn putty(text: &str) -> Result<Preview> {
                 "PublicKeyFile",
                 "PortNumber",
                 "ProxyMethod",
+                "ProxyHost",
+                "ProxyPort",
+                "ProxyUsername",
                 "PortForwardings",
                 "LocalPortAcceptAll",
                 "RemotePortAcceptAll",
@@ -356,7 +361,7 @@ fn putty(text: &str) -> Result<Preview> {
         }
     }
     flush(&mut result, name, &mut values)?;
-    result.warn("PuTTY reg: 기본 접속·OpenSSH 키 경로·루프백 L/R/D 터널을 변환합니다. PPK·프록시·명령·신뢰·암호는 이전하지 않습니다. reg에는 제품 버전이 없어 버전별 실제 내보내기 검증이 별도로 필요합니다.");
+    result.warn("PuTTY reg: 기본 접속·OpenSSH 키 경로·루프백 L/R/D 터널·SOCKS5/HTTP 프록시를 변환합니다. PPK·그 밖의 프록시·명령·신뢰·암호는 이전하지 않습니다. reg에는 제품 버전이 없어 버전별 실제 내보내기 검증이 별도로 필요합니다.");
     Ok(result)
 }
 
@@ -622,7 +627,7 @@ fn openssh(text: &str) -> Result<Preview> {
                         .iter()
                         .any(|p| p.strip_prefix('!').is_some_and(|p| glob(p, &alias)));
             } else if applies {
-                values.entry(w[0].as_str()).or_insert(w[1].as_str());
+                values.entry(w[0].as_str()).or_insert(&w[1..]);
                 if matches!(
                     w[0].as_str(),
                     "localforward" | "remoteforward" | "dynamicforward"
@@ -631,21 +636,10 @@ fn openssh(text: &str) -> Result<Preview> {
                 }
             }
         }
-        let get = |key: &str| values.get(key).copied().unwrap_or("");
-        if [
-            "proxycommand",
-            "hostkeyalias",
-            "knownhostscommand",
-            "certificatefile",
-        ]
-        .iter()
-        .any(|k| !matches!(get(k), "" | "none"))
-            || !matches!(get("canonicalizehostname"), "" | "no" | "false")
-        {
-            result.skipped += 1;
-            result.warn("ProxyCommand·HostKeyAlias·KnownHostsCommand·CertificateFile·호스트 정규화 조건 세션을 제외했습니다.");
+        let get = |key: &str| values.get(key).map_or("", |v: &&[String]| v[0].as_str());
+        let Some(proxy) = proxy::openssh(&mut result, &values) else {
             continue;
-        }
+        };
         let host = if get("hostname").is_empty() {
             alias.as_str()
         } else {
@@ -666,6 +660,7 @@ fn openssh(text: &str) -> Result<Preview> {
                 get("port").parse().unwrap_or(0)
             },
         );
+        p.proxy = proxy;
         let key = get("identityfile");
         if !matches!(key, "" | "none") {
             if key.contains(['%', '$', '~']) {
@@ -796,7 +791,7 @@ fn openssh(text: &str) -> Result<Preview> {
         .bundle
         .tunnels
         .retain(|t| result.bundle.profiles.iter().any(|p| p.id == t.profile_id));
-    result.warn("OpenSSH 명시적 Host와 첫 설정값, ProxyJump, 루프백 Local/Remote/DynamicForward를 변환합니다. 추가 IdentityFile·Match·임의 명령·agent forwarding·신뢰 설정은 이전하지 않습니다. 파일에 제품 버전이 없어 원본 버전은 확인할 수 없습니다.");
+    result.warn("OpenSSH 명시적 Host와 첫 설정값, ProxyJump, nc 형식 ProxyCommand 프록시, 루프백 Local/Remote/DynamicForward를 변환합니다. 추가 IdentityFile·Match·임의 명령·agent forwarding·신뢰 설정은 이전하지 않습니다. 파일에 제품 버전이 없어 원본 버전은 확인할 수 없습니다.");
     Ok(result)
 }
 
@@ -983,7 +978,7 @@ mod tests {
         assert!(!stored.profiles[0].has_secret);
         let exported = crate::settings::export(&store).unwrap();
         let p = parse(&exported, "auto", "utf-8").unwrap();
-        assert_eq!(p.bundle.version, 3);
+        assert_eq!(p.bundle.version, crate::settings::CURRENT_VERSION);
         assert_eq!(p.bundle.format.as_deref(), Some("dachsterm.sessions"));
         assert_eq!(p.bundle.profiles[0].host, "lab.example");
     }

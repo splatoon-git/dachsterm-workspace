@@ -123,3 +123,29 @@ test('forwarded keys sit under key forwarding and leave no half-empty rows', asy
   await expect(keys.getByRole('list', { name: '추가 키' }).getByRole('listitem')).toHaveCount(0);
   await expectFullRows(dialog.locator('.session-advanced .form-grid').first());
 });
+
+test('a proxy asks for its address, and its password only for a named account', async ({
+  page,
+}) => {
+  const dialog = await openForm(page);
+  await dialog.locator('summary', { hasText: '고급 옵션' }).click();
+  const kind = dialog.getByLabel('프록시 종류');
+  await expect(kind).toHaveValue('');
+  await expect(dialog.getByLabel('프록시 호스트')).toHaveCount(0);
+  await kind.selectOption('socks5');
+  await expect(dialog.getByLabel('프록시 포트')).toHaveValue('1080');
+  await kind.selectOption('http');
+  await expect(dialog.getByLabel('프록시 포트')).toHaveValue('3128');
+  await expect(dialog.getByLabel('프록시 암호', { exact: true })).toHaveCount(0);
+  await dialog.getByLabel('프록시 사용자 (선택)').fill('alice');
+  const keep = dialog.getByLabel('프록시 암호 보관');
+  await expect(keep).toHaveValue('keep');
+  await dialog.getByLabel('프록시 암호', { exact: true }).fill('pw');
+  await expect(keep).toHaveValue('replace');
+  await expectFullRows(dialog.locator('.session-advanced fieldset .form-grid'));
+  // FTP cannot use a proxy, and coming back to SSH does not bring it back silently.
+  await dialog.getByLabel('프로토콜').selectOption('ftp');
+  await expect(kind).toHaveCount(0);
+  await dialog.getByLabel('프로토콜').selectOption('ssh');
+  await expect(dialog.getByLabel('프록시 종류')).toHaveValue('');
+});

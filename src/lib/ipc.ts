@@ -31,6 +31,16 @@ export type Profile = {
   kube?: KubeSettings | null;
   lastConnected: number | null;
   hasSecret: boolean;
+  /** The proxy the first TCP connection goes through. SSH without jump hosts only. */
+  proxy?: Proxy | null;
+};
+/** Only the backend sets `secretRef`; a form's value is ignored. */
+export type Proxy = {
+  kind: 'http' | 'socks5';
+  host: string;
+  port: number;
+  username: string;
+  secretRef?: string | null;
 };
 /** Paths and names on the server; a kubeconfig's contents never reach the app. */
 export type KubeSettings = {

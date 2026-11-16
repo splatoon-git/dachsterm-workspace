@@ -14,11 +14,19 @@ PuTTY는 `HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions`를 레지스트
 
 파일당 2MiB/20,000줄, 세션500·그룹100·터널128·템플릿100개 제한이다. 선택한 세션의 경유지와 상위 그룹, 템플릿 의존성도 함께 가져온다. 누락 계정은 미리보기에서 입력한다. Include는 설정 파일 폴더 안의 상대 경로만 지원하며 목록에서 승인한 파일만 읽는다.
 
+## JSON v4 규약
+
+현재 내보내기는 [v4 JSON Schema](session-format.schema.json)를 사용한다. v3에 프로필의 `proxy`를 더했다.
+
+- `proxy`: `{ "kind": "http" | "socks5", "host", "port", "username" }`. SSH 세션에만 쓰고, 경유지가 있는 세션에는 쓸 수 없다(첫 TCP 연결을 여는 첫 경유지 세션에 지정한다). 프록시 암호는 내보내지 않으며, 파일에 암호 참조(`secretRef`)가 있으면 거부한다. 가져온 세션은 연결할 때 암호를 묻는다.
+- v3 이하 파일에 `proxy`가 있으면 "JSON v4가 필요합니다"로 거부한다.
+- 외부 설정에서는 OpenSSH `ProxyCommand nc -X 5|connect -x 호스트[:포트] [-P 사용자] %h %p` 형식과 PuTTY `ProxyMethod` 2(SOCKS5)·3(HTTP)의 `ProxyHost`·`ProxyPort`·`ProxyUsername`만 프록시로 바꾼다. SOCKS4와 그 밖의 프록시 방식은 경고와 함께 해당 세션을 제외한다. `ProxyJump`와 `ProxyCommand`가 함께 있으면 `ProxyJump`만 쓴다. PuTTY `ProxyPassword`는 읽지 않는다.
+
 ## JSON v3 규약
 
-현재 내보내기는 [v3 JSON Schema](session-format.schema.json)를 사용한다. `format`, `version: 3`, `profiles`, `groups`, `tunnels`, `templates`로 구성한다. 프로필에 `jumpIds`(순서 있는 프로필 참조), `tags`, `sortOrder`, 그룹에 `parentId`/`sortOrder`를 추가했다. 템플릿은 `id`/`name`과 포트·인증 방식·인코딩·키 경로·연결 옵션·경유·태그·그룹·정렬 등의 선택 필드 `options`만 가진다. 목적지·사용자명·비밀정보는 템플릿에서 허용하지 않는다.
+[v3 JSON Schema](session-format.v3.schema.json)는 읽기 호환용으로 보존한다. `format`, `version: 3`, `profiles`, `groups`, `tunnels`, `templates`로 구성한다. 프로필에 `jumpIds`(순서 있는 프로필 참조), `tags`, `sortOrder`, 그룹에 `parentId`/`sortOrder`를 추가했다. 템플릿은 `id`/`name`과 포트·인증 방식·인코딩·키 경로·연결 옵션·경유·태그·그룹·정렬 등의 선택 필드 `options`만 가진다. 목적지·사용자명·비밀정보는 템플릿에서 허용하지 않는다.
 
-v1/v2 읽기는 유지한다. 알 수 없는 버전/필드, 자기 참조·순환·누락 참조·비SSH 경유, 4홉 초과와 그룹16깊이 초과는 거부한다. ID 재발급은 세션/그룹/경유/템플릿 전체에 적용하며 트랜잭션 실패 시 기존 데이터가 유지된다. 설정 복구본도 v3이며 기존 제품의 추가 복원 방식을 유지한다.
+v1~v3 읽기는 유지한다. 알 수 없는 버전/필드, 자기 참조·순환·누락 참조·비SSH 경유, 4홉 초과와 그룹16깊이 초과는 거부한다. ID 재발급은 세션/그룹/경유/템플릿 전체에 적용하며 트랜잭션 실패 시 기존 데이터가 유지된다. 설정 복구본은 현재 버전(v4)이며 기존 제품의 추가 복원 방식을 유지한다.
 
 ## JSON v2 읽기 호환 예제
 

@@ -1,6 +1,9 @@
 //! Reaches a profile's server through its jump hosts and logs in. A terminal opens a PTY on the
 //! result; the network tools stop here (TL.5).
-use super::{AuthReply, Connections, Event, Host, Receivers, Sink};
+use super::{
+    AuthReply, Connections, Event, Host, Receivers, Sink,
+    first_hop::{self, Transport},
+};
 use crate::storage::{Profile, Result};
 use russh::{Disconnect, client, keys::HashAlg};
 use std::{
@@ -41,11 +44,19 @@ impl Drop for SessionGuard {
     }
 }
 
+/// What a route needs besides the session's own secret: its jump hosts with the secrets saved for
+/// them, and the saved password of the proxy its first connection goes through (CG.1).
+#[derive(Default)]
+pub struct Secrets {
+    pub hops: Vec<(Profile, Option<Zeroizing<String>>)>,
+    pub proxy: Option<Zeroizing<String>>,
+}
+
 pub(crate) struct Target<'a> {
     pub profile: &'a Profile,
     /// `None` asks for it, as a jump host without a saved secret does.
     pub secret: Option<Zeroizing<String>>,
-    pub hops: Vec<(Profile, Option<Zeroizing<String>>)>,
+    pub route: Secrets,
     pub paths: &'a [PathBuf],
     pub forward_agent: bool,
 }
@@ -80,15 +91,20 @@ pub(crate) async fn open(
     let Target {
         profile: p,
         secret,
-        hops,
+        route: Secrets { hops, proxy },
         paths,
         forward_agent,
     } = target;
+    let mut proxy_secret = proxy;
     sink(Event::State {
         status: "connecting".into(),
         message: "서버에 연결하고 있습니다.".into(),
     })?;
-    let description = crate::routes::describe(hops.iter().map(|(h, _)| h).chain([p]));
+    let mut description = crate::routes::describe(hops.iter().map(|(h, _)| h).chain([p]));
+    // Only the first connection's proxy is used: the later hops are reached through the earlier.
+    if let Some(proxy) = hops.first().map_or(p, |(h, _)| h).proxy.as_ref() {
+        description = format!("{} → {description}", proxy.label());
+    }
     let mut route = hops;
     route.push((p.clone(), secret));
     let mut owned: Vec<SessionGuard> = Vec::new();
@@ -127,15 +143,7 @@ pub(crate) async fn open(
                     .into_stream(),
                 )
             } else {
-                Box::new(
-                    timeout(
-                        Duration::from_secs(hop.timeout),
-                        tokio::net::TcpStream::connect((hop.host.as_str(), hop.port)),
-                    )
-                    .await
-                    .map_err(|_| "접속 시간이 초과되었습니다.")?
-                    .map_err(|_| "서버에 연결할 수 없습니다.")?,
-                )
+                first_hop::open(&hop, proxy_secret.take(), &hop_sink, &mut channels.replies).await?
             };
             let last = hop.id == p.id;
             let secret = match secret {
@@ -180,8 +188,6 @@ pub(crate) async fn open(
     })
 }
 
-trait Transport: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send {}
-impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send> Transport for T {}
 #[allow(clippy::too_many_arguments)]
 async fn authenticate_hop(
     p: &Profile,

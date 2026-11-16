@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::Mutex};
 use uuid::Uuid;
 mod git_credentials;
+mod proxy;
 pub use git_credentials::GitCredential;
+pub use proxy::{Endpoint, MAX_PROXY_FIELD, Proxy};
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn db_error(_: rusqlite::Error) -> String {
@@ -61,6 +63,18 @@ pub struct Profile {
     pub last_connected: Option<i64>,
     #[serde(default)]
     pub has_secret: bool,
+    /// The proxy the first TCP connection goes through (CG.1). Only an SSH session without jump
+    /// hosts has one; with jump hosts, the first jump host's proxy is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<Proxy>,
+}
+/// A host name or address without spaces, separators or brackets.
+pub(crate) fn valid_host(host: &str) -> bool {
+    !host.is_empty()
+        && host.len() <= 253
+        && !host.chars().any(|c| {
+            c.is_whitespace() || c.is_control() || matches!(c, '/' | '\\' | ',' | '[' | ']')
+        })
 }
 fn is_false(value: &bool) -> bool {
     !value
@@ -129,6 +143,7 @@ impl Profile {
             kube: None,
             last_connected: None,
             has_secret: false,
+            proxy: None,
         }
     }
     /// Stored Passphrase references of the forwarded key files.
@@ -149,6 +164,7 @@ impl Profile {
             return Err("키 전달은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
         check_forward_keys(&self.forward_keys)?;
+        self.check_proxy()?;
         if self.protocol != "ssh" && (!self.workspace.is_terminal() || self.kube.is_some()) {
             return Err("쿠버네티스 화면은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
@@ -176,11 +192,7 @@ impl Profile {
         }
         if self.name.trim().is_empty()
             || self.name.len() > 200
-            || self.host.is_empty()
-            || self.host.len() > 253
-            || self.host.chars().any(|c| {
-                c.is_whitespace() || c.is_control() || matches!(c, '/' | '\\' | ',' | '[' | ']')
-            })
+            || !valid_host(&self.host)
             || self.port == 0
             || self.username.is_empty()
             || self.username.len() > 256
@@ -348,10 +360,13 @@ impl Store {
                 .find(|k| k.path == key.path)
                 .and_then(|k| k.secret_ref.clone());
         }
+        if let Some(proxy) = &mut p.proxy {
+            proxy.keep_secret(old.as_ref().and_then(|o| o.proxy.as_ref()));
+        }
         let dropped: Vec<String> = old
             .iter()
-            .flat_map(|o| o.forward_refs())
-            .filter(|r| !p.forward_refs().any(|kept| kept == *r))
+            .flat_map(|o| o.data_refs())
+            .filter(|r| !p.data_refs().any(|kept| kept == *r))
             .map(String::from)
             .collect();
         let mut profiles = self.list()?.profiles;
@@ -395,7 +410,7 @@ impl Store {
             .list()?
             .profiles
             .iter()
-            .flat_map(|p| p.forward_refs().map(String::from))
+            .flat_map(|p| p.data_refs().map(String::from))
             .collect();
         forwarded.extend(self.local_agent()?.refs().map(String::from));
         forwarded.extend(self.git_credentials()?.into_iter().map(|e| e.secret_ref));
@@ -477,7 +492,7 @@ impl Store {
         use rusqlite::OptionalExtension;
         let forwarded: Vec<String> = self
             .profile(id)
-            .map(|p| p.forward_refs().map(String::from).collect())
+            .map(|p| p.data_refs().map(String::from).collect())
             .unwrap_or_default();
         let mut db = self.0.lock().unwrap();
         let tx = db.transaction().map_err(db_error)?;
@@ -569,6 +584,7 @@ pub(crate) mod tests {
             kube: None,
             last_connected: None,
             has_secret: false,
+            proxy: None,
         }
     }
     #[test]

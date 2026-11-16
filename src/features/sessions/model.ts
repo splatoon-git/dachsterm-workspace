@@ -20,7 +20,8 @@ export function hasConnectionOverrides(p: Profile) {
     !!p.tlsCaPath ||
     !!p.tmuxSession ||
     !!p.forwardAgent ||
-    !!p.forwardGitCredentials
+    !!p.forwardGitCredentials ||
+    !!p.proxy
   );
 }
 export function inGroup(p: Profile, id: string, groups: Group[]) {

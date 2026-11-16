@@ -103,6 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 forward_git_credentials: false,
                 last_connected: None,
                 has_secret: false,
+                proxy: None,
             },
             None,
         )?;

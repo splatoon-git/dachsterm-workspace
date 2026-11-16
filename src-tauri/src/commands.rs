@@ -21,9 +21,18 @@ pub fn save_session(
     mut profile: Profile,
     secret_action: String,
     secret: Option<String>,
+    proxy_secret_action: Option<String>,
+    proxy_secret: Option<String>,
 ) -> Result<Profile> {
     let secret = secret.map(Zeroizing::new);
+    let proxy_secret = proxy_secret.map(Zeroizing::new);
     profile.validate()?;
+    let proxy_secret = match proxy_secret_action.as_deref() {
+        None | Some("keep") => None,
+        Some("forget") => Some(None),
+        Some("replace") => Some(Some(check_proxy_secret(&profile, proxy_secret)?)),
+        Some(_) => return Err("프록시 암호 저장 방식이 올바르지 않습니다.".into()),
+    };
     if matches!(profile.auth.as_str(), "agent" | "interactive") && secret_action == "replace" {
         return Err("에이전트·추가 인증 응답은 저장할 수 없습니다.".into());
     }
@@ -70,10 +79,35 @@ pub fn save_session(
         }
         _ => return Err("인증정보 저장 방식이 올바르지 않습니다.".into()),
     };
-    let result = state.store.save(profile, new);
+    let result = state
+        .store
+        .save(profile, new)
+        .and_then(|saved| match proxy_secret {
+            None => Ok(saved),
+            Some(None) => state.store.set_proxy_secret(&saved.id, None),
+            Some(Some(value)) => {
+                let reference = state.vault.save(&state.store, &value)?;
+                state.store.set_proxy_secret(&saved.id, Some(&reference))
+            }
+        });
     // A failed OS cleanup stays journaled and is reported by the next snapshot.
     let _ = state.store.cleanup_credentials();
     result
+}
+/// A proxy password to store: SOCKS5 carries at most 255 bytes, and only a named account has one.
+fn check_proxy_secret(
+    profile: &Profile,
+    value: Option<Zeroizing<String>>,
+) -> Result<Zeroizing<String>> {
+    let proxy = (profile.proxy.as_ref()).ok_or("프록시를 지정해야 암호를 저장할 수 있습니다.")?;
+    if proxy.endpoint().username.is_empty() {
+        return Err("프록시 사용자 이름을 입력해야 암호를 저장할 수 있습니다.".into());
+    }
+    let value = value.ok_or("저장할 프록시 암호를 입력하세요.")?;
+    if value.len() > crate::storage::MAX_PROXY_FIELD {
+        return Err("프록시 암호는 255바이트 이하여야 합니다.".into());
+    }
+    Ok(value)
 }
 #[tauri::command]
 pub fn delete_session(state: State<AppState>, id: String) -> Result<()> {
@@ -132,6 +166,7 @@ pub async fn connect(
         || profile.auth != expected.auth
         || profile.key_path != expected.key_path
         || profile.jump_ids != expected.jump_ids
+        || !same_proxy(&profile, &expected)
     {
         return Err("저장된 연결 대상이 변경되었습니다. 세션 목록에서 다시 연결하세요.".into());
     }
@@ -162,7 +197,7 @@ pub async fn connect(
         .filter(|c| c.profile_id == profile_id && c.auto_start)
         .collect::<Vec<_>>();
     let tunnel_connection = id.clone();
-    let hops = hop_secrets(&state, &profile)?;
+    let route = route_secrets(&state, &profile)?;
     if let Some(launch) = launch {
         state.connections.launches.put(&id, launch);
     }
@@ -171,7 +206,7 @@ pub async fn connect(
         id,
         profile,
         secret,
-        hops,
+        route,
         state.known_hosts.clone(),
         Arc::new(move |mut event| {
             if let Event::State { status, message } = &mut event {
@@ -229,15 +264,17 @@ pub(crate) fn saved_secret(state: &AppState, id: &str) -> Result<Option<Zeroizin
         None => Ok(None),
     }
 }
-/// The jump hosts on the way to a session, with the secrets saved for them.
-pub(crate) fn hop_secrets(
-    state: &AppState,
-    profile: &Profile,
-) -> Result<Vec<(Profile, Option<Zeroizing<String>>)>> {
+/// The jump hosts on the way to a session with the secrets saved for them, and the saved password
+/// of the proxy the first of them (or the session itself) connects through.
+pub(crate) fn route_secrets(state: &AppState, profile: &Profile) -> Result<crate::ssh::Secrets> {
     let _guard = state.mutation.lock().unwrap();
     let mut route = crate::routes::resolve(profile, &state.store.list()?.profiles)?;
+    let proxy = match route.first().and_then(|p| p.proxy.as_ref()?.secret_ref()) {
+        Some(reference) => Some(state.vault.get(&state.store, reference)?),
+        None => None,
+    };
     route.pop();
-    route
+    let hops = route
         .into_iter()
         .map(|p| {
             let secret = match state.store.secret_ref(&p.id)? {
@@ -246,7 +283,16 @@ pub(crate) fn hop_secrets(
             };
             Ok((p, secret))
         })
-        .collect()
+        .collect::<Result<_>>()?;
+    Ok(crate::ssh::Secrets { hops, proxy })
+}
+/// The proxy the tab was opened for, ignoring the password reference the backend keeps.
+fn same_proxy(a: &Profile, b: &Profile) -> bool {
+    match (&a.proxy, &b.proxy) {
+        (None, None) => true,
+        (Some(a), Some(b)) => a.same_target(b),
+        _ => false,
+    }
 }
 pub(crate) fn same_credential_target(a: &Profile, b: &Profile) -> bool {
     a.id == b.id
@@ -399,7 +445,13 @@ pub fn terminal_ack(
 /// so no early return leaves the plain text in memory. S.11 found `connect` returning first.
 #[cfg(test)]
 mod secret_argument_tests {
-    const SECRETS: &[&str] = &["secret", "password", "new_password", "passphrase"];
+    const SECRETS: &[&str] = &[
+        "secret",
+        "password",
+        "new_password",
+        "passphrase",
+        "proxy_secret",
+    ];
 
     fn sources(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
         for entry in std::fs::read_dir(dir).unwrap().map(Result::unwrap) {
