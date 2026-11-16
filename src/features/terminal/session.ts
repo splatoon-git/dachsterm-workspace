@@ -10,8 +10,9 @@ import { ProgramStatus } from './programStatus';
 import { PaneView } from './paneView';
 import { AgentSignQueue } from './agentSign';
 import { InputQueue } from './inputQueue';
-import type { LocalTarget, SessionEvent as Event, SessionState } from './sessionTypes';
+import type { SessionEvent as Event, SessionState } from './sessionTypes';
 export type { LocalCatalog, LocalTarget, SessionState } from './sessionTypes';
+import { podTransport, remoteTransport, type TerminalTransport } from './transport';
 import { Channel } from '@tauri-apps/api/core';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -47,10 +48,9 @@ export class TerminalSession {
     mode: () => {
       // tmux may reattach to a pane where a program runs, so nothing may ever be typed there.
       // A Kubernetes session's shell is hidden, and nothing is typed into a shell nobody sees.
-      const { protocol, tmuxSession, workspace } = this.profile;
-      if (this.podTerminal || protocol !== 'ssh' || tmuxSession || workspace === 'kubernetes')
-        return 'none';
-      return this.localTarget?.follow ?? 'remote';
+      const { tmuxSession, workspace } = this.profile;
+      if (tmuxSession || workspace === 'kubernetes') return 'none';
+      return this.transport.directory;
     },
     supportsHook: () =>
       call<boolean>('terminal_supports_directory_hook', { id: this.connectionId }),
@@ -73,7 +73,7 @@ export class TerminalSession {
   /** tmux gets the helper from its start command instead, since nothing is typed there. */
   private async loadGitHook(id: string) {
     const { forwardGitCredentials, tmuxSession } = this.profile;
-    const asks = forwardGitCredentials && !tmuxSession && !this.localTarget && !this.podTerminal;
+    const asks = forwardGitCredentials && !tmuxSession && this.transport.gitCredentials;
     const hook =
       asks && (await call<string | null>('git_credential_shell', { id }).catch(() => null));
     if (id === this.connectionId) this.gitHook = hook || undefined;
@@ -83,10 +83,9 @@ export class TerminalSession {
     if (value && this.autoDirectoryHook && this.current.status === 'connected')
       void this.directoryHookInstaller.install();
   }
-  /** A Windows shell only takes its hook at launch; the typed hook is Bash and Zsh text. */
+  /** The typed hook is Bash and Zsh text, and tmux owns the prompt. */
   get canTypeDirectoryHook() {
-    if (this.podTerminal || this.profile.tmuxSession) return false;
-    return !this.localTarget || this.localTarget.kind === 'wsl';
+    return this.transport.typedHook && !this.profile.tmuxSession;
   }
   typeDirectoryHook() {
     this.directoryHookInstaller.cancel();
@@ -117,20 +116,21 @@ export class TerminalSession {
   disposed = false;
   private pending = false;
   private readonly input = new InputQueue({
-    send: (data) => call(`${this.backend}_input`, { id: this.connectionId, data }),
+    send: (data) => this.transport.input(this.connectionId, data),
     notice: (message) => this.notice(message),
     disposed: () => this.disposed,
   });
   private replaying = false;
   private channel?: Channel<Event>;
+  private transport: TerminalTransport;
   constructor(
     public profile: Profile,
     theme: ThemeDefinition,
     readonly onConnected: () => void,
-    readonly localTarget?: LocalTarget,
-    /** Reassigned only to point a cut pod shell at the workload's new pod before `reconnect`. */
-    public podTerminal?: PodTerminalLaunch,
+    /** How the tab reaches its shell. A saved connection's when absent. */
+    transport?: TerminalTransport,
   ) {
+    this.transport = transport ?? remoteTransport(profile);
     this.terminal = new Terminal({
       ...terminalColorOptions(theme),
       fontFamily: terminalFontFamily(theme),
@@ -142,55 +142,57 @@ export class TerminalSession {
     this.terminal.loadAddon(this.fit);
     this.terminal.loadAddon(this.search);
     attachTerminalIntegrations(this.terminal, {
-      windowsPaths: this.localTarget?.kind === 'shell',
+      windowsPaths: this.transport.windowsPaths,
       directory: (path) => this.setDirectory(path),
       // Kept while the guide is off too, so turning it on shows a program already running.
       program: (guideProgram) => {
         const guideRun = (this.current.guideRun ?? 0) + 1;
-        if (!this.podTerminal) this.update({ ...this.current, guideProgram, guideRun });
+        if (this.transport.programGuide) this.update({ ...this.current, guideProgram, guideRun });
       },
-      agent:
-        this.podTerminal || this.profile.protocol !== 'ssh'
-          ? undefined
-          : {
-              keyboard: this.keyboard,
-              status: this.programStatus,
+      agent: !this.transport.agent
+        ? undefined
+        : {
+            keyboard: this.keyboard,
+            status: this.programStatus,
+            replaying: () => this.replaying,
+            copy: (text) => this.copyText(text),
+            notice: (message) => this.notice(message),
+            tmuxMissing: () => this.notice('서버에 tmux가 없어 일반 셸로 시작했습니다.'),
+            attention: programNotifier({
+              terminal: this.terminal,
+              sessionName: () => this.profile.name,
               replaying: () => this.replaying,
-              copy: (text) => this.copyText(text),
               notice: (message) => this.notice(message),
-              tmuxMissing: () => this.notice('서버에 tmux가 없어 일반 셸로 시작했습니다.'),
-              attention: programNotifier({
-                terminal: this.terminal,
-                sessionName: () => this.profile.name,
-                replaying: () => this.replaying,
-                notice: (message) => this.notice(message),
-              }),
-            },
+            }),
+          },
       respond: (data) => this.send(data),
     });
-    if (!this.podTerminal && this.profile.protocol === 'ssh')
+    if (this.transport.links)
       attachTerminalLinks(this.terminal, {
-        remote: () => !this.localTarget,
+        remote: () => this.transport.links === 'remote',
         server: (serverLink) => this.update({ ...this.current, serverLink }),
         notice: (message) => this.notice(message),
       });
     this.terminal.onData((data) => this.send(data));
     this.terminal.onResize(({ cols, rows }) => {
-      if (this.current.status === 'connected' && this.profile.protocol === 'ssh')
-        void call(`${this.backend}_resize`, { id: this.connectionId, cols, rows }).catch((e) =>
-          this.notice(errorText(e)),
-        );
+      if (this.current.status === 'connected') this.resizeRemote(this.connectionId, cols, rows);
     });
   }
-  private get backend() {
-    return this.podTerminal ? 'kube_terminal' : this.localTarget ? 'local' : 'terminal';
+  get kind() {
+    return this.transport.kind;
   }
-  private get closeCommand() {
-    return this.podTerminal
-      ? 'kube_terminal_close'
-      : this.localTarget
-        ? 'local_close'
-        : 'disconnect';
+  get localTarget() {
+    return this.transport.localTarget;
+  }
+  get podTerminal() {
+    return this.transport.podLaunch;
+  }
+  /** Points a cut pod shell at the workload's new pod before `reconnect`. */
+  retargetPod(launch: PodTerminalLaunch) {
+    if (this.transport.kind === 'pod') this.transport = podTransport(launch);
+  }
+  private resizeRemote(id: string, cols: number, rows: number) {
+    void this.transport.resize?.(id, cols, rows).catch((e) => this.notice(errorText(e)));
   }
   private setDirectory(path: string) {
     if (this.current.directory !== path)
@@ -238,36 +240,21 @@ export class TerminalSession {
     this.channel = new Channel<Event>();
     this.bindEvents(this.channel, id);
     try {
-      await (this.podTerminal
-        ? call('kube_terminal_open', {
-            id,
-            launch: this.podTerminal,
-            cols: this.terminal.cols,
-            rows: this.terminal.rows,
-            onEvent: this.channel,
-          })
-        : this.localTarget
-          ? call('local_open', {
-              id,
-              targetId: this.localTarget.id,
-              cols: this.terminal.cols,
-              rows: this.terminal.rows,
-              onEvent: this.channel,
-            })
-          : call('connect', {
-              id,
-              profileId: this.profile.id,
-              expected: this.profile,
-              secret,
-              remember,
-              launch,
-              onEvent: this.channel,
-            }));
+      await this.transport.open({
+        id,
+        profile: this.profile,
+        secret,
+        remember,
+        launch,
+        cols: this.terminal.cols,
+        rows: this.terminal.rows,
+        onEvent: this.channel,
+      });
     } catch (e) {
       this.update({ status: 'error', message: errorText(e), hostKey: null });
     } finally {
       this.pending = false;
-      if (this.disposed) await call(this.closeCommand, { id }).catch(() => {});
+      if (this.disposed) await this.transport.close(id).catch(() => {});
     }
   }
   private bindEvents(channel: Channel<Event>, id: string) {
@@ -293,7 +280,7 @@ export class TerminalSession {
           this.notice('일부 문자가 대체 표시되었습니다. 세션 인코딩과 서버 로케일을 확인하세요.');
         this.terminal.write(this.directoryHookInstaller.filter.push(text), () => {
           this.directoryHookInstaller.noteOutput();
-          void call(`${this.backend}_ack`, { id, seq: event.seq }).catch(() => {});
+          void this.transport.ack(id, event.seq).catch(() => {});
         });
       } else if (event.type === 'authPrompt')
         this.update({
@@ -322,12 +309,7 @@ export class TerminalSession {
         if (event.status === 'closed' || event.status === 'error')
           this.programStatus.programEnded();
         if (event.status === 'connected') {
-          if (this.profile.protocol === 'ssh')
-            void call(`${this.backend}_resize`, {
-              id,
-              cols: this.terminal.cols,
-              rows: this.terminal.rows,
-            }).catch((e) => this.notice(errorText(e)));
+          this.resizeRemote(id, this.terminal.cols, this.terminal.rows);
           this.onConnected();
           void this.loadGitHook(id).then(() => {
             if (this.autoDirectoryHook && this.wantsShellHook())
@@ -373,14 +355,13 @@ export class TerminalSession {
     this.input.push(data);
   }
   async disconnect() {
-    await call(this.closeCommand, { id: this.connectionId }).catch((e) =>
-      this.notice(errorText(e)),
-    );
+    await this.transport.close(this.connectionId).catch((e) => this.notice(errorText(e)));
   }
   async reconnect(secret: string | null, profile: Profile, remember = false) {
     if (!['closed', 'error'].includes(this.current.status)) return;
     this.connectionId = crypto.randomUUID();
     this.profile = profile;
+    this.transport = this.transport.reopen(profile);
     this.input.clear();
     this.directoryHookInstaller.cancel();
     this.terminal.reset();

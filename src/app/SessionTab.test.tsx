@@ -24,6 +24,8 @@ function setup() {
     notice: () => {},
   });
   const session = {
+    // A kind without a session log, so no log status is watched.
+    kind: 'ftp',
     programStatus,
     agentSign,
     connectionId: 'c1',

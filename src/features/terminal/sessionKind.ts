@@ -1,4 +1,3 @@
-import type { PodTerminalLaunch, Profile } from '../../lib/ipc';
 import type { Source } from '../../lib/source';
 import type { LocalTarget } from './sessionTypes';
 
@@ -20,17 +19,8 @@ export type SessionCapabilities = {
   kube: boolean;
 };
 
-type SessionLike = {
-  profile: Pick<Profile, 'protocol'>;
-  localTarget?: LocalTarget;
-  podTerminal?: PodTerminalLaunch;
-};
-
-export function sessionKind(session: SessionLike): SessionKind {
-  if (session.podTerminal) return 'pod';
-  if (session.localTarget) return 'local';
-  return session.profile.protocol === 'ssh' ? 'ssh' : 'ftp';
-}
+/** A session's kind comes from its transport (`transport.ts`), never from its profile. */
+type SessionLike = { kind: SessionKind };
 
 const table: Record<SessionKind, SessionCapabilities> = {
   ssh: {
@@ -71,14 +61,19 @@ const table: Record<SessionKind, SessionCapabilities> = {
   },
 };
 
-export const capabilities = (session: SessionLike) => table[sessionKind(session)];
+export const capabilities = (session: SessionLike) => table[session.kind];
 
 /** What commands that work on any tab are told about this one. A pod tab has no files of its own. */
-export function sessionSource(session: SessionLike & { connectionId: string }): Source | null {
-  if (session.podTerminal) return null;
-  if (session.localTarget) return { kind: 'local', targetId: session.localTarget.id };
-  return {
-    kind: session.profile.protocol === 'ssh' ? 'ssh' : 'ftp',
-    connectionId: session.connectionId,
-  };
+export function sessionSource(
+  session: SessionLike & { connectionId: string; localTarget?: Pick<LocalTarget, 'id'> },
+): Source | null {
+  switch (session.kind) {
+    case 'pod':
+      return null;
+    case 'local':
+      return session.localTarget ? { kind: 'local', targetId: session.localTarget.id } : null;
+    case 'ssh':
+    case 'ftp':
+      return { kind: session.kind, connectionId: session.connectionId };
+  }
 }

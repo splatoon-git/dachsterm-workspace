@@ -120,7 +120,7 @@ Tauri 2 앱이다. React는 화면과 터미널 렌더링만 맡고, SSH 연결�
 ### 식별자와 터미널 데이터 흐름
 
 - 저장된 프로필, 실행 중 연결, 탭(`tabId`), SFTP 작업, 터널은 서로 다른 ID를 쓴다. 재접속은 새 ID와 새 셸을 만들고 명령을 재실행하지 않는다.
-- [session.ts](src/features/terminal/session.ts)의 `TerminalSession`이 xterm과 연결 수명을 함께 가지며, SSH·로컬·파드 터미널 명령을 분기해 호출한다. FTP 탭도 이 클래스를 쓴다.
+- [session.ts](src/features/terminal/session.ts)의 `TerminalSession`이 xterm과 연결 수명을 함께 가진다. 백엔드 명령과 종류별 지원 기능은 [transport.ts](src/features/terminal/transport.ts)의 transport 객체(SSH·FTP, 로컬, 파드)가 정하고, 탭 종류는 `session.kind`로 판단한다. FTP 탭도 이 클래스를 쓴다.
 - 백엔드는 [ssh.rs](src-tauri/src/ssh.rs), [local.rs](src-tauri/src/local.rs), [kube/terminal.rs](src-tauri/src/kube/terminal.rs)로 나뉘어 있다. 출력은 `Channel<Event>`로 32KiB 프레임을 보내고 xterm 렌더 완료 ACK를 받은 뒤 다음 프레임을 보낸다. 세 구현의 ACK 규칙과 상한이 다르므로 한쪽만 고치면 동작이 더 벌어진다.
 - 창 분리는 [windows.rs](src-tauri/src/windows.rs)의 `Broker`가 처리한다. 최근 최대 2MiB를 새 창에 재생하고, 소유 창만 입력·resize·ACK를 보낼 수 있다.
 

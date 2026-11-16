@@ -12,6 +12,7 @@ import {
 } from '../features/kube/podShell';
 import type { Snapshot } from '../features/kube/snapshotTypes';
 import { TerminalSession } from '../features/terminal/session';
+import { podTransport } from '../features/terminal/transport';
 import type { ThemeDefinition } from '../themes/contract';
 import type { Workspace } from './useWorkspaceLayout';
 import { tabKey, type TabRef } from './workspaceLayout';
@@ -57,7 +58,7 @@ export function useKubeTabs({
 
   function start(launch: PodTerminalLaunch, name: string, host: string) {
     const profile = { ...blankProfile(), name, host };
-    const session = new TerminalSession(profile, theme, () => {}, undefined, launch);
+    const session = new TerminalSession(profile, theme, () => {}, podTransport(launch));
     setTabs((previous) => [...previous, session]);
     latest.current.workspace.open(refOf(session));
     return session;
@@ -196,7 +197,7 @@ export function useKubeTabs({
         target.overview?.containers.find((c) => c.name === launch.container)?.name ??
         target.overview?.containers[0]?.name ??
         launch.container;
-      session.podTerminal = { ...here, pod: target.pod, container };
+      session.retargetPod({ ...here, pod: target.pod, container });
       shell.overview = target.overview;
       shell.container = container;
       shell.connectedAt = 0;

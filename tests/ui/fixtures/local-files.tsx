@@ -47,6 +47,7 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
 // The part of a local shell tab the panel reads. Following the shell's folder is off.
 const snapshot = { status: 'connected', directory: null };
 const session = {
+  kind: 'local',
   connectionId: 'local-1',
   profile: { protocol: 'ssh', name: 'zsh' },
   subscribe: () => () => {},

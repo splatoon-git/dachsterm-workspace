@@ -1,31 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { capabilities, sessionKind } from '../features/terminal/sessionKind';
-import { blankProfile } from '../lib/ipc';
+import { capabilities } from '../features/terminal/sessionKind';
 import { tabMenuEntries, type TabMenuState } from './tabMenu';
 
-const ssh = { profile: { ...blankProfile(), protocol: 'ssh' as const } };
-const ftp = { profile: { ...blankProfile(), protocol: 'ftps' as const } };
-const local = {
-  profile: blankProfile(),
-  localTarget: {
-    id: 'pwsh',
-    name: 'PowerShell',
-    kind: 'shell' as const,
-    follow: 'launch' as const,
-  },
-};
-const pod = {
-  profile: blankProfile(),
-  podTerminal: {
-    kind: 'podLogs' as const,
-    connection: 'c',
-    kube: { context: 'c', namespace: 'n', kubectl: 'kubectl', kubeconfig: '', operate: false },
-    namespace: 'n',
-    pod: 'p',
-    container: 'app',
-    tail: 200,
-  },
-};
+const ssh = { kind: 'ssh' as const };
+const ftp = { kind: 'ftp' as const };
+const local = { kind: 'local' as const };
+const pod = { kind: 'pod' as const };
 const base: TabMenuState = {
   capabilities: capabilities(ssh),
   review: true,
@@ -44,10 +24,7 @@ const all = (state: Partial<TabMenuState>) =>
 const commands = (state: Partial<TabMenuState>) =>
   all(state).filter((command) => !arrangeCommands.includes(command));
 
-describe('sessionKind', () => {
-  it('tells the four kinds apart', () => {
-    expect([ssh, ftp, local, pod].map(sessionKind)).toEqual(['ssh', 'ftp', 'local', 'pod']);
-  });
+describe('capabilities', () => {
   it('lets only SSH leave the window or report server load', () => {
     expect([ssh, ftp, local, pod].map((s) => capabilities(s).detach)).toEqual([
       true,

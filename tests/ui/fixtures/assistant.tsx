@@ -77,6 +77,7 @@ window.__guide = (program) => {
 };
 const first = {
   tabId: 'one',
+  kind: 'ssh',
   connectionId: 'id-one',
   profile: { ...blankProfile(), name: '테스트 SSH', host: 'example.test', username: 'test' },
   terminal: { modes: { bracketedPasteMode: true }, buffer },
@@ -90,6 +91,7 @@ const first = {
 const second = {
   ...first,
   tabId: 'two',
+  kind: 'local',
   connectionId: 'id-two',
   profile: { ...first.profile, name: '테스트 로컬' },
   localTarget: { id: 'powershell', name: 'PowerShell', kind: 'shell' },
@@ -97,6 +99,7 @@ const second = {
 const excluded = {
   ...first,
   tabId: 'pod',
+  kind: 'pod',
   profile: { ...first.profile, name: '파드 탭' },
   podTerminal: {},
 } as unknown as TerminalSession;

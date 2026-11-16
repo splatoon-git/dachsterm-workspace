@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { call, desktop, errorText } from '../../lib/ipc';
 import type { ExternalEdit } from '../../lib/externalEdit';
-import { sessionKind } from './sessionKind';
 import type { TerminalSession } from './session';
 import { programNotifier } from './terminalNotify';
 
@@ -156,7 +155,7 @@ const noSubscription = () => () => {};
 
 export function useEditSavePrompt(session: TerminalSession) {
   // Other tab kinds have no server files to edit, so they do not start the polling.
-  const remote = sessionKind(session) === 'ssh';
+  const remote = session.kind === 'ssh';
   const edits = useSyncExternalStore(
     remote ? editSaves.subscribe : noSubscription,
     editSaves.snapshot,

@@ -73,6 +73,7 @@ window.__cd = (directory) => {
 // A stand-in for the part of a terminal session the status bar reads.
 const session = {
   tabId: 't1',
+  kind: 'ssh',
   connectionId: 'c1',
   profile: { protocol: 'ssh', name: '서버', username: 'u', host: 'srv', port: 22 },
   view: new PaneView(),

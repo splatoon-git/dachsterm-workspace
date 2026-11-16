@@ -55,6 +55,7 @@ import { TunnelPanel } from '../features/tunnels/TunnelPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { SessionTab } from './SessionTab';
 import { capabilities } from '../features/terminal/sessionKind';
+import { localTransport } from '../features/terminal/transport';
 import { SidebarViews } from './SidebarViews';
 import { PreviewTab, TerminalPreviewCell } from './TerminalPreviewCell';
 import { Icon } from '../components/Icon';
@@ -219,7 +220,12 @@ export function App() {
   }
   const agent = useAgentLaunch((p, launch) => requestConnect(p, undefined, { launch }));
   function openLocal(target: LocalTarget, beside?: Beside, cluster?: LocalClusterProfile) {
-    const session = new TerminalSession(localTabProfile(target, cluster), theme, () => {}, target);
+    const session = new TerminalSession(
+      localTabProfile(target, cluster),
+      theme,
+      () => {},
+      localTransport(target),
+    );
     setTabs((previous) => [...previous, session]);
     workspace.open(sessionRef(session), beside);
     setLocalOpen(false);
@@ -271,14 +277,8 @@ export function App() {
   };
   useAppShortcuts(keptByFile, runShortcut, () => tabMenu.closeFocused());
   function requestConnect(profile: Profile, existing?: TerminalSession, opening?: Opening) {
-    if (existing?.podTerminal) {
-      void kubeTabs.reconnect(existing);
-      return;
-    }
-    if (existing?.localTarget) {
-      void existing.reconnect(null, profile);
-      return;
-    }
+    if (existing?.kind === 'pod') return void kubeTabs.reconnect(existing);
+    if (existing?.kind === 'local') return void existing.reconnect(null, profile);
     if (profile.hasSecret || ['agent', 'interactive'].includes(profile.auth))
       connect(profile, null, existing, false, opening);
     else setAuth({ profile, session: existing, opening });

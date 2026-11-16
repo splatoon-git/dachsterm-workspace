@@ -2,7 +2,6 @@ import { lazy, Suspense, useState } from 'react';
 import { networkTools, type ServiceHandoff, type ToolId } from '../features/tools/catalog';
 import type { VaultReady } from '../features/tools/useSource';
 import type { TerminalSession } from '../features/terminal/session';
-import { sessionKind } from '../features/terminal/sessionKind';
 import type { Profile } from '../lib/ipc';
 import { PlainTab } from './GroupTabBar';
 import type { Workspace } from './useWorkspaceLayout';
@@ -48,7 +47,7 @@ export function useToolTabs({
     sessions.some(
       (session) =>
         session.profile.id === profileId &&
-        sessionKind(session) === 'ssh' &&
+        session.kind === 'ssh' &&
         session.snapshot().status === 'connected',
     );
   return {

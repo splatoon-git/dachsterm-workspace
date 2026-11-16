@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { call, errorText } from '../../lib/ipc';
 import { terminalPreferences } from '../terminal/preferences';
 import type { TerminalSession } from '../terminal/session';
-import { sessionKind, sessionSource } from '../terminal/sessionKind';
+import { sessionSource } from '../terminal/sessionKind';
 import { GitScheduler, gitPath, type GitEvent, type GitResult } from './gitStatus';
 import { gitStatusOf, useGitStatus } from './useGitStatus';
 import type { GitViewRepo, GitViewResult } from './gitViewModel';
@@ -135,7 +135,7 @@ export function useGitView(session: TerminalSession | undefined): GitViewModel {
   }, [store, status, folder]);
 
   if (!session) return { state: 'noTab' };
-  if (!store || !status) return { state: 'unsupported', ftp: sessionKind(session) === 'ftp' };
+  if (!store || !status) return { state: 'unsupported', ftp: session.kind === 'ftp' };
   if (!connected) return { state: 'disconnected' };
   if (!folder) return { state: 'noFolder' };
   return {

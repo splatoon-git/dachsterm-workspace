@@ -78,7 +78,7 @@ Codex와 Claude Code가 함께 따르는 규칙이다. 범위·디자인·보안
 - 의존 방향은 `app → features → components·lib·themes`다. `components`, `lib`, `themes`는 `features`를 import하지 않는다.
 - 기능 간 직접 import를 새로 추가하지 않는다. 공유할 코드는 아래 계층으로 내린다.
 - 탭 배치는 `app/useWorkspaceLayout.ts`를 거치고, 연산은 `app/workspaceLayout.ts`의 순수 함수에 둔다. 셀은 `WorkspaceGrid`의 평탄한 목록으로 렌더링해 칸을 옮겨도 다시 마운트되지 않게 한다.
-- 새 탭 종류나 연결 종류를 `this.podTerminal ? … : this.localTarget ? …` 분기로 늘리지 않는다.
+- 새 터미널 종류는 `features/terminal/transport.ts`에 transport를 추가해 붙이고 `TerminalSession`에 분기를 늘리지 않는다. 탭 종류는 `session.kind`로 판단하고 `podTerminal`·`localTarget`·`profile.protocol`의 유무로 추론하지 않는다.
 - 여러 상태를 인코딩한 문자열(`'discard:id'`) 대신 판별 유니온을 쓴다.
 - 순수 로직은 컴포넌트 밖 `.ts`로 빼고 단위 테스트한다.
 - 사용자에게 보여줄 프런트엔드 오류는 `lib/ipc.ts`의 `UserError`로 던진다. 일반 `Error`의 메시지는 `errorText`가 표시하지 않는다.

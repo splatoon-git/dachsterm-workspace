@@ -94,6 +94,7 @@ const profile = {
 let connectionState = 'connected';
 const listeners = new Set<() => void>();
 const session = {
+  kind: 'ssh',
   profile,
   connectionId: 'connection-1',
   snapshot: () => ({ status: connectionState }),

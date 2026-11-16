@@ -3,7 +3,7 @@ import { MonitorBar } from '../features/monitoring/MonitorBar';
 import { ProgramGuide } from '../features/terminal/CommandGuide';
 import { isRecording, useLogStatus } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
-import { capabilities, sessionKind } from '../features/terminal/sessionKind';
+import { capabilities } from '../features/terminal/sessionKind';
 import { AgentBoard } from './AgentBoard';
 import { GitStatusItem } from './GitStatusItem';
 import type { AgentBoardState } from './useAgentBoard';
@@ -11,7 +11,7 @@ import './statusBar.css';
 
 function where(session: TerminalSession) {
   const { profile } = session;
-  switch (sessionKind(session)) {
+  switch (session.kind) {
     case 'local':
       return session.localTarget?.kind === 'wsl' ? 'WSL' : '로컬 셸';
     case 'pod':
@@ -28,8 +28,7 @@ function Target({ session }: { session: TerminalSession }) {
   const { profile } = session;
   const place = where(session);
   // A local shell's ready message only repeats its name ("로컬 · Ubuntu"); other states still show.
-  const message =
-    sessionKind(session) === 'local' && state.status === 'connected' ? '' : state.message;
+  const message = session.kind === 'local' && state.status === 'connected' ? '' : state.message;
   return (
     <span className="status-target" title={state.message}>
       <span

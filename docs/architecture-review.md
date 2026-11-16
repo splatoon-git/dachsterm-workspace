@@ -65,7 +65,7 @@
 | U1 | 높음 | 보고 | `App.tsx` 1381줄, useState 31개. 탭, 사이드바, 연결 흐름, 다이얼로그, 단축키가 섞여 있다. | `useWorkspaceTabs`, `SessionSidebar`, `useAppShortcuts`, 다이얼로그 순으로 분리 | L |
 | U2 | 높음 | 보고 | `FilePanel`의 `ConnectedFiles` 한 함수가 약 1000줄, useState 27개. `operation` 문자열이 상태기계 역할을 한다. | 판별 유니온, 편집 트레이·압축 다이얼로그·메뉴 분리 | L |
 | U3 | 높음 | 일부 확인 | IPC 계약 부재. 명령 문자열에 타입이 없고 응답 타입이 기능 폴더에 흩어져 있다. 터널 구조 3벌, 이름만 같은 `Status` 3개(보고). 현재 호출 이름 오타는 0건(확인). | `lib/commands.ts`의 `CommandMap`, 이후 tauri-specta 검토 | M |
-| U4 | 중간 | 확인 | `TerminalSession`이 3갈래 명령 분기를 반복하고 FTP 탭도 xterm을 생성한다. | `session.kind`와 transport 객체 | M |
+| U4 | 중간 | 확인 | `TerminalSession`이 3갈래 명령 분기를 반복하고 FTP 탭도 xterm을 생성한다. | `session.kind`와 transport 객체. **2026-11-16 분기 분리 완료**([검증](verification/terminal-transport.md)), FTP xterm은 남음 | M |
 | U5 | 중간 | 일부 확인 | 공통 훅·저장소 없음. `localStorage` 직접 접근 31곳/8개 파일(확인), busy·try/finally·폴링 반복(보고). | `lib/storage.ts`, `usePolling`, `useAsyncAction`, `<Notice>` | M |
 | U6 | 중간 | 보고 | CSS 소유권: `styles.css` 276개 선택자 중 76개, `workspace.css` 165개 중 37개가 파일 내 중복, 두 파일 간 겹침 53개. 미사용 규칙도 있다. | 미사용 제거 → 기능별 이동 → `@layer`. 시각 회귀 위험이 가장 크다 | L |
 | U7 | 중간 | 보고 | 단위 테스트 편중: games 11개 파일 3525줄, 나머지 5개 파일 259줄. `session.ts`의 replay 차단·입력 분할에 단위 테스트가 없다. | 순수 함수 추출 후 테스트 | M |

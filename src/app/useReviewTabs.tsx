@@ -3,7 +3,6 @@ import { ReviewPane } from '../features/git/ReviewPane';
 import type { Delivery } from '../features/git/review';
 import { inputReach } from '../features/terminal/broadcastStatus';
 import type { TerminalSession } from '../features/terminal/session';
-import { sessionKind } from '../features/terminal/sessionKind';
 import { PlainTab } from './GroupTabBar';
 import type { Workspace } from './useWorkspaceLayout';
 import { groupOfTab, tabKey, type TabRef } from './workspaceLayout';
@@ -20,7 +19,7 @@ const sessionKey = (tabId: string) => tabKey({ kind: 'session', tabId });
  * yet (not connected, or the shell's folder is unknown).
  */
 export function reviewable(session: TerminalSession | undefined) {
-  if (!session || sessionKind(session) !== 'ssh') return null;
+  if (!session || session.kind !== 'ssh') return null;
   const { status, directory } = session.snapshot();
   return status === 'connected' && !!directory;
 }
