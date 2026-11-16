@@ -177,6 +177,9 @@ pub(crate) fn validate_bundle(bundle: &Bundle) -> Result<()> {
     if bundle.version < 4 && bundle.profiles.iter().any(|p| p.proxy.is_some()) {
         return Err("프록시 설정에는 JSON v4가 필요합니다.".into());
     }
+    if bundle.version < 4 && bundle.profiles.iter().any(|p| p.protocol == "telnet") {
+        return Err("Telnet 세션에는 JSON v4가 필요합니다.".into());
+    }
     crate::session_management::validate_groups(&bundle.groups)?;
     crate::routes::validate(&bundle.profiles)?;
     let mut template_ids = std::collections::HashSet::new();
@@ -452,6 +455,25 @@ pub(crate) fn apply_bundle(store: &Store, bundle: &mut Bundle, merges: &[Merge])
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn telnet_sessions_need_v4_and_never_a_password() {
+        let mut p = Profile::imported("switch", "sw.example", "", 23);
+        p.protocol = "telnet".into();
+        p.auth = "interactive".into();
+        let mut bundle = Bundle {
+            format: Some("dachsterm.sessions".into()),
+            version: 3,
+            profiles: vec![p.clone()],
+            groups: vec![],
+            tunnels: vec![],
+            templates: vec![],
+        };
+        assert!(validate_bundle(&bundle).is_err_and(|e| e.contains("v4")));
+        bundle.version = CURRENT_VERSION;
+        validate_bundle(&bundle).unwrap();
+        p.auth = "password".into();
+        assert!(p.validate().is_err());
+    }
     #[test]
     fn v3_templates_hierarchy_merge_and_credentials_are_atomic() {
         let dir = tempfile::tempdir().unwrap();

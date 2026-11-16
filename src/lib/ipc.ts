@@ -6,7 +6,8 @@ export type Profile = {
   port: number;
   username: string;
   auth: 'password' | 'key' | 'agent' | 'interactive';
-  protocol: 'ssh' | 'ftp' | 'ftps';
+  /** Telnet keeps no password: its login is typed in the terminal (CG.4). */
+  protocol: 'ssh' | 'ftp' | 'ftps' | 'telnet';
   tlsCaPath: string;
   encoding: string;
   keyPath: string;

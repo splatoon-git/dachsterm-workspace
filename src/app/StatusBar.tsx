@@ -16,6 +16,8 @@ function where(session: TerminalSession) {
       return session.localTarget?.kind === 'wsl' ? 'WSL' : '로컬 셸';
     case 'pod':
       return profile.host;
+    case 'telnet':
+      return `Telnet · 암호화 없음 · ${profile.host}:${profile.port}`;
     case 'ftp':
       return `${profile.protocol === 'ftp' ? 'FTP · TLS 없음' : 'FTPS · TLS 인증서 검증'} · ${profile.username}@${profile.host}:${profile.port}`;
     default:

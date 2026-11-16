@@ -227,7 +227,8 @@
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--font-tracking-wide);
 }
-.protocol-badge.ftp {
+.protocol-badge.ftp,
+.protocol-badge.telnet {
   border-color: var(--color-status-warning);
   color: var(--color-status-warning);
 }

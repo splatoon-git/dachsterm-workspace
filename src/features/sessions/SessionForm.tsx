@@ -6,6 +6,8 @@ import { TmuxField } from './TmuxField';
 import { WorkspaceField } from './WorkspaceField';
 import { AgentForwardField } from './AgentForwardField';
 import { LoginKeyField } from './LoginKeyField';
+import { ProtocolField } from './ProtocolField';
+import { switchProtocol } from './protocol';
 import { ProxyField } from './ProxyField';
 import { proxySecretArgs, type ProxySecret } from './proxy';
 import { groupPath, hasConnectionOverrides } from './model';
@@ -135,36 +137,14 @@ export function SessionForm({
               onChange={(e) => field('name', e.target.value)}
             />
           </label>
-          <label>
-            프로토콜
-            <select
-              value={profile.protocol ?? 'ssh'}
-              onChange={(e) =>
-                setProfile((p) => ({
-                  ...p,
-                  protocol: e.target.value as Profile['protocol'],
-                  port: [21, 22].includes(p.port) ? (e.target.value === 'ssh' ? 22 : 21) : p.port,
-                  auth: e.target.value === 'ssh' ? p.auth : 'password',
-                  jumpIds: e.target.value === 'ssh' ? p.jumpIds : [],
-                  tmuxSession: e.target.value === 'ssh' ? p.tmuxSession : '',
-                  forwardAgent: e.target.value === 'ssh' && p.forwardAgent,
-                  forwardKeys: e.target.value === 'ssh' ? p.forwardKeys : [],
-                  forwardGitCredentials: e.target.value === 'ssh' && p.forwardGitCredentials,
-                  workspace: e.target.value === 'ssh' ? p.workspace : 'terminal',
-                  proxy: e.target.value === 'ssh' ? p.proxy : null,
-                }))
-              }
-            >
-              <option value="ssh">SSH + SFTP</option>
-              <option value="ftps">FTPS · 명시적 TLS</option>
-              <option value="ftp">FTP · 암호화 없음</option>
-            </select>
-          </label>
-          {profile.protocol === 'ftp' && (
-            <p className="muted wide">
-              FTP는 로그인 정보와 파일을 암호화하지 않습니다. 서버가 지원하면 FTPS를 선택하세요.
-            </p>
-          )}
+          <ProtocolField
+            value={profile.protocol}
+            change={(protocol) => {
+              setProfile((p) => switchProtocol(p, protocol));
+              // Telnet keeps no password, and a saved one cannot follow a new protocol.
+              if (protocol === 'telnet') setSecretAction('forget');
+            }}
+          />
           <label>
             호스트
             <input
@@ -186,37 +166,40 @@ export function SessionForm({
               onChange={(e) => field('port', Number(e.target.value))}
             />
           </label>
-          <label>
+          {/* Telnet has no login method to choose, so the name takes the whole row. */}
+          <label className={profile.protocol === 'telnet' ? 'wide' : undefined}>
             사용자
             <input
-              required
+              required={profile.protocol !== 'telnet'}
               maxLength={256}
               value={profile.username}
               onChange={(e) => field('username', e.target.value)}
             />
           </label>
-          <label>
-            인증 방식
-            <select
-              aria-label="인증 방식"
-              disabled={!!profile.protocol && profile.protocol !== 'ssh'}
-              value={profile.auth}
-              onChange={(e) => {
-                field('auth', e.target.value as Profile['auth']);
-                if (secret.current) secret.current.value = '';
-                if (['agent', 'interactive'].includes(e.target.value)) setSecretAction('forget');
-              }}
-            >
-              <option value="password">비밀번호</option>
-              <option value="key">개인키</option>
-              <option value="agent">SSH agent · OS 인증 에이전트</option>
-              <option value="interactive">서버 질문 · OTP / MFA</option>
-            </select>
-          </label>
+          {profile.protocol !== 'telnet' && (
+            <label>
+              인증 방식
+              <select
+                aria-label="인증 방식"
+                disabled={!!profile.protocol && profile.protocol !== 'ssh'}
+                value={profile.auth}
+                onChange={(e) => {
+                  field('auth', e.target.value as Profile['auth']);
+                  if (secret.current) secret.current.value = '';
+                  if (['agent', 'interactive'].includes(e.target.value)) setSecretAction('forget');
+                }}
+              >
+                <option value="password">비밀번호</option>
+                <option value="key">개인키</option>
+                <option value="agent">SSH agent · OS 인증 에이전트</option>
+                <option value="interactive">서버 질문 · OTP / MFA</option>
+              </select>
+            </label>
+          )}
           {profile.auth === 'key' && (
             <LoginKeyField value={profile.keyPath} change={(path) => field('keyPath', path)} />
           )}
-          {['agent', 'interactive'].includes(profile.auth) && (
+          {profile.protocol === 'ssh' && ['agent', 'interactive'].includes(profile.auth) && (
             <p className="muted wide">
               에이전트는 등록된 키로 서명하며 개인키를 앱에 저장하지 않습니다. 서버의 OTP·추가 인증
               질문은 연결 중 표시되고 응답은 저장하지 않습니다. 키 인증 뒤 추가 MFA도 자동으로
@@ -325,7 +308,7 @@ export function SessionForm({
                 />
               </label>
               <label className="wide">
-                {profile.protocol && profile.protocol !== 'ssh'
+                {profile.protocol === 'ftp' || profile.protocol === 'ftps'
                   ? 'FTP 파일명·명령 인코딩'
                   : '터미널 인코딩'}
                 <select

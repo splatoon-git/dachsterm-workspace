@@ -184,8 +184,11 @@ impl Profile {
                     .into(),
             );
         }
-        if !["ssh", "ftp", "ftps"].contains(&self.protocol.as_str())
-            || (self.protocol != "ssh" && self.auth != "password")
+        // Telnet saves no password and types no login: the user logs in inside the terminal.
+        if !["ssh", "ftp", "ftps", "telnet"].contains(&self.protocol.as_str())
+            || (["ftp", "ftps"].contains(&self.protocol.as_str()) && self.auth != "password")
+            || (self.protocol == "telnet"
+                && (self.auth != "interactive" || !self.key_path.is_empty()))
             || self.tls_ca_path.len() > 4096
         {
             return Err("프로토콜 또는 TLS 설정을 확인하세요.".into());
@@ -194,7 +197,7 @@ impl Profile {
             || self.name.len() > 200
             || !valid_host(&self.host)
             || self.port == 0
-            || self.username.is_empty()
+            || (self.username.is_empty() && self.protocol != "telnet")
             || self.username.len() > 256
             || self.username.chars().any(char::is_control)
             || !matches!(

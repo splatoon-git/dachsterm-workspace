@@ -93,7 +93,7 @@ pub async fn detach_terminal(
 ) -> Result<()> {
     let c = state.connections.control(&id)?;
     c.broker.check(window.label())?;
-    state.connections.handle(&id)?;
+    state.connections.terminal_ready(&id)?;
     if !(2..=1000).contains(&cols) || !(1..=500).contains(&rows) {
         return Err("터미널 크기 오류".into());
     }

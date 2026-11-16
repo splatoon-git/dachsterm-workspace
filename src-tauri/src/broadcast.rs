@@ -24,7 +24,7 @@ pub struct Status {
 }
 impl Broadcast {
     fn ready(connections: &Connections, locals: &Locals, id: &str) -> bool {
-        connections.handle(id).is_ok() || locals.control(id).is_ok_and(|c| c.ready())
+        connections.terminal_ready(id).is_ok() || locals.control(id).is_ok_and(|c| c.ready())
     }
     fn refresh(&self, connections: &Connections, locals: &Locals, ids: &mut Vec<String>) {
         // A connection change stops the whole group. A newly authenticated shell
@@ -64,7 +64,7 @@ impl Broadcast {
             .collect::<Vec<_>>();
         let mut targets = candidates
             .into_iter()
-            .filter(|(id, _)| connections.handle(id).is_ok())
+            .filter(|(id, _)| connections.terminal_ready(id).is_ok())
             .map(|(id, c)| Target {
                 id,
                 name: c.profile.name.clone(),

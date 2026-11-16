@@ -52,25 +52,9 @@ pub struct Connections {
     pub launches: crate::terminal_start::Launches,
     pub git: crate::git_credential::Forwards,
     pub net: crate::net_tools::link::Links,
+    pub streaming: Mutex<std::collections::HashSet<String>>,
 }
 impl Connections {
-    pub fn ftp_session(&self, id: &str) -> Result<Arc<crate::ftp::Session>> {
-        self.ftp
-            .lock()
-            .unwrap()
-            .get(id)
-            .cloned()
-            .ok_or("FTP 연결이 종료되었습니다.".into())
-    }
-    pub fn ready(&self, id: &str) -> Result<()> {
-        if self.control(id)?.profile.protocol == "ssh" {
-            self.handle(id)?;
-        } else {
-            self.ftp_session(id)?;
-        }
-        Ok(())
-    }
-
     pub fn handle(&self, id: &str) -> Result<Arc<client::Handle<Host>>> {
         self.live
             .lock()
@@ -122,31 +106,12 @@ impl Connections {
         let mut stopped = channels.stop.clone();
         let manager = self.clone();
         tokio::spawn(async move {
+            let (m, i, s) = (manager.clone(), id.clone(), sink.clone());
             let work = async {
-                if profile.protocol == "ssh" {
-                    run(
-                        profile,
-                        secret,
-                        route,
-                        paths,
-                        sink.clone(),
-                        channels,
-                        manager.clone(),
-                        store,
-                        id.clone(),
-                    )
-                    .await
-                } else {
-                    crate::ftp::run(
-                        manager.clone(),
-                        id.clone(),
-                        profile,
-                        secret,
-                        sink.clone(),
-                        channels.stop,
-                        store,
-                    )
-                    .await
+                match profile.protocol.as_str() {
+                    "ssh" => run(profile, secret, route, paths, s, channels, m, store, i).await,
+                    "telnet" => crate::telnet::run(m, i, profile, s, channels, store).await,
+                    _ => crate::ftp::run(m, i, profile, secret, s, channels.stop, store).await,
                 }
             };
             // A stop first removes the server's credential socket, while the connection still exists.
@@ -230,6 +195,7 @@ impl Connections {
         }
         self.logs.close(id);
         self.ftp.lock().unwrap().remove(id);
+        self.streaming.lock().unwrap().remove(id);
         self.live.lock().unwrap().remove(id);
         self.entries.lock().unwrap().remove(id);
         self.launches.take(id);
@@ -237,10 +203,10 @@ impl Connections {
 }
 pub(crate) struct Receivers {
     replies: mpsc::Receiver<AuthReply>,
-    input: mpsc::Receiver<Input>,
+    pub(crate) input: mpsc::Receiver<Input>,
     trust: watch::Receiver<Option<bool>>,
     trust_request: Arc<Mutex<Option<String>>>,
-    ack: watch::Receiver<u64>,
+    pub(crate) ack: watch::Receiver<u64>,
     pub(crate) stop: watch::Receiver<bool>,
 }
 #[allow(clippy::too_many_arguments)]
