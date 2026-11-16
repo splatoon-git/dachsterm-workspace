@@ -150,6 +150,7 @@ pub fn snippet_send(
                     (c.input.clone(), data.into_bytes())
                 } else {
                     state.connections.terminal_ready(&t.id)?;
+                    state.connections.inband.check_input(&t.id)?;
                     let c = state.connections.control(&t.id)?;
                     c.broker.check(window.label())?;
                     (

@@ -55,6 +55,7 @@ pub struct Connections {
     pub net: crate::net_tools::link::Links,
     pub streaming: Mutex<std::collections::HashSet<String>>,
     pub serial: crate::serial::Breaks,
+    pub inband: Arc<crate::inband::Transfers>,
 }
 impl Connections {
     pub fn handle(&self, id: &str) -> Result<Arc<client::Handle<Host>>> {
@@ -200,6 +201,7 @@ impl Connections {
         self.ftp.lock().unwrap().remove(id);
         self.streaming.lock().unwrap().remove(id);
         self.serial.remove(id);
+        self.inband.remove(id);
         self.live.lock().unwrap().remove(id);
         self.entries.lock().unwrap().remove(id);
         self.launches.take(id);
@@ -278,7 +280,7 @@ async fn run(
         status: "connected".into(),
         message: format!("연결됨 · {}", route.description),
     })?;
-    let (mut reader, writer) = channel.split();
+    let (reader, writer) = channel.split();
     let output = async {
         let send = |seq, bytes: Vec<u8>| {
             manager.logs.data(&id, &bytes);
@@ -293,6 +295,7 @@ async fn run(
             _ => Other::Ignore,
         };
         let stalled = "터미널 렌더링 응답이 없어 연결을 종료했습니다.";
+        let mut reader = crate::inband::Inband::new(reader, manager.inband_context(&id, &sink)?);
         pump(&mut reader, &mut ack, send, other, stalled).await?;
         if session.is_closed() {
             Err(crate::terminal_start::lost_message(&p).to_string())

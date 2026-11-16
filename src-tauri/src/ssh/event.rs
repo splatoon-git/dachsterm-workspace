@@ -35,6 +35,8 @@ pub enum Event {
         message: String,
     },
     GitCredential(crate::git_credential::CredentialRequest),
+    /// A file transfer inside the terminal (CG.8). Never replayed to another window.
+    Inband(crate::inband::Notice),
 }
 #[derive(Clone, Serialize)]
 pub struct AuthPrompt {

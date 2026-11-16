@@ -1071,9 +1071,11 @@ dependencies = [
  "dirs 6.0.0",
  "drag",
  "encoding_rs",
+ "flate2",
  "hmac 0.12.1",
  "icu_normalizer",
  "keyring",
+ "md5",
  "open",
  "pkcs1",
  "pkcs8",
@@ -1101,6 +1103,7 @@ dependencies = [
  "windows-sys 0.61.2",
  "x509-cert",
  "zeroize",
+ "zmodem2",
 ]
 
 [[package]]
@@ -7709,6 +7712,17 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zmodem2"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a4c6cda9d8fd2379ce54d171a1a3a387ff6789b4c9de140586b91a217749ff1"
+dependencies = [
+ "bitflags 2.13.2",
+ "hex",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "zune-core"

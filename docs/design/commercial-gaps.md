@@ -282,7 +282,7 @@ v3 이하 파일이 위 필드를 쓰면 "v4가 필요합니다"로 거부한다
 | `highlight_rules`, `highlight_rules_save` | CG.7 | 규칙 읽기·저장(revision 비교, 저장 뒤 `highlight-rules` 이벤트로 모든 창이 다시 읽음). 설계 때 빠뜨려 구현에서 추가 |
 | `serial_ports` | CG.5 | 포트 목록(이름, USB 제조사·제품) |
 | `terminal_send_break` | CG.5 | 시리얼 탭에 Break |
-| `inband_transfer_answer` | CG.8 | 저장 폴더·업로드 파일 선택 결과 또는 취소 |
+| `inband_transfer_answer` | CG.8 | `accept`(백엔드가 시스템 창으로 폴더·파일을 고른다. 웹뷰는 경로를 넘기지 않는다)·`decline`·`stop` |
 | `update_check`, `update_install`, `update_settings_set` | CG.6 | 업데이트 |
 
 프록시·ProxyCommand·인증서·Telnet·X11은 기존 `connect`·`session_save`·가져오기 명령의 입력이 늘어날 뿐 새 명령이 없다. 가져오기 승인은 기존 `config_preview` 결과에 `proxy_commands` 목록을 더한다.

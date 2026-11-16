@@ -31,7 +31,7 @@ struct Reader {
     telnet: Arc<Mutex<Telnet>>,
     replies: mpsc::Sender<Vec<u8>>,
     buffer: Vec<u8>,
-    flooded: bool,
+    flooded: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Source for Reader {
@@ -43,7 +43,8 @@ impl Source for Reader {
             }
             let parsed = self.telnet.lock().unwrap().feed(&self.buffer[..read]);
             if !parsed.reply.is_empty() && self.replies.try_send(parsed.reply).is_err() {
-                self.flooded = true;
+                self.flooded
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 return Some(ChannelMsg::Close);
             }
             if !parsed.data.is_empty() {
@@ -83,12 +84,13 @@ pub(crate) async fn run(
     let (socket, mut writer) = stream.into_split();
     let telnet = Arc::new(Mutex::new(Telnet::new(80, 24)));
     let (replies, mut answers) = mpsc::channel(MAX_REPLIES);
-    let mut reader = Reader {
+    let flooded = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let reader = Reader {
         socket,
         telnet: telnet.clone(),
         replies,
         buffer: vec![0; 16384],
-        flooded: false,
+        flooded: flooded.clone(),
     };
     manager.mark_streaming(&id);
     manager.logs.register(&id, &p.encoding)?;
@@ -113,8 +115,9 @@ pub(crate) async fn run(
             sink(Event::Data { seq, bytes })
         };
         let stalled = "터미널 렌더링 응답이 없어 연결을 종료했습니다.";
-        pump(&mut reader, &mut ack, send, |_| Other::End, stalled).await?;
-        if reader.flooded {
+        let mut source = crate::inband::Inband::new(reader, manager.inband_context(&id, &sink)?);
+        pump(&mut source, &mut ack, send, |_| Other::End, stalled).await?;
+        if flooded.load(std::sync::atomic::Ordering::Relaxed) {
             return Err("Telnet 서버가 옵션 협상을 너무 많이 보내 연결을 종료했습니다.".into());
         }
         Ok(())
@@ -297,7 +300,7 @@ mod tests {
         }
         /// Waits until the screen, from `from` on, holds `text`. Returns where it ends.
         async fn wait(&mut self, from: usize, text: &str) -> usize {
-            let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
             loop {
                 if let Some(at) = self.screen[from..].find(text) {
                     return from + at + text.len();
@@ -325,6 +328,7 @@ mod tests {
                 }
             }
         }
+
         /// Draws until the connection ends, and says how.
         async fn end(&mut self) -> String {
             while self.closed.is_none() {

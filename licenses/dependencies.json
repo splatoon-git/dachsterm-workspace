@@ -4198,6 +4198,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "zmodem2",
+      "version": "0.7.3",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://codeberg.org/jarkko/zmodem2.git",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "zune-core",
       "version": "0.5.3",
       "license": "MIT OR Apache-2.0 OR Zlib",

@@ -165,6 +165,7 @@ fn main() {
             "highlight_rules_save",
             "serial_ports",
             "terminal_send_break",
+            "inband_transfer_answer",
             "save_session",
             "delete_session",
             "duplicate_session",

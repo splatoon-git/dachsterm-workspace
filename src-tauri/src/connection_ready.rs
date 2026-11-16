@@ -32,6 +32,20 @@ impl Connections {
         }
     }
 
+    /// Where a terminal's in-band transfers (CG.8) report and write.
+    pub(crate) fn inband_context(
+        &self,
+        id: &str,
+        sink: &crate::ssh::Sink,
+    ) -> Result<crate::inband::Context> {
+        Ok(crate::inband::Context {
+            id: id.into(),
+            sink: sink.clone(),
+            input: self.control(id)?.input.clone(),
+            transfers: self.inband.clone(),
+        })
+    }
+
     /// A Telnet or serial terminal is connected. `finish` forgets it.
     pub(crate) fn mark_streaming(&self, id: &str) {
         self.streaming.lock().unwrap().insert(id.to_string());
