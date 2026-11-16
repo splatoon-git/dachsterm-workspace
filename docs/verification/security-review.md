@@ -76,6 +76,13 @@ GitHub Actions는 커밋 SHA가 아니라 태그(`@v4`)로 고정돼 있다. 권
 - **S.11의 인자 제한:** 알려진 편집기라도 인자가 있으면 확인한다. VS Code의 `--extensionDevelopmentPath` 같은 인자는 코드를 불러온다. 업그레이드 전에 직접 입력해 둔 편집기 경로와 인자는 처음 한 번 확인 창이 뜬다.
 - 디버그 빌드에 한해 `DACHSTERM_TEST_EDITOR`와 같은 프로그램은 확인 없이 실행한다. `test-native.mjs`가 편집 저장 카드 검사에서 node를 편집기로 쓰기 때문이다. 출시 빌드에는 없다.
 
+### S.6·S.8·S.9·S.11 검증 (2026-11-16, Mac, `fix/security-low` `20dd182`)
+
+- `cargo fmt --all --check` 통과, `cargo clippy --workspace --all-targets --locked -- -D warnings` 통과.
+- `cargo test --workspace --locked --no-fail-fast`: `dachsterm` lib 688개 통과·4개 무시, `dachsterm_ssh_probe` 1개 통과. 첫 실행에서는 `agent_forward::tests::a_locked_key_is_unlocked_on_the_card_even_while_allowed`가 30초 승인 창을 넘겨 실패했다. 다른 세션의 빌드로 부하 평균이 70이었고, 부하가 내려간 뒤 같은 테스트가 `52cb524`에서 5.8초, 이 브랜치에서 6.4초로 통과했다.
+- `npm run typecheck`, `npm run lint`, `npm run format:check` 통과. `npx vitest run` 112개 파일 중 1,366개 통과·2개 실패. 실패한 둘은 게임 시간 제한 테스트(`survivor/endurance.test.ts`, `survivor/stages.test.ts`)이고, `stages.test.ts`는 같은 부하에서 `52cb524`로도 5초 제한을 넘겨 실패했다. 게임 코드는 바꾸지 않았다.
+- **대기:** S.11 확인 창과 편집기 실행의 실제 앱 확인(Mac·Windows), S.6 PowerShell 탭 끌어 놓기의 Windows 실행, S.9의 Windows 실행, `verify-windows.ps1 -Native`(편집 저장 카드 검사가 `DACHSTERM_TEST_EDITOR`로 통과하는지), CI.
+
 ## 문제를 찾지 못한 영역 (코드 추적)
 
 호스트키 검증(모든 연결이 `route.rs` 한 곳), 알고리즘, Vault(Argon2id, 임의 nonce, AAD), agent 소켓 권한, 세션 로그, 원격 이름의 경로 이탈, 압축 해제, 임시 파일, 원격 셸 인용과 인자 주입, 터널 바인딩(127.0.0.1), FTPS 인증서, PASV, SQL 매개변수, `innerHTML` 계열, Markdown 살균, 가져오기의 실행 필드.
