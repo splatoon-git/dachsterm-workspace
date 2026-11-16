@@ -2,7 +2,7 @@
 
 - 대상: `17cc876` (`dev`), 커밋된 소스와 잠금 파일.
 - 방법: 의존성·시크릿은 아래 명령을 실행했다. 소스는 코드 경로 추적이고, **실행으로 재현한 항목은 S.1뿐이다.** 나머지 항목의 Windows 동작은 Mac에서 코드만 읽었다.
-- 상태: S.1~S.5와 S.10은 브랜치 `fix/s1-s5-security`, S.6·S.8·S.9·S.11은 `fix/security-low`에서 수정했다(아래 수정 결과). S.7은 열려 있다.
+- 상태: S.1~S.5와 S.10은 브랜치 `fix/s1-s5-security`, S.6·S.8·S.9·S.11은 `fix/security-low`, S.12는 `fix/s12-unrequested-channels`에서 수정했다(아래 수정 결과). S.7은 열려 있다.
 
 ## 결론
 
@@ -47,6 +47,7 @@ GitHub Actions는 커밋 SHA가 아니라 태그(`@v4`)로 고정돼 있다. 권
 | S.9 | Low | `storage.rs`, `ssh/route.rs`, `ftp.rs` | 가져온 세션의 `keyPath`·`tlsCaPath`에 UNC가 허용돼 연결 시 Windows SMB 인증이 나갈 수 있다. | 가져오기에서 UNC 거부 또는 경고. | 코드 추적 |
 | S.10 | Low | `sftp.rs` `list` | 항목 이름 길이 상한이 없어 20초 안에 큰 메모리를 쓸 수 있다. | 이름 4,096바이트 또는 누적 상한. | 코드 추적 |
 | S.11 | Low | `editor.rs`, `local_files.rs`, `capabilities/main.json`, `commands.rs` | architecture-review B11이 그대로다. 프런트엔드가 준 프로그램 실행은 XSS가 전제이고, 현재 XSS 경로는 찾지 못했다. `connect`의 조기 반환에서 secret이 지워지지 않는다. | 저장된 편집기만 허용, 진입 첫 줄에서 `Zeroizing`. | 코드 추적 |
+| S.12 | Low | `ssh/host.rs` | 앱이 요청하지 않은 `x11`·`session`·`direct-tcpip`·`direct-streamlocal` 채널을 서버가 열면 russh 기본값대로 수락한다. 데이터가 이 PC로 이어지지는 않지만 서버가 채널을 열어 둔 채 자원을 쓰게 할 수 있다. CG.0 실측에서 발견(2026-11-16). | 네 종류를 거부. CG.9는 포워딩을 요청한 연결의 X11만 받는다. | 재현 테스트 |
 
 ## 수정 결과
 
@@ -62,6 +63,7 @@ GitHub Actions는 커밋 SHA가 아니라 태그(`@v4`)로 고정돼 있다. 권
 | S.6 | 로컬 탭에 끌어 놓은 경로를 셸별로 인용한다. PowerShell(`pwsh`, `powershell`)은 작은따옴표로 감싸고 `'`와 U+2018~U+201B를 두 번 쓴다. cmd는 기존 큰따옴표, WSL·Mac은 POSIX 인용이다. 대상은 `local.rs`의 대상 ID로 고른다. | `promptAttachments.test.ts`의 `keeps PowerShell from running anything in a dropped file name`, `picks the quoting of the tab it is dropped on`. PowerShell에 큰따옴표를 쓰면 실패함을 확인했다. Windows 실행은 대기 |
 | S.9 | 가져오기(미리보기 `parse`의 모든 형식, `config_apply`)에서 `keyPath`, `tlsCaPath`, `forwardKeys[].path`, 템플릿 `keyPath`가 `\\`, `//`, `/\`, `\/`로 시작하면 파일 전체를 거부한다. 연결 편집에서 직접 넣는 값과 설정 복구본 복원은 막지 않는다. | `settings.rs`의 `an_imported_file_cannot_point_a_session_at_a_network_share`, `local_key_paths_still_import_and_a_users_own_share_still_restores`. Windows 실행은 대기 |
 | S.11 | 새 `editor_launch.rs`. `edit_start`·`local_files_edit`는 실행 전에 허용을 확인한다. 이 PC에서 찾은 편집기를 인자 없이 쓰면 바로, `editor_pick` 파일 대화상자로 고른 파일은 고를 때 기록해 바로 실행한다. 그 밖의 프로그램·인자 조합은 웹뷰 밖의 네이티브 확인 창에서 허용해야 실행하고 최근 32개를 DB `settings`의 `editor-launches`에 기록한다. 제어 문자·길이 초과는 거부한다. `connect`는 첫 줄에서 `secret`을 `Zeroizing`으로 감싼다. capability 설명을 실제 대상(`terminal-*` 포함)에 맞췄다. | `editor_launch.rs` 단위 4건(알려진 편집기만 묻지 않음, 형식 거부, 기록 상한, 손상 기록). `commands.rs`의 `every_command_wraps_its_secrets_before_anything_else`는 모든 `#[tauri::command]`의 비밀 인자가 첫 문장에서 감싸지는지 소스로 검사하며, 수정 전 `connect`와 같은 형태가 걸리는 것을 `an_early_return_before_the_wrap_is_found`로 확인한다. 확인 창은 Mac 실제 앱 확인 대기 |
+| S.12 | `Host`가 네 종류의 `server_channel_open_*`를 구현해 `AdministrativelyProhibited`로 거부한다. `forwarded-tcpip`(터널)·`forwarded-streamlocal`(Git 자격 증명)·에이전트 채널은 지금처럼 요청한 것만 받는다. | `ssh::host::tests::the_server_cannot_open_channels_the_app_did_not_ask_for`: 프로세스 안 russh 서버가 네 채널을 열면 거부되고, 클라이언트의 세션 채널은 열린다. 수정 전 코드에서 `x11`에서 실패하는 것을 확인 |
 
 결정과 남는 동작:
 
