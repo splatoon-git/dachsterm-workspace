@@ -11,3 +11,6 @@ playwright-report/
 test-results-audit.json
 
 .tools/
+
+# Update release files (scripts/update-release.mjs)
+/release/

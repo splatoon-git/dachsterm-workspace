@@ -1,7 +1,15 @@
 import type { Source } from './source';
 
 export type SettingsSection =
-  'appearance' | 'terminal' | 'git' | 'agents' | 'vault' | 'sessions' | 'transfer' | 'recovery';
+  | 'appearance'
+  | 'terminal'
+  | 'git'
+  | 'agents'
+  | 'vault'
+  | 'sessions'
+  | 'transfer'
+  | 'recovery'
+  | 'update';
 
 /** A repository whose own `git config` the Git category opens on. */
 export type SettingsRepo = { source: Source; folder: string };

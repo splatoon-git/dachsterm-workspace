@@ -4,6 +4,7 @@ import { LazySshKeyDialog } from '../components/NewSshKey';
 import { ToolbarMenu } from '../components/ToolbarMenu';
 import { games, type GameId } from '../features/games/catalog';
 import { networkTools, toolActions, type ToolId } from '../features/tools/catalog';
+import { UpdateBadge } from '../features/updates/UpdateBadge';
 import { desktop } from '../lib/ipc';
 import { modKey } from '../lib/platform';
 import type { AppShortcut } from './appShortcuts';
@@ -129,6 +130,7 @@ export function HeaderActions({
 }) {
   return (
     <>
+      <UpdateBadge />
       {chat}
       <IconButton
         icon="snippet"
