@@ -157,7 +157,7 @@ export function ConnectionTree({
             <span className={`protocol-badge ${protocol}`}>{protocol.toUpperCase()}</span>
           )}
           <span className="row-detail">
-            {p.username}@{p.host}
+            {protocol === 'serial' || !p.username ? p.host : `${p.username}@${p.host}`}
           </span>
         </button>
       </article>

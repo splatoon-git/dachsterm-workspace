@@ -182,8 +182,8 @@ pub(crate) fn validate_bundle(bundle: &Bundle) -> Result<()> {
     {
         return Err("프록시·인증서·Pageant 설정에는 JSON v4가 필요합니다.".into());
     }
-    if bundle.version < 4 && bundle.profiles.iter().any(|p| p.protocol == "telnet") {
-        return Err("Telnet 세션에는 JSON v4가 필요합니다.".into());
+    if bundle.version < 4 && bundle.profiles.iter().any(|p| p.terminal_only()) {
+        return Err("Telnet·시리얼 세션에는 JSON v4가 필요합니다.".into());
     }
     crate::session_management::validate_groups(&bundle.groups)?;
     crate::routes::validate(&bundle.profiles)?;

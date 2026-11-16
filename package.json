@@ -40,6 +40,7 @@
     "measure:highlight": "node scripts/measure-highlight.mjs",
     "connect:fixture": "node scripts/connect-fixture.mjs",
     "probe:telnet": "cargo test -p dachsterm --lib --locked telnet::tests::logs_into_the_fixture_telnetd -- --ignored",
+    "probe:serial": "cargo test -p dachsterm --lib --locked serial::tests::talks_to_the_fixture_console_and_sees_it_unplugged -- --ignored",
     "probe:connect": "node scripts/run-connect-probe.mjs",
     "kube:fixture": "wsl -d Ubuntu-24.04 -- bash scripts/kube-fixture.sh",
     "test:kube-detect": "node scripts/verify-kube-detect.mjs",

@@ -55,8 +55,8 @@ export function SnippetRun({
   duplicate: () => void;
   remove: () => void;
 }) {
-  // Terminals whose input the snippet command accepts: SSH, Telnet and local shells, not pods.
-  const candidates = sessions.filter((s) => ['ssh', 'telnet', 'local'].includes(s.kind));
+  // Terminals whose input the snippet command accepts: SSH, Telnet, serial and local, not pods.
+  const candidates = sessions.filter((s) => ['ssh', 'telnet', 'serial', 'local'].includes(s.kind));
   const [values, setValues] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string[]>(() =>
     candidates.some((s) => s.tabId === active) ? [active!] : [],

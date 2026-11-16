@@ -101,6 +101,18 @@ describe('terminal transports', () => {
     expect([transport.directory, transport.agent, transport.links]).toEqual(['none', false, null]);
   });
 
+  it('opens a serial console through connect, with no window size to send', async () => {
+    const transport = remoteTransport({ protocol: 'serial' });
+    expect(transport.kind).toBe('serial');
+    expect(transport.resize).toBeUndefined();
+    expect((await commands(transport)).map(([name]) => name)).toEqual([
+      'connect',
+      'terminal_input',
+      'terminal_ack',
+      'disconnect',
+    ]);
+  });
+
   it("runs this computer's shell through the local commands", async () => {
     expect(await commands(localTransport(shell))).toEqual([
       ['local_open', { id: 'x', targetId: 'pwsh', cols: 80, rows: 24, onEvent }],
