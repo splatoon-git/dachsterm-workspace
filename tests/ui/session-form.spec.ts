@@ -143,6 +143,11 @@ test('a proxy asks for its address, and its password only for a named account', 
   await dialog.getByLabel('프록시 암호', { exact: true }).fill('pw');
   await expect(keep).toHaveValue('replace');
   await expectFullRows(dialog.locator('.session-advanced fieldset .form-grid'));
+  await kind.selectOption('command');
+  await expect(dialog.getByLabel('프록시 호스트')).toHaveCount(0);
+  await dialog.getByLabel('프록시 명령').fill('ssh -W %h:%p jump');
+  await expect(dialog.getByLabel('프록시 명령')).toHaveValue('ssh -W %h:%p jump');
+  await kind.selectOption('http');
   // FTP cannot use a proxy, and coming back to SSH does not bring it back silently.
   await dialog.getByLabel('프로토콜').selectOption('ftp');
   await expect(kind).toHaveCount(0);

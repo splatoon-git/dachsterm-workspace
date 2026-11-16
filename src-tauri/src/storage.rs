@@ -7,7 +7,7 @@ mod login;
 mod proxy;
 pub use git_credentials::GitCredential;
 pub use login::AGENT_SOURCES;
-pub use proxy::{Endpoint, MAX_PROXY_FIELD, Proxy};
+pub use proxy::{Endpoint, MAX_COMMAND, MAX_PROXY_FIELD, Proxy, check_command, command_program};
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn db_error(_: rusqlite::Error) -> String {

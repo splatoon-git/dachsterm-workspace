@@ -7,18 +7,31 @@ import '../../../src/app/workspace.css';
 
 declare global {
   interface Window {
-    __transferTest: { fail: boolean; cancel: boolean; applied: string[] };
+    __transferTest: {
+      fail: boolean;
+      cancel: boolean;
+      command: boolean;
+      applied: string[];
+      approved: unknown[];
+    };
   }
 }
-const state = (window.__transferTest = { fail: false, cancel: false, applied: [] as string[] });
+const state = (window.__transferTest = {
+  fail: false,
+  cancel: false,
+  command: false,
+  applied: [] as string[],
+  approved: [] as unknown[],
+});
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
-    invoke: async (command: string, args: { data: string }) => {
+    invoke: async (command: string, args: { data: string; approved?: unknown }) => {
       if (command === 'config_export') return !state.cancel;
       if (command === 'config_apply') {
         if (state.fail) throw '가져오기 실패 테스트';
         state.applied.push(args.data);
+        state.approved.push(args.approved ?? null);
         return JSON.parse(args.data).profiles.length;
       }
       if (command === 'config_preview') {
@@ -41,13 +54,19 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
           hasSecret: false,
           lastConnected: null,
         };
+        const command = 'ssh -W %h:%p bastion';
+        const relay = { ...p, id: 'cmd', name: '명령 경유', username: 'ops', groupId: 'g' };
         return {
+          commandPlan: state.command
+            ? { token: 'plan', sessions: [{ id: 'cmd', name: '명령 경유', command }] }
+            : null,
           bundle: {
             format: 'dachsterm.sessions',
-            version: 2,
+            version: 4,
             profiles: [
               p,
               { ...p, id: 'two', name: '운영 서버', username: 'operator', groupId: 'other' },
+              ...(state.command ? [{ ...relay, proxy: { kind: 'command', command } }] : []),
             ],
             groups: [
               { id: 'g', name: '개발' },

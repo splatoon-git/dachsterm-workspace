@@ -337,7 +337,7 @@ pub fn run() {
             settings::config_export,
             session_transfer::config_preview,
             config_includes::config_include_preview,
-            session_transfer::config_apply,
+            session_transfer::approval::config_apply,
             monitoring::monitor_get,
             monitoring::monitor_configure,
             session_management::session_templates,

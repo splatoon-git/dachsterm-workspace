@@ -1,7 +1,7 @@
 //! The first TCP connection of a route (CG.1): straight to the server, or through the HTTP CONNECT
 //! or SOCKS5 proxy of the profile that owns it. Everything after it — jump hosts, SFTP, tunnels,
 //! monitoring — rides on the SSH connection made over this stream.
-use super::{AuthReply, Sink};
+use super::{AuthReply, Sink, proxy_command};
 use crate::storage::{Endpoint, MAX_PROXY_FIELD, Profile, Result};
 use base64::Engine;
 use std::time::Duration;
@@ -23,6 +23,12 @@ const AUTH_REQUIRED: &str = "프록시가 인증을 요구합니다.";
 const NOT_ALLOWED: &str = "프록시가 이 목적지를 허용하지 않습니다.";
 const CLOSED: &str = "프록시가 응답 도중 연결을 닫았습니다.";
 
+/// The stream an SSH handshake runs on, and a proxy command's standard error to explain a failure.
+pub(crate) struct Opened {
+    pub stream: Box<dyn Transport>,
+    pub stderr: Option<proxy_command::Stderr>,
+}
+
 /// Opens the stream the SSH handshake of `p` runs on. `secret` is the saved proxy password; a
 /// proxy with a user name and no saved password asks for one, for this connection only.
 pub(crate) async fn open(
@@ -30,16 +36,26 @@ pub(crate) async fn open(
     secret: Option<Zeroizing<String>>,
     sink: &Sink,
     replies: &mut mpsc::Receiver<AuthReply>,
-) -> Result<Box<dyn Transport>> {
+) -> Result<Opened> {
     let limit = Duration::from_secs(p.timeout);
     let Some(proxy) = &p.proxy else {
         let stream = timeout(limit, TcpStream::connect((p.host.as_str(), p.port)))
             .await
             .map_err(|_| "접속 시간이 초과되었습니다.")?
             .map_err(|_| "서버에 연결할 수 없습니다.")?;
-        return Ok(Box::new(stream));
+        return Ok(Opened {
+            stream: Box::new(stream),
+            stderr: None,
+        });
     };
-    let proxy = proxy.endpoint();
+    let Some(proxy) = proxy.endpoint() else {
+        let command = proxy_command::expand(proxy.command().unwrap_or(""), p);
+        let (stream, stderr) = proxy_command::spawn(&command)?;
+        return Ok(Opened {
+            stream: Box::new(stream),
+            stderr: Some(stderr),
+        });
+    };
     let password = match secret {
         _ if proxy.username.is_empty() => None,
         Some(saved) => Some(saved),
@@ -64,7 +80,10 @@ pub(crate) async fn open(
         } else {
             http_connect(&mut stream, &p.host, p.port, auth).await?;
         }
-        Ok::<_, String>(Box::new(stream) as Box<dyn Transport>)
+        Ok::<_, String>(Opened {
+            stream: Box::new(stream),
+            stderr: None,
+        })
     })
     .await
     .map_err(|_| "프록시를 거친 접속 시간이 초과되었습니다.".to_string())?

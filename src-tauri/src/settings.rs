@@ -871,7 +871,16 @@ mod tests {
         let other = Store::open(&dir.path().join("other")).unwrap();
         assert_eq!(import(&other, &data).unwrap(), 1);
         let imported = other.list().unwrap().profiles.remove(0);
-        assert_eq!(imported.proxy.as_ref().unwrap().endpoint().username, "user");
+        assert_eq!(
+            imported
+                .proxy
+                .as_ref()
+                .unwrap()
+                .endpoint()
+                .unwrap()
+                .username,
+            "user"
+        );
         assert_eq!(imported.data_refs().count(), 0);
         let mut bundle: Bundle = serde_json::from_slice(&data).unwrap();
         bundle.version = 3;
@@ -885,7 +894,7 @@ mod tests {
         assert!(validate_bundle(&older).is_ok());
         bundle.version = 4;
         let proxy = bundle.profiles[0].proxy.as_mut().unwrap();
-        *proxy.secret_slot() = Some("forged".into());
+        *proxy.secret_slot().unwrap() = Some("forged".into());
         assert!(
             validate_bundle(&bundle).is_err(),
             "a file cannot name a stored secret"

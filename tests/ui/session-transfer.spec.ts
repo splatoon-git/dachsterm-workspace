@@ -46,3 +46,33 @@ for (const width of [1280, 560, 360]) {
     await expect(page.getByRole('checkbox')).toHaveCount(0);
   });
 }
+
+test('a session that runs a command stays out until its command is ticked', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/transfer.html');
+  await page.evaluate(() => {
+    window.__transferTest.command = true;
+  });
+  await page.getByRole('button', { name: '파일 선택 · 미리보기' }).click();
+  const approve = page.getByLabel('명령 경유 명령 승인');
+  await expect(approve).not.toBeChecked();
+  await expect(page.locator('.proxy-command-approval code')).toHaveText('ssh -W %h:%p bastion');
+  await page.getByLabel('개발 서버 사용자명').fill('developer');
+  await page.getByRole('button', { name: '전체 선택' }).click();
+  await expect(approve).not.toBeChecked();
+  await page.getByRole('button', { name: '2개 세션 추가' }).click();
+  await expect(page.getByRole('status')).toHaveText('2개 세션을 추가했습니다.');
+  const first = JSON.parse(await page.evaluate(() => window.__transferTest.applied[0]));
+  expect(first.profiles.map((p: { id: string }) => p.id)).toEqual(['one', 'two']);
+  expect(await page.evaluate(() => window.__transferTest.approved[0])).toEqual({
+    token: 'plan',
+    ids: [],
+  });
+  await page.getByRole('button', { name: '파일 선택 · 미리보기' }).click();
+  await page.getByLabel('개발 서버 사용자명').fill('developer');
+  await page.getByLabel('명령 경유 명령 승인').check();
+  await page.getByRole('button', { name: '3개 세션 추가' }).click();
+  expect(await page.evaluate(() => window.__transferTest.approved[1])).toEqual({
+    token: 'plan',
+    ids: ['cmd'],
+  });
+});

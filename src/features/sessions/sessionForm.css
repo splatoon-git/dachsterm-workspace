@@ -67,3 +67,6 @@
   flex: 1;
   min-width: 0;
 }
+.session-advanced input.mono {
+  font-family: var(--font-mono);
+}

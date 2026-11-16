@@ -32,6 +32,9 @@ pub enum Proxy {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         secret_ref: Option<String>,
     },
+    /// OpenSSH's `ProxyCommand` (CG.2): the SSH connection runs over the command's standard
+    /// input and output. Only a command the user typed or approved on the import preview is saved.
+    Command { command: String },
 }
 
 /// The parts of an HTTP or SOCKS5 proxy the connection uses.
@@ -42,37 +45,78 @@ pub struct Endpoint<'a> {
     pub username: &'a str,
 }
 
+/// A command line long enough for `ssh -W` with options, short enough to read on the preview.
+pub const MAX_COMMAND: usize = 4096;
+/// The tokens a command may use: host, port, user, original host name and a literal `%`.
+const TOKENS: [char; 5] = ['h', 'p', 'r', 'n', '%'];
+
+/// Checks a `ProxyCommand` line: one line, and only the tokens the connection replaces.
+pub fn check_command(command: &str) -> Result<()> {
+    if command.trim().is_empty()
+        || command.len() > MAX_COMMAND
+        || command.chars().any(char::is_control)
+    {
+        return Err("프록시 명령은 4096바이트 이하의 한 줄로 입력하세요.".into());
+    }
+    let mut chars = command.chars();
+    while let Some(c) = chars.next() {
+        if c == '%' && !chars.next().is_some_and(|t| TOKENS.contains(&t)) {
+            return Err("프록시 명령에는 %h, %p, %r, %n, %%만 쓸 수 있습니다.".into());
+        }
+    }
+    Ok(())
+}
+
+/// The program a command runs, for status lines: its first word without the folder.
+pub fn command_program(command: &str) -> &str {
+    let command = command.trim_start();
+    let first = match command.strip_prefix(['"', '\'']) {
+        Some(quoted) => quoted.split(['"', '\'']).next().unwrap_or(quoted),
+        None => command.split_whitespace().next().unwrap_or(""),
+    };
+    first.rsplit(['/', '\\']).next().unwrap_or(first)
+}
+
 impl Proxy {
-    pub fn endpoint(&self) -> Endpoint<'_> {
+    /// `None` for a command, which has no address of its own.
+    pub fn endpoint(&self) -> Option<Endpoint<'_>> {
         match self {
             Proxy::Http {
                 host,
                 port,
                 username,
                 ..
-            } => Endpoint {
+            } => Some(Endpoint {
                 socks: false,
                 host,
                 port: *port,
                 username,
-            },
+            }),
             Proxy::Socks5 {
                 host,
                 port,
                 username,
                 ..
-            } => Endpoint {
+            } => Some(Endpoint {
                 socks: true,
                 host,
                 port: *port,
                 username,
-            },
+            }),
+            Proxy::Command { .. } => None,
         }
     }
-    /// Where the password reference is kept, for the backend alone to set.
-    pub(crate) fn secret_slot(&mut self) -> &mut Option<String> {
+    pub fn command(&self) -> Option<&str> {
         match self {
-            Proxy::Http { secret_ref, .. } | Proxy::Socks5 { secret_ref, .. } => secret_ref,
+            Proxy::Command { command } => Some(command),
+            _ => None,
+        }
+    }
+    /// Where the password reference is kept, for the backend alone to set. A command has none.
+    pub(crate) fn secret_slot(&mut self) -> Option<&mut Option<String>> {
+        match self {
+            Proxy::Http { secret_ref, .. } | Proxy::Socks5 { secret_ref, .. } => Some(secret_ref),
+            Proxy::Command { .. } => None,
         }
     }
     pub fn secret_ref(&self) -> Option<&str> {
@@ -80,15 +124,26 @@ impl Proxy {
             Proxy::Http { secret_ref, .. } | Proxy::Socks5 { secret_ref, .. } => {
                 secret_ref.as_deref()
             }
+            Proxy::Command { .. } => None,
         }
     }
     pub fn clear_secret(&mut self) {
-        self.secret_slot().take();
+        if let Some(slot) = self.secret_slot() {
+            slot.take();
+        }
     }
-    /// The same proxy and account, so a saved password still belongs to it.
+    /// The same proxy and account (or the same command), so a saved password still belongs to it.
     pub fn same_target(&self, other: &Proxy) -> bool {
-        let (a, b) = (self.endpoint(), other.endpoint());
-        a.socks == b.socks && a.host == b.host && a.port == b.port && a.username == b.username
+        match (self.endpoint(), other.endpoint()) {
+            (Some(a), Some(b)) => {
+                a.socks == b.socks
+                    && a.host == b.host
+                    && a.port == b.port
+                    && a.username == b.username
+            }
+            (None, None) => self.command() == other.command(),
+            _ => false,
+        }
     }
     /// Keeps the saved password while the proxy and account stay the same; a form or a file
     /// cannot choose one.
@@ -97,16 +152,28 @@ impl Proxy {
             .filter(|s| s.same_target(self))
             .and_then(Proxy::secret_ref)
             .map(String::from);
-        *self.secret_slot() = kept;
+        if let Some(slot) = self.secret_slot() {
+            *slot = kept;
+        }
     }
-    /// What the connection's status line shows, e.g. `SOCKS5 프록시 경유 (proxy:1080)`.
+    /// What the connection's status line shows, e.g. `SOCKS5 프록시 경유 (proxy:1080)` or
+    /// `명령으로 연결: nc`.
     pub fn label(&self) -> String {
-        let e = self.endpoint();
-        let kind = if e.socks { "SOCKS5" } else { "HTTP" };
-        format!("{kind} 프록시 경유 ({}:{})", e.host, e.port)
+        match self.endpoint() {
+            Some(e) => {
+                let kind = if e.socks { "SOCKS5" } else { "HTTP" };
+                format!("{kind} 프록시 경유 ({}:{})", e.host, e.port)
+            }
+            None => format!(
+                "명령으로 연결: {}",
+                command_program(self.command().unwrap_or(""))
+            ),
+        }
     }
     pub fn validate(&self) -> Result<()> {
-        let e = self.endpoint();
+        let Some(e) = self.endpoint() else {
+            return check_command(self.command().unwrap_or(""));
+        };
         if !super::valid_host(e.host)
             || e.port == 0
             || e.username.len() > MAX_PROXY_FIELD
@@ -149,7 +216,7 @@ impl Store {
     /// refers to it.
     pub fn set_proxy_secret(&self, profile: &str, reference: Option<&str>) -> Result<Profile> {
         let mut p = self.profile(profile)?;
-        let slot = (p.proxy.as_mut().map(Proxy::secret_slot))
+        let slot = (p.proxy.as_mut().and_then(Proxy::secret_slot))
             .ok_or("세션의 프록시가 바뀌어 암호를 저장하지 않았습니다.")?;
         let previous = std::mem::replace(slot, reference.map(String::from));
         let data = profile_data(&p)?;
@@ -230,7 +297,7 @@ mod tests {
         assert!(serde_json::from_str::<Profile>(&other).is_err());
         let minimal: Proxy =
             serde_json::from_str(r#"{"kind":"http","host":"h","port":8080}"#).unwrap();
-        assert_eq!(minimal.endpoint().username, "");
+        assert_eq!(minimal.endpoint().unwrap().username, "");
     }
 
     #[test]
@@ -277,7 +344,7 @@ mod tests {
         let store = Store::open(&dir.path().join("test.db")).unwrap();
         let mut p = profile();
         let mut forged = http("user");
-        *forged.secret_slot() = Some("forged".into());
+        *forged.secret_slot().unwrap() = Some("forged".into());
         p.proxy = Some(forged);
         let p = store.save(p, None).unwrap();
         assert_eq!(p.data_refs().count(), 0, "a form cannot pick a reference");
@@ -328,5 +395,47 @@ mod tests {
             Some("in-use")
         );
         assert_eq!(journaled(&store), ["in-use"], "kept, not removed");
+    }
+    #[test]
+    fn a_command_is_one_line_with_known_tokens_and_has_no_password() {
+        let command = |c: &str| Proxy::Command { command: c.into() };
+        for ok in ["nc %h %p", "ssh -W %h:%p -l %r jump", "connect %n 100%%"] {
+            assert!(command(ok).validate().is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "  ",
+            "nc %h %d",
+            "nc %h %",
+            "a\nb",
+            &"x".repeat(MAX_COMMAND + 1),
+        ] {
+            assert!(command(bad).validate().is_err(), "{bad:?}");
+        }
+        let p = command("/opt/homebrew/bin/socat - TCP:%h:%p");
+        assert_eq!(
+            serde_json::to_string(&p).unwrap(),
+            r#"{"kind":"command","command":"/opt/homebrew/bin/socat - TCP:%h:%p"}"#
+        );
+        assert_eq!(p.label(), "명령으로 연결: socat");
+        assert_eq!(
+            command(r#""C:\Program Files\x.exe" %h"#).label(),
+            "명령으로 연결: x.exe"
+        );
+        assert!(p.same_target(&p.clone()) && !p.same_target(&command("nc %h %p")));
+        assert!(!p.same_target(&http("u")));
+        let mut cleared = p.clone();
+        cleared.clear_secret();
+        cleared.keep_secret(Some(&p));
+        assert_eq!(cleared, p);
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("test.db")).unwrap();
+        let mut profile = profile();
+        profile.proxy = Some(p);
+        let saved = store.save(profile, None).unwrap();
+        assert!(
+            store.set_proxy_secret(&saved.id, None).is_err(),
+            "no password"
+        );
     }
 }

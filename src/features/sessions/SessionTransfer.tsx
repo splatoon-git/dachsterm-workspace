@@ -3,6 +3,8 @@ import { call, desktop, errorText, type Profile, type Group } from '../../lib/ip
 import './transfer.css';
 import { importSelection, routeNames } from './model';
 import type { SessionTemplate } from './SessionManager';
+import { ProxyCommandApproval } from './ProxyCommandApproval';
+import { approval, initialSelection, unapproved, type CommandPlan } from './proxyApproval';
 
 type Bundle = {
   format?: string;
@@ -17,6 +19,7 @@ type Preview = {
   warnings: string[];
   skipped: number;
   includePlan?: { token: string; files: string[] } | null;
+  commandPlan?: CommandPlan | null;
 };
 
 export function SessionTransfer({
@@ -51,7 +54,7 @@ export function SessionTransfer({
         setPreview(result);
         setMerges({});
         setIncludeFiles([]);
-        setSelected(result.bundle.profiles.map((p) => p.id));
+        setSelected(initialSelection(result.bundle.profiles));
       }
     } catch (e) {
       setError(errorText(e));
@@ -75,6 +78,7 @@ export function SessionTransfer({
             sourceId,
             expected: existing.find((p) => p.id === target),
           })),
+        approved: approval(preview.commandPlan, bundle.profiles, selected),
       });
       setPreview(null);
       setSelected([]);
@@ -97,7 +101,7 @@ export function SessionTransfer({
           가져올 형식
           <select value={format} disabled={busy} onChange={(e) => setFormat(e.target.value)}>
             <option value="auto">자동 감지</option>
-            <option value="dachsterm">DachsTerm JSON (v1 / v2 / v3)</option>
+            <option value="dachsterm">DachsTerm JSON (v1 ~ v4)</option>
             <option value="putty">PuTTY (.reg)</option>
             <option value="mobaxterm">세션 북마크 파일 (.mxtsessions / .ini)</option>
             <option value="openssh">OpenSSH (config)</option>
@@ -174,7 +178,7 @@ export function SessionTransfer({
                       files: includeFiles,
                     });
                     setPreview(next);
-                    setSelected(next.bundle.profiles.map((p) => p.id));
+                    setSelected(initialSelection(next.bundle.profiles));
                   } catch (e) {
                     setError(errorText(e));
                   } finally {
@@ -185,6 +189,16 @@ export function SessionTransfer({
                 선택한 Include 읽기 · 변환 미리보기
               </button>
             </fieldset>
+          )}
+          {preview.commandPlan && (
+            <ProxyCommandApproval
+              plan={preview.commandPlan}
+              selected={selected}
+              toggle={(id, on) =>
+                setSelected(on ? [...selected, id] : selected.filter((v) => v !== id))
+              }
+              missing={unapproved(effective?.profiles ?? [], selected)}
+            />
           )}
           <h4>
             변환 결과: {preview.bundle.profiles.length}개 · 제외 {preview.skipped}개
@@ -204,7 +218,7 @@ export function SessionTransfer({
           <div className="form-actions">
             <button
               disabled={busy}
-              onClick={() => setSelected(preview.bundle.profiles.map((p) => p.id))}
+              onClick={() => setSelected(initialSelection(preview.bundle.profiles))}
             >
               전체 선택
             </button>
@@ -332,7 +346,8 @@ export function SessionTransfer({
               disabled={
                 busy ||
                 (!effective?.profiles.length && !preview.bundle.templates?.length) ||
-                effective?.profiles.some((p) => !p.username.trim())
+                effective?.profiles.some((p) => !p.username.trim()) ||
+                unapproved(effective?.profiles ?? [], selected).length > 0
               }
               onClick={() => void apply()}
             >

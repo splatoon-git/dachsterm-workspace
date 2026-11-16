@@ -263,7 +263,7 @@ impl Vault {
                 profile
                     .proxy
                     .as_mut()
-                    .map(crate::storage::Proxy::secret_slot),
+                    .and_then(crate::storage::Proxy::secret_slot),
             );
             for slot in slots {
                 if let Some(previous) = slot.take() {

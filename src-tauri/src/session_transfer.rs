@@ -1,12 +1,11 @@
 //! File adapters are inert parsers: no registry writes, includes, commands, or connections.
 use crate::{
-    AppState,
     settings::Bundle,
     storage::{Group, Profile, Result},
 };
 use serde::Serialize;
 use std::collections::HashMap;
-use tauri::State;
+pub(crate) mod approval;
 mod login;
 mod proxy;
 mod putty;
@@ -186,7 +185,10 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
 }
 
 #[tauri::command]
-pub async fn config_preview(format: String, encoding: String) -> Result<Option<Preview>> {
+pub async fn config_preview(
+    format: String,
+    encoding: String,
+) -> Result<Option<approval::Reviewed>> {
     let Some(file) = rfd::AsyncFileDialog::new()
         .set_title("가져올 세션 설정 선택")
         .add_filter("세션 설정", &["json", "reg", "mxtsessions", "ini", "conf"])
@@ -208,28 +210,11 @@ pub async fn config_preview(format: String, encoding: String) -> Result<Option<P
             let mut preview = Preview::new();
             preview.include_plan = Some(crate::config_includes::plan(file.path(), &encoding)?);
             preview.warn("Include 파일 내용을 읽기 전에 목록에서 허용할 파일을 선택하세요. 선택한 파일의 폴더를 루트로 사용하며 상대 경로만 지원합니다. 파일·명령은 실행하지 않습니다.");
-            return Ok(Some(preview));
+            return Ok(Some(approval::review(preview)));
         }
     }
-    parse(&data, &format, &encoding).map(Some)
+    parse(&data, &format, &encoding).map(|p| Some(approval::review(p)))
 }
-#[tauri::command]
-pub fn config_apply(
-    state: State<AppState>,
-    data: String,
-    merges: Option<Vec<crate::settings::Merge>>,
-) -> Result<usize> {
-    if data.len() > crate::maintenance::MAX_CONFIG_BYTES {
-        return Err("설정 파일은 2MiB 이하여야 합니다.".into());
-    }
-    let bundle: Bundle = serde_json::from_str(&data).map_err(|_| "DachsTerm JSON 스키마 오류")?;
-    crate::settings::validate_import(&bundle)?;
-    let _guard = state.mutation.lock().unwrap();
-    crate::maintenance::snapshot(&state.store, &state.directory)?;
-    let mut bundle = bundle;
-    crate::settings::apply_bundle(&state.store, &mut bundle, &merges.unwrap_or_default())
-}
-
 // Registry strings only recognize the escapes emitted by regedit; never execute a .reg file.
 fn reg_string(value: &str) -> Option<String> {
     let inner = value.strip_prefix('"')?.strip_suffix('"')?;
@@ -579,7 +564,7 @@ fn openssh(text: &str) -> Result<Preview> {
         if w.is_empty() {
             continue;
         }
-        w[0] = w[0].to_ascii_lowercase();
+        proxy::keyword(&mut w, line);
         if matches!(w[0].as_str(), "match" | "include") {
             return Err(
                 "Match는 지원하지 않습니다. Include는 파일 목록 승인 후에만 읽습니다.".into(),
@@ -857,11 +842,25 @@ mod tests {
     fn unsupported_and_cyclic_hops_never_become_direct() {
         for text in [
             "Host a\nUser u\nProxyJump b\nHost b\nUser u\nProxyJump a",
-            "Host a\nUser u\nProxyJump b\nHost b\nUser u\nProxyCommand unsafe",
+            "Host a\nUser u\nProxyJump b\nHost b\nUser u\nProxyCommand nc -X 4 -x p %h %p",
         ] {
             let p = parse(text.as_bytes(), "openssh", "utf-8").unwrap();
             assert!(p.bundle.profiles.is_empty());
         }
+        // A hop with a command keeps it (for the preview to approve, CG.2), never a direct hop.
+        let text = "Host a\nUser u\nProxyJump b\nHost b\nUser u\nProxyCommand unsafe %h";
+        let p = parse(text.as_bytes(), "openssh", "utf-8").unwrap();
+        let b = p.bundle.profiles.iter().find(|p| p.name == "b").unwrap();
+        assert_eq!(b.proxy.as_ref().unwrap().command(), Some("unsafe %h"));
+        assert_eq!(
+            p.bundle
+                .profiles
+                .iter()
+                .find(|p| p.name == "a")
+                .unwrap()
+                .jump_ids,
+            std::slice::from_ref(&b.id)
+        );
     }
 
     #[test]
@@ -921,8 +920,17 @@ mod tests {
     fn openssh_first_value_patterns_quotes_and_proxy_skip() {
         let text = "Host lab other\n HostName=lab.example\n User \"test user\" # comment\n Port 2222\n IdentityFile \"C:/keys/test key\"\nHost other\n ProxyCommand command\nHost * !other\n User fallback\n Port 22\nHost *\n ConnectTimeout 9\n";
         let p = parse(text.as_bytes(), "openssh", "utf-8").unwrap();
-        assert_eq!(p.bundle.profiles.len(), 1);
-        assert_eq!(p.skipped, 1);
+        assert_eq!(
+            p.bundle.profiles.len(),
+            2,
+            "the ProxyCommand host waits for approval"
+        );
+        assert_eq!(p.skipped, 0);
+        let command = p.bundle.profiles[1]
+            .proxy
+            .as_ref()
+            .and_then(|x| x.command());
+        assert_eq!(command, Some("command"));
         let s = &p.bundle.profiles[0];
         assert_eq!(s.name, "lab");
         assert_eq!(s.port, 2222);
