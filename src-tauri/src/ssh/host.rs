@@ -20,6 +20,8 @@ pub struct Host {
     pub(super) waiting: watch::Sender<bool>,
     pub(super) stop: watch::Receiver<bool>,
     pub(super) forward_agent: bool,
+    /// Only a connection that asked for X11 forwarding has one (CG.9).
+    pub(super) x11: Option<std::sync::Arc<crate::x11::Forward>>,
 }
 impl client::Handler for Host {
     type Error = russh::Error;
@@ -90,8 +92,8 @@ impl client::Handler for Host {
         Ok(())
     }
     // The app never asks the server for these channels, and russh accepts them by default, which
-    // lets a server keep channels open on the connection (S.12). CG.9 will take X11 only when the
-    // connection asked for forwarding.
+    // lets a server keep channels open on the connection (S.12). X11 is taken only when the
+    // connection asked for forwarding (CG.9).
     async fn server_channel_open_session(
         &mut self,
         _: russh::Channel<client::Msg>,
@@ -123,13 +125,18 @@ impl client::Handler for Host {
     }
     async fn server_channel_open_x11(
         &mut self,
-        _: russh::Channel<client::Msg>,
+        channel: russh::Channel<client::Msg>,
         _: &str,
         _: u32,
         reply: client::ChannelOpenHandle,
         _: &mut client::Session,
     ) -> std::result::Result<(), Self::Error> {
-        refuse(reply).await
+        let Some(x11) = &self.x11 else {
+            return refuse(reply).await;
+        };
+        x11.relay(channel);
+        reply.accept().await;
+        Ok(())
     }
 }
 

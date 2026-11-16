@@ -107,6 +107,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 agent_source: "system".into(),
                 cert_path: String::new(),
                 serial: None,
+                forward_x11: false,
+                x11_display: String::new(),
             },
             None,
         )?;

@@ -37,7 +37,7 @@ pub struct Status {
     pub unlocked: bool,
     pub seconds: u64,
 }
-fn random<const N: usize>() -> Result<[u8; N]> {
+pub(crate) fn random<const N: usize>() -> Result<[u8; N]> {
     let mut value = [0; N];
     OsRng
         .try_fill_bytes(&mut value)

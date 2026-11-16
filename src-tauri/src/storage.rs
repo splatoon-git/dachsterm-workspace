@@ -81,6 +81,13 @@ pub struct Profile {
     /// Speed, framing and flow control of a serial session (CG.5). Its device is `host`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial: Option<SerialSettings>,
+    /// X11 forwarding to an X server the user runs (CG.9). Like `forward_agent`, off unless the
+    /// form turns it on, and never taken from a session file.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub forward_x11: bool,
+    /// Empty uses `DISPLAY` (macOS) or `localhost:0.0` (Windows).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub x11_display: String,
 }
 /// A host name or address without spaces, separators or brackets.
 pub(crate) fn valid_host(host: &str) -> bool {
@@ -161,6 +168,8 @@ impl Profile {
             agent_source: "system".into(),
             cert_path: String::new(),
             serial: None,
+            forward_x11: false,
+            x11_display: String::new(),
         }
     }
     /// Stored Passphrase references of the forwarded key files.
@@ -608,6 +617,8 @@ pub(crate) mod tests {
             agent_source: "system".into(),
             cert_path: String::new(),
             serial: None,
+            forward_x11: false,
+            x11_display: String::new(),
         }
     }
     #[test]

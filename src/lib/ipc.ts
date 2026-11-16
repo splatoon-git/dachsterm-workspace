@@ -38,6 +38,10 @@ export type Profile = {
   agentSource?: 'system' | 'pageant';
   /** An OpenSSH certificate for the key file. Empty uses `<key>-cert.pub` beside it. */
   certPath?: string;
+  /** X11 forwarding to an X server the user runs. Off unless the form turns it on. */
+  forwardX11?: boolean;
+  /** Empty uses `DISPLAY` (macOS) or `localhost:0.0` (Windows). */
+  x11Display?: string;
   /** A serial session's line settings (CG.5). Its device name is `host`. */
   serial?: SerialSettings | null;
 };

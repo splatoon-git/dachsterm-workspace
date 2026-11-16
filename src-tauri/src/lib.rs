@@ -73,6 +73,7 @@ mod updates;
 pub mod vault;
 pub mod windows;
 mod workspace;
+mod x11;
 use std::{
     path::PathBuf,
     sync::{

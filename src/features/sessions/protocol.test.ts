@@ -10,6 +10,9 @@ const ssh: Profile = {
   tmuxSession: 'main',
   forwardAgent: true,
   proxy: { kind: 'socks5', host: 'p', port: 1080, username: '' },
+  certPath: '/k-cert.pub',
+  agentSource: 'pageant',
+  forwardX11: true,
 };
 
 describe('switchProtocol', () => {
@@ -24,6 +27,9 @@ describe('switchProtocol', () => {
       tmuxSession: '',
       forwardAgent: false,
       proxy: null,
+      certPath: '',
+      agentSource: 'system',
+      forwardX11: false,
     });
   });
 
@@ -31,7 +37,8 @@ describe('switchProtocol', () => {
     expect(switchProtocol(ssh, 'ftp')).toMatchObject({ port: 21, auth: 'password' });
     const back = switchProtocol(switchProtocol(ssh, 'telnet'), 'ssh');
     expect(back).toMatchObject({ port: 22, auth: 'password' });
-    expect(switchProtocol(ssh, 'ssh').auth).toBe('key');
+    expect(switchProtocol(ssh, 'ssh')).toMatchObject({ auth: 'key', certPath: '/k-cert.pub' });
+    expect(switchProtocol(ssh, 'ftp')).toMatchObject({ certPath: '', forwardX11: false });
   });
 
   it('turns a session into a serial console with the common line settings and no host', () => {

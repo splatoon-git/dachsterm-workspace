@@ -5,6 +5,7 @@ import { JumpEditor } from './JumpEditor';
 import { TmuxField } from './TmuxField';
 import { WorkspaceField } from './WorkspaceField';
 import { AgentForwardField } from './AgentForwardField';
+import { X11Field } from './X11Field';
 import { LoginKeyField } from './LoginKeyField';
 import { AgentLoginField } from './AgentLoginField';
 import { NetworkFields } from './NetworkFields';
@@ -298,6 +299,7 @@ export function SessionForm({
               )}
               {profile.protocol === 'ssh' && <TmuxField profile={profile} field={field} />}
               {profile.protocol === 'ssh' && <AgentForwardField profile={profile} field={field} />}
+              {profile.protocol === 'ssh' && <X11Field profile={profile} field={field} />}
               {profile.protocol === 'ssh' && (
                 <ProxyField profile={profile} field={field} passwordRef={proxySecret} />
               )}

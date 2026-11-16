@@ -202,3 +202,17 @@ test('a serial console asks for a device and line settings, not a host or a logi
   await dialog.getByLabel('프로토콜').selectOption('ssh');
   await expect(dialog.getByLabel('포트', { exact: true })).toHaveValue('22');
 });
+
+test('X11 forwarding starts off and asks for a display only when on', async ({ page }) => {
+  const dialog = await openForm(page);
+  await dialog.locator('summary', { hasText: '고급 옵션' }).click();
+  const x11 = dialog.getByLabel('X11 포워딩 (외부 X 서버 필요)');
+  await expect(x11).not.toBeChecked();
+  await expect(dialog.getByLabel('X 디스플레이 (선택)')).toHaveCount(0);
+  await x11.check();
+  await dialog.getByLabel('X 디스플레이 (선택)').fill('localhost:10.0');
+  await dialog.getByLabel('프로토콜').selectOption('ftp');
+  await expect(dialog.getByLabel('X11 포워딩 (외부 X 서버 필요)')).toHaveCount(0);
+  await dialog.getByLabel('프로토콜').selectOption('ssh');
+  await expect(dialog.getByLabel('X11 포워딩 (외부 X 서버 필요)')).not.toBeChecked();
+});

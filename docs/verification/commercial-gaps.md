@@ -323,3 +323,38 @@ PASS ProxyCommand failure shows the command's standard error: 1홉 missing (targ
 - 단위: 장치 이름(두 OS 형식, `..`·`/`·`tty.*` 거부), 설정 범위·인증·네트워크 필드 거부, 다른 OS 장치 이름 안내, 설정 표시 `115200 7E1 · RTS/CTS`, 여는 실패 문구. **가상 단말 쌍(`TTYPort::pair`)으로 종단 검사**: 장치 출력 → `Event::Data`, 입력 `show version\r`이 장치에 도착, 장치 쪽을 닫으면 `장치 연결이 끊겼습니다.`로 끝남(5회 연속 통과). 프런트엔드: `switchProtocol`(시리얼 전환 시 호스트 비움·기본 115200 8N1·벗어나면 설정 제거), 시리얼 transport, 탭 메뉴 Break(시리얼·연결 중만)·분할 없음, 세션 폼(Playwright: 호스트·포트·사용자·인증 칸 없음, 기본값, 빈 칸 없는 행).
 - 실장치 대역(`npm run probe:serial`, Mac): 검사가 socat으로 PTY를 만들어 `connect:fixture`의 장치 콘솔(127.0.0.1:47000)에 잇고, PTY는 속도를 거부하므로 속도 없이 연다. `echo serial-$((40+2))` → `serial-42`, Break 송신 `Ok`(PTY라 실제 신호는 확인 불가), socat 종료 → `장치 연결이 끊겼습니다.` 통과.
 - **대기:** 실제 USB 시리얼 장치로 속도 변경·Break·흐름 제어·케이블 분리, macOS 실제 앱 화면(CG.10). Windows의 실제 COM 포트·com0com(사용자 지시대로 대기, Windows 대상 컴파일도 이 Mac에서는 못 함).
+
+## CG.9 X11 포워딩 (2026-11-16, `feat/cg9-x11`)
+
+### 구현
+
+- 프로필 `forwardX11`(기본 꺼짐)·`x11Display`(빈 값이면 macOS는 `DISPLAY`, Windows는 `localhost:0.0`). 에이전트 전달과 같이 세션 파일로 내보내거나 가져오지 않고, 병합은 저장된 값을 유지한다. SSH만. 세션 폼 고급 옵션의 `X11 포워딩 (외부 X 서버 필요)`(`X11Field`).
+- `x11.rs`: 연결이 포워딩을 요청한 경우에만 `Forward`를 만들어 그 연결의 `Host`에 둔다(`route.rs`). `Host::server_channel_open_x11`은 `Forward`가 없으면 S.12처럼 `AdministrativelyProhibited`로 거부하고, 있으면 수락해 중계한다. 경유지 연결에는 두지 않는다.
+- 요청: 셸 채널을 열고 가장 먼저 `x11-req`(무작위 16바이트 가짜 쿠키, `want_reply`)를 보내 그 응답을 기다린 뒤 에이전트 전달·PTY로 간다(`Route::open_shell`, `ssh.rs`는 두 줄을 한 줄로 바꿔 순증 없음). 서버가 거부하면 탭에 한 번 알린다.
+- 중계: X 클라이언트의 접속 설정 패킷(바이트 순서 `l`/`B`)에서 이름이 `MIT-MAGIC-COOKIE-1`이고 쿠키가 가짜 쿠키와 같을 때만 실제 쿠키로 바꿔(없으면 인증 없이) 로컬 X 서버로 넘긴다. 다르면 아무것도 로컬로 보내지 않고 닫는다. 실제 쿠키는 `xauth` 프로그램 대신 Xauthority 파일(`XAUTHORITY`, 없으면 `~/.Xauthority`)을 직접 읽는다(설계안의 `/opt/X11/bin/xauth` 대신, `PATH` 문제가 없음). 디스플레이 번호로 찾고 주소는 비교하지 않는다. 로컬은 `host:n` → TCP `6000+n`, `:n`·`unix:n` → `/tmp/.X11-unix/Xn`, `/…/org.xquartz:0` → 그 Unix 소켓(Windows는 TCP만). X 서버에 연결하지 못하면 `X 서버(XQuartz, VcXsrv 등)를 먼저 실행하세요.`를 탭에 한 번 알린다.
+- 가져오기: OpenSSH `ForwardX11 yes`는 켜지 않고 경고만 한다.
+- 함께 고친 것: 프로토콜을 바꿀 때(`switchProtocol`, CG.4) CG.3의 `certPath`·`agentSource`가 남아 FTP·Telnet 저장이 거부되던 것을 지우도록 했다(X11도 같이).
+
+### 검증 (Mac, 미커밋 트리)
+
+| 검사 | 결과 |
+|---|---|
+| 단위 `x11` | 디스플레이 형식(TCP·Unix·XQuartz 경로·IPv6·범위), Xauthority 레코드 찾기·잘린 파일, 쿠키 치환(두 바이트 순서, 실제 쿠키 있음·없음), 다른 쿠키·다른 이름·잘못된 순서 바이트·과도한 길이 거부 |
+| 단위 `ssh::host`(앱 `Host` + russh 서버를 메모리 안에서) | 포워딩을 요청한 연결: 서버가 연 X11 채널의 가짜 쿠키가 지워져(실제 쿠키 없음) 로컬 가짜 X 서버로 가고 양방향 중계, 다른 쿠키는 로컬에 닿지 않고 닫힘. 요청하지 않은 연결은 S.12 시험대로 거부 |
+| 단위 `settings`, `session_transfer::login` | 내보내기에 없음, 파일로 켤 수 없음, `ForwardX11` 경고 |
+| Vitest·Playwright | `switchProtocol`(인증서·Pageant·X11 지움), 세션 폼의 X11 칸 |
+| **실제 환경 `npm run probe:connect`** | 실행기가 검사 환경 Xvfb의 쿠키로 임시 Xauthority 파일을 만들어 `XAUTHORITY`로 넘긴다(이 PC의 파일은 건드리지 않음) |
+
+```text
+PASS X11: xdpyinfo through the fake cookie reaches Xvfb, no DISPLAY without forwarding, a missing X server is told
+```
+
+- 게이트(미커밋 트리): typecheck·lint·format, Vitest 1419/1419(`--testTimeout=60000`), build, Playwright 546, `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` 750(무시 6)+1, `npm audit` 0건, 의존성 감사, 고지 537개.
+- 포워딩: 서버의 `DISPLAY`가 `localhost:1`로 시작(sshd의 X11DisplayOffset 10 이상), `xdpyinfo`의 `vendor string: The X.Org Foundation`(Xvfb는 쿠키가 맞아야 받는다). 포워딩 없음: `DISPLAY` 비어 있음. X 서버 없음(`127.0.0.1:59000`): `xdpyinfo` 실패와 탭 알림. 같은 실행에서 CG.1~CG.3 여덟 줄도 통과.
+
+### 대기
+
+- Mac XQuartz(Unix 소켓 `DISPLAY`, `~/.Xauthority`)와 패키지 앱에서 사람이 확인(CG.10).
+- Windows VcXsrv(인증 없는 TCP 6000)·X410(CG.10).
+- 서버가 요청 없이 X11 채널을 여는 경우는 OpenSSH로 만들 수 없어 앱 `Host`를 메모리 안 russh 서버로 시험한 것으로 대신했다.
+

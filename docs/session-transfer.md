@@ -25,6 +25,7 @@ PuTTY는 `HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions`를 레지스트
 - `protocol: "serial"`: 장비의 시리얼 콘솔. `host`는 장치 이름(Windows `COM3`, macOS `/dev/cu.usbserial-1410`), `port`는 0, `auth`는 `interactive`이고 `serial`에 `{ "baud", "dataBits", "parity": "none" | "odd" | "even", "stopBits", "flow": "none" | "software" | "hardware" }`를 둔다. 장치 이름은 PC마다 다르므로 그대로 가져오고, 다른 PC의 이름이면 연결할 때 세션을 수정해 포트 목록에서 고르라고 알린다.
 - v3 이하 파일에 `proxy`·`certPath`·`agentSource`나 Telnet·시리얼 세션이 있으면 "JSON v4가 필요합니다"로 거부한다.
 - 외부 설정에서는 OpenSSH `ProxyCommand nc -X 5|connect -x 호스트[:포트] [-P 사용자] %h %p` 형식과 PuTTY `ProxyMethod` 2(SOCKS5)·3(HTTP)의 `ProxyHost`·`ProxyPort`·`ProxyUsername`만 프록시로 바꾼다. SOCKS4와 그 밖의 프록시 방식은 경고와 함께 해당 세션을 제외한다. PuTTY `Protocol=telnet` 세션은 Telnet 세션으로 받고(키·터널은 버림), 프록시를 쓰는 Telnet 세션은 제외한다. `ProxyJump`와 `ProxyCommand`가 함께 있으면 `ProxyJump`만 쓴다. PuTTY `ProxyPassword`는 읽지 않는다.
+- X11 포워딩(`forwardX11`, `x11Display`)은 에이전트 전달처럼 이 PC의 세션에만 두고 내보내거나 가져오지 않는다. 가져올 때 같은 세션에 병합하면 저장된 값을 유지한다. OpenSSH `ForwardX11 yes`는 켜지 않고 경고만 한다.
 - **명령 승인:** 연결할 때 이 PC에서 명령을 실행하는 세션(`proxy.kind: "command"`)은 DachsTerm JSON이든 OpenSSH `ProxyCommand`든 미리보기에 명령 전문을 따로 보이고 기본으로 선택하지 않는다. 사용자가 선택한 세션만, 미리보기에 보인 명령과 바이트 단위로 같을 때 저장한다(10분 동안 한 번 쓰는 승인). 선택하지 않은 세션은 명령 없이 가져오지 않고 건너뛴다. 필요한 경유지가 명령을 쓰면 그 명령도 승인해야 가져올 수 있다. nc 형식이 아닌 `ProxyCommand`가 이 경로로 들어오고, 그 밖의 `%` 토큰을 쓰는 명령은 제외한다.
 - OpenSSH `CertificateFile`(첫 값)과 PuTTY `DetachedCertificate`는 개인키 세션의 `certPath`가 된다. 환경변수·`~`·토큰이 든 경로는 경고 후 비운다. OpenSSH `IdentityAgent`가 Pageant를 가리키면 경고만 한다.
 
