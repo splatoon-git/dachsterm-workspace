@@ -38,6 +38,7 @@
     "probe:endurance": "node scripts/run-endurance.mjs",
     "measure:render": "node scripts/measure-terminal-render.mjs",
     "connect:fixture": "node scripts/connect-fixture.mjs",
+    "probe:connect": "node scripts/run-connect-probe.mjs",
     "kube:fixture": "wsl -d Ubuntu-24.04 -- bash scripts/kube-fixture.sh",
     "test:kube-detect": "node scripts/verify-kube-detect.mjs",
     "test:kube-dashboard": "node scripts/verify-kube-tree.mjs --dashboard",

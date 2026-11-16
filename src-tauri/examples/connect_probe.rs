@@ -1,0 +1,345 @@
+// Connection-path checks of the product engine against `npm run connect:fixture` (CG): an HTTP
+// CONNECT and a SOCKS5 proxy in front of an SSH server that only they and the jump host can reach.
+// `scripts/run-connect-probe.mjs` runs it. No secret output.
+#[path = "probe_client/mod.rs"]
+mod probe_client;
+use dachsterm::{
+    ssh::{AuthReply, Connections, Event, Secrets},
+    storage::{Profile, Proxy, Store},
+};
+use probe_client::{Client, Result, base};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::mpsc,
+    time::timeout,
+};
+use zeroize::Zeroizing;
+
+struct Fixture {
+    dir: PathBuf,
+    user: String,
+    proxy: String,
+}
+impl Fixture {
+    fn read(&self, name: &str) -> String {
+        std::fs::read_to_string(self.dir.join(name))
+            .expect("fixture file missing; run npm run connect:fixture -- up")
+            .trim()
+            .to_string()
+    }
+    fn host_key(&self, fingerprint: &str) -> bool {
+        ["host_target.pub", "host_jump.pub"].iter().any(|name| {
+            russh::keys::PublicKey::from_openssh(&self.read(name))
+                .map(|k| k.fingerprint(russh::keys::HashAlg::Sha256).to_string() == fingerprint)
+                .unwrap_or(false)
+        })
+    }
+}
+
+fn proxy(socks: bool, username: &str) -> Proxy {
+    let (host, username, secret_ref) = ("127.0.0.1".to_string(), username.to_string(), None);
+    if socks {
+        Proxy::Socks5 {
+            host,
+            port: 41080,
+            username,
+            secret_ref,
+        }
+    } else {
+        Proxy::Http {
+            host,
+            port: 43128,
+            username,
+            secret_ref,
+        }
+    }
+}
+/// The internal `target` server, reached only through `proxy` (or a jump host).
+fn target(proxy: Option<Proxy>) -> Profile {
+    let mut p = Profile {
+        host: "target".into(),
+        port: 22,
+        name: "target".into(),
+        timeout: 30,
+        keepalive: 15,
+        ..base()
+    };
+    p.proxy = proxy;
+    p
+}
+
+struct Run<'a> {
+    fx: &'a Fixture,
+    store: Arc<Store>,
+    manager: Arc<Connections>,
+    paths: Vec<PathBuf>,
+}
+impl Run<'_> {
+    fn start(&self, profile: Profile, route: Secrets) -> Result<Client> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let (tx, rx) = mpsc::channel(256);
+        let secret = Zeroizing::new(self.fx.user.clone());
+        self.manager.start_route(
+            id.clone(),
+            profile,
+            secret,
+            route,
+            self.paths.clone(),
+            Arc::new(move |e| tx.try_send(e).map_err(|_| "probe queue full".into())),
+            self.store.clone(),
+        )?;
+        Ok(Client {
+            id,
+            rx,
+            manager: self.manager.clone(),
+            bytes: vec![],
+        })
+    }
+    /// Answers host keys and prompts until the connection is up. Returns the status message and
+    /// the names of the prompts it answered.
+    async fn ready(&self, c: &mut Client) -> std::result::Result<(String, Vec<String>), String> {
+        let mut prompts = vec![];
+        loop {
+            match c.event().await.map_err(|e| e.to_string())? {
+                Event::HostKey { fingerprint, .. } => {
+                    assert!(self.fx.host_key(&fingerprint), "unknown host key");
+                    let control = c.manager.control(&c.id).map_err(|e| e.to_string())?;
+                    control.trust.send(Some(true)).map_err(|e| e.to_string())?;
+                }
+                Event::AuthPrompt {
+                    challenge, name, ..
+                } => {
+                    let answer = if name.contains("프록시") {
+                        self.fx.proxy.clone()
+                    } else {
+                        self.fx.user.clone()
+                    };
+                    prompts.push(name);
+                    let control = c.manager.control(&c.id).map_err(|e| e.to_string())?;
+                    control
+                        .auth_reply
+                        .send(AuthReply {
+                            challenge,
+                            responses: Zeroizing::new(vec![answer]),
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+                Event::State { status, message } if status == "error" => return Err(message),
+                Event::State { status, message } if status == "connected" => {
+                    return Ok((message, prompts));
+                }
+                _ => {}
+            }
+        }
+    }
+    async fn failure(&self, profile: Profile, route: Secrets, expected: &str) -> Result<()> {
+        let mut c = self.start(profile, route)?;
+        let error = self
+            .ready(&mut c)
+            .await
+            .expect_err("connected unexpectedly");
+        assert!(error.contains(expected), "unexpected error: {error}");
+        Ok(())
+    }
+}
+
+/// Terminal, SFTP, a Local tunnel and monitoring on one connection: the services that reuse it.
+async fn services(c: &mut Client, profile_id: &str) -> Result<()> {
+    use dachsterm::{
+        monitoring::Monitors,
+        tunnels::{Config, Tunnels},
+    };
+    c.send("stty -echo; printf '\\nHOST=%s\\n' \"$(hostname)\"\n")
+        .await?;
+    let output = c.marker("HOST=target\r\n").await?;
+    assert!(output.contains("HOST=target"));
+    let listing = dachsterm::sftp::list(&c.manager, &c.id, "/").await?;
+    assert!(
+        listing
+            .entries
+            .iter()
+            .any(|e| e.name == "etc" && e.directory),
+        "SFTP listing of / misses etc"
+    );
+    let tunnels = Arc::new(Tunnels::default());
+    let config = Config {
+        id: uuid::Uuid::new_v4().to_string(),
+        profile_id: profile_id.into(),
+        name: "proxy-local".into(),
+        kind: "local".into(),
+        port: 0,
+        host: "127.0.0.1".into(),
+        target_port: 22,
+        auto_start: false,
+    };
+    let local = tunnels
+        .start(c.manager.clone(), c.id.clone(), config)
+        .await?;
+    let port = (tunnels.list().into_iter().find(|t| t.id == local))
+        .unwrap()
+        .port;
+    let mut socket = tokio::net::TcpStream::connect(("127.0.0.1", port)).await?;
+    let mut banner = [0u8; 4];
+    timeout(Duration::from_secs(10), socket.read_exact(&mut banner)).await??;
+    assert_eq!(&banner, b"SSH-", "the tunnel reaches the target's sshd");
+    socket.shutdown().await.ok();
+    tunnels.stop(&local);
+    let monitors = Arc::new(Monitors::default());
+    monitors.configure(c.manager.clone(), c.id.clone(), true, 2, "all".into())?;
+    timeout(Duration::from_secs(20), async {
+        while !monitors.get(&c.id).is_some_and(|m| m.history.len() >= 2) {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await?;
+    monitors.configure(c.manager.clone(), c.id.clone(), false, 2, "all".into())?;
+    Ok(())
+}
+
+async fn run(dir: &Path) -> Result<()> {
+    let fx = Fixture {
+        dir: dir.into(),
+        user: String::new(),
+        proxy: String::new(),
+    };
+    let fx = Fixture {
+        user: fx.read("user.password"),
+        proxy: fx.read("proxy.password"),
+        ..fx
+    };
+    let work = tempfile::tempdir()?;
+    let run = Run {
+        fx: &fx,
+        store: Arc::new(Store::open(&work.path().join("sessions.sqlite3"))?),
+        manager: Arc::new(Connections::default()),
+        paths: vec![work.path().join("known_hosts")],
+    };
+    let saved = |p: Profile| run.store.save(p, None);
+
+    // HTTP CONNECT, password asked at connect time.
+    let http = saved(target(Some(proxy(false, "probe"))))?;
+    let mut c = run.start(http.clone(), Secrets::default())?;
+    let (message, prompts) = run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    assert!(
+        message.contains("HTTP 프록시 경유 (127.0.0.1:43128)"),
+        "{message}"
+    );
+    assert!(prompts.iter().any(|p| p.contains("프록시 암호")));
+    services(&mut c, &http.id).await?;
+    c.stop().await?;
+    println!("PASS HTTP CONNECT (asked password): terminal, SFTP, Local tunnel, monitoring");
+
+    // SOCKS5 with the saved password.
+    let socks = saved(target(Some(proxy(true, "probe"))))?;
+    let route = Secrets {
+        hops: vec![],
+        proxy: Some(Zeroizing::new(fx.proxy.clone())),
+    };
+    let mut c = run.start(socks.clone(), route)?;
+    let (message, prompts) = run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    assert!(
+        message.contains("SOCKS5 프록시 경유 (127.0.0.1:41080)"),
+        "{message}"
+    );
+    assert!(prompts.is_empty(), "a saved password is not asked");
+    services(&mut c, &socks.id).await?;
+    c.stop().await?;
+    println!(
+        "PASS SOCKS5 (saved password, name resolved by the proxy): terminal, SFTP, Local tunnel, monitoring"
+    );
+
+    // SOCKS5 → jump host → target: the proxy belongs to the first jump host.
+    let mut jump = target(Some(proxy(true, "probe")));
+    jump.host = "jump".into();
+    jump.name = "jump".into();
+    let jump = saved(jump)?;
+    let mut end = target(None);
+    end.jump_ids = vec![jump.id.clone()];
+    let end = saved(end)?;
+    let route = Secrets {
+        hops: vec![(jump.clone(), Some(Zeroizing::new(fx.user.clone())))],
+        proxy: Some(Zeroizing::new(fx.proxy.clone())),
+    };
+    let mut c = run.start(end.clone(), route)?;
+    let (message, _) = run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    assert!(
+        message.starts_with("연결됨 · SOCKS5 프록시 경유 (127.0.0.1:41080) → jump"),
+        "{message}"
+    );
+    services(&mut c, &end.id).await?;
+    c.stop().await?;
+    println!("PASS SOCKS5 → jump → target: terminal, SFTP, Local tunnel, monitoring");
+
+    // Errors the user sees, with the answers measured in CG.0.
+    const AUTH_FAILED: &str = "프록시 인증에 실패했습니다.";
+    let wrong = |p: Profile| Secrets {
+        hops: vec![],
+        proxy: p
+            .proxy
+            .as_ref()
+            .map(|_| Zeroizing::new("wrong-password".to_string())),
+    };
+    run.failure(http.clone(), wrong(http.clone()), AUTH_FAILED)
+        .await?;
+    run.failure(socks.clone(), wrong(socks.clone()), AUTH_FAILED)
+        .await?;
+    for socks in [false, true] {
+        let anonymous = saved(target(Some(proxy(socks, ""))))?;
+        run.failure(anonymous, Secrets::default(), "프록시가 인증을 요구합니다.")
+            .await?;
+    }
+    let saved_proxy = || Secrets {
+        hops: vec![],
+        proxy: Some(Zeroizing::new(fx.proxy.clone())),
+    };
+    let mut port23 = target(Some(proxy(false, "probe")));
+    port23.port = 23;
+    let port23 = saved(port23)?;
+    run.failure(
+        port23,
+        saved_proxy(),
+        "프록시가 이 목적지를 허용하지 않습니다.",
+    )
+    .await?;
+    for socks in [false, true] {
+        let mut missing = target(Some(proxy(socks, "probe")));
+        missing.host = "no-such-host.invalid".into();
+        let missing = saved(missing)?;
+        run.failure(
+            missing,
+            saved_proxy(),
+            "프록시가 목적지에 연결하지 못했습니다(",
+        )
+        .await?;
+    }
+    let mut closed = target(Some(proxy(true, "probe")));
+    if let Some(Proxy::Socks5 { port, .. }) = &mut closed.proxy {
+        *port = 1;
+    }
+    let closed = saved(closed)?;
+    run.failure(
+        closed,
+        saved_proxy(),
+        "프록시(127.0.0.1:1)에 연결할 수 없습니다.",
+    )
+    .await?;
+    println!(
+        "PASS proxy errors: wrong password (HTTP 401, SOCKS 01 02), auth required (407, 05 FF), port refused (403), unknown host (500, SOCKS 1), closed proxy port"
+    );
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() {
+    let dir = std::env::var("DACHSTERM_CONNECT_FIXTURE").expect("DACHSTERM_CONNECT_FIXTURE");
+    if let Err(e) = run(Path::new(&dir)).await {
+        eprintln!("FAIL {e}");
+        std::process::exit(1);
+    }
+}

@@ -6,6 +6,8 @@ import { TmuxField } from './TmuxField';
 import { WorkspaceField } from './WorkspaceField';
 import { AgentForwardField } from './AgentForwardField';
 import { LoginKeyField } from './LoginKeyField';
+import { ProxyField } from './ProxyField';
+import { proxySecretArgs, type ProxySecret } from './proxy';
 import { groupPath, hasConnectionOverrides } from './model';
 import type { SessionTemplate } from './SessionManager';
 import { call, errorText, type Group, type Profile } from '../../lib/ipc';
@@ -36,6 +38,7 @@ export function SessionForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const secret = useRef<HTMLInputElement>(null);
+  const proxySecret = useRef<ProxySecret>({ action: 'keep', value: '' });
   const advanced = useRef<HTMLDetailsElement>(null);
   const field = <K extends keyof Profile>(key: K, value: Profile[K]) =>
     setProfile((p) => ({ ...p, [key]: value }));
@@ -58,6 +61,7 @@ export function SessionForm({
         },
         secretAction,
         secret: secretAction === 'replace' ? value : null,
+        ...proxySecretArgs(profile, proxySecret.current),
       });
       saved(p, connect, value);
     } catch (e) {
@@ -147,6 +151,7 @@ export function SessionForm({
                   forwardKeys: e.target.value === 'ssh' ? p.forwardKeys : [],
                   forwardGitCredentials: e.target.value === 'ssh' && p.forwardGitCredentials,
                   workspace: e.target.value === 'ssh' ? p.workspace : 'terminal',
+                  proxy: e.target.value === 'ssh' ? p.proxy : null,
                 }))
               }
             >
@@ -352,6 +357,9 @@ export function SessionForm({
               )}
               {profile.protocol === 'ssh' && <TmuxField profile={profile} field={field} />}
               {profile.protocol === 'ssh' && <AgentForwardField profile={profile} field={field} />}
+              {profile.protocol === 'ssh' && (
+                <ProxyField profile={profile} field={field} passwordRef={proxySecret} />
+              )}
               {profile.protocol === 'ssh' && (
                 <JumpEditor
                   profile={profile}

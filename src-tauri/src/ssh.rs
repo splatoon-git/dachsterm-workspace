@@ -13,11 +13,13 @@ use tokio::{
 };
 use zeroize::Zeroizing;
 mod event;
+mod first_hop;
 mod host;
 mod host_key;
 pub(crate) mod route;
 pub use event::{AuthPrompt, Event};
 pub use host::Host;
+pub use route::Secrets;
 
 pub struct AuthReply {
     pub challenge: String,
@@ -103,7 +105,7 @@ impl Connections {
         if !profile.jump_ids.is_empty() {
             return Err("경유 인증 경로가 필요합니다.".into());
         }
-        self.start_route(id, profile, secret, vec![], paths, sink, store)
+        self.start_route(id, profile, secret, Secrets::default(), paths, sink, store)
     }
     #[allow(clippy::too_many_arguments)]
     pub fn start_route(
@@ -111,12 +113,12 @@ impl Connections {
         id: String,
         profile: Profile,
         secret: Zeroizing<String>,
-        hops: Vec<(Profile, Option<Zeroizing<String>>)>,
+        route: Secrets,
         paths: Vec<PathBuf>,
         sink: Sink,
         store: Arc<Store>,
     ) -> Result<()> {
-        let (sink, channels) = self.register(&id, &profile, &hops, sink, &store)?;
+        let (sink, channels) = self.register(&id, &profile, &route.hops, sink, &store)?;
         let mut stopped = channels.stop.clone();
         let manager = self.clone();
         tokio::spawn(async move {
@@ -125,7 +127,7 @@ impl Connections {
                     run(
                         profile,
                         secret,
-                        hops,
+                        route,
                         paths,
                         sink.clone(),
                         channels,
@@ -245,7 +247,7 @@ pub(crate) struct Receivers {
 async fn run(
     p: Profile,
     secret: Zeroizing<String>,
-    hops: Vec<(Profile, Option<Zeroizing<String>>)>,
+    secrets: Secrets,
     paths: Vec<PathBuf>,
     sink: Sink,
     mut channels: Receivers,
@@ -257,7 +259,7 @@ async fn run(
         route::Target {
             profile: &p,
             secret: Some(secret),
-            hops,
+            route: secrets,
             paths: &paths,
             forward_agent: p.forward_agent,
         },

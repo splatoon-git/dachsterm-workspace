@@ -8,13 +8,14 @@ pub(super) fn routed(
     hops: Vec<(Profile, Option<Zeroizing<String>>)>,
     secret: String,
 ) -> Result<Client> {
+    let route = dachsterm::ssh::Secrets { hops, proxy: None };
     let id = uuid::Uuid::new_v4().to_string();
     let (tx, rx) = mpsc::channel(64);
     manager.start_route(
         id.clone(),
         target,
         Zeroizing::new(secret),
-        hops,
+        route,
         paths.to_vec(),
         Arc::new(move |e| tx.try_send(e).map_err(|_| "probe queue full".into())),
         store.clone(),

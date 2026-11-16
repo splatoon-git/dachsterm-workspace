@@ -254,14 +254,21 @@ impl Vault {
                 let next = copy(&previous)?;
                 changed.push((Some(profile.id.clone()), previous, next));
             }
-            // Passphrases of forwarded key files (DX.11) live in the profile data.
-            if profile.forward_refs().next().is_none() {
+            // Passphrases of forwarded key files (DX.11) and the proxy password (CG.1) live in
+            // the profile data.
+            if profile.data_refs().next().is_none() {
                 continue;
             }
-            for forward in &mut profile.forward_keys {
-                if let Some(previous) = forward.secret_ref.take() {
+            let slots = (profile.forward_keys.iter_mut().map(|k| &mut k.secret_ref)).chain(
+                profile
+                    .proxy
+                    .as_mut()
+                    .map(crate::storage::Proxy::secret_slot),
+            );
+            for slot in slots {
+                if let Some(previous) = slot.take() {
                     let next = copy(&previous)?;
-                    forward.secret_ref = Some(next.clone());
+                    *slot = Some(next.clone());
                     changed.push((None, previous, next));
                 }
             }

@@ -114,6 +114,9 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
         p.forward_git_credentials = false;
         p.workspace = Default::default();
         p.kube = None;
+        if let Some(proxy) = &mut p.proxy {
+            proxy.clear_secret();
+        }
     }
     let tunnels = store
         .tunnel_configs()?
@@ -122,7 +125,7 @@ pub fn export(store: &Store) -> Result<Vec<u8>> {
         .collect();
     let data = serde_json::to_vec_pretty(&Bundle {
         format: Some("dachsterm.sessions".into()),
-        version: 3,
+        version: CURRENT_VERSION,
         templates: crate::session_management::templates(store)?,
         profiles: snapshot.profiles,
         groups: snapshot.groups,
@@ -143,10 +146,12 @@ pub fn import(store: &Store, data: &[u8]) -> Result<usize> {
     validate_bundle(&bundle)?;
     apply_bundle(store, &mut bundle, &[])
 }
+/// The session file version this app writes (docs/session-transfer.md).
+pub(crate) const CURRENT_VERSION: u32 = 4;
 pub(crate) fn validate_bundle(bundle: &Bundle) -> Result<()> {
     if !matches!(
         (bundle.version, bundle.format.as_deref()),
-        (1, None) | (2 | 3, Some("dachsterm.sessions"))
+        (1, None) | (2..=CURRENT_VERSION, Some("dachsterm.sessions"))
     ) || bundle.profiles.len() > 500
         || bundle.groups.len() > 100
         || bundle.tunnels.len() > 128
@@ -168,6 +173,9 @@ pub(crate) fn validate_bundle(bundle: &Bundle) -> Result<()> {
                 .any(|p| !p.jump_ids.is_empty() || !p.tags.is_empty() || p.sort_order != 0))
     {
         return Err("계층·태그·템플릿·경유 설정에는 JSON v3이 필요합니다.".into());
+    }
+    if bundle.version < 4 && bundle.profiles.iter().any(|p| p.proxy.is_some()) {
+        return Err("프록시 설정에는 JSON v4가 필요합니다.".into());
     }
     crate::session_management::validate_groups(&bundle.groups)?;
     crate::routes::validate(&bundle.profiles)?;
@@ -196,6 +204,7 @@ pub(crate) fn validate_bundle(bundle: &Bundle) -> Result<()> {
         if p.id.is_empty()
             || p.id.len() > 200
             || p.has_secret
+            || p.proxy.as_ref().and_then(|x| x.secret_ref()).is_some()
             || !profiles.insert(&p.id)
             || p.group_id.as_ref().is_some_and(|id| !groups.contains(id))
         {
@@ -415,6 +424,16 @@ pub(crate) fn apply_bundle(store: &Store, bundle: &mut Bundle, merges: &[Merge])
         p.forward_git_credentials = saved.is_some_and(|old| old.forward_git_credentials);
         p.workspace = saved.map_or_else(Default::default, |old| old.workspace);
         p.kube = saved.and_then(|old| old.kube.clone());
+        if let Some(proxy) = &mut p.proxy {
+            proxy.keep_secret(saved.and_then(|old| old.proxy.as_ref()));
+        }
+        // A merge that changes the proxy leaves its saved password to the cleanup.
+        for dropped in saved.iter().flat_map(|old| old.data_refs()) {
+            if !p.data_refs().any(|kept| kept == dropped) {
+                tx.execute("INSERT OR IGNORE INTO credential_gc VALUES(?)", [dropped])
+                    .map_err(db_error)?;
+            }
+        }
         tx.execute(
             "INSERT INTO profiles(id,data,group_id) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET data=?2,group_id=?3",
             params![
@@ -800,5 +819,45 @@ mod tests {
             import(&store, &serde_json::to_vec(&bundle).unwrap()).unwrap(),
             1
         );
+    }
+    #[test]
+    fn v4_carries_a_proxy_without_its_password_and_older_files_cannot() {
+        use crate::storage::Proxy;
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("db")).unwrap();
+        let mut p = crate::storage::tests::profile();
+        p.proxy = Some(Proxy::Socks5 {
+            host: "proxy.example".into(),
+            port: 1080,
+            username: "user".into(),
+            secret_ref: None,
+        });
+        let saved = store.save(p, None).unwrap();
+        store.stage_secret("proxy-ref").unwrap();
+        store
+            .set_proxy_secret(&saved.id, Some("proxy-ref"))
+            .unwrap();
+        let data = export(&store).unwrap();
+        let text = String::from_utf8(data.clone()).unwrap();
+        assert!(text.contains("\"version\": 4") && text.contains("\"kind\": \"socks5\""));
+        assert!(!text.contains("proxy-ref") && !text.contains("secretRef"));
+        let other = Store::open(&dir.path().join("other")).unwrap();
+        assert_eq!(import(&other, &data).unwrap(), 1);
+        let imported = other.list().unwrap().profiles.remove(0);
+        assert_eq!(imported.proxy.as_ref().unwrap().endpoint().username, "user");
+        assert_eq!(imported.data_refs().count(), 0);
+        let mut bundle: Bundle = serde_json::from_slice(&data).unwrap();
+        bundle.version = 3;
+        assert!(validate_bundle(&bundle).is_err_and(|e| e.contains("v4")));
+        bundle.version = 4;
+        let proxy = bundle.profiles[0].proxy.as_mut().unwrap();
+        *proxy.secret_slot() = Some("forged".into());
+        assert!(
+            validate_bundle(&bundle).is_err(),
+            "a file cannot name a stored secret"
+        );
+        bundle.version = 5;
+        bundle.profiles[0].proxy.as_mut().unwrap().clear_secret();
+        assert!(validate_bundle(&bundle).is_err(), "a newer file");
     }
 }

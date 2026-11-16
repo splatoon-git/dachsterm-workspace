@@ -19,34 +19,46 @@ pub async fn hop_secret(
     sink: &Sink,
     replies: &mut mpsc::Receiver<AuthReply>,
 ) -> Result<zeroize::Zeroizing<String>> {
+    let (name, instructions) = if last {
+        (
+            "세션 인증",
+            "이번 연결에만 사용합니다. 저장하려면 세션을 편집하세요.",
+        )
+    } else {
+        (
+            "경유지 인증",
+            "이번 연결에만 사용합니다. 저장하려면 해당 경유 프로필을 편집하세요.",
+        )
+    };
+    let prompt = if p.auth == "key" {
+        "Passphrase (없으면 빈 값)"
+    } else {
+        "비밀번호"
+    };
+    ask_one(sink, replies, name, instructions, prompt).await
+}
+
+/// Shows one hidden prompt and waits up to two minutes for its answer.
+pub async fn ask_one(
+    sink: &Sink,
+    replies: &mut mpsc::Receiver<AuthReply>,
+    name: &str,
+    instructions: &str,
+    prompt: &str,
+) -> Result<zeroize::Zeroizing<String>> {
     let challenge = uuid::Uuid::new_v4().to_string();
     sink(Event::AuthPrompt {
         challenge: challenge.clone(),
-        name: if last {
-            "세션 인증"
-        } else {
-            "경유지 인증"
-        }
-        .into(),
-        instructions: if last {
-            "이번 연결에만 사용합니다. 저장하려면 세션을 편집하세요."
-        } else {
-            "이번 연결에만 사용합니다. 저장하려면 해당 경유 프로필을 편집하세요."
-        }
-        .into(),
+        name: name.into(),
+        instructions: instructions.into(),
         prompts: vec![AuthPrompt {
-            prompt: if p.auth == "key" {
-                "Passphrase (없으면 빈 값)"
-            } else {
-                "비밀번호"
-            }
-            .into(),
+            prompt: prompt.into(),
             echo: false,
         }],
     })?;
     timeout(Duration::from_secs(120), async {
         loop {
-            let mut reply = replies.recv().await.ok_or("경유 인증이 취소되었습니다.")?;
+            let mut reply = replies.recv().await.ok_or("인증 입력이 취소되었습니다.")?;
             if reply.challenge == challenge {
                 if reply.responses.len() != 1 {
                     return Err("인증 응답 개수 오류".into());
@@ -56,7 +68,7 @@ pub async fn hop_secret(
         }
     })
     .await
-    .map_err(|_| "경유 인증 입력 시간 초과")?
+    .map_err(|_| "인증 입력 시간이 초과되었습니다.")?
 }
 
 pub async fn agent(session: &mut client::Handle<Host>, user: &str) -> Result<client::AuthResult> {

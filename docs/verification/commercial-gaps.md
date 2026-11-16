@@ -154,3 +154,43 @@ Node 26.0.0(V8, WebView2와 같은 엔진 계열). ANSI 색이 섞인 로그형 
 - Windows: Pageant(PuTTY 0.75 이상 파이프, 이전 `WM_COPYDATA`), `connect_pageant` 호출부 컴파일, Windows ProxyCommand(`CreateProcessW`, `ssh.exe -W`), com0com·실제 COM 포트, VcXsrv 인증 없는 X11.
 - Mac: 실제 USB 시리얼 장치의 속도·Break, XQuartz Unix 소켓 `DISPLAY`, 패키지 앱(Finder 실행)의 ProxyCommand `PATH`.
 - 실제 업데이트 동작(서명 없는 앱의 Keychain·Gatekeeper·SmartScreen)은 CG.6 구현 뒤.
+
+## CG.1 프록시 경유 접속 (2026-11-16, `feat/cg1-proxy`)
+
+### 구현
+
+- 프로필 `proxy`(`storage/proxy.rs`): `{kind: http|socks5, host, port, username, secretRef}`. SSH만, 경유지가 있는 세션은 거부(첫 경유지에 지정), 사용자 이름·암호 255바이트. 경유지 구간의 두 번째 이후 홉에 프록시가 있어도 쓰지 않는다(그 홉의 TCP는 앞 홉이 연다).
+- 암호 참조는 `ForwardKey.secretRef`와 같은 방식이다. 폼이 보낸 값은 무시하고, 같은 종류·호스트·포트·사용자일 때만 저장된 참조를 유지한다. `save_session`의 `proxySecretAction`(`keep`/`replace`/`forget`)으로 저장·삭제하고, 떠난 참조는 `credential_gc`로 회수한다. 마스터 암호 변경(`vault.rs`)과 정리(`cleanup_credentials`)가 프로필 JSON 안의 참조를 함께 다룬다(`Profile::data_refs`). **설계와 다른 점:** 프런트엔드는 `hasSecret` 대신 `secretRef`를 받는다(전달 키와 같은 방식이며, 값을 보내도 백엔드가 무시한다).
+- 연결(`ssh/first_hop.rs`): `route::open`의 첫 TCP 연결만 바꿨다. HTTP는 응답 헤더를 빈 줄까지 1바이트씩 읽고(16KiB 상한), SOCKS5는 이름을 프록시가 풀도록 ATYP 3으로 보낸다. 저장된 암호가 없으면 `프록시 암호` 입력을 연결 때 묻는다. 상태 메시지는 `연결됨 · SOCKS5 프록시 경유 (호스트:포트) → …`. 프로필 시간 제한 하나가 프록시 TCP와 협상을 덮는다. 열린 탭과 저장된 프록시가 다르면 `connect`가 거부한다.
+- 세션 교환 v4(`settings::CURRENT_VERSION`): 내보내기는 프록시 암호 참조를 지우고, 가져오기는 v3 이하의 `proxy`와 파일 안의 `secretRef`를 거부한다. 병합은 같은 프록시일 때 저장된 암호를 유지한다. 스키마 `session-format.schema.json`을 v4로 올리고 v3를 `session-format.v3.schema.json`으로 남겼다.
+- 가져오기(`session_transfer/proxy.rs`): OpenSSH `nc [-X 5|connect] -x 호스트[:포트] [-P 사용자] %h %p`, PuTTY `ProxyMethod` 2·3. SOCKS4·Telnet·로컬 명령·SSH 프록시는 경고와 함께 제외하고, `ProxyJump`와 함께 있으면 `ProxyJump`만 쓴다. 그 밖의 `ProxyCommand`는 지금처럼 제외한다(CG.2). `session_transfer.rs`는 순증 없이(비테스트 802 → 797줄) 하위 모듈로 옮겼다.
+- 화면: 세션 폼 고급 옵션의 `프록시` 칸(`ProxyField.tsx`, 순수 로직 `proxy.ts`). 사용자 이름이 있을 때만 암호 칸이 보이고, 암호를 입력하면 보관 방식이 `저장`으로 바뀐다. FTP로 바꾸면 프록시를 지운다.
+
+### 검증 (Mac, 미커밋 트리)
+
+| 검사 | 결과 |
+|---|---|
+| 단위: 협상(`first_hop_tests.rs`, `tokio::io::duplex`로 CG.0 응답 고정) | HTTP Basic 요청 바이트, 헤더 뒤 배너 보존, 401/407/403/500/400, 헤더 16KiB 상한, IPv6 대괄호, SOCKS5 `00 02`·사용자 인증·ATYP 1/3/4·바인드 주소 읽기, `05 FF`·`01 02`·응답 2/1/5 통과 |
+| 단위: 저장(`storage/proxy.rs`, `settings.rs`) | JSON 형태와 미지 필드 거부, SSH·경유지·필드 검증, 폼이 고른 참조 무시, 같은 프록시만 참조 유지, 잊기·삭제·변경의 회수 기록, 사용 중 참조 보존, v4 내보내기에 참조 없음·가져오기 성공·v3 거부·참조 위조 거부·v5 거부 |
+| 단위: 가져오기(`session_transfer/proxy.rs`) | nc 4형식 변환, SOCKS4·다른 옵션·다른 위치 인자·`ncat`·`ssh -W` 제외, ProxyJump 우선 경고, PuTTY 0/2/3 변환과 1/4/5/6 제외 |
+| 프런트엔드 | Vitest `proxy.test.ts`, Playwright `session-form.spec.ts`의 프록시 칸(종류별 기본 포트, 사용자 이름이 있을 때만 암호, 입력 시 저장으로 전환, FTP 전환 시 제거) |
+| **실제 환경 `npm run probe:connect`**(새 검사, `connect:fixture` 필요) | 제품 엔진으로 아래 전부 통과 |
+
+`npm run probe:connect` 출력:
+
+```text
+PASS HTTP CONNECT (asked password): terminal, SFTP, Local tunnel, monitoring
+PASS SOCKS5 (saved password, name resolved by the proxy): terminal, SFTP, Local tunnel, monitoring
+PASS SOCKS5 → jump → target: terminal, SFTP, Local tunnel, monitoring
+PASS proxy errors: wrong password (HTTP 401, SOCKS 01 02), auth required (407, 05 FF), port refused (403), unknown host (500, SOCKS 1), closed proxy port
+```
+
+- `target`은 내부 망에만 있어 프록시나 경유지가 아니면 닿지 않는다. 터미널에서 `hostname` = `target`, SFTP `/` 목록, Local 터널로 대상 sshd 배너(`SSH-`), 모니터링 2회 수집을 각 연결에서 확인했다.
+- 오류 문구는 설계 §CG.1 표 그대로 나왔다(문자열 포함 비교).
+- 게이트(미커밋 트리, `verify-macos.sh` 단계): typecheck·lint·format 통과, Vitest 1387/1388(게임 `survivor/stages.test.ts`의 30/60/120Hz 시험이 부하 평균 35~46에서 5초 제한 초과, `--testTimeout=60000` 단독 재실행 17/17 통과, 이 변경과 무관), build, Playwright 537, `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` 711(무시 4)+1, `npm audit` 0건, 의존성 감사, 고지 532개. 첫 실행은 lint(`react-hooks/immutability`: 고쳐 쓰는 ref 속성 이름)로 멈춰 이름을 `passwordRef`로 바꾸고 다시 돌렸다.
+
+### 대기
+
+- Windows: 네이티브 검사 `test-proxy-native.mjs`와 `verify-windows.ps1 -Native` 연결, Windows 실행.
+- Mac 패키지 앱에서 사람이 세션 폼으로 프록시를 지정해 터미널·SFTP·터널·모니터링을 여는 확인(WKWebView 자동 검사 경로 없음, CG.10).
+
