@@ -4,6 +4,7 @@ import { ProgramGuide } from '../features/terminal/CommandGuide';
 import { isRecording, useLogStatus } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
 import { capabilities } from '../features/terminal/sessionKind';
+import { serialLabel } from '../features/sessions/protocol';
 import { AgentBoard } from './AgentBoard';
 import { GitStatusItem } from './GitStatusItem';
 import type { AgentBoardState } from './useAgentBoard';
@@ -16,6 +17,8 @@ function where(session: TerminalSession) {
       return session.localTarget?.kind === 'wsl' ? 'WSL' : '로컬 셸';
     case 'pod':
       return profile.host;
+    case 'serial':
+      return `시리얼 · ${profile.host} · ${serialLabel(profile)}`;
     case 'telnet':
       return `Telnet · 암호화 없음 · ${profile.host}:${profile.port}`;
     case 'ftp':

@@ -7,7 +7,7 @@ export type Profile = {
   username: string;
   auth: 'password' | 'key' | 'agent' | 'interactive';
   /** Telnet keeps no password: its login is typed in the terminal (CG.4). */
-  protocol: 'ssh' | 'ftp' | 'ftps' | 'telnet';
+  protocol: 'ssh' | 'ftp' | 'ftps' | 'telnet' | 'serial';
   tlsCaPath: string;
   encoding: string;
   keyPath: string;
@@ -38,6 +38,15 @@ export type Profile = {
   agentSource?: 'system' | 'pageant';
   /** An OpenSSH certificate for the key file. Empty uses `<key>-cert.pub` beside it. */
   certPath?: string;
+  /** A serial session's line settings (CG.5). Its device name is `host`. */
+  serial?: SerialSettings | null;
+};
+export type SerialSettings = {
+  baud: number;
+  dataBits: 5 | 6 | 7 | 8;
+  parity: 'none' | 'odd' | 'even';
+  stopBits: 1 | 2;
+  flow: 'none' | 'software' | 'hardware';
 };
 /** Only the backend sets `secretRef`; a form's value is ignored. */
 export type NetworkProxy = {

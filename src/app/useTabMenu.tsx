@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ContextMenu, type MenuPoint, type MenuRequest } from '../components/ContextMenu';
 import { kubeMenu } from '../features/kube/kubeModel';
+import { call, errorText } from '../lib/ipc';
 import { highlightLibrary } from '../features/terminal/highlightStore';
 import { isRecording, logStatusOf } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
@@ -74,6 +75,12 @@ export function useTabMenu({
         session?.view.set({ guide: true });
       },
       highlight: () => session?.highlighter.setEnabled(!session.highlighter.enabled),
+      sendBreak: () =>
+        session &&
+        void call('terminal_send_break', { id: session.connectionId }).then(
+          () => session.notice('Break를 보냈습니다.'),
+          (e) => session.notice(errorText(e)),
+        ),
       review: () => session && actions.review(session),
       splitRight: () => session && actions.split(session, { groupId: group.id, side: 'right' }),
       splitDown: () => session && actions.split(session, { groupId: group.id, side: 'bottom' }),

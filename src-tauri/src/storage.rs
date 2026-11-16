@@ -5,9 +5,12 @@ use uuid::Uuid;
 mod git_credentials;
 mod login;
 mod proxy;
+mod serial;
 pub use git_credentials::GitCredential;
 pub use login::AGENT_SOURCES;
 pub use proxy::{Endpoint, MAX_COMMAND, MAX_PROXY_FIELD, Proxy, check_command, command_program};
+pub(crate) use serial::native_device;
+pub use serial::{Flow, Parity, SerialSettings};
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn db_error(_: rusqlite::Error) -> String {
@@ -75,6 +78,9 @@ pub struct Profile {
     /// An OpenSSH certificate for the key file. Empty uses `<key>-cert.pub` when it exists.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub cert_path: String,
+    /// Speed, framing and flow control of a serial session (CG.5). Its device is `host`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serial: Option<SerialSettings>,
 }
 /// A host name or address without spaces, separators or brackets.
 pub(crate) fn valid_host(host: &str) -> bool {
@@ -154,6 +160,7 @@ impl Profile {
             proxy: None,
             agent_source: "system".into(),
             cert_path: String::new(),
+            serial: None,
         }
     }
     /// Stored Passphrase references of the forwarded key files.
@@ -176,6 +183,7 @@ impl Profile {
         check_forward_keys(&self.forward_keys)?;
         self.check_proxy()?;
         self.check_login()?;
+        self.check_serial()?;
         if self.protocol != "ssh" && (!self.workspace.is_terminal() || self.kube.is_some()) {
             return Err("쿠버네티스 화면은 SSH 연결에서만 사용할 수 있습니다.".into());
         }
@@ -195,20 +203,18 @@ impl Profile {
                     .into(),
             );
         }
-        // Telnet saves no password and types no login: the user logs in inside the terminal.
-        if !["ssh", "ftp", "ftps", "telnet"].contains(&self.protocol.as_str())
+        // Telnet and serial save no password and type no login: the user logs in in the terminal.
+        if !["ssh", "ftp", "ftps", "telnet", "serial"].contains(&self.protocol.as_str())
             || (["ftp", "ftps"].contains(&self.protocol.as_str()) && self.auth != "password")
-            || (self.protocol == "telnet"
-                && (self.auth != "interactive" || !self.key_path.is_empty()))
+            || (self.terminal_only() && (self.auth != "interactive" || !self.key_path.is_empty()))
             || self.tls_ca_path.len() > 4096
         {
             return Err("프로토콜 또는 TLS 설정을 확인하세요.".into());
         }
         if self.name.trim().is_empty()
             || self.name.len() > 200
-            || !valid_host(&self.host)
-            || self.port == 0
-            || (self.username.is_empty() && self.protocol != "telnet")
+            || (self.protocol != "serial" && (!valid_host(&self.host) || self.port == 0))
+            || (self.username.is_empty() && !self.terminal_only())
             || self.username.len() > 256
             || self.username.chars().any(char::is_control)
             || !matches!(
@@ -601,6 +607,7 @@ pub(crate) mod tests {
             proxy: None,
             agent_source: "system".into(),
             cert_path: String::new(),
+            serial: None,
         }
     }
     #[test]

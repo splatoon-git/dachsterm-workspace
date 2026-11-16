@@ -163,6 +163,8 @@ fn main() {
             "snippet_send",
             "highlight_rules",
             "highlight_rules_save",
+            "serial_ports",
+            "terminal_send_break",
             "save_session",
             "delete_session",
             "duplicate_session",

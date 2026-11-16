@@ -74,12 +74,11 @@
         "host": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 253,
-          "pattern": "^[^\\s/\\\\,\\[\\]\\u0000-\\u001f\\u007f]+$"
+          "maxLength": 253
         },
         "port": {
           "type": "integer",
-          "minimum": 1,
+          "minimum": 0,
           "maximum": 65535
         },
         "username": {
@@ -91,7 +90,7 @@
           "enum": ["password", "key", "agent", "interactive"]
         },
         "protocol": {
-          "enum": ["ssh", "ftp", "ftps", "telnet"],
+          "enum": ["ssh", "ftp", "ftps", "telnet", "serial"],
           "default": "ssh"
         },
         "tlsCaPath": {
@@ -161,6 +160,18 @@
           "minimum": -2147483648,
           "maximum": 2147483647
         },
+        "serial": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["baud", "dataBits", "parity", "stopBits", "flow"],
+          "properties": {
+            "baud": { "type": "integer", "minimum": 50, "maximum": 4000000 },
+            "dataBits": { "enum": [5, 6, 7, 8] },
+            "parity": { "enum": ["none", "odd", "even"] },
+            "stopBits": { "enum": [1, 2] },
+            "flow": { "enum": ["none", "software", "hardware"] }
+          }
+        },
         "proxy": {
           "$ref": "#/$defs/proxy"
         },
@@ -216,7 +227,7 @@
             "required": ["protocol"],
             "properties": {
               "protocol": {
-                "const": "telnet"
+                "enum": ["telnet", "serial"]
               }
             }
           },
@@ -234,6 +245,43 @@
             "properties": {
               "username": {
                 "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["protocol"],
+            "properties": {
+              "protocol": {
+                "const": "serial"
+              }
+            }
+          },
+          "then": {
+            "required": ["serial"],
+            "properties": {
+              "host": {
+                "pattern": "^(COM([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])|/dev/cu\\.[A-Za-z0-9_.-]+)$"
+              },
+              "jumpIds": {
+                "maxItems": 0
+              }
+            },
+            "not": {
+              "required": ["proxy"]
+            }
+          },
+          "else": {
+            "not": {
+              "required": ["serial"]
+            },
+            "properties": {
+              "host": {
+                "pattern": "^[^\\s/\\\\,\\[\\]\\u0000-\\u001f\\u007f]+$"
+              },
+              "port": {
+                "minimum": 1
               }
             }
           }

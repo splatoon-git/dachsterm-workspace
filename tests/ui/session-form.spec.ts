@@ -184,3 +184,21 @@ test('Telnet warns that it is not encrypted and asks for no password', async ({ 
   await expect(dialog.getByLabel('경유 프로필 추가')).toHaveCount(0);
   await expectFullRows(dialog.locator('.form-grid').first());
 });
+
+test('a serial console asks for a device and line settings, not a host or a login', async ({
+  page,
+}) => {
+  const dialog = await openForm(page);
+  await dialog.getByLabel('프로토콜').selectOption('serial');
+  for (const label of ['호스트', '포트', '사용자', '인증 방식'])
+    await expect(dialog.getByLabel(label, { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('장치')).toHaveValue('');
+  await expect(dialog.getByLabel('통신 속도')).toHaveValue('115200');
+  await expect(dialog.getByLabel('데이터 비트')).toHaveValue('8');
+  await expect(dialog.getByLabel('패리티')).toHaveValue('none');
+  await expect(dialog.getByLabel('정지 비트')).toHaveValue('1');
+  await expect(dialog.getByLabel('흐름 제어')).toHaveValue('none');
+  await expectFullRows(dialog.locator('.form-grid').first());
+  await dialog.getByLabel('프로토콜').selectOption('ssh');
+  await expect(dialog.getByLabel('포트', { exact: true })).toHaveValue('22');
+});

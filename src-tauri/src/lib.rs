@@ -49,6 +49,7 @@ mod remote_name;
 mod remote_ports;
 pub mod routes;
 mod rsa_auth;
+pub mod serial;
 pub mod session_log;
 mod session_management;
 mod session_transfer;
@@ -406,6 +407,8 @@ pub fn run() {
             snippets::snippet_send,
             highlights::highlight_rules,
             highlights::highlight_rules_save,
+            serial::serial_ports,
+            serial::terminal_send_break,
             commands::terminal_ack
         ])
         .build(context);

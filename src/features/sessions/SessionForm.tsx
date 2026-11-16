@@ -7,7 +7,9 @@ import { WorkspaceField } from './WorkspaceField';
 import { AgentForwardField } from './AgentForwardField';
 import { LoginKeyField } from './LoginKeyField';
 import { AgentLoginField } from './AgentLoginField';
+import { NetworkFields } from './NetworkFields';
 import { ProtocolField } from './ProtocolField';
+import { SerialFields } from './SerialFields';
 import { switchProtocol } from './protocol';
 import { ProxyField } from './ProxyField';
 import { proxySecretArgs, type ProxySecret } from './proxy';
@@ -142,60 +144,21 @@ export function SessionForm({
             value={profile.protocol}
             change={(protocol) => {
               setProfile((p) => switchProtocol(p, protocol));
-              // Telnet keeps no password, and a saved one cannot follow a new protocol.
-              if (protocol === 'telnet') setSecretAction('forget');
+              // Telnet and serial keep no password, and a saved one cannot follow a new protocol.
+              if (protocol === 'telnet' || protocol === 'serial') setSecretAction('forget');
             }}
           />
-          <label>
-            호스트
-            <input
-              required
-              maxLength={253}
-              placeholder="server.example.com"
-              value={profile.host}
-              onChange={(e) => field('host', e.target.value.trim())}
+          {profile.protocol === 'serial' ? (
+            <SerialFields profile={profile} change={setProfile} />
+          ) : (
+            <NetworkFields
+              profile={profile}
+              field={field}
+              secretChanged={(forget) => {
+                if (secret.current) secret.current.value = '';
+                if (forget) setSecretAction('forget');
+              }}
             />
-          </label>
-          <label>
-            포트
-            <input
-              required
-              type="number"
-              min={1}
-              max={65535}
-              value={profile.port}
-              onChange={(e) => field('port', Number(e.target.value))}
-            />
-          </label>
-          {/* Telnet has no login method to choose, so the name takes the whole row. */}
-          <label className={profile.protocol === 'telnet' ? 'wide' : undefined}>
-            사용자
-            <input
-              required={profile.protocol !== 'telnet'}
-              maxLength={256}
-              value={profile.username}
-              onChange={(e) => field('username', e.target.value)}
-            />
-          </label>
-          {profile.protocol !== 'telnet' && (
-            <label>
-              인증 방식
-              <select
-                aria-label="인증 방식"
-                disabled={!!profile.protocol && profile.protocol !== 'ssh'}
-                value={profile.auth}
-                onChange={(e) => {
-                  field('auth', e.target.value as Profile['auth']);
-                  if (secret.current) secret.current.value = '';
-                  if (['agent', 'interactive'].includes(e.target.value)) setSecretAction('forget');
-                }}
-              >
-                <option value="password">비밀번호</option>
-                <option value="key">개인키</option>
-                <option value="agent">SSH agent · OS 인증 에이전트</option>
-                <option value="interactive">서버 질문 · OTP / MFA</option>
-              </select>
-            </label>
           )}
           {profile.auth === 'key' && <LoginKeyField profile={profile} field={field} />}
           {profile.protocol === 'ssh' && ['agent', 'interactive'].includes(profile.auth) && (

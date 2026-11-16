@@ -1,7 +1,7 @@
 import type { Source } from '../../lib/source';
 import type { LocalTarget } from './sessionTypes';
 
-export type SessionKind = 'ssh' | 'local' | 'pod' | 'ftp' | 'telnet';
+export type SessionKind = 'ssh' | 'local' | 'pod' | 'ftp' | 'telnet' | 'serial';
 export type SessionCapabilities = {
   /** Has a terminal, so search, copy and paste apply. */
   terminal: boolean;
@@ -17,6 +17,8 @@ export type SessionCapabilities = {
   monitor: boolean;
   /** The Kubernetes workspace can run over this connection. */
   kube: boolean;
+  /** A Break can be sent on the line (a serial console). */
+  lineBreak: boolean;
 };
 
 /** A session's kind comes from its transport (`transport.ts`), never from its profile. */
@@ -31,6 +33,7 @@ const table: Record<SessionKind, SessionCapabilities> = {
     detach: true,
     monitor: true,
     kube: true,
+    lineBreak: false,
   },
   local: {
     terminal: true,
@@ -40,6 +43,7 @@ const table: Record<SessionKind, SessionCapabilities> = {
     detach: false,
     monitor: false,
     kube: false,
+    lineBreak: false,
   },
   pod: {
     terminal: true,
@@ -49,6 +53,7 @@ const table: Record<SessionKind, SessionCapabilities> = {
     detach: false,
     monitor: false,
     kube: false,
+    lineBreak: false,
   },
   telnet: {
     terminal: true,
@@ -58,6 +63,18 @@ const table: Record<SessionKind, SessionCapabilities> = {
     detach: true,
     monitor: false,
     kube: false,
+    lineBreak: false,
+  },
+  // One device opens in one tab only, so a serial tab does not split.
+  serial: {
+    terminal: true,
+    log: true,
+    guide: false,
+    split: false,
+    detach: true,
+    monitor: false,
+    kube: false,
+    lineBreak: true,
   },
   ftp: {
     terminal: false,
@@ -67,6 +84,7 @@ const table: Record<SessionKind, SessionCapabilities> = {
     detach: false,
     monitor: false,
     kube: false,
+    lineBreak: false,
   },
 };
 
@@ -79,6 +97,7 @@ export function sessionSource(
   switch (session.kind) {
     case 'pod':
     case 'telnet':
+    case 'serial':
       return null;
     case 'local':
       return session.localTarget ? { kind: 'local', targetId: session.localTarget.id } : null;
