@@ -29,7 +29,29 @@ npm run tauri -- dev
 | `npm run tauri -- build --bundles app,dmg` | macOS 앱과 DMG(미검증) |
 | `npm run icons` | `src/assets/brand` 원본에서 앱 아이콘 재생성 |
 
-공개 배포에는 Windows 코드 서명과 macOS Developer ID 서명·공증이 필요하고, 별도의 자격증명과 실기기 검증이 있어야 한다. 개인 로컬 빌드와 서명된 공개 배포를 구분한다. 자동 업데이트 서비스는 아직 구성하지 않았다.
+공개 배포에는 Windows 코드 서명과 macOS Developer ID 서명·공증이 필요하고, 별도의 자격증명과 실기기 검증이 있어야 한다. 개인 로컬 빌드와 서명된 공개 배포를 구분한다. OS 코드 서명은 하지 않기로 했다(roadmap §26 CG.6, 사용자 결정).
+
+### 앱 업데이트 배포
+
+앱은 `tauri.conf.json`의 `plugins.updater.endpoints`(GitHub 최신 릴리스의 `latest.json`)에서 새 버전을 확인하고, 내려받은 파일을 `plugins.updater.pubkey`로 검증한 뒤 설치한다. 공개 키가 비어 있는 빌드는 업데이트를 확인하지 않는다.
+
+업데이트 서명 키(minisign)는 OS 코드 서명과 별개다. 개인 키와 암호는 저장소, 문서, 로그, CI 출력에 두지 않는다. 키를 잃으면 이미 설치된 앱이 새 버전을 받을 수 없으므로 개인 키를 저장소 밖에 백업한다.
+
+1. 최초 1회: `npx tauri signer generate -w <저장소 밖 경로>`로 키를 만들고, `.pub` 파일 내용을 `plugins.updater.pubkey`에 넣어 커밋한다.
+2. `package.json`, `src-tauri/Cargo.toml`, `tauri.conf.json`의 버전을 올린다. `requireSignedVersion`이 켜져 있어 서명에 기록된 버전과 `latest.json`의 버전이 다르면 설치하지 않는다.
+3. 각 OS에서 서명 키를 환경 변수로 주고 업데이트 파일을 함께 빌드한 뒤 모은다.
+
+   ```text
+   TAURI_SIGNING_PRIVATE_KEY=<키 파일 경로 또는 내용>  TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<암호>
+   npm run tauri -- build --bundles app,dmg --config src-tauri/tauri.release.conf.json    macOS
+   npm run tauri -- build --bundles nsis --config src-tauri/tauri.release.conf.json       Windows
+   node scripts/update-release.mjs collect --out release
+   ```
+
+4. 두 OS의 `release/` 내용을 한 폴더에 모아 `node scripts/update-release.mjs manifest --out release --notes <릴리스 노트 파일>`로 `latest.json`을 만든다.
+5. `v<버전>` 릴리스에 설치 파일(DMG, NSIS)과 `release/`의 업데이트 파일·`latest.json`을 올린다. 초안이나 사전 릴리스는 `releases/latest`에 잡히지 않는다.
+
+서명 없는 앱의 동작: macOS에서 업데이트로 받은 번들은 격리 속성(`com.apple.quarantine`)이 붙지 않아 Gatekeeper 확인 없이 다시 시작했다. 브라우저로 받은 DMG의 첫 실행 확인과 Windows NSIS 업데이트(SmartScreen 포함)는 아직 확인하지 않았다. 결과와 남은 확인은 [업데이트 검증 기록](verification/app-updates.md)에 있다.
 
 ## 자동 검사
 

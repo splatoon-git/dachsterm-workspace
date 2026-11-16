@@ -178,6 +178,10 @@ macOS 26.5, Apple Silicon, Node 26.0.0, Rust 1.99.1, Docker 29.8.0. 패키지 �
 2. M.5(Finder 드롭·파일 선택의 한글 이름), M.6(LAN 접속과 권한 창)을 패키지된 앱에서 확인한다.
 3. GE는 M.16 시험 앱의 한글 입력을 먼저 확인해 편집기 부품을 확정하고, 이어서 패키지된 앱으로 M.18(한글 입력·저장), M.17(Finder 끌기), M.19, M.20을 확인한다. GE.1 저장 확인 카드는 M.4의 외부 편집기 실행과 함께 패키지된 앱에서 카드와 OS 알림까지 본다.
 
+## CG.6 앱 업데이트 (2026-11-16, `feat/cg6-updater` 미커밋 트리)
+
+서명 없는(ad hoc) 시험 앱 0.5.1 → 0.5.2 업데이트를 이 Mac에서 사람이 직접 눌러 설치했다. 번들 교체, 자동 재시작, 격리 속성 없음, 서명 불일치 거부, 자동 확인 끄기를 확인했다. 열린 세션 정리, DMG 첫 실행, 이전 Keychain 항목 접근, 관리자 권한 위치는 대기다. [기록](app-updates.md)
+
 ## 참고
 
 - [TN3179: Understanding local network privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)

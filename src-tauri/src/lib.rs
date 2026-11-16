@@ -63,6 +63,7 @@ pub mod storage;
 pub mod terminal_start;
 pub mod transfer_queue;
 pub mod tunnels;
+mod updates;
 pub mod vault;
 pub mod windows;
 mod workspace;
@@ -95,6 +96,30 @@ pub struct AppState {
     pub mutation: std::sync::Mutex<()>,
     pub closing: AtomicBool,
 }
+/// Closes every connection and terminal and saves the session logs, before the app quits or an
+/// update replaces it. The caller sets `AppState::closing` first, so this runs once.
+async fn finish_sessions(app: tauri::AppHandle) {
+    let state = app.state::<AppState>();
+    state.kube_terminals.shutdown();
+    state.locals.shutdown();
+    state.connections.shutdown();
+    let connections = state.connections.clone();
+    let kube_terminals = state.kube_terminals.clone();
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        while !connections.entries.lock().unwrap().is_empty() || !kube_terminals.is_empty() {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    let logs = connections.logs.clone();
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        if !logs.shutdown() {
+            rfd::MessageDialog::new().set_title("세션 로그 저장 시간 초과")
+                .set_description("로그 저장이 3초 안에 끝나지 않았습니다. 종료 후 로그의 마지막 출력이 누락될 수 있습니다. 저장 장치 상태와 로그 파일을 확인하세요.")
+                .set_level(rfd::MessageLevel::Warning).show();
+        }
+    }).await;
+}
 pub fn run() {
     #[cfg(target_os = "macos")]
     login_path::apply();
@@ -119,6 +144,8 @@ pub fn run() {
     let app = tauri::Builder::default()
         // Only desktop_bridge uses this. The webview gets no notification permission.
         .plugin(tauri_plugin_notification::init())
+        // Only `updates` uses this. The webview gets none of its commands.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_menu(macos_menu::build(app.handle())?)?;
@@ -173,6 +200,7 @@ pub fn run() {
                     }
                 });
             }
+            app.manage(updates::Updates::default());
             app.manage(kube::Slots::default());
             app.manage(kube::WatchSlots::default());
             app.manage(kube::AiTargets::default());
@@ -292,6 +320,10 @@ pub fn run() {
             vault::vault_status,
             vault::vault_action,
             vault::vault_lock,
+            updates::update_status,
+            updates::update_auto_set,
+            updates::update_check,
+            updates::update_install,
             settings::tunnel_configs,
             settings::tunnel_save,
             settings::tunnel_start,
@@ -412,27 +444,9 @@ pub fn run() {
             let state = app.state::<AppState>();
             if !state.closing.swap(true, Ordering::SeqCst) {
                 api.prevent_exit();
-                state.kube_terminals.shutdown();
-                state.locals.shutdown();
-                state.connections.shutdown();
-                let connections = state.connections.clone();
-                let kube_terminals = state.kube_terminals.clone();
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-                        while !connections.entries.lock().unwrap().is_empty() || !kube_terminals.is_empty() {
-                            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-                        }
-                    })
-                    .await;
-                    let logs = app.state::<AppState>().connections.logs.clone();
-                    let _ = tauri::async_runtime::spawn_blocking(move || {
-                        if !logs.shutdown() {
-                            rfd::MessageDialog::new().set_title("세션 로그 저장 시간 초과")
-                                .set_description("로그 저장이 3초 안에 끝나지 않았습니다. 종료 후 로그의 마지막 출력이 누락될 수 있습니다. 저장 장치 상태와 로그 파일을 확인하세요.")
-                                .set_level(rfd::MessageLevel::Warning).show();
-                        }
-                    }).await;
+                    finish_sessions(app.clone()).await;
                     app.exit(0);
                 });
             }

@@ -9,6 +9,7 @@ import { SessionTransfer } from '../features/sessions/SessionTransfer';
 import { VaultPanel, vaultSummary } from '../features/sessions/VaultDialog';
 import type { TerminalSession } from '../features/terminal/session';
 import { TerminalSettingsPanel } from '../features/terminal/TerminalSettings';
+import { UpdateSettings } from '../features/updates/UpdateSettings';
 import type { Snapshot } from '../lib/ipc';
 import {
   onSettingsRequest,
@@ -64,6 +65,12 @@ const entries: Entry[] = [
     label: '복구·진단',
     icon: 'archive',
     summary: '설정 복구본으로 지운 세션을 되살리고, 문제를 알릴 때 쓸 진단 파일을 저장합니다.',
+  },
+  {
+    id: 'update',
+    label: '업데이트',
+    icon: 'download',
+    summary: '새 버전을 확인하고 설치합니다. 자동 확인은 여기서 끌 수 있습니다.',
   },
 ];
 
@@ -130,6 +137,7 @@ function SettingsWindow({
     sessions: <SessionManager snapshot={snapshot} changed={changed} />,
     transfer: <SessionTransfer changed={changed} profiles={snapshot.profiles} />,
     recovery: <MaintenancePanel restored={changed} />,
+    update: <UpdateSettings />,
   };
   return (
     <Dialog title="설정" size="large" className="settings-window" close={close}>

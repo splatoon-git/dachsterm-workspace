@@ -1,0 +1,44 @@
+.update-settings {
+  display: grid;
+  gap: var(--space-sm);
+}
+.update-version {
+  font-family: var(--font-mono);
+}
+.update-unavailable {
+  color: var(--color-status-warning);
+}
+.update-available {
+  display: grid;
+  gap: var(--space-xs);
+}
+.update-available p {
+  margin: 0;
+}
+.update-notes {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  padding: var(--space-sm);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-subtle);
+  font-family: inherit;
+  font-size: var(--font-small);
+  white-space: pre-wrap;
+}
+.update-progress {
+  display: grid;
+  gap: var(--space-xxs);
+}
+.update-progress progress {
+  width: 100%;
+}
+/* The title bar notice. Only there while a new version waits, so it may stand out. */
+.tools > .update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  color: var(--color-action-primary);
+  font-weight: var(--font-weight-semibold);
+}
