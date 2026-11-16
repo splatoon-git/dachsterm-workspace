@@ -31,6 +31,8 @@ argon2 = { version = "=0.5.3", features = ["zeroize"] }
 aes-gcm = { version = "=0.10.3", features = ["zeroize"] }
 rfd = "0.15"
 rusqlite = { version = "0.41", features = ["bundled"] }
+# Serial console tabs (CG.5). libudev is Linux only, and Linux is not a target.
+serialport = { version = "=4.10.1", default-features = false }
 keyring = { version = "3.6", features = ["windows-native", "apple-native"] }
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"

@@ -8,6 +8,7 @@ export type TabCommand =
   | 'log'
   | 'guide'
   | 'highlight'
+  | 'sendBreak'
   | 'review'
   | 'splitRight'
   | 'splitDown'
@@ -64,6 +65,12 @@ export function tabMenuEntries(state: TabMenuState): TabMenuEntry[] {
   if (can?.log)
     view.push({ command: 'log', label: state.recording ? '세션 기록 · 기록 중…' : '세션 기록…' });
   if (can?.guide) view.push({ command: 'guide', label: '조작표 보기·고정' });
+  if (can?.lineBreak)
+    view.push({
+      command: 'sendBreak',
+      label: 'Break 보내기',
+      disabled: state.connection !== 'live',
+    });
   if (can?.terminal && typeof state.highlight === 'boolean')
     view.push({
       command: 'highlight',

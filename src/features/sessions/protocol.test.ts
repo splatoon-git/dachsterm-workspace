@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankProfile, type Profile } from '../../lib/ipc';
-import { switchProtocol } from './protocol';
+import { defaultSerial, serialLabel, switchProtocol } from './protocol';
 
 const ssh: Profile = {
   ...blankProfile(),
@@ -32,6 +32,21 @@ describe('switchProtocol', () => {
     const back = switchProtocol(switchProtocol(ssh, 'telnet'), 'ssh');
     expect(back).toMatchObject({ port: 22, auth: 'password' });
     expect(switchProtocol(ssh, 'ssh').auth).toBe('key');
+  });
+
+  it('turns a session into a serial console with the common line settings and no host', () => {
+    const serial = switchProtocol({ ...ssh, host: 'server.example' }, 'serial');
+    expect(serial).toMatchObject({ protocol: 'serial', host: '', port: 0, auth: 'interactive' });
+    expect(serial.serial).toEqual(defaultSerial);
+    expect(serialLabel(serial)).toBe('115200 8N1');
+    // Leaving serial drops the device name and the line settings.
+    const back = switchProtocol({ ...serial, host: '/dev/cu.usbserial' }, 'telnet');
+    expect(back).toMatchObject({ host: '', port: 23, serial: null });
+    const tuned = {
+      ...serial,
+      serial: { ...defaultSerial, parity: 'even' as const, flow: 'hardware' as const },
+    };
+    expect(serialLabel(tuned)).toBe('115200 8E1 · RTS/CTS');
   });
 
   it('keeps a port the user chose', () => {

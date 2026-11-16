@@ -272,3 +272,20 @@ PASS certificate checks: expired (named: local error; beside: skipped, key refus
 - 단위: 협상(지원·거부·반복 무응답), 모든 위치의 읽기 경계 분할, `FF FF`, `CR NUL`, 입력 `\r\0`, NAWS 이스케이프, 끝없는 하위 협상, 가짜 TCP 서버로 연결→협상 응답→로그인 입력→크기 변경→서버 종료까지(`telnet::tests`, 5회 연속 통과). v4 게이트, PuTTY Telnet 가져오기, 프로필 검증, `switchProtocol`, Telnet transport 명령 순서, 세션 폼(Playwright: 경고·포트 23·인증 방식·암호 칸 없음·사용자 선택 입력·경유지 없음).
 - 실서버(`npm run probe:telnet`, `connect:fixture`의 inetutils telnetd, Mac): 터미널에서 `probe`와 암호를 입력해 로그인(암호가 화면에 되돌아오지 않음), 크기 변경 뒤 `stty size` = `43 132`, `TERM=xterm-256color`, 스니펫 명령 형식(`snippets::payload`) 입력, 한글 왕복, 세션 로그 파일에 출력 기록·암호 없음, `exit` 뒤 `closed`. 3회 실행 모두 통과.
 - **대기:** 실제 앱 화면에서의 Telnet 탭(Mac 패키지 앱, Windows 네이티브 검사)은 CG.10. Docker가 응답하지 않아 `connect:fixture -- status`는 시간 초과였고, 이미 떠 있던 포트에 직접 연결해 검사했다.
+
+## CG.5 시리얼 탭 (2026-11-16, 브랜치 `feat/cg5-serial`)
+
+### 구현
+
+- 의존성: `serialport =4.10.1`(MPL-2.0, `default-features = false`로 Linux 전용 libudev 제외). 새로 들어온 것은 `io-kit-sys`, `mach2`, `nix 0.26`, `unescaper`(잠금 파일은 온라인으로 추가만, 기존 버전 변경 없음).
+- 프로필: `protocol = "serial"`, `serial: { baud 50~4,000,000, dataBits 5~8, parity none|odd|even, stopBits 1|2, flow none|software|hardware }`(`storage/serial.rs`). 장치 이름은 `host`에 두고, 저장은 두 OS 형식(`COM1~255`, `/dev/cu.*`) 모두 받되 연결할 때 이 PC 형식이 아니면 `…는 이 PC의 장치 이름이 아닙니다. 세션을 수정해 포트 목록에서 고르세요.` 암호·키·경유지·프록시 없음(`auth = interactive`).
+- 백엔드 `serial.rs`: 속도 없이 열고 `set_baud_rate`를 따로 불러, 속도를 거부하는 장치(macOS PTY의 ENOTTY)를 오류 문자열이 아니라 단계로 판정해 `이 장치는 통신 속도 설정을 지원하지 않습니다.` 여는 실패는 `ErrorKind`로 `이미 다른 탭이나 프로그램이 이 포트를 쓰고 있습니다.`(NoDevice=EBUSY·TIOCEXCL, Windows 접근 거부)·`장치가 없습니다`·`권한이 없습니다`로 나눈다. 읽기는 탭당 스레드 하나(200ms 시간 제한, 탭이 끝나면 `StopOnDrop`으로 종료), 출력은 `terminal_output::pump` 공유(16개 대기열로 역압), 쓰기는 `spawn_blocking` 10초. 읽기 오류·0바이트는 `장치 연결이 끊겼습니다.`(오류 상태, 재접속 가능).
+- Break: 새 명령 `terminal_send_break`(포트를 복제한 핸들로 250ms `set_break`→`clear_break`, 락을 쥔 채 기다리지 않음), 탭 헤더 우클릭 `Break 보내기`(시리얼 탭만, 연결 중에만). 포트 목록 `serial_ports`(macOS는 `/dev/cu.*`만, USB 제조사·제품 표시).
+- 프런트엔드: `serialTransport`(kind `serial`, 크기 없음), `sessionKind`에 `serial`(분할 불가 — 한 장치는 한 탭만 연다, `lineBreak` 능력), 세션 폼 `SerialFields.tsx`(장치 목록·직접 입력·다시 찾기, 속도·데이터 비트·패리티·정지 비트·흐름 제어). 폼의 호스트·포트·사용자·인증 칸을 `NetworkFields.tsx`로 옮겨 `SessionForm.tsx`는 384→345줄. 상태바 `시리얼 · /dev/cu.x · 115200 8N1`. 스니펫 대상에 Telnet·시리얼 포함.
+- 세션 교환 v4: 시리얼 세션(v3 이하 거부), 스키마의 `serial` 객체·장치 이름 패턴·조건, `docs/session-transfer.md`.
+
+### 검증
+
+- 단위: 장치 이름(두 OS 형식, `..`·`/`·`tty.*` 거부), 설정 범위·인증·네트워크 필드 거부, 다른 OS 장치 이름 안내, 설정 표시 `115200 7E1 · RTS/CTS`, 여는 실패 문구. **가상 단말 쌍(`TTYPort::pair`)으로 종단 검사**: 장치 출력 → `Event::Data`, 입력 `show version\r`이 장치에 도착, 장치 쪽을 닫으면 `장치 연결이 끊겼습니다.`로 끝남(5회 연속 통과). 프런트엔드: `switchProtocol`(시리얼 전환 시 호스트 비움·기본 115200 8N1·벗어나면 설정 제거), 시리얼 transport, 탭 메뉴 Break(시리얼·연결 중만)·분할 없음, 세션 폼(Playwright: 호스트·포트·사용자·인증 칸 없음, 기본값, 빈 칸 없는 행).
+- 실장치 대역(`npm run probe:serial`, Mac): 검사가 socat으로 PTY를 만들어 `connect:fixture`의 장치 콘솔(127.0.0.1:47000)에 잇고, PTY는 속도를 거부하므로 속도 없이 연다. `echo serial-$((40+2))` → `serial-42`, Break 송신 `Ok`(PTY라 실제 신호는 확인 불가), socat 종료 → `장치 연결이 끊겼습니다.` 통과.
+- **대기:** 실제 USB 시리얼 장치로 속도 변경·Break·흐름 제어·케이블 분리, macOS 실제 앱 화면(CG.10). Windows의 실제 COM 포트·com0com(사용자 지시대로 대기, Windows 대상 컴파일도 이 Mac에서는 못 함).

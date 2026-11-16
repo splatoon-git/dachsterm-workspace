@@ -1582,6 +1582,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "io-kit-sys",
+      "version": "0.4.1",
+      "license": "MIT / Apache-2.0",
+      "repository": "https://github.com/jtakakura/io-kit-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
       "name": "ipnet",
       "version": "2.12.2",
       "license": "MIT OR Apache-2.0",
@@ -1766,6 +1774,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "mach2",
+      "version": "0.4.3",
+      "license": "BSD-2-Clause OR MIT OR Apache-2.0",
+      "repository": "https://github.com/JohnTitor/mach2",
+      "licenseTextsFound": 3
+    },
+    {
+      "ecosystem": "cargo",
       "name": "markup5ever",
       "version": "0.39.0",
       "license": "MIT OR Apache-2.0",
@@ -1866,6 +1882,14 @@
       "version": "1.0.6",
       "license": "MIT",
       "repository": "https://github.com/mbrubeck/rust-debug-unreachable",
+      "licenseTextsFound": 1
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "nix",
+      "version": "0.26.4",
+      "license": "MIT",
+      "repository": "https://github.com/nix-rust/nix",
       "licenseTextsFound": 1
     },
     {
@@ -2875,6 +2899,14 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/chippers/serialize-to-javascript",
       "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "serialport",
+      "version": "4.10.1",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/serialport/serialport-rs",
+      "licenseTextsFound": 1
     },
     {
       "ecosystem": "cargo",
@@ -3912,6 +3944,14 @@
       "ecosystem": "cargo",
       "name": "windows-strings",
       "version": "0.5.1",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/microsoft/windows-rs",
+      "licenseTextsFound": 2
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-sys",
+      "version": "0.52.0",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/microsoft/windows-rs",
       "licenseTextsFound": 2

@@ -128,6 +128,18 @@ describe('tabMenuEntries', () => {
     expect(label({ highlight: true, capabilities: capabilities(ftp) })).toBeUndefined();
   });
 
+  it('sends a Break only from a serial tab with a live line', () => {
+    const serial = capabilities({ kind: 'serial' });
+    const entry = (connection: TabMenuState['connection']) =>
+      tabMenuEntries({ ...base, capabilities: serial, connection }).find(
+        (e) => e.command === 'sendBreak',
+      );
+    expect(entry('live')).toMatchObject({ label: 'Break 보내기', disabled: false });
+    expect(entry('ended')?.disabled).toBe(true);
+    expect(commands({ capabilities: serial })).not.toContain('splitRight');
+    expect(commands({})).not.toContain('sendBreak');
+  });
+
   it('disables what cannot apply', () => {
     const entries = tabMenuEntries({ ...base, groupCount: 1, otherTabs: 0, narrow: true });
     const disabled = entries.filter((e) => e.disabled).map((e) => e.command);

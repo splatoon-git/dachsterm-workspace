@@ -53,6 +53,7 @@ pub struct Connections {
     pub git: crate::git_credential::Forwards,
     pub net: crate::net_tools::link::Links,
     pub streaming: Mutex<std::collections::HashSet<String>>,
+    pub serial: crate::serial::Breaks,
 }
 impl Connections {
     pub fn handle(&self, id: &str) -> Result<Arc<client::Handle<Host>>> {
@@ -111,6 +112,7 @@ impl Connections {
                 match profile.protocol.as_str() {
                     "ssh" => run(profile, secret, route, paths, s, channels, m, store, i).await,
                     "telnet" => crate::telnet::run(m, i, profile, s, channels, store).await,
+                    "serial" => crate::serial::run(m, i, profile, s, channels, store).await,
                     _ => crate::ftp::run(m, i, profile, secret, s, channels.stop, store).await,
                 }
             };
@@ -196,6 +198,7 @@ impl Connections {
         self.logs.close(id);
         self.ftp.lock().unwrap().remove(id);
         self.streaming.lock().unwrap().remove(id);
+        self.serial.remove(id);
         self.live.lock().unwrap().remove(id);
         self.entries.lock().unwrap().remove(id);
         self.launches.take(id);

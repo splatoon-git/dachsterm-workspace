@@ -186,6 +186,7 @@ fn base() -> Profile {
         proxy: None,
         agent_source: "system".into(),
         cert_path: String::new(),
+        serial: None,
     }
 }
 fn stress_seconds() -> u64 {

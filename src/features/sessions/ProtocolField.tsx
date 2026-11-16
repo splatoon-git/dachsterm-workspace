@@ -18,6 +18,7 @@ export function ProtocolField({
           <option value="ftps">FTPS · 명시적 TLS</option>
           <option value="ftp">FTP · 암호화 없음</option>
           <option value="telnet">Telnet · 암호화 없음</option>
+          <option value="serial">시리얼 · 장비 콘솔</option>
         </select>
       </label>
       {value === 'ftp' && (

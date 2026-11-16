@@ -78,6 +78,7 @@ const sshCommands = {
  */
 export function remoteTransport(profile: Pick<Profile, 'protocol'>): TerminalTransport {
   if (profile.protocol === 'telnet') return telnetTransport;
+  if (profile.protocol === 'serial') return serialTransport;
   if (profile.protocol !== 'ssh')
     return {
       ...sshCommands,
@@ -120,6 +121,16 @@ const telnetTransport: TerminalTransport = {
   agent: false,
   links: null,
   resize: (id, cols, rows) => call('terminal_resize', { id, cols, rows }),
+};
+
+/**
+ * A device's serial console (CG.5). Like Telnet nothing is typed for the app, and a serial line
+ * has no window size to send.
+ */
+const serialTransport: TerminalTransport = {
+  ...telnetTransport,
+  kind: 'serial',
+  resize: undefined,
 };
 
 /** One of this computer's shells. A Windows shell only takes its hook at launch. */

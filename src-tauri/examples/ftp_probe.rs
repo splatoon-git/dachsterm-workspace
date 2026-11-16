@@ -106,6 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 proxy: None,
                 agent_source: "system".into(),
                 cert_path: String::new(),
+                serial: None,
             },
             None,
         )?;
