@@ -83,6 +83,24 @@ describe('terminal transports', () => {
     ]);
   });
 
+  it('opens Telnet through connect and sends its size, with nothing typed for the app', async () => {
+    const transport = remoteTransport({ protocol: 'telnet' });
+    expect(transport.kind).toBe('telnet');
+    expect((await commands(transport)).map(([name]) => name)).toEqual([
+      'connect',
+      'terminal_input',
+      'terminal_ack',
+      'terminal_resize',
+      'disconnect',
+    ]);
+    expect([transport.typedHook, transport.gitCredentials, transport.programGuide]).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    expect([transport.directory, transport.agent, transport.links]).toEqual(['none', false, null]);
+  });
+
   it("runs this computer's shell through the local commands", async () => {
     expect(await commands(localTransport(shell))).toEqual([
       ['local_open', { id: 'x', targetId: 'pwsh', cols: 80, rows: 24, onEvent }],

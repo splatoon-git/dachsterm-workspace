@@ -74,9 +74,10 @@ const sshCommands = {
 
 /**
  * A saved connection. FTP and FTPS tabs also open through `connect`, but have no shell: the size,
- * the hook and program helpers apply to SSH only.
+ * the hook and program helpers apply to SSH only. Telnet has a terminal and nothing else.
  */
 export function remoteTransport(profile: Pick<Profile, 'protocol'>): TerminalTransport {
+  if (profile.protocol === 'telnet') return telnetTransport;
   if (profile.protocol !== 'ssh')
     return {
       ...sshCommands,
@@ -102,6 +103,24 @@ export function remoteTransport(profile: Pick<Profile, 'protocol'>): TerminalTra
     resize: (id, cols, rows) => call('terminal_resize', { id, cols, rows }),
   };
 }
+
+/**
+ * A Telnet device or host (CG.4). Its shell is unknown and may not be one, so nothing is typed
+ * into it for the app: no folder hook, no Git helper, no program guide. Output can still be
+ * logged, highlighted and answered by snippets, and the window size goes out by NAWS.
+ */
+const telnetTransport: TerminalTransport = {
+  ...sshCommands,
+  kind: 'telnet',
+  directory: 'none',
+  typedHook: false,
+  gitCredentials: false,
+  programGuide: false,
+  windowsPaths: false,
+  agent: false,
+  links: null,
+  resize: (id, cols, rows) => call('terminal_resize', { id, cols, rows }),
+};
 
 /** One of this computer's shells. A Windows shell only takes its hook at launch. */
 export function localTransport(target: LocalTarget): TerminalTransport {

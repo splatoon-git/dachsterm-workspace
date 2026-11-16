@@ -165,3 +165,17 @@ test('a key login offers a certificate and an agent login offers Pageant', async
   await auth.selectOption('interactive');
   await expect(dialog.getByLabel('인증 에이전트')).toHaveCount(0);
 });
+
+test('Telnet warns that it is not encrypted and asks for no password', async ({ page }) => {
+  const dialog = await openForm(page);
+  await dialog.getByLabel('프로토콜').selectOption('telnet');
+  await expect(dialog.getByRole('note')).toContainText('암호화하지 않고');
+  await expect(dialog.getByLabel('포트', { exact: true })).toHaveValue('23');
+  await expect(dialog.getByLabel('인증 방식')).toHaveCount(0);
+  await expect(dialog.getByLabel('비밀번호', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('사용자', { exact: true })).not.toHaveAttribute('required');
+  await dialog.locator('summary', { hasText: '고급 옵션' }).click();
+  await expect(dialog.getByLabel('터미널 인코딩')).toBeVisible();
+  await expect(dialog.getByLabel('경유 프로필 추가')).toHaveCount(0);
+  await expectFullRows(dialog.locator('.form-grid').first());
+});

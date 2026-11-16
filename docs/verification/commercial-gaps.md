@@ -246,9 +246,29 @@ PASS certificate checks: expired (named: local error; beside: skipped, key refus
 
 - 게이트(미커밋 트리, `verify-macos.sh`와 같은 단계): typecheck·lint·format, Vitest 1410/1410(부하 때문에 처음부터 `--testTimeout=60000`), build, Playwright 542, `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` 722(무시 4)+1, `npm audit` 0건, 의존성 감사, 고지 532개.
 
+- `dev`(CG.4 병합 6201ee3)를 합친 트리에서 다시: Vitest 1414/1414(`--testTimeout=60000`), Playwright 543, `cargo test --workspace` 732(무시 5)+1, clippy·fmt, `npm audit` 0, 의존성 감사, 고지 532개, `probe:connect` 여섯 줄 모두 통과.
+
 (같은 실행에서 CG.1의 네 줄도 통과.) 이번 실행에서 검사 환경의 tinyproxy가 CONNECT마다 18~37초(직접 잰 값, CG.0은 6~16초)를 써서, 검사 프로필의 시간 제한을 30초에서 최대값 120초로, 검사의 이벤트 대기를 150초로 늘렸다. 제품 코드의 문제는 아니다(SOCKS5와 경유지는 빠르다).
 
 ### 대기
 
 - **Pageant 전부(Windows):** `cfg(windows)` 경로 컴파일, PuTTY 0.75 이상(이름 있는 파이프)과 이전 방식(`WM_COPYDATA`) 로그인, Pageant 없음 문구, 확인 창 동안의 동작, 에이전트 전달. 이 Mac에서 `cargo check --target x86_64-pc-windows-msvc`는 `ring`의 C 빌드가 Windows 헤더(`assert.h`)를 찾지 못해 실행할 수 없었다.
 - Mac 패키지 앱에서 사람이 인증서 세션을 만들고 연결하는 확인(CG.10).
+
+## CG.4 Telnet 탭 (2026-11-16, 브랜치 `feat/cg4-telnet`)
+
+### 구현
+
+- 백엔드 `telnet.rs`: TCP 연결(프로필 `timeout`) → `Event::Data`. 출력은 SSH 터미널과 같은 `terminal_output::pump`(`Source` 구현)로 보내 32KiB 프레임·ACK·30초 정지 규칙을 공유한다. 세션 로그(`logs.register`·`auto_start`, 키 `ssh:<프로필 ID>`), 스니펫·동시 입력·창 분리는 `Connections::terminal_ready`(SSH는 핸들, Telnet은 연결된 스트림)로 열었다. 서버가 닫으면 `closed`.
+- 옵션 협상 `telnet/protocol.rs`(순수 함수): 서버 `WILL ECHO`·`WILL SGA`·`WILL BINARY` → `DO`, `DO TTYPE`(SB로 `XTERM-256COLOR`)·`DO NAWS`(바로 현재 크기)·`DO BINARY` → `WILL`, 나머지는 `DONT`/`WONT`. 상태가 바뀔 때만 답한다(RFC 1143, 반복 요청에 무응답). 출력에서 IAC 시퀀스를 걷어내고 읽기 경계에 걸친 시퀀스를 이어 붙인다. BINARY가 아니면 서버의 `CR NUL`의 NUL을 지운다. 입력은 `0xFF`를 `FF FF`로, 홀로 있는 `\r`을 `\r\0`으로. 크기 변경은 NAWS(255 이스케이프). 하위 협상은 512바이트, 협상 응답 대기열은 256개로 제한하고 넘치면 연결을 끊는다.
+- 암호 저장·자동 로그인 없음(사용자 결정): 프로필 검증이 `protocol = "telnet"`에 `auth = "interactive"`, 빈 키 경로만 허용하고 사용자 이름은 비워도 된다. 연결 화면은 암호를 묻지 않고, 로그인은 터미널에서 친다.
+- 경고: 세션 폼에서 Telnet을 고르면 프로토콜 바로 아래에 `Telnet은 암호를 포함한 모든 입력을 암호화하지 않고 보냅니다…`, 상태 메시지 `연결됨 · Telnet · 암호화 없음 · 호스트:포트`, 상태바 `Telnet · 암호화 없음`, 연결 목록 `TELNET` 표시.
+- 프런트엔드: `transport.ts`의 `telnetTransport`(kind `telnet`, 폴더 훅·Git 도우미·조작표·에이전트·링크 없음, 크기는 `terminal_resize`), `sessionKind`에 `telnet`(터미널·로그·분할·창 분리 가능, 모니터링·쿠버네티스·파일 없음). `TerminalSession`은 바꾸지 않았다. 세션 폼의 프로토콜 선택은 `ProtocolField.tsx`와 순수 함수 `protocol.ts`(`switchProtocol`)로 옮겨 폼을 400→384줄로 줄였다.
+- 구조: `ssh.rs`(상한 초과 파일)는 프로토콜 분기를 `match`로 바꾸고 `ready`·`ftp_session`을 `connection_ready.rs`로 옮겨 365→331줄. `session_transfer.rs`는 PuTTY 프로토콜·프록시 판정과 터널 변환을 `session_transfer/putty.rs`로 옮겨 순증 없음.
+- 세션 교환 v4: CG.1이 만든 v4에 Telnet을 더했다(v3 이하에 Telnet이 있으면 거부, 스키마의 `protocol`·Telnet 조건, `docs/session-transfer.md`). PuTTY `Protocol=telnet`은 Telnet 세션으로 받고(키·터널 버림), 프록시를 쓰는 Telnet 세션은 제외한다.
+
+### 검증
+
+- 단위: 협상(지원·거부·반복 무응답), 모든 위치의 읽기 경계 분할, `FF FF`, `CR NUL`, 입력 `\r\0`, NAWS 이스케이프, 끝없는 하위 협상, 가짜 TCP 서버로 연결→협상 응답→로그인 입력→크기 변경→서버 종료까지(`telnet::tests`, 5회 연속 통과). v4 게이트, PuTTY Telnet 가져오기, 프로필 검증, `switchProtocol`, Telnet transport 명령 순서, 세션 폼(Playwright: 경고·포트 23·인증 방식·암호 칸 없음·사용자 선택 입력·경유지 없음).
+- 실서버(`npm run probe:telnet`, `connect:fixture`의 inetutils telnetd, Mac): 터미널에서 `probe`와 암호를 입력해 로그인(암호가 화면에 되돌아오지 않음), 크기 변경 뒤 `stty size` = `43 132`, `TERM=xterm-256color`, 스니펫 명령 형식(`snippets::payload`) 입력, 한글 왕복, 세션 로그 파일에 출력 기록·암호 없음, `exit` 뒤 `closed`. 3회 실행 모두 통과.
+- **대기:** 실제 앱 화면에서의 Telnet 탭(Mac 패키지 앱, Windows 네이티브 검사)은 CG.10. Docker가 응답하지 않아 `connect:fixture -- status`는 시간 초과였고, 이미 떠 있던 포트에 직접 연결해 검사했다.
