@@ -1,0 +1,50 @@
+# Connect fixture for CG.1~CG.9. Start and stop it with `npm run connect:fixture -- up|down|status`.
+# Every port is bound to 127.0.0.1. The target server has no published port and sits on an
+# internal network, so only the proxies and the jump host can reach it.
+name: dachsterm-connect
+
+services:
+  init:
+    build: sshd
+    image: dachsterm-connect-sshd
+    environment: [ROLE=init]
+    volumes: [secrets:/run/fixture]
+    network_mode: none
+
+  target:
+    image: dachsterm-connect-sshd
+    hostname: target
+    environment: [ROLE=target]
+    volumes: [secrets:/run/fixture:ro]
+    networks: [inner]
+    depends_on: { init: { condition: service_completed_successfully } }
+
+  jump:
+    image: dachsterm-connect-sshd
+    hostname: jump
+    environment: [ROLE=jump]
+    volumes: [secrets:/run/fixture:ro]
+    networks: [outer, inner]
+    ports: ['127.0.0.1:42222:22']
+    depends_on: { init: { condition: service_completed_successfully } }
+
+  edge:
+    build: edge
+    image: dachsterm-connect-edge
+    hostname: edge
+    volumes: [secrets:/run/fixture:ro]
+    networks: [outer, inner]
+    ports:
+      - '127.0.0.1:43128:3128' # HTTP CONNECT
+      - '127.0.0.1:41080:1080' # SOCKS5
+      - '127.0.0.1:42323:23' # Telnet
+      - '127.0.0.1:46000:6000' # X server, display 127.0.0.1:40000
+      - '127.0.0.1:47000:7000' # serial console stand-in
+    depends_on: { init: { condition: service_completed_successfully } }
+
+networks:
+  outer: {}
+  inner: { internal: true }
+
+volumes:
+  secrets: {}

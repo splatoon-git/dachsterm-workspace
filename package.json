@@ -35,6 +35,7 @@
     "format:check": "prettier --check src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
     "probe:ftp": "node scripts/run-ftp.mjs",
     "probe:prompt-branch": "node scripts/probe-prompt-branch.mjs",
+    "connect:fixture": "node scripts/connect-fixture.mjs",
     "kube:fixture": "wsl -d Ubuntu-24.04 -- bash scripts/kube-fixture.sh",
     "test:kube-detect": "node scripts/verify-kube-detect.mjs",
     "test:kube-dashboard": "node scripts/verify-kube-tree.mjs --dashboard",
