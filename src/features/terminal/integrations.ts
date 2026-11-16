@@ -3,7 +3,7 @@ import { programMetadata, type GuideProgram } from './guideData';
 import { attachCommandMarks, commandNotice } from './commandMarks';
 import type { KittyKeyboard } from './kittyKeyboard';
 import { directoryFromOsc, terminalPreferences } from './preferences';
-import { parseOsc52 } from './osc52';
+import { osc52Notice, parseOsc52 } from './osc52';
 import { hookStatus, programStatusQueryReply, type ProgramStatus } from './programStatus';
 import { osc777Message, osc9Message, type AttentionReason } from './terminalNotify';
 
@@ -18,6 +18,7 @@ type IntegrationHost = {
     /** A copy made in the past must never replace what is on the clipboard now. */
     replaying(): boolean;
     copy(text: string): void;
+    notice(message: string): void;
     tmuxMissing(): void;
     attention(reason: AttentionReason, detail?: string): void;
   };
@@ -132,7 +133,10 @@ export function attachTerminalIntegrations(terminal: Terminal, host: Integration
     const focused = document.hasFocus() && document.activeElement === terminal.textarea;
     if (!agent.replaying() && focused && terminalPreferences().clipboardWrite) {
       const text = parseOsc52(value);
-      if (text !== null) agent.copy(text);
+      if (text !== null) {
+        agent.copy(text);
+        agent.notice(osc52Notice(text));
+      }
     }
     return true;
   });

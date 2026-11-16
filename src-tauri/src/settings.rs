@@ -218,6 +218,40 @@ pub(crate) fn validate_bundle(bundle: &Bundle) -> Result<()> {
     }
     Ok(())
 }
+/// A path that Windows opens over the network, such as `\\server\share\key` or `//server/key`.
+/// Mixed separators count too, because Windows accepts either.
+fn network_path(path: &str) -> bool {
+    let mut chars = path.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some('\\' | '/'), Some('\\' | '/'))
+    )
+}
+/// A file from someone else must not make a connection open `\\host\...`: Windows would send
+/// this PC's sign-in to that host. Paths the user types in the edit dialog are still allowed, and
+/// a recovery snapshot holds only the user's own settings, so it does not come through here.
+pub(crate) fn check_import_paths(bundle: &Bundle) -> Result<()> {
+    let profile = bundle.profiles.iter().find(|p| {
+        let forward_keys = p.forward_keys.iter().map(|k| &k.path);
+        [&p.key_path, &p.tls_ca_path]
+            .into_iter()
+            .chain(forward_keys)
+            .any(|path| network_path(path))
+    });
+    let template =
+        (bundle.templates.iter()).find(|t| t.options.key_path.as_deref().is_some_and(network_path));
+    match profile.map(|p| &p.name).or(template.map(|t| &t.name)) {
+        Some(name) => Err(format!(
+            "'{name}'의 키·인증서 파일이 네트워크 경로라 가져올 수 없습니다. 이 PC의 경로로 바꾼 뒤 가져오세요."
+        )),
+        None => Ok(()),
+    }
+}
+/// The checks for a bundle that arrives from a file the user picked.
+pub(crate) fn validate_import(bundle: &Bundle) -> Result<()> {
+    validate_bundle(bundle)?;
+    check_import_paths(bundle)
+}
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Merge {
@@ -684,5 +718,87 @@ mod tests {
         import(&store, &serde_json::to_vec(&valid).unwrap()).unwrap();
         assert!(!store.tunnel_configs().unwrap()[0].auto_start);
         assert_ne!(store.tunnel_configs().unwrap()[0].profile_id, "session");
+    }
+    fn share_bundle(edit: impl FnOnce(&mut Profile)) -> Bundle {
+        let mut p = crate::storage::tests::profile();
+        p.id = "share".into();
+        edit(&mut p);
+        Bundle {
+            format: Some("dachsterm.sessions".into()),
+            version: 3,
+            profiles: vec![p],
+            groups: vec![],
+            tunnels: vec![],
+            templates: vec![],
+        }
+    }
+    /// S.9: opening `\\host\share\key` makes Windows send this PC's sign-in to that host.
+    #[test]
+    fn an_imported_file_cannot_point_a_session_at_a_network_share() {
+        for path in [
+            r"\\nas\keys\id",
+            "//nas/keys/id",
+            r"/\nas\keys\id",
+            r"\\?\UNC\nas\id",
+        ] {
+            let config =
+                format!("Host lab\n HostName lab.example\n User u\n IdentityFile {path}\n");
+            let error = crate::session_transfer::parse(config.as_bytes(), "openssh", "utf-8");
+            assert!(error.err().is_some_and(|e| e.contains("'lab'")), "{path}");
+        }
+        let unc = r"\\nas\share\ca.pem".to_string();
+        let bundles = [
+            share_bundle(|p| {
+                p.auth = "key".into();
+                p.key_path = unc.clone();
+            }),
+            share_bundle(|p| {
+                p.protocol = "ftps".into();
+                p.tls_ca_path = unc.clone();
+            }),
+            share_bundle(|p| {
+                p.forward_keys = vec![crate::storage::ForwardKey {
+                    path: unc.clone(),
+                    secret_ref: None,
+                }];
+            }),
+        ];
+        for bundle in bundles {
+            assert!(validate_bundle(&bundle).is_ok());
+            assert!(validate_import(&bundle).is_err());
+            let json = serde_json::to_vec(&bundle).unwrap();
+            assert!(crate::session_transfer::parse(&json, "dachsterm", "utf-8").is_err());
+        }
+        let mut template = share_bundle(|_| {});
+        template.templates = vec![crate::session_management::Template {
+            id: "template".into(),
+            name: "nas".into(),
+            options: crate::session_management::Options {
+                key_path: Some(unc.clone()),
+                ..Default::default()
+            },
+        }];
+        assert!(validate_import(&template).is_err_and(|e| e.contains("'nas'")));
+    }
+    #[test]
+    fn local_key_paths_still_import_and_a_users_own_share_still_restores() {
+        for path in [r"C:\keys\id", "C:/keys/id", "/Users/u/.ssh/id", r"keys\id"] {
+            let bundle = share_bundle(|p| {
+                p.auth = "key".into();
+                p.key_path = path.into();
+            });
+            assert!(validate_import(&bundle).is_ok(), "{path}");
+        }
+        // A recovery snapshot holds what the user typed, so restoring it must not fail.
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("db")).unwrap();
+        let bundle = share_bundle(|p| {
+            p.auth = "key".into();
+            p.key_path = r"\\nas\keys\id".into();
+        });
+        assert_eq!(
+            import(&store, &serde_json::to_vec(&bundle).unwrap()).unwrap(),
+            1
+        );
     }
 }

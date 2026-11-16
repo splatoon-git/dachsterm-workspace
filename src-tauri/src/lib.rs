@@ -13,6 +13,7 @@ pub mod credentials;
 mod desktop_bridge;
 mod desktop_files;
 pub mod editor;
+mod editor_launch;
 mod editor_location;
 pub mod encoding;
 pub mod file_ops;

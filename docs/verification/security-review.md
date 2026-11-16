@@ -2,7 +2,7 @@
 
 - 대상: `17cc876` (`dev`), 커밋된 소스와 잠금 파일.
 - 방법: 의존성·시크릿은 아래 명령을 실행했다. 소스는 코드 경로 추적이고, **실행으로 재현한 항목은 S.1뿐이다.** 나머지 항목의 Windows 동작은 Mac에서 코드만 읽었다.
-- 상태: S.1~S.5와 S.10은 브랜치 `fix/s1-s5-security`에서 수정했다(아래 수정 결과). S.6~S.9, S.11은 열려 있다.
+- 상태: S.1~S.5와 S.10은 브랜치 `fix/s1-s5-security`, S.6·S.8·S.9·S.11은 `fix/security-low`에서 수정했다(아래 수정 결과). S.7은 열려 있다.
 
 ## 결론
 
@@ -58,6 +58,10 @@ GitHub Actions는 커밋 SHA가 아니라 태그(`@v4`)로 고정돼 있다. 권
 | S.4 | `remove_old`가 상한이 있는 `sftp::list`를 쓰고 삭제 전체에 10초 제한을 둔다. | `only_old_regular_files_of_this_module_expire`(만료 판정). 끝나지 않는 서버의 동작은 악성 SFTP 서버 fixture가 없어 미실행 |
 | S.5 | `directoryFromOsc`가 Windows 탭에서 `\\`, `//`, `/\`, `\/`로 시작하는 경로를 거부한다. | `preferences.test.ts`. Windows 실행은 대기 |
 | S.10 | `sftp::list`가 4,096바이트를 넘는 이름을 거부한다. S.4가 이 목록을 쓰게 되어 함께 고쳤다. | 없음. 악성 서버 fixture 필요 |
+| S.8 | 기본 켜짐은 유지하고, 프로그램이 클립보드를 바꿀 때마다 상태 줄에 글자 수를 알린다. 줄바꿈이 있으면 붙여넣기 전에 확인하라고 덧붙인다. 무시한 복사(재생, 포커스 없음, 설정 꺼짐, 읽기 요청)는 알리지 않는다. | `integrations.test.ts`의 `tells the user every time a program replaces the clipboard`, `says nothing when a copy is ignored`. 수정을 빼면 앞의 것이 실패함을 확인했다. |
+| S.6 | 로컬 탭에 끌어 놓은 경로를 셸별로 인용한다. PowerShell(`pwsh`, `powershell`)은 작은따옴표로 감싸고 `'`와 U+2018~U+201B를 두 번 쓴다. cmd는 기존 큰따옴표, WSL·Mac은 POSIX 인용이다. 대상은 `local.rs`의 대상 ID로 고른다. | `promptAttachments.test.ts`의 `keeps PowerShell from running anything in a dropped file name`, `picks the quoting of the tab it is dropped on`. PowerShell에 큰따옴표를 쓰면 실패함을 확인했다. Windows 실행은 대기 |
+| S.9 | 가져오기(미리보기 `parse`의 모든 형식, `config_apply`)에서 `keyPath`, `tlsCaPath`, `forwardKeys[].path`, 템플릿 `keyPath`가 `\\`, `//`, `/\`, `\/`로 시작하면 파일 전체를 거부한다. 연결 편집에서 직접 넣는 값과 설정 복구본 복원은 막지 않는다. | `settings.rs`의 `an_imported_file_cannot_point_a_session_at_a_network_share`, `local_key_paths_still_import_and_a_users_own_share_still_restores`. Windows 실행은 대기 |
+| S.11 | 새 `editor_launch.rs`. `edit_start`·`local_files_edit`는 실행 전에 허용을 확인한다. 이 PC에서 찾은 편집기를 인자 없이 쓰면 바로, `editor_pick` 파일 대화상자로 고른 파일은 고를 때 기록해 바로 실행한다. 그 밖의 프로그램·인자 조합은 웹뷰 밖의 네이티브 확인 창에서 허용해야 실행하고 최근 32개를 DB `settings`의 `editor-launches`에 기록한다. 제어 문자·길이 초과는 거부한다. `connect`는 첫 줄에서 `secret`을 `Zeroizing`으로 감싼다. capability 설명을 실제 대상(`terminal-*` 포함)에 맞췄다. | `editor_launch.rs` 단위 4건(알려진 편집기만 묻지 않음, 형식 거부, 기록 상한, 손상 기록). `commands.rs`의 `every_command_wraps_its_secrets_before_anything_else`는 모든 `#[tauri::command]`의 비밀 인자가 첫 문장에서 감싸지는지 소스로 검사하며, 수정 전 `connect`와 같은 형태가 걸리는 것을 `an_early_return_before_the_wrap_is_found`로 확인한다. 확인 창은 Mac 실제 앱 확인 대기 |
 
 결정과 남는 동작:
 
@@ -67,6 +71,10 @@ GitHub Actions는 커밋 SHA가 아니라 태그(`@v4`)로 고정돼 있다. 권
 - 이름에 `=`가 든 필터는 `-c`로 끌 수 없어 조회를 거부한다. 실험에서 그대로 실행됐다.
 - Git 2.26 미만은 필터 범위를 읽을 수 없어 자동 조회를 하지 않는다(WSL·이 PC).
 - Windows 탭에서 네트워크 공유로 `cd`하면 파일 패널이 따라가지 않는다. 경로를 직접 입력하면 열린다.
+- **S.8은 기본 끄기 대신 알림을 골랐다.** 끄면 tmux·vim의 복사가 이유 없이 안 되고, 위험은 사용자가 모르게 바뀌는 것이기 때문이다. 알림에 내용은 넣지 않는다(화면 공유 중 비밀이 보일 수 있음).
+- **S.6의 cmd는 `%이름%` 확장을 막을 인용이 없다.** 변수 확장은 명령을 실행하지 않고, Windows 파일 이름에는 `"`가 없어 따옴표를 닫을 수 없다.
+- **S.11의 인자 제한:** 알려진 편집기라도 인자가 있으면 확인한다. VS Code의 `--extensionDevelopmentPath` 같은 인자는 코드를 불러온다. 업그레이드 전에 직접 입력해 둔 편집기 경로와 인자는 처음 한 번 확인 창이 뜬다.
+- 디버그 빌드에 한해 `DACHSTERM_TEST_EDITOR`와 같은 프로그램은 확인 없이 실행한다. `test-native.mjs`가 편집 저장 카드 검사에서 node를 편집기로 쓰기 때문이다. 출시 빌드에는 없다.
 
 ## 문제를 찾지 못한 영역 (코드 추적)
 

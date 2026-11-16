@@ -14,6 +14,7 @@ function setup(withAgent = true) {
   const keyboard = new KittyKeyboard();
   const status = new ProgramStatus();
   const copy = vi.fn();
+  const notice = vi.fn();
   const attention = vi.fn();
   const replay = { active: false };
   const host = {
@@ -22,12 +23,20 @@ function setup(withAgent = true) {
     program: vi.fn(),
     respond: vi.fn(),
     agent: withAgent
-      ? { keyboard, status, replaying: () => replay.active, copy, attention, tmuxMissing: vi.fn() }
+      ? {
+          keyboard,
+          status,
+          replaying: () => replay.active,
+          copy,
+          notice,
+          attention,
+          tmuxMissing: vi.fn(),
+        }
       : undefined,
   };
   attachTerminalIntegrations(terminal, host);
   const write = (data: string) => new Promise<void>((resolve) => terminal.write(data, resolve));
-  return { terminal, keyboard, status, host, write, copy, replay, attention };
+  return { terminal, keyboard, status, host, write, copy, notice, replay, attention };
 }
 
 describe('terminal integrations', () => {
@@ -202,6 +211,25 @@ describe('terminal integrations', () => {
       const { copy, write } = focusedSetup();
       await write(osc);
       expect(copy).toHaveBeenCalledExactlyOnceWith('copied');
+    });
+
+    // S.8: a server could swap the clipboard between the user's copy and paste without a trace.
+    it('tells the user every time a program replaces the clipboard', async () => {
+      const { notice, write } = focusedSetup();
+      await write(osc);
+      expect(notice).toHaveBeenCalledExactlyOnceWith('프로그램이 클립보드를 바꿨습니다(6자).');
+      await write(`\x1b]52;c;${btoa('rm -rf ~\n')}\x07`);
+      expect(notice).toHaveBeenLastCalledWith(
+        '프로그램이 클립보드를 바꿨습니다(9자, 줄바꿈 1개). 붙여넣기 전에 내용을 확인하세요.',
+      );
+    });
+
+    it('says nothing when a copy is ignored', async () => {
+      const { notice, replay, write } = focusedSetup();
+      replay.active = true;
+      await write(osc);
+      await write('\x1b]52;c;?\x07');
+      expect(notice).not.toHaveBeenCalled();
     });
 
     it('ignores a replayed copy', async () => {

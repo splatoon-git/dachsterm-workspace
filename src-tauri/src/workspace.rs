@@ -193,6 +193,7 @@ pub fn transfer_items(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn edit_start(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     id: String,
     profile_id: String,
@@ -206,6 +207,7 @@ pub async fn edit_start(
     if !["ask", "auto", "manual"].contains(&mode) {
         return Err("업로드 방식 오류".into());
     }
+    crate::editor_launch::check(&app, &program, &args).await?;
     let edit = state
         .editors
         .start(
@@ -291,12 +293,21 @@ pub async fn editor_list() -> Result<Vec<crate::editor_location::Installed>> {
 }
 
 #[tauri::command]
-pub async fn editor_pick() -> Result<Option<String>> {
-    Ok(rfd::AsyncFileDialog::new()
+pub async fn editor_pick(app: tauri::AppHandle) -> Result<Option<String>> {
+    let Some(file) = rfd::AsyncFileDialog::new()
         .set_title("외부 편집기 실행 파일 선택")
         .pick_file()
         .await
-        .map(|f| f.path().to_string_lossy().into_owned()))
+    else {
+        return Ok(None);
+    };
+    // A lossy conversion would allow a different file than the one picked.
+    let path = file
+        .path()
+        .to_str()
+        .ok_or("이 파일 이름은 쓸 수 없습니다.")?;
+    crate::editor_launch::picked(&app, path.to_owned()).await?;
+    Ok(Some(path.to_owned()))
 }
 
 #[tauri::command]

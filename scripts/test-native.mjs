@@ -60,6 +60,8 @@ async function launch() {
       ...process.env,
       DACHSTERM_TEST_DATA_DIR: directory,
       DACHSTERM_TEST_CDP_PORT: String(debugPort),
+      // verify-edit-save-card.mjs starts node as the editor; the app would otherwise ask first.
+      DACHSTERM_TEST_EDITOR: process.execPath,
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort} --remote-debugging-address=127.0.0.1`,
     },
