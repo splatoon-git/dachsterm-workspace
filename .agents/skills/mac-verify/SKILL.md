@@ -24,7 +24,13 @@ Docker가 있으면 `npm run probe`와 `npm run probe:phase1`을 실행한다. D
 
 ## 4. 앱 실기기 확인
 
-`.app`을 **Finder 또는 `open`으로** 실행한다. 터미널에서 실행하면 `PATH`가 달라 일부 문제가 드러나지 않는다.
+`.app`을 **Finder로, 또는 빈 환경에서 부른 `open`으로** 실행한다. 터미널에서 그냥 `open`을 부르면 셸의 `PATH`가 앱에 넘어가 Finder 실행의 `PATH` 문제가 드러나지 않는다. 사용자 데이터와 섞이지 않게 debug 빌드의 데이터 폴더도 격리한다.
+
+```sh
+env -i HOME="$HOME" USER="$USER" LOGNAME="$LOGNAME" /usr/bin/open -n \
+  --env DACHSTERM_TEST_DATA_DIR=<scratchpad 폴더> target/debug/bundle/macos/DachsTerm.app
+ps eww -p "$(pgrep -f 'DachsTerm.app/Contents/MacOS')" | tr ' ' '\n' | grep '^PATH='   # /usr/bin:/bin:/usr/sbin:/sbin 이어야 한다
+```
 
 [macos-readiness](../../../docs/verification/macos-readiness.md)의 작업 ID를 먼저 확인한 뒤, 아래 체크리스트를 순서대로 진행한다. 사람의 조작이 필요한 항목(Keychain 승인, 한글 IME, 파일 대화상자, 로컬 네트워크 권한)은 절차를 안내하고 사용자의 관찰 결과를 받아 기록한다.
 
