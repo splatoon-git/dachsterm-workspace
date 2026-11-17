@@ -32,6 +32,8 @@ if ($Native) {
   Invoke-Check 'node' @('scripts/test-workspace-native.mjs')
   Invoke-Check 'node' @('scripts/test-maintenance-native.mjs')
   Invoke-Check 'node' @('scripts/run-ftp.mjs', '--native')
+  Invoke-Check 'npm.cmd' @('run', 'connect:fixture', '--', 'up')
+  Invoke-Check 'npm.cmd' @('run', 'test:connect')
 }
 if ($Package) {
   Invoke-Check 'npm.cmd' @('run', 'tauri', '--', 'build', '--bundles', 'nsis')

@@ -76,3 +76,18 @@ test('a session that runs a command stays out until its command is ticked', asyn
     ids: ['cmd'],
   });
 });
+
+test('Telnet and serial sessions without a user name can be added', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/transfer.html');
+  await page.evaluate(() => {
+    window.__transferTest.consoles = true;
+  });
+  await page.getByRole('button', { name: '파일 선택 · 미리보기' }).click();
+  // The SSH session still needs its user; the two consoles log in inside the terminal.
+  await expect(page.getByRole('button', { name: '4개 세션 추가' })).toBeDisabled();
+  await page.getByLabel('개발 서버 사용자명').fill('developer');
+  await page.getByRole('button', { name: '4개 세션 추가' }).click();
+  await expect(page.getByRole('status')).toHaveText('4개 세션을 추가했습니다.');
+  const applied = JSON.parse(await page.evaluate(() => window.__transferTest.applied[0]));
+  expect(applied.profiles.map((p: { id: string }) => p.id)).toEqual(['one', 'two', 'tel', 'ser']);
+});

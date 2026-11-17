@@ -182,6 +182,10 @@ macOS 26.5, Apple Silicon, Node 26.0.0, Rust 1.99.1, Docker 29.8.0. 패키지 �
 
 서명 없는(ad hoc) 시험 앱 0.5.1 → 0.5.2 업데이트를 이 Mac에서 사람이 직접 눌러 설치했다. 번들 교체, 자동 재시작, 격리 속성 없음, 서명 불일치 거부, 자동 확인 끄기를 확인했다. 열린 세션 정리, DMG 첫 실행, 이전 Keychain 항목 접근, 관리자 권한 위치는 대기다. [기록](app-updates.md)
 
+## CG.10 패키지 앱 (2026-11-17, `feat/cg10-docs-mac` 미커밋 트리)
+
+에이전트가 접근성 API와 창 캡처로 조작했다(사람 조작 아님). Finder와 같은 최소 `PATH`로 띄운 앱에서 ProxyCommand(Homebrew `socat` 이름만), 가져오기 명령 승인, HTTP 프록시 암호 카드, 하이라이트 색(WKWebView), Telnet 프롬프트·종료, 시리얼 포트 목록을 확인했고, 사용자명 없는 Telnet·시리얼 세션을 가져올 수 없던 결함을 고쳤다. 터미널 입력이 필요한 Telnet 로그인과 터미널 안 전송, XQuartz, 실제 USB 시리얼, 업데이트 뒤 Keychain은 대기다. 터미널에서 그냥 `open`으로 띄운 앱은 셸 `PATH`를 받으므로 Finder 실행 확인에는 빈 환경 `open`을 쓴다(`mac-verify` 스킬). [기록](commercial-gaps.md#mac-패키지-앱)
+
 ## 참고
 
 - [TN3179: Understanding local network privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)

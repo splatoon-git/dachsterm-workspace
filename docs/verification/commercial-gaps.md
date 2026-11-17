@@ -377,3 +377,48 @@ PASS X11: xdpyinfo through the fake cookie reaches Xvfb, no DISPLAY without forw
 - 실서버(`npm run probe:inband`, Mac): 제품 SSH 경로로 `connect:fixture`의 경유지(lrzsz 0.12.21, trzsz 1.1.7)에 비밀번호 로그인 → 서버에서 만든 임의 64KiB 파일을 `sz`·`tsz`로 받아 SHA-256 일치, 모든 바이트 값이 든 50,000B 파일을 `rz -y`·`trz -y`로 보내 서버 `sha256sum` 일치, 화면에 "OO" 남지 않음. 2회 통과.
 - 처음 실행에서 찾은 것: 테스트가 이전 프롬프트를 새 프롬프트로 읽어 `sz`가 끝나기 전에 다음 명령을 보냈다(서버 `sz`가 그 입력을 먹어 이후 입력이 사라진 것처럼 보임). 제품 결함이 아니라 테스트 대기 조건을 고쳤다.
 - **대기:** Telnet·시리얼 위 ZMODEM 실서버(검사 환경의 Telnet 서버 `edge`에는 lrzsz가 없다. 경로는 단위 테스트로만), tmux 안에서의 동작, 실제 앱 화면의 카드와 시스템 파일 창(CG.10), 대용량(수백 MiB) 속도.
+
+## CG.10 문서·회귀·Mac (2026-11-17, `feat/cg10-docs-mac`, `dev` `201b5e1` 위 미커밋 트리)
+
+바꾼 것은 사용 안내서, 새 Windows 네이티브 검사와 게이트 연결, 이 기록과 progress, 그리고 Mac 앱 확인에서 찾은 가져오기 결함의 수정(`sessions/protocol.ts`의 `needsUsername`, `SessionTransfer.tsx`, `NetworkFields.tsx`)이다.
+
+### 사용 안내서
+
+[user-guide](../user-guide.md)에 프록시, 프록시 명령, 인증서 파일, X11 포워딩(SSH 연결 아래), 하이라이트와 트리거, 터미널 안 파일 전송(터미널 아래), 새 절 Telnet과 시리얼을 썼다. Pageant를 미지원 목록에서 지원 항목으로 옮기고, 세션 목록 표시(`TELNET`, `SERIAL`)와 세션 교환(JSON v4, 명령 승인, 프록시 가져오기)을 고쳤다. 안내서에 적은 화면 문구 17개(`이해했고 켭니다`, `하이라이트 일시 중지`, `Pageant가 실행 중이 아니거나` 등)를 `src`·`src-tauri/src`에서 찾아 모두 있음을 확인했다. 설계안·검증 기록에 기대어 쓴 곳: 시리얼 탭의 동시 입력·스니펫, Telnet 사용자 칸을 장비로 보내지 않는다는 점, ECDSA 인증서(실제 검사는 Ed25519·RSA).
+
+### Windows 네이티브 검사
+
+- `scripts/test-connect-native.mjs`(`npm run test:connect`). 공용 실행 헬퍼 `scripts/lib/native-app.mjs`를 써서 `launch()` 복사를 늘리지 않았다(review T2). `connect:fixture`가 떠 있어야 한다.
+- 실제 WebView2 화면에서: HTTP 프록시(연결 때 묻는 `프록시 암호` 카드) → 내부 서버 `target`, 같은 탭에서 하이라이트 규칙이 일치한 줄만 다른 색으로 그려지는지(계산된 색 비교), SOCKS5 + 키 옆 `-cert.pub` 인증서, ProxyCommand(Windows OpenSSH `ssh.exe -W`, `cmd.exe` 없이 실행되는 경로), Telnet 로그인과 상태바 `Telnet · 암호화 없음`. 비밀은 앱의 입력 칸에만 넣고 실패해도 단계 이름만 출력한다.
+- `verify-windows.ps1 -Native`가 `npm run connect:fixture -- up` 다음 `npm run test:connect`를 실행한다.
+- 넣지 않은 것: Pageant(실행 중인 Pageant와 키가 필요), VcXsrv, 실제 COM 포트, 터미널 안 전송(시스템 파일 창은 CDP로 조작할 수 없다). 이 항목들은 사람 확인으로 남긴다.
+- **Windows에서 실행하지 않았다.** 이 Mac에는 WebView2가 없다. Mac에서 확인한 것은 `eslint`, `prettier --check`, `node --check`와 게이트의 lint·format뿐이다.
+
+### Mac 게이트
+
+macOS 27.2.1(26B131), Apple Silicon, Node 26.0.0, Rust 1.99.1(Homebrew rustup), Docker 29.8.0. `npm ci` 뒤 `bash scripts/verify-macos.sh --package`: typecheck·lint·format 통과, Vitest 1423/1424에서 멈춤(게임 `survivor/stages.test.ts`의 30/60/120Hz 시험이 부하 평균 23~30에서 5초 초과, 이전 기록과 같은 원인). 그 파일을 `--testTimeout=60000`으로 다시 돌려 17/17 통과한 뒤 나머지 단계를 같은 순서로 실행해 모두 종료 0: build, Playwright 547, `cargo fmt`·`clippy -D warnings`, `cargo test --workspace` 766(무시 7)+1, `npm audit` 0, 의존성 감사 0(대상 밖 5), 고지 538개(변경 없음), debug `.app`(ad hoc 서명).
+
+가져오기 결함을 고친 뒤(Rust 변경 없음) 프런트엔드 단계를 다시 실행해 모두 종료 0: typecheck·lint·format, Vitest 1425/1425(`--testTimeout=60000`, 위 게임 시험의 부하 시간 초과를 피하려고), build, Playwright 548(새 시험 1개). 고친 코드로 debug `.app`을 다시 빌드해 아래 확인에 썼다.
+
+### Mac 패키지 앱
+
+- 실행: `env -i HOME=… USER=… LOGNAME=… /usr/bin/open -n --env DACHSTERM_TEST_DATA_DIR=<scratchpad> DachsTerm.app`. 앱 프로세스의 시작 환경(`ps eww`)이 `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, `TERM` 없음으로 Finder 실행과 같다.
+- **발견:** 터미널에서 그냥 `open`으로 띄우면 이 macOS에서는 셸의 `PATH`가 앱에 그대로 넘어간다(`launchctl getenv PATH`는 비어 있음). 이렇게 띄운 앱은 Finder 실행의 `PATH` 문제를 재현하지 못하므로 `mac-verify` 스킬의 실행 방법을 위 명령으로 고쳤다.
+- 준비: `connect:fixture` up, `connect:fixture -- serial`(socat PTY `/dev/ttys007`), 가져오기 파일(ProxyCommand `socat STDIO TCP:%h:%p` 이름만 쓴 세션, HTTP 프록시 세션, Telnet 세션. SSH는 검사 환경의 무암호 키 `plain`).
+- 조작: 사람이 아니라 에이전트가 했다. 입력은 접근성 API(요소 누르기·값 넣기, 시스템 팝업 메뉴)와 CGEvent 마우스, 앱 PID로만 보내는 키 이벤트, 판정은 앱 창만 찍는 창 캡처(`screencapture -l`)·격리 DB·`ps eww`·지문 대조다. 같은 Mac을 사용자가 쓰고 있었고(HID 유휴 0~15초), 외부 모니터가 분리·재연결되며 창이 화면 사이를 옮겨 다녔다. 그래서 클릭은 DachsTerm이 맨 앞이고 좌표가 창 안일 때만 보냈다. 이 장치가 생기기 전 클릭 2번이 다른 앱 창에 들어갔다(텍스트 위의 더블클릭, 입력 없음). 웹 내용의 접근성 트리는 도중에 비어 버려 뒤쪽은 창 캡처와 창 기준 좌표로 했다. 터미널에 명령을 붙여넣어 실행하는 조작은 권한 확인에서 두 번 거부되어 하지 않았다.
+- 이 Mac의 `/dev/cu.*`: `Bluetooth-Incoming-Port`, `debug-console`뿐. USB 시리얼 장치 없음.
+
+| 항목 | 결과 |
+|---|---|
+| Finder 실행 앱의 ProxyCommand `PATH`(Homebrew `socat` 이름만) | **통과.** 앱 시작 환경 `PATH=/usr/bin:/bin:/usr/sbin:/sbin`. 연결하자 앱(PID 90407)의 자식 `socat STDIO TCP:127.0.0.1:42222`가 떴고 그 `PATH`에 로그인 셸에서 가져온 `/opt/homebrew/bin`이 있다(`login_path`). 상태 `연결됨 · 명령으로 연결: socat → …`, 호스트키 지문이 검사 환경 `host_jump.pub`와 같음, 셸 `probe@jump:~$`. 앱 종료 뒤 `socat` 없음 |
+| 가져오기 미리보기의 명령 승인(WKWebView) | **통과.** `연결할 때 실행할 명령 승인`에 명령 전문, 승인 체크·세션 행 모두 기본 해제, **전체 선택**을 눌러도 명령 세션은 해제 그대로, 승인하면 세션도 선택됨. 격리 DB에 명령이 그대로 저장 |
+| **결함: 사용자명 없는 Telnet·시리얼 가져오기** | 첫 시도에서 **세션 추가** 버튼이 꺼져 가져올 수 없었다. 미리보기가 모든 세션에 사용자명을 요구했기 때문이다(Telnet·시리얼은 사용자명 없이 저장하는 것이 정상). `protocol.ts`의 `needsUsername`으로 고치고(세션 폼도 같은 규칙을 쓴다) Playwright 재현 시험(수정 전 실패·수정 후 통과)과 단위 시험을 넣었다. 다시 빌드한 앱에서 `3개 세션을 추가했습니다.` |
+| HTTP 프록시 암호 카드 → 내부 서버 | **통과.** 키 Passphrase 창 → `서버 추가 인증` 카드 `… · 프록시 암호`(검사 환경 암호는 파일에서 접근성 값으로 넣음, 출력 없음) → `target:22` 지문이 `host_target.pub`와 같음 → `연결됨 · HTTP 프록시 경유 (127.0.0.1:43128) → … (target:22)`, 셸 `probe@target:~$`. 사이드바 SFTP도 같은 경로로 `/home/probe` 목록 |
+| 하이라이트 규칙 추가와 색(WKWebView) | **통과.** 설정 → 터미널 → 하이라이트 → 규칙 추가(이름·패턴 `login`, 색 위험) → 저장, DB `highlight_rules_v1`에 저장. 그 뒤 연 Telnet 탭의 `edge login:`에서 `login`만 빨강, `edge`·`:`는 기본 색(창 캡처). 규칙 전에 나온 출력은 칠하지 않음 |
+| Telnet 탭 | **일부 통과.** 연결, 배너 `Linux 7.0.12-linuxkit (edge)`, `edge login:` 프롬프트, 상태바 `Telnet · 암호화 없음 · 127.0.0.1:42323`, 장비가 로그인 시간 초과로 끊자 탭 `종료`와 `연결이 종료되었습니다 · 탭 닫기 · 재접속` 카드. **로그인 입력은 하지 않았다**(터미널 입력 거부) |
+| 시리얼 포트 목록과 장치 이름 | **통과.** 새 연결 → 프로토콜 `시리얼 · 장비 콘솔` → 장치 제안 목록이 `/dev/cu.debug-console`, `/dev/cu.Bluetooth-Incoming-Port`(이 Mac의 실제 열거, `tty.*` 없음). 가상 포트 `/dev/ttys007`은 저장 단계에서 `장치는 COM3이나 /dev/cu.usbserial-1410처럼 입력하세요.`로 거부된다(의도된 규칙 `device_name`). 그래서 앱으로는 PTY를 열 수 없고 속도 거부 안내는 엔진 검사(`probe:serial`)로만 확인된 상태다. 안내서에 이 제한을 적었다. 시스템 장치(`debug-console`, Bluetooth)는 열지 않았다 |
+| 터미널 안 전송 카드와 시스템 파일 창(`sz`·`rz`) | 대기. 서버에서 `sz`·`rz`를 실행하려면 터미널 입력이 필요한데 거부되어 하지 않았다 |
+| XQuartz Unix 소켓 | 대기. XQuartz가 설치되어 있지 않다(`/opt/X11` 없음). 설치는 사용자 결정 |
+| ad hoc 서명 앱의 업데이트와 Keychain | 대기. 같은 원인의 근거: ad hoc 앱을 다시 빌드하면 이전 빌드의 Keychain 항목 접근 때 로그인 암호 창이 뜬다([M.29](macos-readiness.md#실제-앱-조작-1차-2026-11-09-17cc876)). 업데이트도 서명(cdhash)이 바뀌므로 같은 창이 예상되지만 업데이트 경로로는 확인하지 않았다 |
+| WKWebView 하이라이트 성능 | 대기. 엔진 측정은 CG.7의 Playwright WebKit(부하 평균 40)뿐이다. 앱 안 측정 경로가 없고, 이번에도 부하 평균 22~35라 다시 재지 않았다 |
+| 실제 USB 시리얼 장치(속도·Break·흐름 제어·분리) | 대기. 장치 없음 |

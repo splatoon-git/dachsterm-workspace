@@ -17,6 +17,11 @@ export const defaultSerial: SerialSettings = {
   flow: 'none',
 };
 
+/** Telnet and serial log in inside the terminal, so their user name may stay empty (CG.4, CG.5). */
+export function needsUsername(p: Pick<Profile, 'protocol'>) {
+  return p.protocol !== 'telnet' && p.protocol !== 'serial';
+}
+
 /** `115200 8N1`, as a console's label says it, with flow control when there is one. */
 export function serialLabel(p: Pick<Profile, 'serial'>) {
   const s = p.serial ?? defaultSerial;
