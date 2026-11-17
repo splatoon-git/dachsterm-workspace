@@ -184,7 +184,7 @@ macOS 26.5, Apple Silicon, Node 26.0.0, Rust 1.99.1, Docker 29.8.0. 패키지 �
 
 ## CG.10 패키지 앱 (2026-11-17, `feat/cg10-docs-mac` 미커밋 트리)
 
-에이전트가 접근성 API와 창 캡처로 조작했다(사람 조작 아님). Finder와 같은 최소 `PATH`로 띄운 앱에서 ProxyCommand(Homebrew `socat` 이름만), 가져오기 명령 승인, HTTP 프록시 암호 카드, 하이라이트 색(WKWebView), Telnet 프롬프트·종료, 시리얼 포트 목록을 확인했고, 사용자명 없는 Telnet·시리얼 세션을 가져올 수 없던 결함을 고쳤다. 터미널 입력이 필요한 Telnet 로그인과 터미널 안 전송, XQuartz, 실제 USB 시리얼, 업데이트 뒤 Keychain은 대기다. 터미널에서 그냥 `open`으로 띄운 앱은 셸 `PATH`를 받으므로 Finder 실행 확인에는 빈 환경 `open`을 쓴다(`mac-verify` 스킬). [기록](commercial-gaps.md#mac-패키지-앱)
+에이전트가 접근성 API와 창 캡처로 조작했다(사람 조작 아님). Finder와 같은 최소 `PATH`로 띄운 앱에서 ProxyCommand(Homebrew `socat` 이름만), 가져오기 명령 승인, HTTP 프록시 암호 카드, 하이라이트 색(WKWebView), Telnet 프롬프트·종료, 시리얼 포트 목록을 확인했고, 사용자명 없는 Telnet·시리얼 세션을 가져올 수 없던 결함을 고쳤다. Telnet 로그인과 터미널 안 전송 `sz`·`rz` 왕복(SHA-256 일치)도 확인했다. 우클릭 붙여넣기(자동 조작에서 실패, 원인 미확인), XQuartz, 실제 USB 시리얼, 업데이트 뒤 Keychain은 대기다. 터미널에서 그냥 `open`으로 띄운 앱은 셸 `PATH`를 받으므로 Finder 실행 확인에는 빈 환경 `open`을 쓴다(`mac-verify` 스킬). [기록](commercial-gaps.md#mac-패키지-앱)
 
 ## 참고
 
