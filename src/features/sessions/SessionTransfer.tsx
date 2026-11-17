@@ -4,6 +4,7 @@ import './transfer.css';
 import { importSelection, routeNames } from './model';
 import type { SessionTemplate } from './SessionManager';
 import { ProxyCommandApproval } from './ProxyCommandApproval';
+import { needsUsername } from './protocol';
 import { approval, initialSelection, unapproved, type CommandPlan } from './proxyApproval';
 
 type Bundle = {
@@ -346,7 +347,7 @@ export function SessionTransfer({
               disabled={
                 busy ||
                 (!effective?.profiles.length && !preview.bundle.templates?.length) ||
-                effective?.profiles.some((p) => !p.username.trim()) ||
+                effective?.profiles.some((p) => needsUsername(p) && !p.username.trim()) ||
                 unapproved(effective?.profiles ?? [], selected).length > 0
               }
               onClick={() => void apply()}

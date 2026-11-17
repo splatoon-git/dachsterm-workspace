@@ -1,4 +1,5 @@
 import type { Profile } from '../../lib/ipc';
+import { needsUsername } from './protocol';
 
 /**
  * Where a network session goes and how it logs in. A serial session has a device instead
@@ -41,7 +42,7 @@ export function NetworkFields({
       <label className={profile.protocol === 'telnet' ? 'wide' : undefined}>
         사용자
         <input
-          required={profile.protocol !== 'telnet'}
+          required={needsUsername(profile)}
           maxLength={256}
           value={profile.username}
           onChange={(e) => field('username', e.target.value)}

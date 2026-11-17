@@ -11,6 +11,8 @@ declare global {
       fail: boolean;
       cancel: boolean;
       command: boolean;
+      /** Adds a Telnet and a serial session, which keep no user name. */
+      consoles: boolean;
       applied: string[];
       approved: unknown[];
     };
@@ -20,6 +22,7 @@ const state = (window.__transferTest = {
   fail: false,
   cancel: false,
   command: false,
+  consoles: false,
   applied: [] as string[],
   approved: [] as unknown[],
 });
@@ -67,6 +70,33 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
               p,
               { ...p, id: 'two', name: '운영 서버', username: 'operator', groupId: 'other' },
               ...(state.command ? [{ ...relay, proxy: { kind: 'command', command } }] : []),
+              ...(state.consoles
+                ? [
+                    {
+                      ...p,
+                      id: 'tel',
+                      name: '스위치 콘솔',
+                      protocol: 'telnet',
+                      auth: 'interactive',
+                    },
+                    {
+                      ...p,
+                      id: 'ser',
+                      name: '보드 시리얼',
+                      protocol: 'serial',
+                      auth: 'interactive',
+                      host: '/dev/cu.usbserial',
+                      port: 0,
+                      serial: {
+                        baud: 115200,
+                        dataBits: 8,
+                        parity: 'none',
+                        stopBits: 1,
+                        flow: 'none',
+                      },
+                    },
+                  ]
+                : []),
             ],
             groups: [
               { id: 'g', name: '개발' },

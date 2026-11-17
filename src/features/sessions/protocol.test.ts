@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankProfile, type Profile } from '../../lib/ipc';
-import { defaultSerial, serialLabel, switchProtocol } from './protocol';
+import { defaultSerial, needsUsername, serialLabel, switchProtocol } from './protocol';
 
 const ssh: Profile = {
   ...blankProfile(),
@@ -58,5 +58,15 @@ describe('switchProtocol', () => {
 
   it('keeps a port the user chose', () => {
     expect(switchProtocol({ ...ssh, port: 2323 }, 'telnet').port).toBe(2323);
+  });
+});
+
+describe('needsUsername', () => {
+  it('asks SSH and FTP for a user, not Telnet or serial', () => {
+    expect(['ssh', 'ftp', 'ftps'].every((protocol) => needsUsername({ protocol } as Profile))).toBe(
+      true,
+    );
+    expect(needsUsername({ protocol: 'telnet' })).toBe(false);
+    expect(needsUsername({ protocol: 'serial' })).toBe(false);
   });
 });
