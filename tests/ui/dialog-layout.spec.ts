@@ -88,7 +88,13 @@ async function capture(page: Page, info: TestInfo, name: string) {
           height: e.getBoundingClientRect().height,
           width: e.getBoundingClientRect().width,
         }));
+      const target = dialog.querySelector('.git-config-target');
+      const targetSelect = target?.querySelector('select');
       return {
+        targetInline:
+          !target ||
+          !targetSelect ||
+          targetSelect.getBoundingClientRect().left > target.getBoundingClientRect().left + 20,
         titleFont: parseFloat(getComputedStyle(dialog.querySelector('.dialog-title h2')!).fontSize),
         bodyFont: parseFloat(getComputedStyle(body).fontSize),
         fieldFonts: [...dialog.querySelectorAll('input,select,textarea')]
@@ -124,6 +130,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
   }
   expect.soft(metrics.outsideViewport, `${name}: modal stays in viewport`).toBe(false);
   expect.soft(metrics.overflowing, `${name}: no horizontal dialog/panel scroll`).toEqual([]);
+  expect.soft(metrics.targetInline, `${name}: Git target stays beside its label`).toBe(true);
   expect.soft(metrics.titleFont, `${name}: title is above body`).toBeGreaterThan(metrics.bodyFont);
   expect
     .soft(
@@ -150,8 +157,17 @@ for (const theme of ['pms-retro-light', 'github-dark', 'terminal-green']) {
         await page.goto(`/tests/ui/fixtures/dialog-audit.html?screen=${screen}&state=${state}`);
       };
       await go('settings');
+      const nav = page.getByRole('tablist', { name: '설정 분류' });
+      await expect(nav).toHaveAttribute(
+        'aria-orientation',
+        width <= 700 ? 'horizontal' : 'vertical',
+      );
+      await page.locator('#settings-tab-appearance').focus();
+      await page.keyboard.press(width <= 700 ? 'ArrowRight' : 'ArrowDown');
+      await expect(page.locator('#settings-tab-terminal')).toHaveAttribute('aria-selected', 'true');
       for (const section of sections) {
         await page.locator(`#settings-tab-${section}`).click();
+        await expect(page.locator('.settings-panel-heading')).toBeInViewport();
         await capture(page, info, `settings-${section}`);
         if (section === 'sessions') {
           await page.locator('.manager-template select').selectOption('template');

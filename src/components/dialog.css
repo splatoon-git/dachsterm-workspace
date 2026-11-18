@@ -157,11 +157,18 @@ dialog select {
   line-height: var(--space-lg-plus);
 }
 dialog label {
+  min-width: 0;
+}
+/* Plain fields stack; row/card labels keep their own layout. */
+dialog label:where(:not([class])) {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  min-width: 0;
   font-size: var(--font-small);
+}
+dialog label.checkbox {
+  display: flex;
+  gap: var(--space-sm);
 }
 dialog select {
   width: 100%;

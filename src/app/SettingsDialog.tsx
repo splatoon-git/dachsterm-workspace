@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog } from '../components/Dialog';
 import { Icon, type IconName } from '../components/Icon';
 import { AgentPresetSettings } from '../features/agents/AgentPresetSettings';
@@ -18,6 +18,7 @@ import {
 } from '../lib/settingsRequest';
 import { ThemePicker } from '../themes/ThemePicker';
 import { GitSettingsSection } from './GitSettingsSection';
+import { useNarrowViewport } from './useNarrowViewport';
 import './settingsDialog.css';
 
 type Entry = { id: SettingsSection; label: string; icon: IconName; summary: string };
@@ -111,6 +112,11 @@ function SettingsWindow({
   close: () => void;
 }) {
   const [section, setSection] = useState<SettingsSection>(() => request?.section ?? readSection());
+  const narrow = useNarrowViewport();
+  const panel = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (panel.current) panel.current.scrollTop = 0;
+  }, [section]);
   const choose = (next: SettingsSection) => {
     setSection(next);
     writeSection(next);
@@ -151,9 +157,11 @@ function SettingsWindow({
         className="settings-nav"
         role="tablist"
         aria-label="설정 분류"
-        aria-orientation="vertical"
+        aria-orientation={narrow ? 'horizontal' : 'vertical'}
         onKeyDown={(e) => {
-          const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+          const step = narrow
+            ? { ArrowRight: 1, ArrowLeft: -1 }[e.key]
+            : { ArrowDown: 1, ArrowUp: -1 }[e.key];
           const at = entries.findIndex((x) => x.id === section);
           const next =
             e.key === 'Home'
@@ -185,6 +193,7 @@ function SettingsWindow({
         ))}
       </nav>
       <section
+        ref={panel}
         id="settings-panel"
         className="settings-panel"
         role="tabpanel"
