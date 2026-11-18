@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { AuthPromptCard, HostKeyCard } from '../../components/ConnectionCards';
 import { Icon } from '../../components/Icon';
-import type { Profile } from '../../lib/ipc';
+import { userAtHost, type Profile } from '../../lib/ipc';
 import { filterSessions } from './sourceLink';
 import type { SourceControl } from './useSource';
 
@@ -64,7 +64,7 @@ function SessionSelect({
             >
               <strong>{profile.name}</strong>
               <span>
-                {profile.username}@{profile.host}:{profile.port}
+                {userAtHost(profile)}:{profile.port}
               </span>
               <small>{live(profile.id) ? '연결됨' : '미연결'}</small>
             </button>

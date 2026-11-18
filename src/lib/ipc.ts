@@ -105,6 +105,9 @@ export function call<T>(command: string, args?: Record<string, unknown>): Promis
     return Promise.reject('실제 연결과 저장은 DachsTerm 데스크톱 앱에서 사용할 수 있습니다.');
   return invoke<T>(command, args);
 }
+/** `user@host`, or the host alone for a session saved without a user name (W.2). */
+export const userAtHost = (p: Pick<Profile, 'username' | 'host'>) =>
+  p.username ? `${p.username}@${p.host}` : p.host;
 export const blankProfile = (): Profile => ({
   id: '',
   name: '',

@@ -2,7 +2,7 @@ import { TransferQueue, type Transfer } from './TransferQueue';
 import { EditorPicker } from './EditorPicker';
 import { PermissionEditor } from './PermissionEditor';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { call, desktop, errorText } from '../../lib/ipc';
+import { call, desktop, errorText, userAtHost } from '../../lib/ipc';
 import { useFileDrop } from '../../lib/fileDrop';
 import type { ExternalEdit as Edit } from '../../lib/externalEdit';
 import { TerminalSession } from '../terminal/session';
@@ -281,7 +281,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
     >
       <div
         className="file-header"
-        title={`${session.profile.name} · ${session.profile.username}@${session.profile.host}`}
+        title={`${session.profile.name} · ${userAtHost(session.profile)}`}
       >
         <span className={`status-dot ${state.status === 'connected' ? 'online' : ''}`} />
         <span className="file-header-name">

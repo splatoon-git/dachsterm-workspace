@@ -728,7 +728,7 @@ export function App() {
       {auth && (
         <Dialog
           title={`${auth.profile.name} 인증`}
-          description={`${auth.profile.username}@${auth.profile.host}:${auth.profile.port}`}
+          description={`${auth.profile.username && `${auth.profile.username}@`}${auth.profile.host}:${auth.profile.port}`}
           size="small"
           close={() => setAuth(null)}
         >

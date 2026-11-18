@@ -171,6 +171,16 @@ test('a key login offers a certificate and an agent login offers Pageant', async
   await expect(dialog.getByLabel('인증 에이전트')).toHaveCount(0);
 });
 
+test('an SSH session may be saved without a user, an FTP session may not', async ({ page }) => {
+  const dialog = await openForm(page);
+  const user = dialog.getByLabel('사용자', { exact: true });
+  await expect(user).not.toHaveAttribute('required');
+  await expect(user).toHaveAttribute('placeholder', '비우면 연결할 때 묻습니다');
+  await dialog.getByLabel('프로토콜').selectOption('ftp');
+  await expect(user).toHaveAttribute('required');
+  await expect(user).toHaveAttribute('placeholder', '');
+});
+
 test('Telnet warns that it is not encrypted and asks for no password', async ({ page }) => {
   const dialog = await openForm(page);
   await dialog.getByLabel('프로토콜').selectOption('telnet');

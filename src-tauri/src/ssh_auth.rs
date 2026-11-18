@@ -38,6 +38,27 @@ pub async fn hop_secret(
     ask_one(sink, replies, name, instructions, prompt).await
 }
 
+/// Asks who to log in as, for a session saved without a user name. Nothing is saved: the next
+/// connection asks again.
+pub async fn hop_username(
+    last: bool,
+    sink: &Sink,
+    replies: &mut mpsc::Receiver<AuthReply>,
+) -> Result<String> {
+    let name = if last {
+        "세션 로그인"
+    } else {
+        "경유지 로그인"
+    };
+    let instructions = "이 세션은 사용자명 없이 저장되어 있습니다. 이번 연결에만 사용합니다. 저장하려면 세션을 편집하세요.";
+    let answer = ask(sink, replies, name, instructions, "사용자명", true).await?;
+    let user = answer.trim();
+    if user.is_empty() || user.len() > 256 || user.chars().any(char::is_control) {
+        return Err("사용자명을 입력해야 연결할 수 있습니다.".into());
+    }
+    Ok(user.to_string())
+}
+
 /// Shows one hidden prompt and waits up to two minutes for its answer.
 pub async fn ask_one(
     sink: &Sink,
@@ -46,6 +67,18 @@ pub async fn ask_one(
     instructions: &str,
     prompt: &str,
 ) -> Result<zeroize::Zeroizing<String>> {
+    ask(sink, replies, name, instructions, prompt, false).await
+}
+
+/// One prompt, shown as typed when `echo`, and up to two minutes for its answer.
+async fn ask(
+    sink: &Sink,
+    replies: &mut mpsc::Receiver<AuthReply>,
+    name: &str,
+    instructions: &str,
+    prompt: &str,
+    echo: bool,
+) -> Result<zeroize::Zeroizing<String>> {
     let challenge = uuid::Uuid::new_v4().to_string();
     sink(Event::AuthPrompt {
         challenge: challenge.clone(),
@@ -53,7 +86,7 @@ pub async fn ask_one(
         instructions: instructions.into(),
         prompts: vec![AuthPrompt {
             prompt: prompt.into(),
-            echo: false,
+            echo,
         }],
     })?;
     timeout(Duration::from_secs(120), async {
@@ -353,4 +386,44 @@ pub async fn interactive(
         }
     }
     Err("추가 인증 요청 횟수가 초과되었습니다.".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    /// Answers the prompt with `answer`, and tells whether it was shown as typed.
+    async fn asked(answer: &str) -> (Result<String>, bool) {
+        let (tx, mut rx) = mpsc::channel(1);
+        let echo = Arc::new(Mutex::new(false));
+        let (seen, reply) = (echo.clone(), answer.to_string());
+        let sink: Sink = Arc::new(move |event| {
+            if let Event::AuthPrompt {
+                challenge, prompts, ..
+            } = event
+            {
+                *seen.lock().unwrap() = prompts[0].echo;
+                let responses = zeroize::Zeroizing::new(vec![reply.clone()]);
+                tx.try_send(AuthReply {
+                    challenge,
+                    responses,
+                })
+                .map_err(|_| "reply not taken")?;
+            }
+            Ok(())
+        });
+        let user = hop_username(true, &sink, &mut rx).await;
+        let echo = *echo.lock().unwrap();
+        (user, echo)
+    }
+
+    #[tokio::test]
+    async fn a_session_saved_without_a_user_name_asks_for_it_in_the_clear() {
+        let (user, echo) = asked(" deploy ").await;
+        assert_eq!(user.unwrap(), "deploy");
+        assert!(echo);
+        assert!(asked("  ").await.0.is_err());
+        assert!(asked("a\nb").await.0.is_err());
+    }
 }

@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { blankProfile, call, errorText, type Profile, type Snapshot } from '../../lib/ipc';
+import {
+  blankProfile,
+  call,
+  errorText,
+  userAtHost,
+  type Profile,
+  type Snapshot,
+} from '../../lib/ipc';
 import { groupPath, matchesSession } from './model';
 import { JumpEditor } from './JumpEditor';
 import './sessionManager.css';
@@ -128,7 +135,7 @@ export function SessionManager({ snapshot, changed }: { snapshot: Snapshot; chan
               <span>
                 <strong>{p.name}</strong>
                 <small>
-                  {p.username}@{p.host}:{p.port} · {groupPath(p.groupId, snapshot.groups)}
+                  {userAtHost(p)}:{p.port} ·{groupPath(p.groupId, snapshot.groups)}
                 </small>
               </span>
             </label>

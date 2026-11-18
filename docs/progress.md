@@ -1,6 +1,7 @@
 # DachsTerm 구현 진행 현황
 
 - 마지막 갱신: 2026-11-18
+- **W.2 사용자명 없이 저장한 SSH 세션은 연결할 때 묻기: 구현·대상 테스트·clippy 통과 / 실제 SSH 접속·앱 빌드·Mac 대기** — [아래 절](#w2--연결할-때-사용자명-묻기-2026-11-18). SSH 세션의 사용자는 비워도 저장되고, 연결하면 사용자명 카드가 먼저 뜬다(경유지 포함, 저장하지 않음). FTP·FTPS는 종전대로 필수다. 가져오기 미리보기는 사용자명 없는 SSH 세션을 막지 않는다. 다음 첫 행동: Docker가 응답하면 사용자명을 비운 세션으로 실제 OpenSSH 접속(암호·키·경유지·ProxyCommand `%r`)을 확인하고, 앱을 빌드해 카드와 암호 대화상자 순서를 본다.
 - **UI.1 배치·글자·컨트롤 일관성: `dev` 병합·Windows ZIP 완료 / 실제 앱·Mac·배율 확인 대기** — [기준](design/ui-consistency.md), [검증·ZIP 해시](verification/ui-consistency.md). 후속 팝업·설정 점검은 터미널 본문 제외: 54상태×4너비×3테마 648조합, UI 598/598, Vitest 1,433/1,433, typecheck·lint·format 통과. 마지막 보관함 간격 보완 12/12도 통과했다. 긴 이름 넘침·제목/컨트롤·설정 스크롤·탭 방향키를 고쳤다. `5f5e6cb` Windows release 빌드·ZIP CRC/EXE 해시 검증 통과. 산출물 `target/release/bundle/DachsTerm_0.5.1_x64_5f5e6cb.zip`. 남은 ID: UI.1 실제 앱/OS 배율·Mac. 다음 첫 행동: 이 ZIP을 실행해 설정·팝업을 실제 Windows 배율에서 확인하고 Mac에서 같은 화면을 확인한다.
 - **W.1 구형 WebView2 화면 붕괴·I.2 찾은 설정 미리보기 보완: 구현·자동 UI 검사·Windows ZIP 완료 / 전체 Rust 검사·다른 PC 확인 대기** — [아래 절](#w1--구형-webview2와-찾은-설정-미리보기-2026-11-18), [I.2 기록](verification/import-detect.md#추가-2026-11-18-제외-사유와-다른-파일). 사용자의 다른 Windows 11 PC(WebView2 100.0.1185.36)에서 하단 상태 줄이 화면 중간에 뜨고, 찾은 세션 북마크 파일의 미리보기가 꺼져 있었다. `100dvh`(Chromium 108부터)를 `100vh`로 바꾸고, 런타임이 111 미만이면 시작할 때 경고한다. 0개의 원인은 북마크 이름이 `[`로 시작하면 그 줄을 섹션 머리글로 읽던 파서 결함이었고, 고친 뒤 그 PC의 실제 ini에서 13개·제외 0개로 읽힌다. 찾은 파일의 세션이 모두 제외돼도 미리보기를 열어 사유를 보이고, 줄마다 **다른 파일…**을 둔다. 다음 첫 행동: UI.1의 새 Windows ZIP을 그 PC에서 열어 화면 배치·경고 창과 북마크 미리보기를 확인한다.
 - **감사 예외 목록 (2026-11-18):** `main` CI(`ba1513a`)가 두 OS 모두 고친 버전 없는 공지로 감사 단계에서 실패해(앞선 typecheck~`cargo test`는 통과), 사용자 결정으로 검토한 예외를 [개발 가이드](development.md#자동-검사)의 규칙대로 `scripts/audit-exceptions.json`에 두었다. npm은 개발 도구 전용 공지만(`picomatch` GHSA-fc5q-39xc-vjpf), Rust는 관리 중단 알림만(`chrono` RUSTSEC-2026-0543, `russh-sftp`·`suppaftp` 경유) 허용하고 재검토일은 2026-12-18이다. 만료·미보고 예외는 실패한다. `scripts/audit-npm.mjs`(새로 만듦)와 `audit-dependencies.mjs`가 공용 `audit-exceptions.mjs`를 쓴다. 로컬(Windows, 미커밋 트리): 두 감사 종료 0, 예외 비움·만료·없는 ID·다른 패키지는 각각 종료 1, 고지 538개(`libz-sys` 1.1.33 반영), prettier·eslint 통과. 다음 첫 행동: 2026-12-18에 두 공지를 다시 확인해 고친 버전이 있으면 올리고 예외를 지운다.
@@ -518,6 +519,16 @@
 - 검증(커밋 전 트리, 상세는 [기록](verification/import-detect.md)): `cargo fmt --check`, 라이브러리 clippy, `cargo test -p dachsterm --lib` 758(무시 8), typecheck·lint·format, Vitest 1430, Playwright 548, 디버그 앱 빌드, `test:import-detect` 7개 확인 통과(임시 PuTTY 레지스트리 세션 → 빈 목록 안내 → 미리보기 → PuTTY 그룹에 저장 → 재가져오기 시 선택 해제, 이 PC의 실제 MobaXterm ini 탐지). `--all-targets` clippy는 `dev`에 있던 `ssh/proxy_command.rs` 테스트 미사용 import 1건으로 실패(이 작업 밖, `verify/cg-windows`에서 수정 중).
 - 대기: Mac 빌드·실기기, 실제 PuTTY 설치본, SSH 북마크가 있는 실제 MobaXterm ini, 휴대용 MobaXterm만 쓰는 PC.
 - 다음 첫 행동: 위 상단 줄과 같다.
+
+## W.2 — 연결할 때 사용자명 묻기 (2026-11-18)
+
+- 요청: 가져온 북마크 중 사용자명이 없는 세션 때문에 추가가 막혔다. 원래 프로그램처럼 사용자명 없이 저장하고 접속할 때 묻게 한다.
+- 백엔드: `storage.rs` `validate`가 빈 사용자명을 FTP·FTPS에서만 거부한다. `ssh/route.rs` `open`이 홉마다 사용자명이 비어 있으면 연결 전에 `ssh_auth::hop_username`으로 묻는다(기존 인증 카드, 입력이 보이는 칸, 2분 제한, 공백·제어 문자·256바이트 초과 거부). 연결 전에 묻는 이유는 ProxyCommand의 `%r` 때문이다. 터미널(`ssh.rs`)과 도구·채팅 연결(`login_only.rs`)이 모두 이 경로를 쓴다. 입력한 값은 저장하지 않고 재접속하면 다시 묻는다.
+- 프런트: `protocol.ts` `needsUsername`은 FTP·FTPS만 참이다. 세션 폼의 사용자 칸은 SSH에서 필수가 아니고 안내 문구가 있다. `lib/ipc.ts` `userAtHost`로 사용자명이 없을 때 호스트만 표시한다(상태 줄, 연결 트리, 세션 폼·일괄 수정, 파일 패널, 스니펫, 도구, 터널, 채팅). `App.tsx`·`FilePanel.tsx`·`TunnelPanel.tsx`는 줄 수가 늘지 않았다.
+- 가져오기: 사용자명 없는 SSH 세션은 그대로 추가된다. `session_transfer.rs`의 검증용 임시 사용자명 대입을 없앴다(비테스트 704→696줄). 세션 형식 스키마의 사용자명 최소 길이는 FTP·FTPS에만 남겼다.
+- 알려진 점: 암호를 저장하지 않은 비밀번호 인증 세션은 연결 전 암호 대화상자가 먼저, 사용자명 카드가 나중에 뜬다. 연결된 탭의 상태 줄에는 입력한 사용자명이 아니라 호스트만 나온다.
+- 검증(Windows, `feat/w2-ask-username`, `dev` `cad727b` 위 커밋 전 트리): `cargo fmt --all --check` 종료 0, `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` 종료 0, `cargo test -p dachsterm --lib --locked -- ssh_auth session_transfer storage settings session_management` 80 통과(새 시험 `a_session_saved_without_a_user_name_asks_for_it_in_the_clear`), `npm run typecheck` 종료 0, 변경 파일 eslint·prettier 종료 0, Vitest `src/features/sessions`·`src/lib`·`chatSession` 11파일 58 통과, Playwright `session-transfer`·`session-form`·`layout` 29 통과(새 시험 2개).
+- 미실행: 실제 SSH 서버 접속(카드 → 인증 성공), 전체 Vitest·Playwright·`cargo test`, 앱 빌드, Mac. 실제 SSH 검증을 단위 시험으로 대체하지 않는다.
 
 ## W.1 — 구형 WebView2와 찾은 설정 미리보기 (2026-11-18)
 

@@ -218,6 +218,9 @@
             "properties": {
               "auth": {
                 "const": "password"
+              },
+              "username": {
+                "minLength": 1
               }
             }
           }
@@ -238,13 +241,6 @@
               },
               "keyPath": {
                 "maxLength": 0
-              }
-            }
-          },
-          "else": {
-            "properties": {
-              "username": {
-                "minLength": 1
               }
             }
           }

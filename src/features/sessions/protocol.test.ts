@@ -62,10 +62,9 @@ describe('switchProtocol', () => {
 });
 
 describe('needsUsername', () => {
-  it('asks SSH and FTP for a user, not Telnet or serial', () => {
-    expect(['ssh', 'ftp', 'ftps'].every((protocol) => needsUsername({ protocol } as Profile))).toBe(
-      true,
-    );
+  it('asks only FTP for a saved user: SSH asks when it connects', () => {
+    expect(['ftp', 'ftps'].every((protocol) => needsUsername({ protocol } as Profile))).toBe(true);
+    expect(needsUsername({ protocol: 'ssh' })).toBe(false);
     expect(needsUsername({ protocol: 'telnet' })).toBe(false);
     expect(needsUsername({ protocol: 'serial' })).toBe(false);
   });

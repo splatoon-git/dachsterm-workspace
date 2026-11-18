@@ -49,12 +49,8 @@ impl Preview {
         if self.bundle.profiles.len() >= 500 {
             return Err("한 번에 500개까지 가져올 수 있습니다.".into());
         }
-        // Missing usernames remain editable in preview, never invent a privileged account.
-        let mut check = p.clone();
-        if check.username.is_empty() {
-            check.username = "preview".into();
-        }
-        if check.validate().is_err() {
+        // A missing user name stays empty, never an invented account: the connection asks for it.
+        if p.validate().is_err() {
             self.skipped += 1;
             self.warn("유효하지 않은 호스트·포트·세션 설정을 제외했습니다.");
             return Ok(());
@@ -88,7 +84,7 @@ impl Preview {
         }
         p.group_id = parent;
         if p.username.is_empty() {
-            self.warn("사용자명이 없는 세션은 미리보기에서 계정을 입력해야 합니다.");
+            self.warn("사용자명이 없는 세션은 연결할 때 사용자명을 묻습니다. 미리보기에서 미리 넣어 둘 수도 있습니다.");
         }
         self.bundle.profiles.push(p);
         Ok(())
@@ -342,11 +338,7 @@ fn moba(text: &str) -> Result<Preview> {
                         ports[i].parse().unwrap_or(0),
                     );
                     key(&mut hop, keys.get(i).copied().unwrap_or(""), out);
-                    let mut check = hop.clone();
-                    if check.username.is_empty() {
-                        check.username = "preview".into();
-                    }
-                    if check.validate().is_err() {
+                    if hop.validate().is_err() {
                         valid = false;
                         break;
                     }

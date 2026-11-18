@@ -20,6 +20,8 @@ declare global {
       command: boolean;
       /** Adds a Telnet and a serial session, which keep no user name. */
       consoles: boolean;
+      /** Adds an FTP session with no user name, which FTP cannot do without. */
+      ftp: boolean;
       applied: string[];
       approved: unknown[];
       /** What `config_detect` reports on this PC (I.2). */
@@ -36,6 +38,7 @@ const state = (window.__transferTest = {
   cancel: false,
   command: false,
   consoles: false,
+  ftp: false,
   applied: [] as string[],
   approved: [] as unknown[],
   found: [] as Found[],
@@ -129,6 +132,9 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
               p,
               { ...p, id: 'two', name: '운영 서버', username: 'operator', groupId: 'other' },
               ...(state.command ? [{ ...relay, proxy: { kind: 'command', command } }] : []),
+              ...(state.ftp
+                ? [{ ...p, id: 'ftp', name: '파일 서버', protocol: 'ftp', port: 21 }]
+                : []),
               ...(state.consoles
                 ? [
                     {

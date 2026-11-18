@@ -15,7 +15,7 @@ import {
 import { Icon, type IconName } from '../components/Icon';
 import type { LocalCatalog, LocalTarget } from '../features/terminal/sessionTypes';
 import { ImportOffer } from '../features/sessions/FoundSources';
-import { desktop, type Group, type Profile } from '../lib/ipc';
+import { desktop, userAtHost, type Group, type Profile } from '../lib/ipc';
 import { modKey } from '../lib/platform';
 import { requestSettings } from '../lib/settingsRequest';
 import {
@@ -152,16 +152,14 @@ export function ConnectionTree({
             if (handlers.onKeyDown(e)) return;
             if (e.key === 'Enter') actions.connect(p);
           }}
-          title={`${p.username}@${p.host}:${p.port}\n더블클릭 또는 Enter로 연결 · 우클릭으로 수정과 삭제`}
+          title={`${userAtHost(p)}:${p.port}\n더블클릭 또는 Enter로 연결 · 우클릭으로 수정과 삭제`}
         >
           <Icon name={p.workspace === 'kubernetes' ? 'kube' : 'server'} size={14} />
           <strong>{p.name}</strong>
           {protocol !== 'ssh' && (
             <span className={`protocol-badge ${protocol}`}>{protocol.toUpperCase()}</span>
           )}
-          <span className="row-detail">
-            {protocol === 'serial' || !p.username ? p.host : `${p.username}@${p.host}`}
-          </span>
+          <span className="row-detail">{protocol === 'serial' ? p.host : userAtHost(p)}</span>
         </button>
       </article>
     );
