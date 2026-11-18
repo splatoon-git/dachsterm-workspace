@@ -89,6 +89,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-md);
 }
 .found-source > span {
@@ -99,8 +100,11 @@
 .found-source small {
   color: var(--color-text-secondary);
 }
-.found-source > button {
+.found-source-actions {
+  display: flex;
   flex: 0 0 auto;
+  margin-left: auto;
+  gap: var(--space-sm);
 }
 .import-offer {
   display: grid;

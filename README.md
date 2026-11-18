@@ -97,6 +97,8 @@ npm run tauri -- build --bundles nsis
 
 설치 파일은 `target/release/bundle/nsis/DachsTerm_0.5.1_x64-setup.exe`에 생성된다. 서명이 없으므로 실행할 때 Windows SmartScreen 경고가 표시될 수 있다.
 
+실행하는 PC에는 Microsoft Edge WebView2 런타임 111 이상이 필요하다. 인터넷으로 업데이트되는 Windows 11에는 이미 있다. 업데이트가 막힌 PC는 런타임이 오래돼 화면이 어긋날 수 있으며, 이때 앱이 시작하면서 알려 준다. Microsoft의 WebView2 런타임 오프라인 설치 프로그램으로 올린다.
+
 ## 빠른 시작
 
 1. 왼쪽 사이드바 **연결** 구역의 ⋯ → **새 연결**(`Ctrl+Shift+N`)에서 이름, 호스트, 포트, 사용자, 인증 방식을 입력하고 저장한다.

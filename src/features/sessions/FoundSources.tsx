@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
 import { call, desktop, errorText } from '../../lib/ipc';
 import { requestSettings, type ImportSource } from '../../lib/settingsRequest';
-import { dismissOffer, foundText, importable, offerDismissed, type Found } from './localImport';
+import {
+  dismissOffer,
+  foundText,
+  importable,
+  inFile,
+  offerDismissed,
+  previewable,
+  type Found,
+} from './localImport';
 import './transfer.css';
 
 /** Looks for other programs' sessions on this PC once, and again on `refresh`. */
@@ -66,13 +74,18 @@ export function ImportOffer() {
   );
 }
 
-/** The import settings' list of sources found on this PC, each opening its preview. */
+/**
+ * The import settings' list of sources found on this PC, each opening its preview. A source kept
+ * in a file can also be read from another file of the same kind, picked in the system dialog.
+ */
 export function FoundList({
   busy,
   preview,
+  pick,
 }: {
   busy: boolean;
   preview: (source: ImportSource) => void;
+  pick: (like: ImportSource) => void;
 }) {
   const { found, error, refresh } = useFound(desktop);
   if (!desktop) return null;
@@ -88,9 +101,20 @@ export function FoundList({
               {foundText(f)}
               <small>{f.problem ?? f.place}</small>
             </span>
-            <button disabled={busy || !importable(f)} onClick={() => preview(f.source)}>
-              미리보기
-            </button>
+            <div className="found-source-actions">
+              {inFile(f.source) && (
+                <button
+                  disabled={busy}
+                  title="다른 위치에 있는 같은 종류의 파일을 골라 가져옵니다"
+                  onClick={() => pick(f.source)}
+                >
+                  다른 파일…
+                </button>
+              )}
+              <button disabled={busy || !previewable(f)} onClick={() => preview(f.source)}>
+                미리보기
+              </button>
+            </div>
           </div>
         ))
       ) : (

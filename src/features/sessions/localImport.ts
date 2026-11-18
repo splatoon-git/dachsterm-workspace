@@ -20,8 +20,17 @@ const names: Record<ImportSource, [string, string]> = {
   openssh: ['OpenSSH config', '호스트'],
 };
 
-/** Something to preview: sessions, or Include files that may hold some. */
+/** Something to bring in: sessions, or Include files that may hold some. */
 export const importable = (f: Found) => !f.problem && (f.count > 0 || f.include);
+
+/**
+ * Worth opening. A source whose entries were all left out still opens: its preview is the only
+ * place that says why, and a list that only shows "0개" reads as a file that could not be read.
+ */
+export const previewable = (f: Found) => importable(f) || (!f.problem && f.skipped > 0);
+
+/** Kept in a file, so a copy somewhere else can be picked in its place. PuTTY's is the registry. */
+export const inFile = (source: ImportSource) => source !== 'putty';
 
 /** "PuTTY 세션 12개". With Include files, the count is the main file's only. */
 export function foundText(f: Found): string {

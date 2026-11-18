@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankProfile, type Group, type Profile } from '../../lib/ipc';
-import { alreadySaved, foundText, placeUnder } from './localImport';
+import { alreadySaved, foundText, importable, placeUnder, previewable } from './localImport';
 
 const profile = (id: string, extra: Partial<Profile> = {}): Profile => ({
   ...blankProfile(),
@@ -50,6 +50,20 @@ describe('alreadySaved', () => {
     expect(alreadySaved(profile('x', { host: 'lab.example', protocol: 'telnet' }), saved)).toBe(
       false,
     );
+  });
+});
+
+describe('importable and previewable', () => {
+  const base = { source: 'bookmarks', place: 'x', include: false, problem: null } as const;
+  it('opens a source whose entries were all left out, without offering it on the empty list', () => {
+    const leftOut = { ...base, count: 0, skipped: 3 };
+    expect(previewable(leftOut)).toBe(true);
+    expect(importable(leftOut)).toBe(false);
+  });
+  it('opens nothing for an empty or unreadable source', () => {
+    expect(previewable({ ...base, count: 0, skipped: 0 })).toBe(false);
+    expect(previewable({ ...base, count: 0, skipped: 3, problem: '오류' })).toBe(false);
+    expect(previewable({ ...base, count: 2, skipped: 0 })).toBe(true);
   });
 });
 

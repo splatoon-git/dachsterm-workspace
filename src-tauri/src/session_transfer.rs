@@ -193,22 +193,6 @@ fn finish(mut result: Preview, format: &str) -> Result<Preview> {
     crate::settings::check_import_paths(&result.bundle).map(|_| result)
 }
 
-#[tauri::command]
-pub async fn config_preview(
-    format: String,
-    encoding: String,
-) -> Result<Option<approval::Reviewed>> {
-    let Some(file) = rfd::AsyncFileDialog::new()
-        .set_title("가져올 세션 설정 선택")
-        .add_filter("세션 설정", &["json", "reg", "mxtsessions", "ini", "conf"])
-        .add_filter("모든 파일 (OpenSSH config)", &["*"])
-        .pick_file()
-        .await
-    else {
-        return Ok(None);
-    };
-    detect::preview_file(file.path(), &format, &encoding).map(Some)
-}
 // Registry strings only recognize the escapes emitted by regedit; never execute a .reg file.
 fn reg_string(value: &str) -> Option<String> {
     let inner = value.strip_prefix('"')?.strip_suffix('"')?;
@@ -285,32 +269,40 @@ fn moba(text: &str) -> Result<Preview> {
     fn flush(out: &mut Preview, folder: &str, entries: &mut Vec<(String, String)>) -> Result<()> {
         for (name, value) in entries.drain(..) {
             // #icon#type%host%port%user... : only the documented-by-export common prefix.
-            let Some(settings) = value.split('#').nth(2) else {
-                out.skipped += 1;
-                continue;
+            let fields: Vec<_> = value.split('#').nth(2).unwrap_or("").split('%').collect();
+            let get = |i: usize| fields.get(i).copied().unwrap_or("");
+            // Each reason has its own line: the preview is where the user learns why a file that
+            // was found gives fewer sessions than the program shows.
+            let left_out = if fields.len() < 4 || fields[0] != "0" {
+                Some("SSH가 아닌 북마크(다른 접속 방식·로컬 셸 등)는 제외했습니다.")
+            } else if !matches!(get(19), "" | "0") {
+                Some("프록시를 거치는 세션은 제외했습니다.")
+            } else if !get(35).is_empty() || !get(36).is_empty() {
+                Some("인증서 조건이 있는 세션은 제외했습니다.")
+            } else if get(27) == "2" {
+                Some("SSHv1 세션은 제외했습니다.")
+            } else {
+                None
             };
-            let fields: Vec<_> = settings.split('%').collect();
-            if fields.len() < 4 || fields[0] != "0" {
+            if let Some(reason) = left_out {
                 out.skipped += 1;
+                out.warn(reason);
                 continue;
             }
             let port = fields[2].parse().unwrap_or(0);
-            let get = |i: usize| fields.get(i).copied().unwrap_or("");
-            if !matches!(get(19), "" | "0")
-                || !get(35).is_empty()
-                || !get(36).is_empty()
-                || get(27) == "2"
-            {
-                out.skipped += 1;
-                out.warn("프록시·인증서·SSHv1 조건 세션은 제외했습니다.");
-                continue;
+            // `[label]` names a login the program keeps outside this file. The label is usually
+            // the account, so it is offered as the user name, which the preview lets the user fix.
+            fn account<'a>(value: &'a str, out: &mut Preview) -> &'a str {
+                if matches!(value, "<default>" | "<username>") {
+                    return "";
+                }
+                let label = value.strip_prefix('[').and_then(|v| v.strip_suffix(']'));
+                if label.is_some() {
+                    out.warn("저장된 로그인 정보를 쓰는 세션은 그 이름을 사용자명으로 넣었습니다. 실제 계정과 다르면 미리보기에서 고치세요.");
+                }
+                label.unwrap_or(value)
             }
-            let user = if matches!(fields[3], "<default>" | "<username>") {
-                ""
-            } else {
-                fields[3]
-            };
-            let mut p = profile(&name, fields[1], user, port);
+            let mut p = profile(&name, fields[1], account(fields[3], out), port);
             fn key(p: &mut Profile, value: &str, out: &mut Preview) {
                 if value.is_empty() {
                     return;
@@ -346,7 +338,7 @@ fn moba(text: &str) -> Result<Preview> {
                     let mut hop = profile(
                         &format!("{name} 경유 {}", i + 1),
                         host,
-                        users[i],
+                        account(users[i], out),
                         ports[i].parse().unwrap_or(0),
                     );
                     key(&mut hop, keys.get(i).copied().unwrap_or(""), out);
@@ -375,7 +367,9 @@ fn moba(text: &str) -> Result<Preview> {
         Ok(())
     }
     for line in text.lines().map(str::trim) {
-        if line.starts_with('[') {
+        // A section line is bracketed from end to end. A bookmark named `[DEV] web` also starts
+        // with `[`, and is an entry: its line goes on to `=` and the settings.
+        if line.starts_with('[') && line.ends_with(']') {
             flush(&mut result, &folder, &mut entries)?;
             folder.clear();
             active = line == "[Bookmarks]"
@@ -854,6 +848,58 @@ mod tests {
         assert!(p.bundle.profiles[1].username.is_empty());
         assert_eq!(p.skipped, 1);
         assert!(!serde_json::to_string(&p).unwrap().contains("never-import"));
+    }
+    #[test]
+    fn moba_names_in_brackets_are_bookmarks_and_stored_logins_give_their_label() {
+        // Reported: a file whose bookmark names all began with `[DEV]` or `[PRD]` gave no sessions,
+        // because each of those lines was read as the start of another section.
+        let text = "[Bookmarks]\nSubRep=\nImgNum=42\n[DEV]10.0.0.1-web/app=#109#0%10.0.0.1%8022%[app]%%-1%-1#MobaFont\n[PRD]db=#109#0%10.0.0.2%22%dba%%-1%-1#MobaFont\n[PortForwarding]\nx=#109#0%never.example%22%u%%\n";
+        let p = parse(text.as_bytes(), "auto", "utf-8").unwrap();
+        let read: Vec<_> = (p.bundle.profiles.iter())
+            .map(|p| {
+                (
+                    p.name.as_str(),
+                    p.host.as_str(),
+                    p.port,
+                    p.username.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            read,
+            [
+                ("[DEV]10.0.0.1-web/app", "10.0.0.1", 8022, "app"),
+                ("[PRD]db", "10.0.0.2", 22, "dba")
+            ]
+        );
+        assert_eq!(p.skipped, 0);
+        assert!(p.warnings.iter().any(|w| w.contains("저장된 로그인 정보")));
+    }
+    #[test]
+    fn moba_entries_left_out_each_say_why() {
+        fn ssh(set: (usize, &str)) -> String {
+            let mut fields = vec![""; 37];
+            fields[..4].copy_from_slice(&["0", "lab.example", "22", "u"]);
+            fields[set.0] = set.1;
+            fields.join("%")
+        }
+        let text = format!(
+            "[Bookmarks]\nwsl= #105#14%Ubuntu%%\nbroken=plain\nproxy= #109#{}\ncert= #109#{}\nv1= #109#{}\n",
+            ssh((19, "2")),
+            ssh((35, "x")),
+            ssh((27, "2"))
+        );
+        let p = parse(text.as_bytes(), "mobaxterm", "utf-8").unwrap();
+        assert!(p.bundle.profiles.is_empty());
+        assert_eq!(p.skipped, 5);
+        for reason in [
+            "SSH가 아닌 북마크",
+            "프록시를 거치는",
+            "인증서 조건",
+            "SSHv1",
+        ] {
+            assert!(p.warnings.iter().any(|w| w.contains(reason)), "{reason}");
+        }
     }
     #[test]
     fn openssh_first_value_patterns_quotes_and_proxy_skip() {
