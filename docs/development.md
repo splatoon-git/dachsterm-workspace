@@ -57,6 +57,13 @@ npm run tauri -- dev
 
 `./scripts/verify-windows.ps1`이 CI와 같은 검사 전체를 실행한다. `-Native`는 실제 앱 검사를, `-Package`는 설치 파일 생성과 설치 검사를, `-RequireSigned`는 서명 확인을 추가한다. 미해결 Cargo 보안 감사는 이 게이트를 실패시킨다.
 
+보안 감사는 `node scripts/audit-npm.mjs`(npm)와 `node scripts/audit-dependencies.mjs`(Windows·macOS 출시 대상의 Rust 그래프)가 맡고, 보고된 공지를 모두 실패로 처리한다. 고친 버전이 없는 공지만 `scripts/audit-exceptions.json`의 `npm`·`cargo` 목록에 ID, 패키지, 사유, 재검토 날짜(`review`)를 적어 예외로 둘 수 있다. 허용 범위는 좁다.
+
+- npm: 개발 도구에만 쓰이는 공지. 출시 의존성(`npm audit --omit=dev`)에 잡힌 공지는 넘기지 않는다.
+- Rust: 관리 중단(`unmaintained`) 알림. 취약점과 `unsound`는 넘기지 않는다.
+
+재검토 날짜가 지났거나 더 이상 보고되지 않는 예외도 게이트를 실패시킨다. 고친 버전이나 대체 라이브러리가 나오면 의존성을 바꾸고 예외를 지운다. 결과는 `target/verification/npm-audit.json`, `dependency-audit.json`에 남는다.
+
 개별 명령은 다음과 같다.
 
 ```text

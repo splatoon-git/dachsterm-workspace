@@ -1,0 +1,18 @@
+{
+  "npm": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "reason": "ReDoS in glob matching. Reached only through vite, vitest and typescript-eslint while building and testing; the released app does not contain it and production dependencies are not affected. No patched version exists (all versions up to 4.0.7).",
+      "review": "2026-12-18"
+    }
+  ],
+  "cargo": [
+    {
+      "id": "RUSTSEC-2026-0543",
+      "package": "chrono",
+      "reason": "Unmaintained notice, not a vulnerability. The app does not use chrono directly; it comes with russh-sftp (SFTP) and suppaftp (FTP), which cannot drop it without a new release. No maintained version exists. Remove when both libraries move to jiff or time.",
+      "review": "2026-12-18"
+    }
+  ]
+}
