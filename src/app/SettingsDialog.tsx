@@ -135,7 +135,13 @@ function SettingsWindow({
     ),
     vault: <VaultPanel />,
     sessions: <SessionManager snapshot={snapshot} changed={changed} />,
-    transfer: <SessionTransfer changed={changed} profiles={snapshot.profiles} />,
+    transfer: (
+      <SessionTransfer
+        changed={changed}
+        profiles={snapshot.profiles}
+        importFrom={request?.importFrom}
+      />
+    ),
     recovery: <MaintenancePanel restored={changed} />,
     update: <UpdateSettings />,
   };

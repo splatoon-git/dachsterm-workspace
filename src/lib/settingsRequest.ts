@@ -13,7 +13,14 @@ export type SettingsSection =
 
 /** A repository whose own `git config` the Git category opens on. */
 export type SettingsRepo = { source: Source; folder: string };
-export type SettingsRequest = { section: SettingsSection; repo?: SettingsRepo };
+/** Session settings another program keeps on this PC, as `config_detect` names them (I.2). */
+export type ImportSource = 'putty' | 'bookmarks' | 'openssh';
+export type SettingsRequest = {
+  section: SettingsSection;
+  repo?: SettingsRepo;
+  /** Opens the import on the preview of this source. */
+  importFrom?: ImportSource;
+};
 
 let listener: ((request: SettingsRequest) => void) | null = null;
 

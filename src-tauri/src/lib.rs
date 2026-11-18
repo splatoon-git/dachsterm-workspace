@@ -339,6 +339,8 @@ pub fn run() {
             settings::tunnel_list,
             settings::config_export,
             session_transfer::config_preview,
+            session_transfer::detect::config_detect,
+            session_transfer::detect::config_preview_found,
             config_includes::config_include_preview,
             session_transfer::approval::config_apply,
             monitoring::monitor_get,

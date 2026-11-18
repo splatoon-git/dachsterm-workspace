@@ -59,6 +59,8 @@
     "allow-tunnel-list",
     "allow-config-export",
     "allow-config-preview",
+    "allow-config-detect",
+    "allow-config-preview-found",
     "allow-config-include-preview",
     "allow-config-apply",
     "allow-monitor-get",

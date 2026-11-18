@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-config-detect"
+description = "Enables the config_detect command without any pre-configured scope."
+commands.allow = ["config_detect"]
+
+[[permission]]
+identifier = "deny-config-detect"
+description = "Denies the config_detect command without any pre-configured scope."
+commands.deny = ["config_detect"]

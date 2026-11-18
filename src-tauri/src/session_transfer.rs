@@ -6,9 +6,12 @@ use crate::{
 use serde::Serialize;
 use std::collections::HashMap;
 pub(crate) mod approval;
+pub(crate) mod detect;
 mod login;
 mod proxy;
 mod putty;
+#[cfg(windows)]
+mod registry;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +20,8 @@ pub struct Preview {
     warnings: Vec<String>,
     skipped: usize,
     include_plan: Option<crate::config_includes::Plan>,
+    /// The program the sessions came from, offered as the group to put them under.
+    source: Option<&'static str>,
 }
 impl Preview {
     fn new() -> Self {
@@ -32,6 +37,7 @@ impl Preview {
             warnings: vec![],
             skipped: 0,
             include_plan: None,
+            source: None,
         }
     }
     fn warn(&mut self, message: &str) {
@@ -153,16 +159,14 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
     } else {
         format
     };
-    let mut result = match format {
+    let result = match format {
         "dachsterm" => {
             let bundle: Bundle =
                 serde_json::from_str(&text).map_err(|_| "DachsTerm JSON 스키마 오류")?;
             crate::settings::validate_bundle(&bundle)?;
             Preview {
                 bundle,
-                warnings: vec![],
-                skipped: 0,
-                include_plan: None,
+                ..Preview::new()
             }
         }
         "putty" => putty(&text)?,
@@ -170,6 +174,11 @@ pub(crate) fn parse(data: &[u8], format: &str, encoding: &str) -> Result<Preview
         "openssh" => openssh(&text)?,
         _ => return Err("지원하지 않는 가져오기 형식입니다.".into()),
     };
+    finish(result, format)
+}
+/// What every import gets before its preview: no secrets, trust or auto-start come along.
+fn finish(mut result: Preview, format: &str) -> Result<Preview> {
+    result.source = detect::label(format);
     for p in &mut result.bundle.profiles {
         p.last_connected = None;
         p.has_secret = false;
@@ -198,22 +207,7 @@ pub async fn config_preview(
     else {
         return Ok(None);
     };
-    let data = zeroize::Zeroizing::new(crate::maintenance::read_config(file.path())?);
-    if matches!(format.as_str(), "auto" | "openssh") {
-        let text = zeroize::Zeroizing::new(decode(&data, &encoding)?);
-        if text.lines().any(|l| {
-            words(l)
-                .ok()
-                .and_then(|w| w.first().cloned())
-                .is_some_and(|w| w.eq_ignore_ascii_case("include"))
-        }) {
-            let mut preview = Preview::new();
-            preview.include_plan = Some(crate::config_includes::plan(file.path(), &encoding)?);
-            preview.warn("Include 파일 내용을 읽기 전에 목록에서 허용할 파일을 선택하세요. 선택한 파일의 폴더를 루트로 사용하며 상대 경로만 지원합니다. 파일·명령은 실행하지 않습니다.");
-            return Ok(Some(approval::review(preview)));
-        }
-    }
-    parse(&data, &format, &encoding).map(|p| Some(approval::review(p)))
+    detect::preview_file(file.path(), &format, &encoding).map(Some)
 }
 // Registry strings only recognize the escapes emitted by regedit; never execute a .reg file.
 fn reg_string(value: &str) -> Option<String> {
@@ -253,48 +247,9 @@ fn putty(text: &str) -> Result<Preview> {
     let mut result = Preview::new();
     let mut name: Option<String> = None;
     let mut values = HashMap::<String, String>::new();
-    fn flush(
-        out: &mut Preview,
-        name: Option<String>,
-        values: &mut HashMap<String, String>,
-    ) -> Result<()> {
-        if let Some(name) = name {
-            let get = |k: &str| values.get(k).map(String::as_str).unwrap_or("");
-            if name == "Default Settings" {
-                values.clear();
-                return Ok(());
-            }
-            if let Some((protocol, default_port, proxy)) = putty::kind(out, get) {
-                let port = if get("PortNumber").is_empty() {
-                    default_port
-                } else {
-                    get("PortNumber").parse().unwrap_or(0)
-                };
-                let mut p = profile(&name, get("HostName"), get("UserName"), port);
-                p.proxy = proxy;
-                let key = get("PublicKeyFile");
-                if protocol == "telnet" {
-                    putty::telnet(&mut p);
-                } else if !key.is_empty() && !key.to_ascii_lowercase().ends_with(".ppk") {
-                    p.auth = "key".into();
-                    p.key_path = key.into();
-                } else if !key.is_empty() {
-                    out.warn("PuTTY PPK 키는 자동 변환하지 않습니다. PuTTYgen에서 OpenSSH 키로 내보낸 후 세션의 키 경로를 지정하세요.");
-                }
-                login::certificate(out, &mut p, get("DetachedCertificate"));
-                let id = p.id.clone();
-                out.add(p, "PuTTY")?;
-                if protocol == "ssh" && out.bundle.profiles.iter().any(|p| p.id == id) {
-                    putty::forwards(out, &id, values);
-                }
-            }
-        }
-        values.clear();
-        Ok(())
-    }
     for line in text.lines().map(str::trim) {
         if line.starts_with('[') {
-            flush(&mut result, name.take(), &mut values)?;
+            putty::session(&mut result, name.take(), &mut values)?;
             name = line
                 .strip_prefix("[HKEY_CURRENT_USER\\Software\\SimonTatham\\PuTTY\\Sessions\\")
                 .and_then(|s| s.strip_suffix(']'))
@@ -305,23 +260,7 @@ fn putty(text: &str) -> Result<Preview> {
             let Some(key) = reg_string(key.trim()) else {
                 continue;
             };
-            if ![
-                "Protocol",
-                "HostName",
-                "UserName",
-                "PublicKeyFile",
-                "DetachedCertificate",
-                "PortNumber",
-                "ProxyMethod",
-                "ProxyHost",
-                "ProxyPort",
-                "ProxyUsername",
-                "PortForwardings",
-                "LocalPortAcceptAll",
-                "RemotePortAcceptAll",
-            ]
-            .contains(&key.as_str())
-            {
+            if !putty::FIELDS.contains(&key.as_str()) {
                 continue;
             }
             let value = value.trim();
@@ -333,7 +272,7 @@ fn putty(text: &str) -> Result<Preview> {
             values.insert(key, parsed.ok_or("PuTTY 필드 형식 오류")?);
         }
     }
-    flush(&mut result, name, &mut values)?;
+    putty::session(&mut result, name, &mut values)?;
     result.warn("PuTTY reg: 기본 접속·OpenSSH 키 경로·인증서 경로·루프백 L/R/D 터널·SOCKS5/HTTP 프록시를 변환합니다. PPK·그 밖의 프록시·명령·신뢰·암호는 이전하지 않습니다. reg에는 제품 버전이 없어 버전별 실제 내보내기 검증이 별도로 필요합니다.");
     Ok(result)
 }
@@ -660,7 +599,7 @@ fn openssh(text: &str) -> Result<Preview> {
         if !matches!(get("proxyjump"), "" | "none") {
             jumps.push((id.clone(), get("proxyjump").to_string()));
         }
-        result.add(p, "OpenSSH")?;
+        result.add(p, "")?;
         if result.bundle.profiles.iter().any(|p| p.id == id) {
             for w in forwards {
                 let kind = match w[0].as_str() {

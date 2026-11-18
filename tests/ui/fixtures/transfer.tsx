@@ -4,6 +4,13 @@ import { applyTheme } from '../../../src/themes/adapters/css';
 import { getCurrentTheme } from '../../../src/themes/store';
 import '../../../src/app/styles.css';
 import '../../../src/app/workspace.css';
+import type { Found } from '../../../src/features/sessions/localImport';
+import type { Profile } from '../../../src/lib/ipc';
+import {
+  onSettingsRequest,
+  type ImportSource,
+  type SettingsRequest,
+} from '../../../src/lib/settingsRequest';
 
 declare global {
   interface Window {
@@ -15,6 +22,10 @@ declare global {
       consoles: boolean;
       applied: string[];
       approved: unknown[];
+      /** What `config_detect` reports on this PC (I.2). */
+      found: Found[];
+      /** Settings the import offer asked to open. */
+      requests: SettingsRequest[];
     };
   }
 }
@@ -25,12 +36,40 @@ const state = (window.__transferTest = {
   consoles: false,
   applied: [] as string[],
   approved: [] as unknown[],
+  found: [] as Found[],
+  requests: [] as SettingsRequest[],
 });
+const params = new URLSearchParams(location.search);
+if (params.has('found'))
+  state.found = [
+    { source: 'putty', place: 'HKCU', count: 2, skipped: 0, include: false, problem: null },
+    { source: 'bookmarks', place: 'b.ini', count: 0, skipped: 1, include: false, problem: null },
+    { source: 'openssh', place: 'config', count: 0, skipped: 0, include: false, problem: '오류' },
+  ];
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
     invoke: async (command: string, args: { data: string; approved?: unknown }) => {
       if (command === 'config_export') return !state.cancel;
+      if (command === 'config_detect') return state.found;
+      if (command === 'config_preview_found') {
+        const lab = { ...saved, id: 'lab', name: 'Lab', host: 'lab.example.com', groupId: null };
+        return {
+          source: 'PuTTY',
+          bundle: {
+            format: 'dachsterm.sessions',
+            version: 4,
+            profiles: [lab, { ...saved, id: 'copy', name: '같은 대상', groupId: 'seoul' }],
+            groups: [
+              { id: 'dev', name: '개발', parentId: null, sortOrder: 0 },
+              { id: 'seoul', name: '서울', parentId: 'dev', sortOrder: 0 },
+            ],
+            tunnels: [],
+          },
+          warnings: [],
+          skipped: 0,
+        };
+      }
       if (command === 'config_apply') {
         if (state.fail) throw '가져오기 실패 테스트';
         state.applied.push(args.data);
@@ -112,11 +151,27 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
     },
   },
 });
+// `ipc` reads `isTauri` when it loads, so it comes in after the stand-in above.
+const { blankProfile } = await import('../../../src/lib/ipc');
+const saved: Profile = {
+  ...blankProfile(),
+  id: 'saved',
+  name: '저장된 서버',
+  host: 'saved.example.com',
+  username: 'ops',
+};
 const { SessionTransfer } = await import('../../../src/features/sessions/SessionTransfer');
+const { ImportOffer } = await import('../../../src/features/sessions/FoundSources');
 const { Dialog } = await import('../../../src/components/Dialog');
 applyTheme(getCurrentTheme());
+onSettingsRequest((request) => state.requests.push(request));
+const from = params.get('from') as ImportSource | null;
 createRoot(document.getElementById('root')!).render(
-  <Dialog title="세션 교환 테스트" className="settings-dialog" close={() => {}}>
-    <SessionTransfer changed={() => {}} />
-  </Dialog>,
+  params.has('offer') ? (
+    <ImportOffer />
+  ) : (
+    <Dialog title="세션 교환 테스트" className="settings-dialog" close={() => {}}>
+      <SessionTransfer changed={() => {}} profiles={[saved]} importFrom={from ?? undefined} />
+    </Dialog>
+  ),
 );

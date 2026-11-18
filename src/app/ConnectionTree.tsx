@@ -14,8 +14,10 @@ import {
 } from '../components/ContextMenu';
 import { Icon, type IconName } from '../components/Icon';
 import type { LocalCatalog, LocalTarget } from '../features/terminal/sessionTypes';
+import { ImportOffer } from '../features/sessions/FoundSources';
 import { desktop, type Group, type Profile } from '../lib/ipc';
 import { modKey } from '../lib/platform';
+import { requestSettings } from '../lib/settingsRequest';
 import {
   connectionSections,
   LOCAL_CLUSTER,
@@ -112,6 +114,7 @@ export function ConnectionTree({
   const savedItems = (): MenuItem[] => [
     { label: '새 연결…', shortcut: modKey('Shift+N'), run: () => actions.newConnection() },
     { label: '새 그룹…', run: () => actions.newGroup() },
+    { label: '세션 가져오기…', run: () => requestSettings({ section: 'transfer' }) },
   ];
   const profileItems = (p: Profile): MenuItem[] => [
     { label: '연결', shortcut: 'Enter', run: () => actions.connect(p) },
@@ -340,6 +343,7 @@ export function ConnectionTree({
                 <button className="link-button" onClick={() => actions.newConnection()}>
                   새 연결 추가
                 </button>
+                <ImportOffer />
               </div>
             ),
             savedItems,

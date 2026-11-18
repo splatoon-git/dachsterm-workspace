@@ -37,7 +37,7 @@ DachsTerm은 Tauri 2와 Rust로 만든 SSH 클라이언트다. 별도 서버, �
 - 최대 4홉의 점프 호스트
 - 최초 접속 시 호스트키 지문 확인, 키가 변경되면 접속 차단
 - 비밀번호와 Passphrase는 OS 보안 저장소에 암호화 보관, 선택적 마스터 패스워드
-- 그룹, 태그, 템플릿, 일괄 수정. PuTTY `.reg`, 세션 북마크 파일(`.mxtsessions`, `.ini`), OpenSSH `config`에서 세션 가져오기
+- 그룹, 태그, 템플릿, 일괄 수정. PuTTY `.reg`, 세션 북마크 파일(`.mxtsessions`, `.ini`), OpenSSH `config`에서 세션 가져오기(이 PC의 PuTTY 레지스트리·북마크 파일·`~/.ssh/config`는 자동으로 찾음)
 
 **파일**
 

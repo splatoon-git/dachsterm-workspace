@@ -53,9 +53,10 @@ md5 = "0.8.1"
 zmodem2 = "0.7.3"
 
 # The local tabs' agent pipe (DX.13) needs a DACL for the current user, and the port list (TL.7)
-# reads the socket tables and process names, and the route trace sends ICMP echoes. Already in the graph.
+# reads the socket tables and process names, the route trace sends ICMP echoes, and the import from
+# this PC (I.2) reads PuTTY's sessions and the ANSI code page. Already in the graph.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Registry", "Win32_System_Threading"] }
 
 # Starting a file drag out to the desktop (GE.3). Windows and macOS are the shipped targets.
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
