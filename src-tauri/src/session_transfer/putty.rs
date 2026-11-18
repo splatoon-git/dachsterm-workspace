@@ -1,6 +1,6 @@
 //! Parts of the PuTTY import kept out of `session_transfer.rs`, which may not grow.
 use super::{Preview, tunnel};
-use crate::storage::{Profile, Proxy};
+use crate::storage::{Profile, Proxy, Result};
 use std::collections::HashMap;
 
 /// What a PuTTY session's `Protocol` becomes, and its port when none is saved. `None`: skipped.
@@ -32,6 +32,62 @@ pub(super) fn kind<'a>(
         return None;
     }
     Some((name, port, None))
+}
+
+/// The session values the import reads; the rest of a session (colors, fonts, …) is ignored.
+pub(super) const FIELDS: [&str; 13] = [
+    "Protocol",
+    "HostName",
+    "UserName",
+    "PublicKeyFile",
+    "DetachedCertificate",
+    "PortNumber",
+    "ProxyMethod",
+    "ProxyHost",
+    "ProxyPort",
+    "ProxyUsername",
+    "PortForwardings",
+    "LocalPortAcceptAll",
+    "RemotePortAcceptAll",
+];
+
+/// One saved session, whether it came from an exported `.reg` file or the registry itself (I.2).
+/// `values` holds `FIELDS` as text, DWORDs in decimal, and is emptied for the next session.
+pub(super) fn session(
+    out: &mut Preview,
+    name: Option<String>,
+    values: &mut HashMap<String, String>,
+) -> Result<()> {
+    if let Some(name) = name.filter(|n| n != "Default Settings") {
+        let get = |k: &str| values.get(k).map(String::as_str).unwrap_or("");
+        if let Some((protocol, default_port, proxy)) = kind(out, get) {
+            let port = if get("PortNumber").is_empty() {
+                default_port
+            } else {
+                get("PortNumber").parse().unwrap_or(0)
+            };
+            let mut p = Profile::imported(&name, get("HostName"), get("UserName"), port);
+            p.proxy = proxy;
+            let key = get("PublicKeyFile");
+            if protocol == "telnet" {
+                telnet(&mut p);
+            } else if !key.is_empty() && !key.to_ascii_lowercase().ends_with(".ppk") {
+                p.auth = "key".into();
+                p.key_path = key.into();
+            } else if !key.is_empty() {
+                out.warn("PuTTY PPK 키는 자동 변환하지 않습니다. PuTTYgen에서 OpenSSH 키로 내보낸 후 세션의 키 경로를 지정하세요.");
+            }
+            super::login::certificate(out, &mut p, get("DetachedCertificate"));
+            let id = p.id.clone();
+            // No group here: the preview offers to put a whole import under the program's name.
+            out.add(p, "")?;
+            if protocol == "ssh" && out.bundle.profiles.iter().any(|p| p.id == id) {
+                forwards(out, &id, values);
+            }
+        }
+    }
+    values.clear();
+    Ok(())
 }
 
 /// A Telnet session keeps no key and no password: the login is typed in its terminal (CG.4).

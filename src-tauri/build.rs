@@ -140,6 +140,8 @@ fn main() {
             "tunnel_list",
             "config_export",
             "config_preview",
+            "config_detect",
+            "config_preview_found",
             "config_include_preview",
             "config_apply",
             "monitor_get",

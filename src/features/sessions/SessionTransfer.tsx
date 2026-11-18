@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { call, desktop, errorText, type Profile, type Group } from '../../lib/ipc';
+import type { ImportSource } from '../../lib/settingsRequest';
 import './transfer.css';
+import { FoundList } from './FoundSources';
+import { alreadySaved, placeUnder } from './localImport';
 import { importSelection, routeNames } from './model';
 import type { SessionTemplate } from './SessionManager';
 import { ProxyCommandApproval } from './ProxyCommandApproval';
@@ -21,22 +24,28 @@ type Preview = {
   skipped: number;
   includePlan?: { token: string; files: string[] } | null;
   commandPlan?: CommandPlan | null;
+  /** The program the sessions came from, offered as their group. */
+  source?: string | null;
 };
 
 export function SessionTransfer({
   changed,
   profiles: existing = [],
+  importFrom,
 }: {
   changed: () => void;
   profiles?: Profile[];
+  /** Opens on the preview of a source found on this PC. */
+  importFrom?: ImportSource;
 }) {
+  const [grouped, setGrouped] = useState(true);
   const [merges, setMerges] = useState<Record<string, string>>({});
   const [includeFiles, setIncludeFiles] = useState<string[]>([]);
   const [format, setFormat] = useState('auto');
   const [encoding, setEncoding] = useState('utf-8');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(!!importFrom);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const effective = preview
@@ -45,31 +54,39 @@ export function SessionTransfer({
         ...(preview.bundle.templates ?? []).flatMap((t) => t.options.jumpIds ?? []),
       ])
     : null;
-  async function choose() {
+  // Sessions already saved start unticked, so taking the same sessions again adds nothing.
+  const fresh = (profiles: Profile[]) =>
+    initialSelection(profiles.filter((p) => !alreadySaved(p, existing)));
+  const shown = (result: Preview | null) => {
+    if (result) {
+      setPreview(result);
+      setMerges({});
+      setIncludeFiles([]);
+      setSelected(fresh(result.bundle.profiles));
+    }
+    setBusy(false);
+  };
+  const failed = (e: unknown) => {
+    setError(errorText(e));
+    setPreview(null);
+    setBusy(false);
+  };
+  const found = (source: ImportSource) => call<Preview>('config_preview_found', { source });
+  function load(read: () => Promise<Preview | null>) {
     setBusy(true);
     setError('');
     setMessage('');
-    try {
-      const result = await call<Preview | null>('config_preview', { format, encoding });
-      if (result) {
-        setPreview(result);
-        setMerges({});
-        setIncludeFiles([]);
-        setSelected(initialSelection(result.bundle.profiles));
-      }
-    } catch (e) {
-      setError(errorText(e));
-      setPreview(null);
-    } finally {
-      setBusy(false);
-    }
+    void read().then(shown, failed);
   }
+  // Opened once on the source asked for (busy from the start); later picks come from the list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => void (importFrom && found(importFrom).then(shown, failed)), [importFrom]);
   async function apply() {
     if (!preview || !effective) return;
     setBusy(true);
     setError('');
     // Template references are included alongside selected route dependencies.
-    const bundle = effective;
+    const bundle = grouped && preview.source ? placeUnder(effective, preview.source) : effective;
     try {
       const count = await call<number>('config_apply', {
         data: JSON.stringify(bundle),
@@ -97,6 +114,7 @@ export function SessionTransfer({
         DachsTerm JSON으로 세션·계층·태그·경유·템플릿·터널을 보관합니다. 외부 형식의 지원·제외
         필드는 변환 보고서에서 확인하세요. 암호와 개인키 내용은 포함하지 않습니다.
       </p>
+      <FoundList busy={busy} preview={(source) => load(() => found(source))} />
       <div className="transfer-options">
         <label>
           가져올 형식
@@ -118,7 +136,10 @@ export function SessionTransfer({
         </label>
       </div>
       <div className="form-actions">
-        <button disabled={busy || !desktop} onClick={() => void choose()}>
+        <button
+          disabled={busy || !desktop}
+          onClick={() => load(() => call('config_preview', { format, encoding }))}
+        >
           파일 선택 · 미리보기
         </button>
         <button
@@ -179,7 +200,7 @@ export function SessionTransfer({
                       files: includeFiles,
                     });
                     setPreview(next);
-                    setSelected(initialSelection(next.bundle.profiles));
+                    setSelected(fresh(next.bundle.profiles));
                   } catch (e) {
                     setError(errorText(e));
                   } finally {
@@ -216,6 +237,17 @@ export function SessionTransfer({
             경유지·상위 그룹·템플릿 참조도 함께 가져옵니다. 터널 자동 시작은 꺼지며, 키 경로는 해당
             PC에서 다시 확인하세요.
           </p>
+          {preview.source && (
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={grouped}
+                disabled={busy}
+                onChange={(e) => setGrouped(e.target.checked)}
+              />
+              가져온 세션을 새 ‘{preview.source}’ 그룹 아래에 넣기 (끄면 원래 폴더를 맨 위에 둠)
+            </label>
+          )}
           <div className="form-actions">
             <button
               disabled={busy}
@@ -248,6 +280,7 @@ export function SessionTransfer({
                     {!selected.includes(p.id) && effective?.profiles.some((v) => v.id === p.id) && (
                       <small>선택한 세션/템플릿에 필요한 경유지 · 함께 가져옴</small>
                     )}
+                    {alreadySaved(p, existing) && <small>이미 저장된 세션과 같은 대상</small>}
                     <small>
                       {p.protocol} · {p.host}:{p.port}
                       {p.groupId

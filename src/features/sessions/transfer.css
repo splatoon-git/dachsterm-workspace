@@ -77,3 +77,45 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.found-sources {
+  display: grid;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+.found-sources > button {
+  justify-self: start;
+}
+.found-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+.found-source > span {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.found-source small {
+  color: var(--color-text-secondary);
+}
+.found-source > button {
+  flex: 0 0 auto;
+}
+.import-offer {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: var(--border-width-default) solid var(--color-border-default);
+}
+.import-offer p {
+  margin: 0;
+}
+.import-offer .link-button {
+  text-align: start;
+}
+.import-offer .import-offer-dismiss {
+  color: var(--color-text-secondary);
+}
