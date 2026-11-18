@@ -529,6 +529,7 @@
 - 검증(Windows, `dev` `ebb85c0` 위 미커밋 트리): `cargo fmt --all --check` 종료 0, `cargo test -p dachsterm --lib --locked -- session_transfer webview_runtime` 23 통과(첫 실행은 rustc가 `STATUS_STACK_BUFFER_OVERRUN`으로 죽었고 같은 소스 재실행에서 통과, 메모리 부족 추정), 파서 수정 뒤 `-- session_transfer` 24 통과(그 PC의 ini를 읽는 임시 시험 1개 포함: 13개·제외 0개, 사용자명 있는 세션 10개. 임시 시험은 지웠고 그 뒤 다시 실행하지 않았다), `npm run typecheck` 종료 0, 변경 파일 eslint·prettier 종료 0, `npx vitest run src/features/sessions/localImport.test.ts src/themes/tokens.test.mjs` 10 통과, `npx playwright test tests/ui/session-transfer.spec.ts` 10 통과(새 시험 2개).
 - 최종 소스로 `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` 종료 0, `scripts/test-import-detect-native.mjs` eslint 종료 0.
 - 당시 미실행(사용자 요청으로 부하 큰 작업 중단): 전체 Vitest·Playwright·`cargo test`, 앱 빌드, `test:import-detect`(스크립트의 미리보기 조건만 고침), Mac 빌드. 구형 런타임에서의 실제 화면과 경고 창은 이 PC(런타임 157)에서 재현할 수 없다. 후속 UI.1에서 전체 Vitest 1,433개·UI 598개와 Windows release ZIP 빌드가 통과했다([기록](verification/ui-consistency.md)). `cargo test` 전체·네이티브 가져오기·구형 PC·Mac 확인은 계속 대기다.
+- 추가: 미리보기의 **N개 세션 추가**가 꺼져 있을 때 이유를 버튼 위에 보인다(`localImport.ts` `addBlocker`: 선택 없음, 사용자명이 빈 세션 이름, 승인 안 한 명령). 받은 ini의 사용자명 없는 세션 3개 때문에 버튼이 꺼졌는데 화면에 이유가 없었다. typecheck·eslint 종료 0, `localImport.test.ts` 10 통과, `session-transfer.spec.ts` 10 통과.
 - 남은 것: 새 빌드로 그 PC에서 실제 가져오기 확인.
 
 ## G.4 — 닥스의 모험 횡스크롤 액션 (2026-11-05)

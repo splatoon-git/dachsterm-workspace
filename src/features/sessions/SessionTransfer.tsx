@@ -3,11 +3,10 @@ import { call, desktop, errorText, type Profile, type Group } from '../../lib/ip
 import type { ImportSource } from '../../lib/settingsRequest';
 import './transfer.css';
 import { FoundList } from './FoundSources';
-import { alreadySaved, placeUnder } from './localImport';
+import { addBlocker, alreadySaved, placeUnder } from './localImport';
 import { importSelection, routeNames } from './model';
 import type { SessionTemplate } from './SessionManager';
 import { ProxyCommandApproval } from './ProxyCommandApproval';
-import { needsUsername } from './protocol';
 import { approval, initialSelection, unapproved, type CommandPlan } from './proxyApproval';
 
 type Bundle = {
@@ -54,6 +53,10 @@ export function SessionTransfer({
         ...(preview.bundle.templates ?? []).flatMap((t) => t.options.jumpIds ?? []),
       ])
     : null;
+  const chosen = effective?.profiles ?? [];
+  const blocker = preview
+    ? addBlocker(chosen, preview.bundle.templates?.length ?? 0, unapproved(chosen, selected))
+    : '';
   // Sessions already saved start unticked, so taking the same sessions again adds nothing.
   const fresh = (profiles: Profile[]) =>
     initialSelection(profiles.filter((p) => !alreadySaved(p, existing)));
@@ -364,6 +367,7 @@ export function SessionTransfer({
               </div>
             ))}
           </div>
+          {blocker && <p className="muted">{blocker}</p>}
           <div className="form-actions">
             <button
               disabled={busy}
@@ -374,16 +378,7 @@ export function SessionTransfer({
             >
               가져오기 취소
             </button>
-            <button
-              className="primary"
-              disabled={
-                busy ||
-                (!effective?.profiles.length && !preview.bundle.templates?.length) ||
-                effective?.profiles.some((p) => needsUsername(p) && !p.username.trim()) ||
-                unapproved(effective?.profiles ?? [], selected).length > 0
-              }
-              onClick={() => void apply()}
-            >
+            <button className="primary" disabled={busy || !!blocker} onClick={() => void apply()}>
               {effective?.profiles.length ?? 0}개 세션 추가
             </button>
           </div>

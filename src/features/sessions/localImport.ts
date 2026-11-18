@@ -1,5 +1,6 @@
 import type { Group, Profile } from '../../lib/ipc';
 import type { ImportSource } from '../../lib/settingsRequest';
+import { needsUsername } from './protocol';
 
 /** A session source `config_detect` found on this PC (I.2). */
 export type Found = {
@@ -70,6 +71,26 @@ export function placeUnder<T extends { profiles: Profile[]; groups: Group[] }>(
     ],
     profiles: bundle.profiles.map((p) => (p.groupId ? p : { ...p, groupId: id })),
   };
+}
+
+const listed = (profiles: Profile[]) =>
+  profiles
+    .slice(0, 3)
+    .map((p) => p.name)
+    .join(', ') + (profiles.length > 3 ? ` 외 ${profiles.length - 3}개` : '');
+
+/**
+ * Why the ticked sessions cannot be added yet, shown above the button; empty when they can. A
+ * disabled button alone does not say which rows are in the way.
+ */
+export function addBlocker(profiles: Profile[], templates: number, commands: Profile[]): string {
+  if (!profiles.length && !templates) return '추가할 세션을 선택하세요.';
+  const nameless = profiles.filter((p) => needsUsername(p) && !p.username.trim());
+  if (nameless.length)
+    return `사용자명이 비어 있는 세션이 ${nameless.length}개 있습니다(${listed(nameless)}). 사용자명을 입력하거나 선택을 해제하면 추가할 수 있습니다.`;
+  if (commands.length)
+    return `명령을 실행하는 세션(${listed(commands)})은 위에서 명령을 승인해야 추가할 수 있습니다.`;
+  return '';
 }
 
 const dismissedKey = 'dachsterm.importOffer.dismissed';
