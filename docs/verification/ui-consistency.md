@@ -3,6 +3,7 @@
 - 날짜: 2026-11-18. Windows, `ba1513a`에서 분리한 `codex/ui1-consistency-audit`의 미커밋 소스.
 - 범위: [역할별 기준](../design/ui-consistency.md). 사용자 첨부의 로컬 클러스터 설정 폼, 제목/본문 위계, 일반 컨트롤 크기, 작업 화면의 시작선.
 - 공유 `dev`에는 WebView 높이 호환성과 가져오기 작업이 진행 중이어서 별도 worktree `D:/Work/dachsterm-ui1`에서 진행했다. 그 변경은 수정하지 않았다.
+- 구현 커밋: `5afbeb9`. `dev`의 `ebb85c0`에서 `git merge --no-ff --no-edit codex/ui1-consistency-audit`를 시도했으나 미커밋 `docs/progress.md`, `src/app/styles.css`, `src/features/terminal/commandPanel.css`를 덮어쓸 수 있어 Git이 중단했다. 병합 상태나 사용자 파일 변경 없이 작업 브랜치를 보존했다.
 
 ## 확인한 결함과 수정
 
@@ -44,6 +45,8 @@
 최종 진단 재실행은 `test-results/ui-audit-final.log`/`.exit`, 최종 빌드는 `test-results/ui-build-final.log`/`.exit`에 기록했다. UI 회귀 로그는 `test-results/ui-suite.log`, 상태바 재검사는 `test-results/ui-status-review.log`다.
 
 포트 1420의 다른 개발 작업을 건드리지 않으려고 검사 서버는 1426, 임시 설정은 `.tools/ui-playwright.config.mjs`를 썼다. 이 설정은 기존 UI 테스트 디렉터리 전체와 Chromium을 가리키고 Windows에서 WebKit 시험을 제외하며 동시 worker는 2개다. 기본 `npm run test:ui`에도 새 회귀 시험이 자동 포함된다.
+
+검사 서버 종료 로그에서 의존성 junction의 실제 경로가 Vite 허용 목록 밖이라 Monaco 아이콘 글꼴을 거부한 것을 확인했다. 제품 설정은 바꾸지 않고 `.tools/vite-ui.config.mjs`에서 이 worktree와 실제 `node_modules` 경로만 허용해 다시 실행했다. 해당 `codicon.ttf` HTTP 200, `file-tab.spec.ts -g 'code is highlighted and read-only'` 1/1 통과. 전체 584건 실행 당시에는 이 아이콘 글꼴이 로드되지 않았으므로 그 실행을 에디터 아이콘의 시각 검증으로 해석하지 않는다.
 
 ## 남은 확인
 
