@@ -2,7 +2,8 @@
 //! when the app asks: PuTTY's sessions in the registry, the bookmarks file whose place the
 //! bookmarks program records in its registry key (or its usual `%APPDATA%` folder), and
 //! `~/.ssh/config`. Paths stay in here: the page names a source, never a file, so it cannot make
-//! the backend read anything else. What is read goes through the same inert parsers as a file.
+//! the backend read anything else. Any other file is one the user picks in the system dialog.
+//! What is read goes through the same inert parsers either way.
 use super::{Preview, approval::Reviewed, decode, parse};
 use crate::storage::Result;
 use serde::{Deserialize, Serialize};
@@ -80,10 +81,52 @@ pub async fn config_preview_found(source: Source) -> Result<Reviewed> {
         .map_err(|_| "세션 설정을 읽지 못했습니다.".to_string())?
 }
 
-/// What the import does with a file: the user's own pick, or one found here.
-pub(super) fn preview_file(path: &Path, format: &str, encoding: &str) -> Result<Reviewed> {
+/// The preview of a file the user picks in the system dialog. With `like`, the dialog opens where
+/// that source was found and the file is read as that source's, for a copy kept somewhere else.
+/// The page still names no path: the file is whichever one the user picks.
+#[tauri::command]
+pub async fn config_preview(
+    format: String,
+    encoding: String,
+    like: Option<Source>,
+) -> Result<Option<Reviewed>> {
+    let failed = |_| "세션 설정을 읽지 못했습니다.".to_string();
+    let mut dialog = rfd::AsyncFileDialog::new()
+        .set_title("가져올 세션 설정 선택")
+        .add_filter("세션 설정", &["json", "reg", "mxtsessions", "ini", "conf"])
+        .add_filter("모든 파일 (OpenSSH config)", &["*"]);
+    let near = tokio::task::spawn_blocking(move || like.and_then(locate));
+    if let Some(folder) = near
+        .await
+        .map_err(failed)?
+        .as_deref()
+        .and_then(Path::parent)
+    {
+        dialog = dialog.set_directory(folder);
+    }
+    let Some(file) = dialog.pick_file().await else {
+        return Ok(None);
+    };
+    let path = file.path().to_path_buf();
+    tokio::task::spawn_blocking(move || match like {
+        Some(source) => preview_as(&path, source),
+        None => preview_file(&path, &format, &encoding),
+    })
+    .await
+    .map_err(failed)?
+    .map(Some)
+}
+
+/// What the import does with a file the user picked.
+fn preview_file(path: &Path, format: &str, encoding: &str) -> Result<Reviewed> {
     let data = Zeroizing::new(crate::maintenance::read_config(path)?);
     preview_data(path, &data, format, encoding)
+}
+
+/// A file read as `source` keeps it, with the text encoding guessed as for the found one.
+fn preview_as(path: &Path, source: Source) -> Result<Reviewed> {
+    let data = Zeroizing::new(crate::maintenance::read_config(path)?);
+    preview_data(path, &data, source.format(), encoding_of(&data))
 }
 
 fn preview_data(path: &Path, data: &[u8], format: &str, encoding: &str) -> Result<Reviewed> {
@@ -114,9 +157,7 @@ fn preview_found(source: Source) -> Result<Reviewed> {
             .ok_or_else(|| GONE.to_string())
             .map(super::approval::review);
     }
-    let path = locate(source).ok_or(GONE)?;
-    let data = Zeroizing::new(crate::maintenance::read_config(&path)?);
-    preview_data(&path, &data, source.format(), encoding_of(&data))
+    preview_as(&locate(source).ok_or(GONE)?, source)
 }
 
 fn found(source: Source) -> Option<Found> {
@@ -284,6 +325,11 @@ mod tests {
                 skipped: 0,
                 include: false
             }
+        );
+        // Picked from another place as the found source's kind: the format and encoding are its.
+        assert_eq!(
+            preview(preview_as(&path, Source::Bookmarks).unwrap())["source"],
+            "세션 북마크"
         );
         let v = preview(preview_file(&path, "mobaxterm", "utf-8").unwrap());
         assert_eq!(v["source"], "세션 북마크");

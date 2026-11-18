@@ -25,7 +25,7 @@ npm run test:ui -- --workers=2
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-npm audit --audit-level=low
+node scripts/audit-npm.mjs
 node scripts/audit-dependencies.mjs
 node scripts/generate-notices.mjs
 

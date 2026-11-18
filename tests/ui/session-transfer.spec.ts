@@ -98,8 +98,7 @@ test('sessions found on this PC open as a preview under the program group', asyn
   await expect(found).toContainText('PuTTY 세션 2개');
   await expect(found).toContainText('세션 북마크 0개 · 제외 1개');
   await expect(found).toContainText('OpenSSH config (읽지 못함)');
-  // Nothing to import, or not readable: listed, but there is no preview to open.
-  await expect(found.getByRole('button', { name: '미리보기' }).nth(1)).toBeDisabled();
+  // Not readable: listed, but there is no preview to open.
   await expect(found.getByRole('button', { name: '미리보기' }).nth(2)).toBeDisabled();
   // Opened on the source asked for; the one already saved starts unticked.
   await expect(page.getByText('이미 저장된 세션과 같은 대상')).toBeVisible();
@@ -124,6 +123,28 @@ test('sessions found on this PC open as a preview under the program group', asyn
     'dev',
   ]);
   expect(kept.profiles.map((p: { groupId: string | null }) => p.groupId)).toEqual([null, 'seoul']);
+});
+
+test('a found file with every entry left out still opens, and says why', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/transfer.html?found');
+  const found = page.getByRole('group', { name: '이 PC에서 찾은 설정' });
+  await expect(found).toContainText('세션 북마크 0개 · 제외 1개');
+  await found.getByRole('button', { name: '미리보기' }).nth(1).click();
+  await expect(page.getByRole('heading', { name: '변환 결과: 0개 · 제외 1개' })).toBeVisible();
+  await expect(page.getByText('프록시를 거치는 세션은 제외했습니다.')).toBeVisible();
+  await expect(page.getByRole('button', { name: '0개 세션 추가' })).toBeDisabled();
+});
+
+test('a copy of a found file kept elsewhere is picked from its row', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/transfer.html?found');
+  const found = page.getByRole('group', { name: '이 PC에서 찾은 설정' });
+  // The registry has no file to swap; a source that could not be read still offers another file.
+  await expect(found.getByRole('button', { name: '다른 파일…' })).toHaveCount(2);
+  await found.getByRole('button', { name: '다른 파일…' }).first().click();
+  await expect(page.getByRole('button', { name: '2개 세션 추가' })).toBeVisible();
+  await page.getByRole('button', { name: '가져오기 취소', exact: true }).click();
+  await page.getByRole('button', { name: '파일 선택 · 미리보기' }).click();
+  expect(await page.evaluate(() => window.__transferTest.picks)).toEqual(['bookmarks', null]);
 });
 
 test('the empty connection list offers what was found until dismissed', async ({ page }) => {

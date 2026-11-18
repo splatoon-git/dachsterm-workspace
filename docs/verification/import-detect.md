@@ -49,6 +49,35 @@ UTF-8로 읽히지 않는 파일은 `GetACP()`가 949면 CP949, 1252면 Windows-
 
 `verify-windows.ps1 -Native`에 `test:import-detect`를 연결했다.
 
+## 추가 (2026-11-18): 제외 사유와 다른 파일
+
+대상: `dev` `ebb85c0` 위 미커밋 트리. 다른 PC에서 찾은 북마크 파일의 경로는 보이는데 **미리보기**가 꺼져 있다는 보고에 따른 변경이다.
+
+- 위 "미리보기 버튼은 꺼진다"는 더 이상 맞지 않는다. 읽기 오류가 없고 제외한 항목이 있으면 세션이 0개여도 미리보기가 열린다(`previewable`). 빈 연결 목록의 제안은 종전대로 가져올 세션이 있을 때만 나온다.
+- 북마크 제외 사유를 하나의 문구에서 넷으로 나눴다: SSH가 아닌 북마크, 프록시, 인증서 조건, SSHv1. 종전에는 SSH가 아닌 북마크는 사유 없이 수만 셌다.
+- 찾은 목록의 파일 출처 줄에 **다른 파일…**을 두었다. `config_preview(format, encoding, like)`가 `like` 출처의 찾은 파일 폴더에서 창을 열고, 고른 파일을 그 출처의 형식과 `encoding_of` 추정으로 읽는다. 페이지는 여전히 경로를 넘기지 않는다.
+- 이 PC의 ini는 그사이 SSH 북마크 1개(필드 39개)와 SSH가 아닌 북마크 1개가 됐고, 값은 보지 않고 필드 구조만 확인했다. 파서 가정(유형 `0`, 19·27·35·36번 필드)과 맞는다.
+
+| 명령 | 결과 |
+|---|---|
+| `cargo fmt --all --check` | 종료 0 |
+| `cargo test -p dachsterm --lib --locked -- session_transfer webview_runtime` | 23 통과. 새 시험 `moba_entries_left_out_each_say_why`, `preview_as` 확인 포함. 첫 실행은 rustc 비정상 종료, 재실행 통과 |
+| `npm run typecheck`, 변경 파일 eslint·prettier | 종료 0 |
+| `npx vitest run src/features/sessions/localImport.test.ts` | 통과(토큰 시험과 합쳐 10) |
+| `npx playwright test tests/ui/session-transfer.spec.ts` | 10 통과. 새 시험: 0개·제외 1개 미리보기와 사유, **다른 파일…**이 `like`를 넘김 |
+
+### 0개로 계산된 원인
+
+보고된 PC의 ini를 받아 확인했다(내용은 기록하지 않는다). 북마크 이름이 모두 `[구분]이름` 꼴이었고, 파서가 `[`로 시작하는 줄을 섹션 머리글로 읽어 `[Bookmarks]` 절이 첫 세션 줄에서 끝났다. 그래서 0개·제외 0개가 됐다.
+
+- 수정: 줄 전체가 `[…]`일 때만 머리글로 본다. 이름이 `[`로 시작해도 `=`와 설정이 이어지는 줄은 북마크다.
+- 사용자명 자리가 `[이름]`이면 프로그램이 따로 보관하는 로그인 정보의 이름이다. 대괄호를 벗겨 사용자명으로 넣고, 실제 계정과 다를 수 있다는 경고를 미리보기에 낸다. 암호는 종전대로 가져오지 않는다.
+- `cargo test -p dachsterm --lib --locked -- session_transfer`: 24 통과. 재현 시험 `moba_names_in_brackets_are_bookmarks_and_stored_logins_give_their_label`과, 받은 ini를 `count_file`·`parse`로 읽는 임시 시험(13개·제외 0개, 사용자명 있는 세션 10개)을 포함한다. 임시 시험은 지웠고 그 뒤 다시 실행하지 않았다.
+
+최종 소스로 `cargo clippy -p dachsterm --all-targets --locked -- -D warnings` 종료 0.
+
+미실행: 전체 테스트, 앱 빌드, `test:import-detect`, 새 빌드로 그 PC에서의 실제 가져오기.
+
 ## 미검증
 
 - macOS 실기기와 macOS 빌드: `~/.ssh/config` 탐지만 해당한다. `cfg(not(windows))` 경로는 이 PC에서 컴파일하지 못했다.

@@ -111,7 +111,8 @@ try {
     assert.equal(bookmarks.problem, null, 'the bookmarks file this PC uses is readable');
     const entry = list.locator('.found-source', { hasText: '세션 북마크' });
     await expect(entry).toContainText(`세션 북마크 ${bookmarks.count}개`);
-    if (bookmarks.count > 0) {
+    // Entries that were all left out still open, so the preview can say why.
+    if (bookmarks.count > 0 || bookmarks.skipped > 0) {
       await entry.getByRole('button', { name: '미리보기' }).click();
       await expect(page.getByRole('heading', { name: /^변환 결과: / })).toContainText(
         `${bookmarks.count}개`,

@@ -1,7 +1,7 @@
 /* Snippets and basic commands: a searchable list at the left, the chosen item at the right. */
 .command-panel {
   width: min(880px, calc(100vw - 32px));
-  height: min(660px, calc(100dvh - 48px));
+  height: min(660px, calc(100vh - 48px));
 }
 /* The list and the detail scroll on their own, so the shared body does not. */
 .command-panel .dialog-body {

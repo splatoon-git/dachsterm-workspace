@@ -42,8 +42,10 @@ button:disabled {
   outline: var(--border-width-focus) solid var(--color-focus-ring);
   outline-offset: var(--border-width-focus);
 }
+/* `vh`, not `dvh`: a desktop webview has no collapsing browser bar, and a WebView2 Runtime older
+   than 108 drops a `dvh` height, which left the shell at its minimum height. */
 .app-shell {
-  height: 100dvh;
+  height: 100vh;
   min-height: 480px;
   display: flex;
   flex-direction: column;

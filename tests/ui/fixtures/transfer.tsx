@@ -26,6 +26,8 @@ declare global {
       found: Found[];
       /** Settings the import offer asked to open. */
       requests: SettingsRequest[];
+      /** The found source each file pick was asked to read like, `null` for a plain pick. */
+      picks: (ImportSource | null)[];
     };
   }
 }
@@ -38,6 +40,7 @@ const state = (window.__transferTest = {
   approved: [] as unknown[],
   found: [] as Found[],
   requests: [] as SettingsRequest[],
+  picks: [] as (ImportSource | null)[],
 });
 const params = new URLSearchParams(location.search);
 if (params.has('found'))
@@ -49,9 +52,25 @@ if (params.has('found'))
 Object.defineProperty(window, 'isTauri', { value: true });
 Object.defineProperty(window, '__TAURI_INTERNALS__', {
   value: {
-    invoke: async (command: string, args: { data: string; approved?: unknown }) => {
+    invoke: async (
+      command: string,
+      args: { data: string; approved?: unknown; source?: ImportSource; like?: ImportSource },
+    ) => {
       if (command === 'config_export') return !state.cancel;
       if (command === 'config_detect') return state.found;
+      if (command === 'config_preview_found' && args.source === 'bookmarks')
+        return {
+          source: '세션 북마크',
+          bundle: {
+            format: 'dachsterm.sessions',
+            version: 4,
+            profiles: [],
+            groups: [],
+            tunnels: [],
+          },
+          warnings: ['프록시를 거치는 세션은 제외했습니다.'],
+          skipped: 1,
+        };
       if (command === 'config_preview_found') {
         const lab = { ...saved, id: 'lab', name: 'Lab', host: 'lab.example.com', groupId: null };
         return {
@@ -77,6 +96,7 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         return JSON.parse(args.data).profiles.length;
       }
       if (command === 'config_preview') {
+        state.picks.push(args.like ?? null);
         if (state.cancel) return null;
         const p = {
           id: 'one',

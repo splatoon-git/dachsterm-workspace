@@ -10,7 +10,7 @@
  */
 dialog {
   width: min(600px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
+  max-height: calc(100vh - 48px);
   padding: 0;
   overflow: hidden;
   border: var(--border-width-default) solid var(--color-border-default);
@@ -32,7 +32,7 @@ dialog.dialog-small {
 }
 dialog.dialog-large {
   width: min(920px, calc(100vw - 32px));
-  height: min(640px, calc(100dvh - 48px));
+  height: min(640px, calc(100vh - 48px));
 }
 
 .dialog-heading {
