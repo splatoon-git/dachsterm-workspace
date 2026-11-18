@@ -91,7 +91,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
 }
 .file-follow-note button {
@@ -152,7 +152,7 @@
 }
 .file-selection-info small {
   flex-shrink: 0;
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
 }
 /* Git status of a row (DX.5). The letter is the default, so the state need not depend on color. */

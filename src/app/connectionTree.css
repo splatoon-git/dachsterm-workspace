@@ -31,7 +31,7 @@
 }
 .tree-section > .tree-head .tree-toggle {
   color: var(--color-text-secondary);
-  font-size: var(--font-caption);
+  font-size: var(--font-small);
   font-weight: var(--font-weight-semibold);
 }
 .tree-toggle:hover:enabled,
@@ -57,7 +57,7 @@
 .tree-count {
   margin-left: auto;
   color: var(--color-text-secondary);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
   font-weight: var(--font-weight-normal);
 }
 /* The section menu button shows on hover or focus, as on the tab bars. */
@@ -137,7 +137,7 @@
   overflow: hidden;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
   text-overflow: ellipsis;
 }
 .local-target small {
@@ -146,7 +146,7 @@
   border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-small);
   color: var(--color-text-secondary);
-  font-size: var(--font-micro);
+  font-size: var(--font-caption);
 }
 /* Recent chat workspaces: the row opens, the ✕ beside it shows on hover or focus. */
 .recent-chats {
@@ -168,12 +168,12 @@
   flex-shrink: 0;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-micro);
+  font-size: var(--font-caption);
 }
 .recent-chat-open {
   flex-shrink: 0;
   color: var(--color-action-primary);
-  font-size: var(--font-micro);
+  font-size: var(--font-caption);
 }
 .recent-chat-forget {
   flex-shrink: 0;
@@ -223,7 +223,7 @@
   border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-small);
   color: var(--color-text-secondary);
-  font-size: var(--font-micro);
+  font-size: var(--font-caption);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--font-tracking-wide);
 }

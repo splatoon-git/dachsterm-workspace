@@ -137,7 +137,7 @@
 .cmd-item-body {
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .cmd-pane {
   display: flex;
@@ -312,7 +312,7 @@
   white-space: nowrap;
 }
 .cmd-target small {
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .cmd-confirm {
   align-items: flex-start;
@@ -434,7 +434,7 @@
   border: var(--border-width-default) solid var(--color-border-subtle);
   border-radius: var(--radius-xs);
   font-family: var(--font-mono);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 @media (max-width: 700px) {
   .command-panel .dialog-body {

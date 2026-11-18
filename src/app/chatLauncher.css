@@ -47,7 +47,7 @@
 .chat-launch-popover h3 {
   margin: var(--space-xs) 0 0;
   color: var(--color-text-secondary);
-  font-size: var(--font-caption);
+  font-size: var(--font-small);
   font-weight: var(--font-weight-semibold);
 }
 .chat-launch-popover ul {
@@ -105,7 +105,7 @@
   flex-shrink: 0;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .chat-launch-away {
   color: var(--color-text-secondary);

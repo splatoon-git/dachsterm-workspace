@@ -75,7 +75,7 @@
 }
 .session-tab small {
   margin-left: var(--space-sm);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .session-tab [role='tab'] {
   gap: var(--space-xs);

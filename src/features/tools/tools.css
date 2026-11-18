@@ -15,7 +15,7 @@
 }
 .tool-pane h2 {
   margin: 0;
-  font-size: var(--font-body);
+  font-size: var(--font-heading);
   font-weight: var(--font-weight-semibold);
 }
 .tool-pane > * {
@@ -315,6 +315,6 @@
 }
 .tool-outside h3 {
   margin: 0;
-  font-size: var(--font-small);
+  font-size: var(--font-body);
   font-weight: var(--font-weight-semibold);
 }
