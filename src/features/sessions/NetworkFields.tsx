@@ -43,6 +43,7 @@ export function NetworkFields({
         사용자
         <input
           required={needsUsername(profile)}
+          placeholder={(profile.protocol ?? 'ssh') === 'ssh' ? '비우면 연결할 때 묻습니다' : ''}
           maxLength={256}
           value={profile.username}
           onChange={(e) => field('username', e.target.value)}

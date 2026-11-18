@@ -75,15 +75,18 @@ describe('importable and previewable', () => {
 });
 
 describe('addBlocker', () => {
-  it('names the sessions that still need a user name', () => {
-    const nameless = ['a', 'b', 'c', 'd'].map((id) => profile(id, { username: ' ' }));
+  it('names the FTP sessions that still need a user name', () => {
+    const nameless = ['a', 'b', 'c', 'd'].map((id) =>
+      profile(id, { username: ' ', protocol: 'ftp' }),
+    );
     expect(addBlocker([profile('ok'), ...nameless], 0, [])).toBe(
       '사용자명이 비어 있는 세션이 4개 있습니다(a, b, c 외 1개). 사용자명을 입력하거나 선택을 해제하면 추가할 수 있습니다.',
     );
   });
-  it('lets Telnet through without a user name, and says nothing when all is ready', () => {
+  it('lets SSH and Telnet through without a user name: they ask when they connect', () => {
     const telnet = profile('t', { username: '', protocol: 'telnet' });
-    expect(addBlocker([profile('ok'), telnet], 0, [])).toBe('');
+    const ssh = profile('s', { username: '' });
+    expect(addBlocker([profile('ok'), telnet, ssh], 0, [])).toBe('');
   });
   it('asks for a selection or a command approval', () => {
     expect(addBlocker([], 0, [])).toBe('추가할 세션을 선택하세요.');

@@ -1,6 +1,6 @@
 import { useRef, useState, useSyncExternalStore } from 'react';
 import { Icon } from '../../components/Icon';
-import { call, errorText, UserError } from '../../lib/ipc';
+import { call, errorText, userAtHost, UserError } from '../../lib/ipc';
 import { checkedBody, previewParts } from './commandItems';
 import { needsPasteConfirmation } from './preferences';
 import type { TerminalSession } from './session';
@@ -11,7 +11,7 @@ const ready = (s: TerminalSession) => {
   return state.status === 'connected' && !state.authPrompt && !state.replaying;
 };
 const address = (s: TerminalSession) =>
-  s.localTarget?.name ?? `${s.profile.username}@${s.profile.host}:${s.profile.port}`;
+  s.localTarget?.name ?? `${userAtHost(s.profile)}:${s.profile.port}`;
 
 /** One terminal the snippet can go to: a check box that follows the connection's state. */
 function Target({

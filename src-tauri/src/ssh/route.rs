@@ -124,7 +124,7 @@ pub(crate) async fn open(
     let mut route = hops;
     route.push((p.clone(), secret));
     let mut owned: Vec<SessionGuard> = Vec::new();
-    for (index, (hop, secret)) in route.into_iter().enumerate() {
+    for (index, (mut hop, secret)) in route.into_iter().enumerate() {
         let label = format!("{}홉 {} ({}:{})", index + 1, hop.name, hop.host, hop.port);
         let base_sink = sink.clone();
         let context = label.clone();
@@ -136,6 +136,13 @@ pub(crate) async fn open(
             }
             base_sink(event)
         });
+        let last = hop.id == p.id;
+        // Saved without a user name: asked before connecting, as a proxy command may name it.
+        if hop.username.is_empty() {
+            hop.username = crate::ssh_auth::hop_username(last, &hop_sink, &mut channels.replies)
+                .await
+                .map_err(|e| format!("{label} 실패 · {e}"))?;
+        }
         sink(Event::State {
             status: "connecting".into(),
             message: format!("{description} · {label} 연결 중"),
@@ -166,7 +173,6 @@ pub(crate) async fn open(
                 stderr = opened.stderr;
                 opened.stream
             };
-            let last = hop.id == p.id;
             let secret = match secret {
                 Some(s) => s,
                 None if matches!(hop.auth.as_str(), "password" | "key") => {

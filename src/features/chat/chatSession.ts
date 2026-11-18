@@ -1,5 +1,5 @@
 import { Channel } from '@tauri-apps/api/core';
-import { call, errorText, type Profile } from '../../lib/ipc';
+import { call, errorText, userAtHost, type Profile } from '../../lib/ipc';
 import { LoginLink } from '../../lib/loginLink';
 import { withAttachments, type ChatAttachment } from './chatAttachments';
 import type { ChatProgram } from './chatPlaces';
@@ -30,7 +30,7 @@ export type ChatPlace =
 export const placeTitle = (place: ChatPlace) =>
   place.kind === 'ssh' ? place.profile.name : '이 PC';
 export const placeDetail = (place: ChatPlace) =>
-  place.kind === 'ssh' ? `${place.profile.username}@${place.profile.host}` : place.name;
+  place.kind === 'ssh' ? userAtHost(place.profile) : place.name;
 /** A chat's name in tabs and lists: `claude` is the default and goes unsaid. */
 export const chatName = ({ place, program }: { place: ChatPlace; program: ChatProgram }) =>
   `채팅 · ${placeTitle(place)}${program === 'claude' ? '' : ` · ${program}`}`;

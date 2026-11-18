@@ -17,11 +17,13 @@ export const defaultSerial: SerialSettings = {
   flow: 'none',
 };
 
-/** Telnet and serial log in inside the terminal, so their user name may stay empty (CG.4, CG.5). */
+/**
+ * Only FTP needs a saved user name. Telnet and serial log in inside the terminal (CG.4, CG.5),
+ * and an SSH session saved without one is asked for it when it connects (W.2).
+ */
 export function needsUsername(p: Pick<Profile, 'protocol'>) {
-  return p.protocol !== 'telnet' && p.protocol !== 'serial';
+  return p.protocol === 'ftp' || p.protocol === 'ftps';
 }
-
 /** `115200 8N1`, as a console's label says it, with flow control when there is one. */
 export function serialLabel(p: Pick<Profile, 'serial'>) {
   const s = p.serial ?? defaultSerial;

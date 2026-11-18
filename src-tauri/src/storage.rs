@@ -223,7 +223,8 @@ impl Profile {
         if self.name.trim().is_empty()
             || self.name.len() > 200
             || (self.protocol != "serial" && (!valid_host(&self.host) || self.port == 0))
-            || (self.username.is_empty() && !self.terminal_only())
+            // An SSH session may be saved without one: the connection asks for it (W.2).
+            || (self.username.is_empty() && ["ftp", "ftps"].contains(&self.protocol.as_str()))
             || self.username.len() > 256
             || self.username.chars().any(char::is_control)
             || !matches!(

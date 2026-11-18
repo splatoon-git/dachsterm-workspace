@@ -5,6 +5,7 @@ import { isRecording, useLogStatus } from '../features/terminal/logStatus';
 import type { TerminalSession } from '../features/terminal/session';
 import { capabilities } from '../features/terminal/sessionKind';
 import { serialLabel } from '../features/sessions/protocol';
+import { userAtHost } from '../lib/ipc';
 import { AgentBoard } from './AgentBoard';
 import { GitStatusItem } from './GitStatusItem';
 import type { AgentBoardState } from './useAgentBoard';
@@ -24,7 +25,7 @@ function where(session: TerminalSession) {
     case 'ftp':
       return `${profile.protocol === 'ftp' ? 'FTP · TLS 없음' : 'FTPS · TLS 인증서 검증'} · ${profile.username}@${profile.host}:${profile.port}`;
     default:
-      return `${profile.username}@${profile.host}:${profile.port}`;
+      return `${userAtHost(profile)}:${profile.port}`;
   }
 }
 

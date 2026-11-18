@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
-import { call, errorText, type Profile } from '../../lib/ipc';
+import { call, errorText, userAtHost, type Profile } from '../../lib/ipc';
 import type { TerminalSession } from '../terminal/session';
 import { ServerPortsButton } from './ForwardPortDialog';
 import type { TunnelStatus as Status } from './serverPorts';
@@ -348,7 +348,7 @@ export function TunnelPanel({
                   </label>
                   <small>
                     {selectedProfile
-                      ? `${selectedProfile.username}@${selectedProfile.host}:${selectedProfile.port}`
+                      ? `${userAtHost(selectedProfile)}:${selectedProfile.port}`
                       : '저장된 SSH 세션이 필요합니다.'}
                   </small>
                   <small>{remote ? 'SSH 서버 → 내 PC' : '내 PC → SSH 서버'}</small>

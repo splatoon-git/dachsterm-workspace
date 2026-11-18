@@ -6,13 +6,8 @@ test('preview, missing user, selection, failure retry and cancellation do not lo
 }) => {
   await page.goto('/tests/ui/fixtures/transfer.html');
   await page.getByRole('button', { name: '파일 선택 · 미리보기' }).click();
-  await expect(page.getByRole('button', { name: '2개 세션 추가' })).toBeDisabled();
-  // The disabled button says which session is in the way, and the line goes once it is not.
-  const reason = page.getByText('사용자명이 비어 있는 세션이 1개 있습니다(개발 서버).');
-  await expect(reason).toBeVisible();
-  await page.getByLabel('개발 서버 사용자명').fill('developer');
-  await expect(reason).toHaveCount(0);
-  await page.getByLabel('개발 서버 사용자명').fill('');
+  // An SSH session without a user name can be added: it is asked for when the session connects.
+  await expect(page.getByRole('button', { name: '2개 세션 추가' })).toBeEnabled();
   await page.getByRole('checkbox').nth(1).uncheck();
   await page.getByLabel('개발 서버 사용자명').fill('developer');
   await page.evaluate(() => {
@@ -89,13 +84,25 @@ test('Telnet and serial sessions without a user name can be added', async ({ pag
     window.__transferTest.consoles = true;
   });
   await page.getByRole('button', { name: '파일 선택 · 미리보기' }).click();
-  // The SSH session still needs its user; the two consoles log in inside the terminal.
-  await expect(page.getByRole('button', { name: '4개 세션 추가' })).toBeDisabled();
-  await page.getByLabel('개발 서버 사용자명').fill('developer');
+  // The consoles log in inside the terminal, and the SSH session asks when it connects.
   await page.getByRole('button', { name: '4개 세션 추가' }).click();
   await expect(page.getByRole('status')).toHaveText('4개 세션을 추가했습니다.');
   const applied = JSON.parse(await page.evaluate(() => window.__transferTest.applied[0]));
   expect(applied.profiles.map((p: { id: string }) => p.id)).toEqual(['one', 'two', 'tel', 'ser']);
+});
+
+test('an FTP session without a user name holds the add button, which says so', async ({ page }) => {
+  await page.goto('/tests/ui/fixtures/transfer.html');
+  await page.evaluate(() => {
+    window.__transferTest.ftp = true;
+  });
+  await page.getByRole('button', { name: '파일 선택 · 미리보기' }).click();
+  await expect(page.getByRole('button', { name: '3개 세션 추가' })).toBeDisabled();
+  const reason = page.getByText('사용자명이 비어 있는 세션이 1개 있습니다(파일 서버).');
+  await expect(reason).toBeVisible();
+  await page.getByLabel('파일 서버 사용자명').fill('files');
+  await expect(reason).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '3개 세션 추가' })).toBeEnabled();
 });
 
 test('sessions found on this PC open as a preview under the program group', async ({ page }) => {

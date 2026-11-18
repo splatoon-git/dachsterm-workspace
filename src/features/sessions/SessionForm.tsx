@@ -16,7 +16,7 @@ import { ProxyField } from './ProxyField';
 import { proxySecretArgs, type ProxySecret } from './proxy';
 import { groupPath, hasConnectionOverrides } from './model';
 import type { SessionTemplate } from './SessionManager';
-import { call, errorText, type Group, type Profile } from '../../lib/ipc';
+import { call, errorText, userAtHost, type Group, type Profile } from '../../lib/ipc';
 import './sessionForm.css';
 export function SessionForm({
   initial,
@@ -81,7 +81,7 @@ export function SessionForm({
       title={initial.id ? '세션 수정' : '새 연결'}
       description={
         initial.id
-          ? `${initial.username}@${initial.host}:${initial.port}`
+          ? `${userAtHost(initial)}:${initial.port}`
           : '서버 주소와 계정을 넣고 저장하거나 바로 연결합니다.'
       }
       close={() => {
