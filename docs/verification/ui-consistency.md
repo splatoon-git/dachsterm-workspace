@@ -1,6 +1,6 @@
 # UI.1 — 배치·글자·컨트롤 점검
 
-- 날짜: 2026-11-18. Windows, `ba1513a`에서 분리한 `codex/ui1-consistency-audit`의 미커밋 소스.
+- 날짜: 2026-11-18. Windows. 최초 `ba1513a`에서 분리해 작업했고, 최종 `dev` 병합·Windows ZIP은 아래 기록을 따른다.
 - 범위: [역할별 기준](../design/ui-consistency.md). 사용자 첨부의 로컬 클러스터 설정 폼, 제목/본문 위계, 일반 컨트롤 크기, 작업 화면의 시작선.
 - 공유 `dev`에는 WebView 높이 호환성과 가져오기 작업이 진행 중이어서 별도 worktree `D:/Work/dachsterm-ui1`에서 진행했다. 그 변경은 수정하지 않았다.
 - 구현 커밋: `5afbeb9`. `dev`의 `ebb85c0`에서 `git merge --no-ff --no-edit codex/ui1-consistency-audit`를 시도했으나 미커밋 `docs/progress.md`, `src/app/styles.css`, `src/features/terminal/commandPanel.css`를 덮어쓸 수 있어 Git이 중단했다. 병합 상태나 사용자 파일 변경 없이 작업 브랜치를 보존했다.
@@ -50,8 +50,7 @@
 
 ## 남은 확인
 
-- `dev` 통합. 공유 작업 트리의 다른 작업이 수정 중인 `styles.css`, `commandPanel.css`, `progress.md`와 겹치므로 그 변경을 보존해야 한다.
-- 이번 소스의 Windows 패키지 앱, OS 배율 100/125/150%, 실제 파일·SSH 내용이 들어간 화면.
+- 생성한 Windows ZIP의 실제 앱 화면, OS 배율 100/125/150%, 실제 파일·SSH 내용이 들어간 화면.
 - macOS 빌드·WKWebView와 실제 시스템 폰트/배율. Windows Chromium 결과로 대체하지 않는다.
 - 모든 프로토콜·오류·대용량 데이터·게임 상태를 사람이 전수 검토한 것은 아니다. 화면 144조합과 UI 자동 회귀를 구분한다.
 
@@ -91,3 +90,13 @@
 마지막 스크린샷 검토에서 보관함 상태 배지의 원래 아래 여백이 공통 `p[role=status]`에 덮여 **입력 레이블까지 간격 0px**인 것을 확인했다. `vault.css`의 기존 상태 선택자를 명확히 해 원래 16px 여백을 복구했다. 이 CSS 수정 뒤 `dialog-layout.spec.ts --grep 'vault status'`를 실행해 **12/12 통과**(`vault-final2.json`): 4너비 × 3테마의 실제 간격과 오류 배너를 확인했다. 최종 추가 테스트 eslint·prettier도 통과했다. 전체 598건은 이 마지막 여백 수정 전이며, 최종 소스 전체 610건을 다시 실행한 것으로 기록하지 않는다.
 
 직접 본 스크린샷에는 Classic 360/560/800/1280, GitHub Dark 360/560/800의 보관함·Git/에이전트·업데이트·세션 미리보기, SSH 키 결과, 저장 확인, 터널 편집창이 포함된다. Windows release 빌드와 ZIP은 아래에 결과를 추가한다. 이번 실행에는 Windows 실제 앱 클릭 검사·OS 배율·Mac 검증이 포함되지 않는다.
+
+### Windows release ZIP
+
+- `dev` 병합: `5f5e6cbdeaad7b4d733b9b04910e2384dff791e6`. 병합한 로컬 작업 브랜치는 삭제했고 원격에는 만들지 않았다. 감사 예외·W.1 변경을 포함한다.
+- `CARGO_BUILD_JOBS=1 npm run tauri -- build --no-bundle`: 종료 0. 프런트엔드 빌드 포함, Rust release 최적화 7분 5초. Vite 큰 청크 경고만 있음. 로그 `test-results/ui-release.log`.
+- ZIP: `target/release/bundle/DachsTerm_0.5.1_x64_5f5e6cb.zip` (23196542 bytes). 구성은 `DachsTerm.exe`, `THIRD_PARTY_NOTICES.txt`, `build-info.json` 3개.
+- ZIP SHA-256: `03d73394e29c3634677cfad5eab320d58b68ec1574be689019ffc868d7355538`.
+- EXE SHA-256: `e6c8a8cc7207bc3cd254c9833abf95e93bfb31a47a915e1ab73add685aa18b8a` (48575488 bytes).
+- `zipfile.testzip()` CRC 검사, ZIP 안 EXE와 빌드 원본의 SHA-256 일치, 라이선스 원본 일치, 빌드 정보의 커밋 일치, EXE PE AMD64 확인 통과. 결과 `test-results/ui-package-verified.json`.
+- ZIP을 새 실제 앱으로 실행한 화면/OS 배율, 구형 WebView2 PC, Mac 실기기는 미검증이다. `main` 반영·푸시·CI는 요청 범위에 포함하지 않았다.
