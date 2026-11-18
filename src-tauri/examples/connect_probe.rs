@@ -436,7 +436,9 @@ async fn x11(run: &Run<'_>) -> Result<()> {
 }
 
 /// CG.2: ProxyCommand. `nc` reaches the jump host; `ssh -W` through it reaches the internal
-/// server; a missing program shows its standard error; a closed connection leaves no process.
+/// server; a missing program is named; a closed connection leaves no process. Windows has no
+/// `nc` or `pgrep`, so it runs the `ssh -W` and missing-program steps; the process ending with
+/// the stream is the unit test `windows_dropping_the_stream_kills_the_process`.
 async fn commands(run: &Run<'_>) -> Result<()> {
     let plain = run.fx.dir.join("plain").to_string_lossy().into_owned();
     let with_command = |name: &str, host: &str, command: String| {
@@ -445,6 +447,46 @@ async fn commands(run: &Run<'_>) -> Result<()> {
         p.host = host.into();
         run.store.save(p, None)
     };
+    #[cfg(unix)]
+    nc_to_jump(run, &with_command).await?;
+    // Not `/dev/null` or `NUL`: Windows OpenSSH wrote `NUL` as a file in the working directory.
+    let known = run.fx.dir.join("proxy_known_hosts");
+    let known = known.to_string_lossy();
+    let ssh = format!(
+        "ssh -i {plain} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no \
+         -o UserKnownHostsFile={known} -o LogLevel=ERROR -p 42222 -W %h:%p probe@127.0.0.1"
+    );
+    let through = with_command("ssh -W", "target", ssh)?;
+    let mut c = run.start(through.clone(), Secrets::default())?;
+    run.ready(&mut c).await.map_err(|e| e.to_string())?;
+    services(&mut c, &through.id).await?;
+    c.stop().await?;
+    println!("PASS ProxyCommand: ssh -W to target with SFTP, Local tunnel, monitoring");
+    let missing = with_command("missing", "target", "dachsterm-no-such-proxy %h %p".into())?;
+    let mut c = run.start(missing, Secrets::default())?;
+    let error = run
+        .ready(&mut c)
+        .await
+        .expect_err("a missing program connected");
+    // macOS: the shell starts and says so on standard error. Windows: the program cannot start.
+    let told = if cfg!(windows) {
+        "프록시 명령을 실행할 수 없습니다: dachsterm-no-such-proxy"
+    } else {
+        "명령 표준 오류:"
+    };
+    assert!(
+        error.contains(told) && error.contains("dachsterm-no-such-proxy"),
+        "{error}"
+    );
+    println!("PASS ProxyCommand failure names the program: {error}");
+    Ok(())
+}
+
+#[cfg(unix)]
+async fn nc_to_jump(
+    run: &Run<'_>,
+    with_command: &impl Fn(&str, &str, String) -> dachsterm::storage::Result<Profile>,
+) -> Result<()> {
     let pids = |pattern: &str| {
         let out = std::process::Command::new("pgrep")
             .args(["-f", pattern])
@@ -472,29 +514,7 @@ async fn commands(run: &Run<'_>) -> Result<()> {
         pids("nc 127.0.0.1 42222").is_empty(),
         "nc is gone after the tab closes"
     );
-    let ssh = format!(
-        "ssh -i {plain} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no \
-         -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p 42222 -W %h:%p probe@127.0.0.1"
-    );
-    let through = with_command("ssh -W", "target", ssh)?;
-    let mut c = run.start(through.clone(), Secrets::default())?;
-    run.ready(&mut c).await.map_err(|e| e.to_string())?;
-    services(&mut c, &through.id).await?;
-    c.stop().await?;
-    println!(
-        "PASS ProxyCommand: nc to the jump host (process ends with the tab), ssh -W to target with SFTP, Local tunnel, monitoring"
-    );
-    let missing = with_command("missing", "target", "dachsterm-no-such-proxy %h %p".into())?;
-    let mut c = run.start(missing, Secrets::default())?;
-    let error = run
-        .ready(&mut c)
-        .await
-        .expect_err("a missing program connected");
-    assert!(
-        error.contains("명령 표준 오류:") && error.contains("dachsterm-no-such-proxy"),
-        "{error}"
-    );
-    println!("PASS ProxyCommand failure shows the command's standard error: {error}");
+    println!("PASS ProxyCommand: nc to the jump host (process ends with the tab)");
     Ok(())
 }
 

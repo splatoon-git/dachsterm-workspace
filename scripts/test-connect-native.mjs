@@ -11,6 +11,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { launchNativeApp } from './lib/native-app.mjs';
+import { showSidebarView } from './native-workspace.mjs';
 
 const secrets = path.join(tmpdir(), 'dachsterm-connect-fixture');
 if (!existsSync(path.join(secrets, 'proxy.password'))) {
@@ -73,7 +74,7 @@ const sessions = [
     protocol: 'ssh',
     proxy: {
       kind: 'command',
-      command: `"${sshClient}" -i "${path.join(secrets, 'plain')}" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o LogLevel=ERROR -p 42222 -W %h:%p probe@127.0.0.1`,
+      command: `"${sshClient}" -i "${path.join(secrets, 'plain')}" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile="${path.join(secrets, 'proxy_known_hosts')}" -o LogLevel=ERROR -p 42222 -W %h:%p probe@127.0.0.1`,
     },
   },
   {
@@ -110,6 +111,8 @@ async function seen(text, timeout = 20_000) {
 }
 async function open(name) {
   stage = `${name}: open`;
+  // An SSH connection turns the sidebar to its files, and it stays there after the tab closes.
+  await showSidebarView(page, '연결');
   await page.locator('.profile-target').filter({ hasText: name }).dblclick();
 }
 async function answerPasswordDialog(name, value) {
@@ -132,6 +135,10 @@ async function trustAndConnect(name, endpoint) {
   await expect(trust).toBeVisible({ timeout: CONNECT_WAIT });
   await expect(trust).toContainText(endpoint);
   await page.getByRole('button', { name: '지문 확인 · 신뢰하고 연결', exact: true }).click();
+  await connected(name);
+}
+/** A later route to a host already trusted gets no prompt; it just connects. */
+async function connected(name) {
   stage = `${name}: connected`;
   await expect(pane().locator('.connection-message')).toContainText('연결됨', {
     timeout: CONNECT_WAIT,
@@ -208,7 +215,7 @@ try {
   await open(socks);
   await answerPasswordDialog(socks, '');
   await answerProxyPassword(socks);
-  await trustAndConnect(socks, 'target:22');
+  await connected(socks);
   await hostIs(socks, 'target');
   await close(socks);
 
@@ -216,7 +223,7 @@ try {
   const command = sessions[2].name;
   await open(command);
   await answerPasswordDialog(command, secret('user.password'));
-  await trustAndConnect(command, 'target:22');
+  await connected(command);
   await hostIs(command, 'target');
   await close(command);
 
@@ -225,7 +232,9 @@ try {
   await open(telnet);
   stage = 'telnet: login prompt';
   await seen('login:', CONNECT_WAIT);
-  await expect(page.getByText('Telnet · 암호화 없음', { exact: false })).toBeVisible();
+  stage = 'telnet: unencrypted notice';
+  // The status bar names it twice: in the session line and in the connection state.
+  await expect(page.getByText('Telnet · 암호화 없음', { exact: false }).first()).toBeVisible();
   await type('probe');
   stage = 'telnet: password prompt';
   await seen('assword:');
@@ -242,8 +251,16 @@ try {
     'PASS connect native: HTTP proxy with prompted password, highlight paint, SOCKS5 with certificate, Windows ProxyCommand ssh -W, Telnet login',
   );
 } catch {
-  // Assertion details may carry what was typed, so only the stage is printed.
+  // Assertion details may carry what was typed, so only the stage is printed. The screenshot is
+  // safe to keep: password fields are masked and the terminal never echoes a typed password.
   console.error(`FAIL connect native stage: ${stage} (details suppressed to protect credentials)`);
+  const counts = await Promise.all([pane().count(), rows().count()]).catch(() => null);
+  if (counts) console.error(`Focused terminal panes: ${counts[0]}, rows: ${counts[1]}`);
+  const shot = path.resolve('target/verification/connect-native-failure.png');
+  await page?.screenshot({ path: shot }).then(
+    () => console.error(`Screen at the failure: ${shot}`),
+    () => {}, // The window may already be gone; the stage line above is the result.
+  );
   process.exitCode = 1;
 } finally {
   await launched?.stop();

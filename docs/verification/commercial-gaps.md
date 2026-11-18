@@ -392,7 +392,7 @@ PASS X11: xdpyinfo through the fake cookie reaches Xvfb, no DISPLAY without forw
 - 실제 WebView2 화면에서: HTTP 프록시(연결 때 묻는 `프록시 암호` 카드) → 내부 서버 `target`, 같은 탭에서 하이라이트 규칙이 일치한 줄만 다른 색으로 그려지는지(계산된 색 비교), SOCKS5 + 키 옆 `-cert.pub` 인증서, ProxyCommand(Windows OpenSSH `ssh.exe -W`, `cmd.exe` 없이 실행되는 경로), Telnet 로그인과 상태바 `Telnet · 암호화 없음`. 비밀은 앱의 입력 칸에만 넣고 실패해도 단계 이름만 출력한다.
 - `verify-windows.ps1 -Native`가 `npm run connect:fixture -- up` 다음 `npm run test:connect`를 실행한다.
 - 넣지 않은 것: Pageant(실행 중인 Pageant와 키가 필요), VcXsrv, 실제 COM 포트, 터미널 안 전송(시스템 파일 창은 CDP로 조작할 수 없다). 이 항목들은 사람 확인으로 남긴다.
-- **Windows에서 실행하지 않았다.** 이 Mac에는 WebView2가 없다. Mac에서 확인한 것은 `eslint`, `prettier --check`, `node --check`와 게이트의 lint·format뿐이다.
+- 작성할 때(Mac)는 `eslint`, `prettier --check`, `node --check`와 게이트의 lint·format만 확인했다. Windows 실행과 그때 고친 스크립트 가정은 [Windows 실행](#windows-실행-2026-11-18-브랜치-verifycg-windows-dev-98f83a8-위-미커밋-트리) 절에 있다.
 
 ### Mac 게이트
 
@@ -423,3 +423,42 @@ macOS 27.2.1(26B131), Apple Silicon, Node 26.0.0, Rust 1.99.1(Homebrew rustup), 
 | ad hoc 서명 앱의 업데이트와 Keychain | 대기. 같은 원인의 근거: ad hoc 앱을 다시 빌드하면 이전 빌드의 Keychain 항목 접근 때 로그인 암호 창이 뜬다([M.29](macos-readiness.md#실제-앱-조작-1차-2026-11-09-17cc876)). 업데이트도 서명(cdhash)이 바뀌므로 같은 창이 예상되지만 업데이트 경로로는 확인하지 않았다 |
 | WKWebView 하이라이트 성능 | 대기. 엔진 측정은 CG.7의 Playwright WebKit(부하 평균 40)뿐이다. 앱 안 측정 경로가 없고, 이번에도 부하 평균 22~35라 다시 재지 않았다 |
 | 실제 USB 시리얼 장치(속도·Break·흐름 제어·분리) | 대기. 장치 없음 |
+
+## Windows 실행 (2026-11-18, 브랜치 `verify/cg-windows`, `dev` `98f83a8` 위 미커밋 트리)
+
+환경: Windows 11 Pro 10.0.26300(x64, 메모리 15.7GB 중 여유 2~5GB), Node 24.22.1, Rust 1.99.1, Docker 28.5.1(WSL2). 메모리가 적어 반복·장시간 검사는 하지 않고 바뀐 부분만 골라 다시 돌렸다.
+
+### 발견과 수정
+
+| 항목 | 내용 |
+|---|---|
+| **결함: Windows clippy 실패** | `ssh/proxy_command.rs` 시험 모듈의 `AsyncReadExt`·`AsyncWriteExt` import를 Unix 전용 시험만 써서 Windows에서 `-D warnings` 오류. CG.2의 Windows 경로가 처음 컴파일되며 드러났다. import를 지우지 않고 Windows 시험 2개를 넣었다: 따옴표 프로그램 경로와 나머지 줄 그대로 전달(`cmd.exe`가 `>&2`·`&`를 직접 해석), 표준 입출력·오류 꼬리, 스트림을 버리면 프로세스 종료(`tasklist`) |
+| **결함: Windows에서 없는 프록시 프로그램의 이름이 안 보임** | macOS는 셸이 `…: not found`를 표준 오류로 남기지만 Windows는 프로그램이 시작조차 못 해 `프록시 명령을 실행할 수 없습니다.`만 나왔다. 이제 `프록시 명령을 실행할 수 없습니다: <프로그램>`(첫 단어 또는 따옴표 경로만, 나머지 줄은 비밀이 있을 수 있어 넣지 않음). 분리 함수 `split_program`을 Windows 실행과 함께 쓴다. 단위 시험 `the_program_is_the_first_word_or_the_quoted_path`, Windows 시험이 문구를 비교 |
+| 검사 환경: 개인키 권한 | `docker cp`로 꺼낸 키는 Windows ACL을 상속해 Windows OpenSSH가 `bad permissions`로 거부했다(`chmod`는 ACL을 바꾸지 않음). `connect-fixture.mjs`가 Windows에서 `icacls /inheritance:r /grant:r <사용자>:F`로 좁힌다 |
+| 검사 스크립트 `test-connect-native.mjs` | Windows 첫 실행에서 앱이 아니라 스크립트 가정 3곳이 틀렸다. ① SSH 연결 뒤 사이드바가 파일 보기에 남아 다음 세션을 못 찾음 → 공용 `showSidebarView`로 연결 보기로 돌아감. ② 이미 신뢰한 `target:22`에 호스트키 창을 다시 기다림 → 두 번째부터 연결만 기다림. ③ 상태바에 `Telnet · 암호화 없음`이 두 번 있어 Playwright 엄격 모드 실패, 단계 이름이 없어 앞 단계로 보고됨 → 단계 이름과 `.first()`. 실패 때 화면(`target/verification/connect-native-failure.png`)과 선택자 수를 남긴다 |
+| 엔진 검사 `connect_probe.rs` | ProxyCommand 단계가 `nc`·`pgrep`·`/dev/null`을 써서 Windows에서 실패. Windows는 `nc` 단계를 건너뛰고(`#[cfg(unix)] nc_to_jump`) `ssh -W`와 없는 프로그램 단계를 실행한다. `UserKnownHostsFile=NUL`은 Windows OpenSSH가 작업 폴더에 `NUL`이라는 파일로 써서, 두 검사 모두 검사 환경 폴더의 `proxy_known_hosts`를 쓴다. **macOS 쪽 컴파일·실행은 이 변경 뒤 확인하지 않았다** |
+
+### 결과
+
+| 검사 | 결과 |
+|---|---|
+| `npm run test:connect`(실제 WebView2 앱) | **통과**: HTTP 프록시(연결 때 묻는 암호) → `target`, 하이라이트가 일치한 줄만 다른 색, SOCKS5 + 키 옆 인증서, Windows ProxyCommand `ssh.exe -W`, Telnet 로그인·`TERM=xterm-256color`·암호 비노출, 페이지 오류 0 |
+| `npm run probe:connect`(제품 엔진) | **9줄 모두 통과**: HTTP CONNECT·SOCKS5·SOCKS5→경유지(터미널·SFTP·Local 터널·모니터링), 프록시 오류 문구, 인증서 3종과 거부 3종, ProxyCommand `ssh -W`, 없는 프로그램 이름 표시, **X11**(검사 환경 Xvfb `127.0.0.1:40000`, 가짜 쿠키 교체, 포워딩 없을 때 `DISPLAY` 없음, X 서버 없음 안내) |
+| `npm run probe:telnet`, `npm run probe:inband` | 통과(Telnet 로그인, SSH 위 `sz`·`rz`·`tsz`·`trz`) |
+| `cargo test -p dachsterm --lib --locked proxy_command` | 5/5(Windows 시험 2개 포함) |
+| `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` | 통과(수정 뒤) |
+| `cargo test --workspace --locked` | 756 통과·무시 8 + 1(수정 중간 트리. 이후 `proxy_command`·`connect_probe` 변경은 위 두 줄로만 다시 확인) |
+| typecheck·lint·format·build, Vitest | 통과, Vitest 1425/1425. `survivor/stages.test.ts`의 30/60/120Hz 시험이 전체 병렬에서 5.8초로 5초 제한을 넘어 개별 제한 30초를 줬다(단독 1.8초, Mac에서도 같은 시간 초과 기록) |
+| Playwright `--workers=2` | 543/546. 실패 3건은 시간 의존 시험으로 단독 재실행에서 통과와 실패가 섞였고 마지막 재실행은 모두 통과: `adventure-random`(클릭 30초 초과), `kube-tree` 폴링 실패 시험(`30초 전` 대신 `36초 전`), `survivor-profile` Web Locks(소유권 재확인 뒤 버튼 비활성). 메모리 압박에서의 흔들림으로 보고 고치지 않았다 |
+| `npm audit --audit-level=low` | **실패**: `picomatch` 4.0.7 ReDoS(GHSA-fc5q-39xc-vjpf, high). 고친 버전 없음(최신 4.0.7), vite·vitest 개발 도구 경로뿐 |
+| `node scripts/audit-dependencies.mjs` | **실패 1건**: `chrono` 0.4.45 관리 중단(RUSTSEC-2026-0543, 고친 버전 없음, russh·russh-sftp·suppaftp 경유). `libz-sys` 1.1.31 힙 오버플로(RUSTSEC-2026-0544)는 1.1.33으로 올렸다(`crates/ssh-probe`의 `ssh2`만 씀, 제품 앱 그래프 아님, clippy·test 통과) |
+| `node scripts/generate-notices.mjs` | 538개, 검토 필요 0 |
+
+환경 메모: 작업 폴더가 소문자 드라이브(`d:\`)인 셸에서 Vitest를 돌리면 모든 파일이 `describe`에서 `Cannot read properties of undefined (reading 'config')`로 실패한다(모듈 이중 로드). `D:\`에서는 통과하며 게이트 스크립트는 `D:\`로 이동해 영향이 없다.
+
+### 남은 것
+
+- Pageant(PuTTY 미설치), VcXsrv·X410(미설치, X11은 위 Xvfb로 엔진만 확인), com0com·실제 COM 포트(없음): 설치 또는 장비 대기.
+- `verify-windows.ps1 -Native` 전체(`test:native` 등): 메모리 부족으로 실행하지 않았다.
+- 이번 `connect_probe.rs` 분기와 `split_program`의 macOS 컴파일·`probe:connect` 재실행.
+- 감사 2건(위)은 상위 수정 대기.

@@ -127,9 +127,13 @@ pub fn spawn(line: &str) -> Result<(CommandStream, Stderr)> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
-    let mut child = command
-        .spawn()
-        .map_err(|_| "프록시 명령을 실행할 수 없습니다.")?;
+    // Only the program is named: the rest of the line may carry a secret the user put there.
+    let mut child = command.spawn().map_err(|_| {
+        format!(
+            "프록시 명령을 실행할 수 없습니다: {}",
+            split_program(line).0
+        )
+    })?;
     let (Some(stdin), Some(stdout), Some(mut err)) =
         (child.stdin.take(), child.stdout.take(), child.stderr.take())
     else {
@@ -160,6 +164,17 @@ pub fn spawn(line: &str) -> Result<(CommandStream, Stderr)> {
     ))
 }
 
+/// The first word, or the quoted program path, and the rest of the line. Windows runs exactly
+/// this split; on macOS the shell parses the line, and this only names the program in an error.
+fn split_program(line: &str) -> (&str, &str) {
+    let line = line.trim_start();
+    if let Some(quoted) = line.strip_prefix('"') {
+        quoted.split_once('"').unwrap_or((quoted, ""))
+    } else {
+        line.split_once(char::is_whitespace).unwrap_or((line, ""))
+    }
+}
+
 #[cfg(unix)]
 fn shell(line: &str) -> tokio::process::Command {
     let mut command = tokio::process::Command::new("/bin/sh");
@@ -173,12 +188,7 @@ fn shell(line: &str) -> tokio::process::Command {
 fn shell(line: &str) -> tokio::process::Command {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let line = line.trim_start();
-    let (program, rest) = if let Some(quoted) = line.strip_prefix('"') {
-        quoted.split_once('"').unwrap_or((quoted, ""))
-    } else {
-        line.split_once(char::is_whitespace).unwrap_or((line, ""))
-    };
+    let (program, rest) = split_program(line);
     let mut command = tokio::process::Command::new(program);
     command
         .as_std_mut()
@@ -192,6 +202,54 @@ mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+    #[cfg(windows)]
+    fn system32(program: &str) -> String {
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        format!(r"{root}\System32\{program}")
+    }
+    // A quoted program path, and the rest handed to it untouched: `cmd.exe` parses `>&2` and `&`
+    // itself, which it could not do if the line had been split into separate arguments.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_runs_the_quoted_program_with_the_rest_as_written() {
+        let line = format!(
+            r#""{}" /d /v:on /c echo oops>&2& set /p x=& echo got !x!"#,
+            system32("cmd.exe")
+        );
+        let (mut stream, stderr) = spawn(&line).unwrap();
+        stream.write_all(b"ping\r\n").await.unwrap();
+        // `cmd` exits after the one line, which ends the stream; `shutdown` would not close stdin.
+        let mut echoed = Vec::new();
+        tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut echoed))
+            .await
+            .expect("cmd answers and exits")
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&echoed).trim(), "got ping");
+        assert_eq!(stderr.text().await.as_deref(), Some("oops"));
+        let error = spawn(r"C:\no\such\program.exe --password hunter2")
+            .err()
+            .expect("a missing program does not start");
+        assert_eq!(
+            error,
+            r"프록시 명령을 실행할 수 없습니다: C:\no\such\program.exe"
+        );
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_dropping_the_stream_kills_the_process() {
+        let line = format!("{} -n 30 127.0.0.1", system32("PING.EXE"));
+        let (stream, _) = spawn(&line).unwrap();
+        let pid = stream.child.id().unwrap().to_string();
+        drop(stream);
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let list = std::process::Command::new(system32("tasklist.exe"))
+            .args(["/FO", "CSV", "/NH", "/FI", &format!("PID eq {pid}")])
+            .output()
+            .unwrap();
+        let list = String::from_utf8_lossy(&list.stdout);
+        assert!(!list.contains(&format!("\"{pid}\"")), "{list}");
+    }
+
     #[test]
     fn tokens_take_the_session_values() {
         let mut p = crate::storage::tests::profile();
@@ -202,6 +260,15 @@ mod tests {
             expand("ssh -W %h:%p -l %r jump # %n 100%%", &p),
             "ssh -W db.internal:2222 -l alice jump # db.internal 100%"
         );
+    }
+    #[test]
+    fn the_program_is_the_first_word_or_the_quoted_path() {
+        assert_eq!(split_program("  nc host 22"), ("nc", "host 22"));
+        assert_eq!(
+            split_program(r#""C:\Program Files\x.exe" -W h:22"#),
+            (r"C:\Program Files\x.exe", " -W h:22")
+        );
+        assert_eq!(split_program("ssh"), ("ssh", ""));
     }
     #[test]
     fn stderr_keeps_a_short_printable_tail() {
