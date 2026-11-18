@@ -471,5 +471,7 @@ describe('G.8.3 continuous stages', () => {
     const expected = simulate(60);
     expect(simulate(30)).toEqual(expected);
     expect(simulate(120)).toEqual(expected);
-  });
+    // About 2 s alone, but six minutes of play at three frame rates passed the 5 s default under
+    // the full parallel suite on both the Windows and macOS gates.
+  }, 30_000);
 });

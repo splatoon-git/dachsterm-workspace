@@ -25,6 +25,21 @@ function copySecrets() {
   docker(['cp', 'init:/run/fixture/.', secrets]);
   for (const name of readdirSync(secrets)) {
     chmodSync(join(secrets, name), name.endsWith('.pub') ? 0o644 : 0o600);
+    if (process.platform === 'win32') ownerOnly(join(secrets, name));
+  }
+}
+
+// `chmod` leaves Windows ACLs alone, and Windows OpenSSH refuses a key that other users can read
+// ("bad permissions"), which the CG.2 ProxyCommand check runs into.
+function ownerOnly(file) {
+  const icacls = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'icacls.exe');
+  const user = `${process.env.USERDOMAIN}\\${process.env.USERNAME}`;
+  const result = spawnSync(icacls, [file, '/inheritance:r', '/grant:r', `${user}:F`], {
+    stdio: 'ignore',
+  });
+  if (result.status !== 0) {
+    console.error(`Could not limit the fixture file to the current user: ${file}`);
+    process.exit(1);
   }
 }
 
