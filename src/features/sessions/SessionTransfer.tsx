@@ -78,6 +78,8 @@ export function SessionTransfer({
     setMessage('');
     void read().then(shown, failed);
   }
+  const pick = (like?: ImportSource) =>
+    load(() => call('config_preview', { format, encoding, like }));
   // Opened once on the source asked for (busy from the start); later picks come from the list.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void (importFrom && found(importFrom).then(shown, failed)), [importFrom]);
@@ -114,7 +116,7 @@ export function SessionTransfer({
         DachsTerm JSON으로 세션·계층·태그·경유·템플릿·터널을 보관합니다. 외부 형식의 지원·제외
         필드는 변환 보고서에서 확인하세요. 암호와 개인키 내용은 포함하지 않습니다.
       </p>
-      <FoundList busy={busy} preview={(source) => load(() => found(source))} />
+      <FoundList busy={busy} preview={(source) => load(() => found(source))} pick={pick} />
       <div className="transfer-options">
         <label>
           가져올 형식
@@ -136,10 +138,7 @@ export function SessionTransfer({
         </label>
       </div>
       <div className="form-actions">
-        <button
-          disabled={busy || !desktop}
-          onClick={() => load(() => call('config_preview', { format, encoding }))}
-        >
+        <button disabled={busy || !desktop} onClick={() => pick()}>
           파일 선택 · 미리보기
         </button>
         <button

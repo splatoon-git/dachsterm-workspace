@@ -72,6 +72,8 @@ pub mod transfer_queue;
 pub mod tunnels;
 mod updates;
 pub mod vault;
+#[cfg(windows)]
+mod webview_runtime;
 pub mod windows;
 mod workspace;
 mod x11;
@@ -234,6 +236,8 @@ pub fn run() {
                 mutation: std::sync::Mutex::new(()),
                 closing: AtomicBool::new(false),
             });
+            #[cfg(windows)]
+            webview_runtime::warn_if_outdated();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -338,7 +342,7 @@ pub fn run() {
             settings::tunnel_stop,
             settings::tunnel_list,
             settings::config_export,
-            session_transfer::config_preview,
+            session_transfer::detect::config_preview,
             session_transfer::detect::config_detect,
             session_transfer::detect::config_preview_found,
             config_includes::config_include_preview,
