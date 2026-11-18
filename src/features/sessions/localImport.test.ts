@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { blankProfile, type Group, type Profile } from '../../lib/ipc';
-import { alreadySaved, foundText, importable, placeUnder, previewable } from './localImport';
+import {
+  addBlocker,
+  alreadySaved,
+  foundText,
+  importable,
+  placeUnder,
+  previewable,
+} from './localImport';
 
 const profile = (id: string, extra: Partial<Profile> = {}): Profile => ({
   ...blankProfile(),
@@ -64,6 +71,24 @@ describe('importable and previewable', () => {
     expect(previewable({ ...base, count: 0, skipped: 0 })).toBe(false);
     expect(previewable({ ...base, count: 0, skipped: 3, problem: '오류' })).toBe(false);
     expect(previewable({ ...base, count: 2, skipped: 0 })).toBe(true);
+  });
+});
+
+describe('addBlocker', () => {
+  it('names the sessions that still need a user name', () => {
+    const nameless = ['a', 'b', 'c', 'd'].map((id) => profile(id, { username: ' ' }));
+    expect(addBlocker([profile('ok'), ...nameless], 0, [])).toBe(
+      '사용자명이 비어 있는 세션이 4개 있습니다(a, b, c 외 1개). 사용자명을 입력하거나 선택을 해제하면 추가할 수 있습니다.',
+    );
+  });
+  it('lets Telnet through without a user name, and says nothing when all is ready', () => {
+    const telnet = profile('t', { username: '', protocol: 'telnet' });
+    expect(addBlocker([profile('ok'), telnet], 0, [])).toBe('');
+  });
+  it('asks for a selection or a command approval', () => {
+    expect(addBlocker([], 0, [])).toBe('추가할 세션을 선택하세요.');
+    expect(addBlocker([], 1, [])).toBe('');
+    expect(addBlocker([profile('ok')], 0, [profile('hop')])).toContain('명령을 실행하는 세션(hop)');
   });
 });
 

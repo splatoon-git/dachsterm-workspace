@@ -7,6 +7,12 @@ test('preview, missing user, selection, failure retry and cancellation do not lo
   await page.goto('/tests/ui/fixtures/transfer.html');
   await page.getByRole('button', { name: '파일 선택 · 미리보기' }).click();
   await expect(page.getByRole('button', { name: '2개 세션 추가' })).toBeDisabled();
+  // The disabled button says which session is in the way, and the line goes once it is not.
+  const reason = page.getByText('사용자명이 비어 있는 세션이 1개 있습니다(개발 서버).');
+  await expect(reason).toBeVisible();
+  await page.getByLabel('개발 서버 사용자명').fill('developer');
+  await expect(reason).toHaveCount(0);
+  await page.getByLabel('개발 서버 사용자명').fill('');
   await page.getByRole('checkbox').nth(1).uncheck();
   await page.getByLabel('개발 서버 사용자명').fill('developer');
   await page.evaluate(() => {
