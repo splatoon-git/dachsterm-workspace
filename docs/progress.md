@@ -1,6 +1,7 @@
 # DachsTerm 구현 진행 현황
 
 - 마지막 갱신: 2026-11-18
+- **UI.1 배치·글자·컨트롤 일관성: 구현·통합 UI 검증 완료 / Windows ZIP 진행 중** — [기준](design/ui-consistency.md), [검증](verification/ui-consistency.md). 터미널 본문을 제외한 후속 팝업·설정 점검: 54상태×4너비×3테마 648조합, 전체 UI 598/598, Vitest 1,433/1,433, typecheck·lint·format 통과. 긴 이름 넘침·제목/컨트롤·설정 스크롤·탭 방향키를 고쳤고 마지막 보관함 간격 보완은 별도 12/12 통과. 최신 `dev`의 W.1·감사 예외를 보존해 통합했다. 남은 ID: UI.1 `dev` 반영·Windows release ZIP, 실제 앱/OS 배율·Mac 확인. 다음 첫 행동: Windows release 빌드 후 EXE·고지·빌드 정보를 ZIP으로 묶고 해시를 기록한다.
 - **W.1 구형 WebView2 화면 붕괴·I.2 찾은 설정 미리보기 보완: 구현·대상 테스트·clippy 통과 / 앱 빌드·전체 게이트·다른 PC 확인 대기** — [아래 절](#w1--구형-webview2와-찾은-설정-미리보기-2026-11-18), [I.2 기록](verification/import-detect.md#추가-2026-11-18-제외-사유와-다른-파일). 사용자의 다른 Windows 11 PC(WebView2 100.0.1185.36)에서 하단 상태 줄이 화면 중간에 뜨고, 찾은 세션 북마크 파일의 미리보기가 꺼져 있었다. `100dvh`(Chromium 108부터)를 `100vh`로 바꾸고, 런타임이 111 미만이면 시작할 때 경고한다. 0개의 원인은 북마크 이름이 `[`로 시작하면 그 줄을 섹션 머리글로 읽던 파서 결함이었고, 고친 뒤 그 PC의 실제 ini에서 13개·제외 0개로 읽힌다. 찾은 파일의 세션이 모두 제외돼도 미리보기를 열어 사유를 보이고, 줄마다 **다른 파일…**을 둔다. 다음 첫 행동: 메모리 여유가 있을 때 `npm run tauri -- build --no-bundle`로 앱을 빌드하고, 새 빌드를 그 PC에서 열어 화면 배치·경고 창과 북마크 미리보기를 확인한다.
 - **감사 예외 목록 (2026-11-18):** `main` CI(`ba1513a`)가 두 OS 모두 고친 버전 없는 공지로 감사 단계에서 실패해(앞선 typecheck~`cargo test`는 통과), 사용자 결정으로 검토한 예외를 [개발 가이드](development.md#자동-검사)의 규칙대로 `scripts/audit-exceptions.json`에 두었다. npm은 개발 도구 전용 공지만(`picomatch` GHSA-fc5q-39xc-vjpf), Rust는 관리 중단 알림만(`chrono` RUSTSEC-2026-0543, `russh-sftp`·`suppaftp` 경유) 허용하고 재검토일은 2026-12-18이다. 만료·미보고 예외는 실패한다. `scripts/audit-npm.mjs`(새로 만듦)와 `audit-dependencies.mjs`가 공용 `audit-exceptions.mjs`를 쓴다. 로컬(Windows, 미커밋 트리): 두 감사 종료 0, 예외 비움·만료·없는 ID·다른 패키지는 각각 종료 1, 고지 538개(`libz-sys` 1.1.33 반영), prettier·eslint 통과. 다음 첫 행동: 2026-12-18에 두 공지를 다시 확인해 고친 버전이 있으면 올리고 예외를 지운다.
 - **I.2 이 PC에서 세션 설정 찾기: 구현·Windows 실제 앱 검사 통과·`dev` 병합 / Mac 대기** — [검증 기록](verification/import-detect.md), [찾는 위치](session-transfer.md#이-pc에서-찾은-설정). PuTTY 레지스트리, 세션 북마크 파일(레지스트리의 마지막 ini 경로 또는 `%APPDATA%`), `~/.ssh/config`를 찾아 빈 연결 목록과 설정 → 가져오기·내보내기에 보여 주고, 기존 미리보기로 가져온다. 가져온 세션은 기본으로 프로그램 이름의 새 그룹 아래에 들어가고(끄면 원래 폴더 그대로), 이미 저장된 대상은 처음 선택에서 빠진다. 대기: Mac 빌드·실기기(`~/.ssh/config`만 해당), 실제 PuTTY 설치본, SSH 북마크가 있는 실제 ini. 다음 첫 행동: Mac에서 `bash scripts/verify-macos.sh`로 `cfg(not(windows))` 경로를 컴파일하고 `~/.ssh/config`가 있는 계정에서 앱을 열어 설정 → 가져오기·내보내기의 찾은 목록을 확인한다.
@@ -241,6 +242,7 @@
 
 | ID | 작업 | 상태 | 근거 또는 남은 사항 |
 |---|---|---|---|
+| UI.1 | UI 배치·글자·컨트롤 일관성 | 통합 UI 검증 완료, Windows ZIP 진행 | [기준](design/ui-consistency.md)·[검증](verification/ui-consistency.md), 실제 앱·Mac/배율 확인 대기 |
 | 0.1 | 도구·Tauri 초기 구성 | 완료 | 기존 Windows 개발 앱·내장 자산 앱 실행/빌드 |
 | 0.2 | 토큰·라이트 테마·마스코트·레이아웃 | 완료 | 1개 테마·토큰 계약, 좁은 창·포커스 검사. Phase 1에서 htop ANSI 배경 대비 보정 |
 | 0.3 | OpenSSH·인증·호스트키·PTY 실증 | 완료 | 실제 Linux OpenSSH 비밀번호·일반/암호화 키·키 거부·PTY·resize |

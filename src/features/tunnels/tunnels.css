@@ -2,7 +2,7 @@
   width: min(920px, calc(100vw - 32px));
 }
 .tunnel-dialog h3 {
-  font-size: var(--font-heading);
+  font-size: var(--font-body);
   margin: 0 0 var(--space-sm);
 }
 .tunnel-dialog h4,
@@ -24,6 +24,7 @@
 }
 .tunnel-list-heading {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: var(--space-md);
@@ -34,7 +35,7 @@
 }
 .tunnel-list-actions {
   display: flex;
-  flex-shrink: 0;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .tunnel-empty {

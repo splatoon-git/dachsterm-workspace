@@ -1,8 +1,4 @@
 /* Shared control sizes and the unified left workspace. Colors come from the active theme. */
-:root {
-  --control-height: 32px;
-  --control-gap: 6px;
-}
 /* Action emphasis never changes geometry. */
 dialog .tunnel-row-actions > button,
 dialog .tunnel-list-actions > button {
@@ -128,7 +124,7 @@ dialog .tunnel-list-actions > button {
 }
 .files .encoding-note {
   padding: 0 var(--space-md) var(--space-sm);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .file-list {
   min-height: 96px;
@@ -137,7 +133,7 @@ dialog .tunnel-list-actions > button {
   font-size: var(--font-small);
 }
 .file-row small {
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 /* Scrolls on its own, so unfinished work never pushes the tree out of the panel. */
 .transfer-tray {
@@ -161,7 +157,7 @@ dialog .tunnel-list-actions > button {
   flex: 1;
 }
 .tray-heading small {
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .transfer-tray .file-toolbar {
   padding-inline: 0;
@@ -182,6 +178,7 @@ dialog .tunnel-list-actions > button {
   box-shadow: var(--shadow-popup);
 }
 .terminal-search input {
+  min-height: 0;
   min-width: 40px;
   width: 100%;
   flex: 1;
@@ -357,7 +354,7 @@ dialog .tunnel-list-actions > button {
 .transfer-status {
   flex-shrink: 0;
   color: var(--color-text-secondary);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
   font-weight: var(--font-weight-semibold);
 }
 .transfer-status[data-status='failed'] {
@@ -371,7 +368,7 @@ dialog .tunnel-list-actions > button {
   height: 22px;
   min-height: 0;
   padding: 0 var(--space-xs-plus);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .transfer-head > .transfer-more {
   width: 22px;
@@ -389,7 +386,7 @@ dialog .tunnel-list-actions > button {
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-xs) 0;
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .transfer-batch > span {
   color: var(--color-text-secondary);
@@ -398,7 +395,7 @@ dialog .tunnel-list-actions > button {
   height: 22px;
   min-height: 0;
   padding: 0 var(--space-xs-plus);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .transfer-results ul {
   list-style: none;

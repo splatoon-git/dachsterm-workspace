@@ -7,7 +7,7 @@
 .vault-panel .form-actions {
   margin-top: var(--space-xs);
 }
-p.vault-state {
+.vault-panel > p.vault-state[role='status'] {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs-plus);

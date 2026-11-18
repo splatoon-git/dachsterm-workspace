@@ -38,6 +38,8 @@
   font-weight: var(--font-weight-semibold);
 }
 .settings-panel {
+  --form-action-align: flex-start;
+  --form-action-spacer: 0px;
   min-width: 0;
   overflow: auto;
   padding: var(--space-lg-plus) var(--space-xl) var(--space-xl);

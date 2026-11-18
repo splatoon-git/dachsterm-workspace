@@ -41,12 +41,12 @@
   display: block;
   padding-bottom: var(--space-xs);
   color: var(--color-text-secondary);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
   white-space: normal;
 }
 .context-menu kbd {
   color: var(--color-text-secondary);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .context-menu-separator {
   height: var(--border-width-default);

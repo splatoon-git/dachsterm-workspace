@@ -185,7 +185,7 @@
 .kube-info h3,
 .kube-cause h3 {
   margin: var(--space-md) 0 var(--space-xs);
-  font-size: var(--font-small);
+  font-size: var(--font-body);
 }
 .kube-info h3:first-child,
 .kube-cause h3:first-child {

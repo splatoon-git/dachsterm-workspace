@@ -83,7 +83,7 @@
 }
 .kube-ai h3 {
   margin: var(--space-md) 0 var(--space-xs);
-  font-size: var(--font-small);
+  font-size: var(--font-body);
   font-weight: var(--font-weight-semibold);
 }
 .kube-ai-trend-head h3 {

@@ -310,14 +310,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  width: min(560px, 100%);
-  margin: var(--space-xl) auto;
-  padding: 0 var(--space-md);
+  width: min(720px, 100%);
+  margin: 0;
+  padding: var(--space-lg) var(--space-lg-plus);
   box-sizing: border-box;
 }
 .kube-board-start h2 {
   margin: 0;
-  font-size: var(--font-title);
+  font-size: var(--font-heading);
 }
 .kube-board-start p {
   margin: 0;

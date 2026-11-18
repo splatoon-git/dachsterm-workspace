@@ -85,7 +85,7 @@
 .editor-text small {
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-tiny);
+  font-size: var(--font-caption);
 }
 .editor-browse {
   border-style: dashed;

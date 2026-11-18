@@ -32,6 +32,7 @@
     "test:connect": "node scripts/test-connect-native.mjs",
     "test:import-detect": "node scripts/test-import-detect-native.mjs",
     "test:ui": "playwright test",
+    "audit:ui": "node scripts/audit-ui.mjs",
     "test:editor-trial": "node scripts/test-editor-native.mjs",
     "format": "prettier --write src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",
     "format:check": "prettier --check src scripts tests *.ts *.js *.json src-tauri/*.json src-tauri/capabilities/*.json",

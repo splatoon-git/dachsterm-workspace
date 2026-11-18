@@ -18,6 +18,27 @@ const themeToken =
 const withoutComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '');
 
 describe('theme tokens in stylesheets', () => {
+  it('reserves micro and tiny text for illustrations, file icons and games', () => {
+    const found = sources.flatMap(([file, text]) => {
+      const name = file.replaceAll('\\', '/');
+      if (
+        !name.endsWith('.css') ||
+        name.startsWith('features/games/') ||
+        name === 'components/fileTypeIcon.css'
+      )
+        return [];
+      return withoutComments(text)
+        .split('\n')
+        .flatMap((line) => {
+          if (!/var\(--font-(?:micro|tiny)\)/.test(line)) return [];
+          // Miniature terminal illustrations, not the theme card's actual label or help text.
+          if (name === 'themes/picker.css' && /^\s*font:/.test(line)) return [];
+          return [`${name}: ${line.trim()}`];
+        });
+    });
+    expect(found).toEqual([]);
+  });
+
   it('references only tokens the theme defines', () => {
     const defined = new Set(Object.keys(cssVariables(defaultTheme)));
     const references = sources.flatMap(([file, text]) =>
