@@ -17,7 +17,7 @@ Invoke-Check 'npm.cmd' @('run', 'test:ui', '--', '--workers=2')
 Invoke-Check 'cargo' @('fmt', '--all', '--check')
 Invoke-Check 'cargo' @('clippy', '--workspace', '--all-targets', '--locked', '--', '-D', 'warnings')
 Invoke-Check 'cargo' @('test', '--workspace', '--locked')
-Invoke-Check 'npm.cmd' @('audit', '--audit-level=low')
+Invoke-Check 'node' @('scripts/audit-npm.mjs')
 Invoke-Check 'node' @('scripts/audit-dependencies.mjs')
 Invoke-Check 'node' @('scripts/generate-notices.mjs')
 if ($Native) {
