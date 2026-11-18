@@ -110,6 +110,6 @@
 }
 .manager-apply {
   display: flex;
-  justify-content: flex-end;
+  justify-content: var(--form-action-align, flex-end);
   gap: var(--space-sm);
 }

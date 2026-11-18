@@ -107,3 +107,6 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.git-credentials button {
+  flex-shrink: 0;
+}
