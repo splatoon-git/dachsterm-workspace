@@ -149,6 +149,27 @@ async function capture(page: Page, info: TestInfo, name: string) {
 
 for (const theme of ['pms-retro-light', 'github-dark', 'terminal-green']) {
   for (const width of [1280, 800, 560, 360]) {
+    test(`${theme} ${width}: vault status is separated from its fields`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 600 });
+      await page.addInitScript((theme) => localStorage.setItem('dachsterm.theme', theme), theme);
+      await page.goto('/tests/ui/fixtures/dialog-audit.html?screen=vault&state=error');
+      const state = page.locator('.vault-state');
+      await expect(state).toBeVisible();
+      const gap = await page
+        .locator('.vault-panel')
+        .evaluate(
+          (panel) =>
+            panel.querySelector('form')!.getBoundingClientRect().top -
+            panel.querySelector('.vault-state')!.getBoundingClientRect().bottom,
+        );
+      expect(gap, 'the status badge must not touch the next field label').toBeGreaterThanOrEqual(
+        12,
+      );
+      await page.getByLabel('현재 마스터 패스워드', { exact: true }).fill('layout-fixture-only');
+      await page.getByRole('button', { name: '잠금 해제', exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText('점검용 오류');
+      await capture(page, info, 'vault-error-spacing');
+    });
     test(`${theme} ${width}: settings and popup layout inventory`, async ({ page }, info) => {
       test.setTimeout(180_000);
       await page.setViewportSize({ width, height: width === 360 ? 600 : 820 });
