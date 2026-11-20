@@ -1,6 +1,6 @@
 //! vLLM and DCGM exporter metrics, from Prometheus text (design KV.10). The metric names are the
 //! original terminal tool's. They have only been checked against stand-in text in this repository,
-//! not against a real engine (docs/verification/kubernetes-workspace.md). Every value is untrusted.
+//! not against a real engine. Every value is untrusted.
 use super::{
     metrics::{label_value, parse_line},
     snapshot::shown,

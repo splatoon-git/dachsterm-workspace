@@ -1,4 +1,4 @@
-//! Backend of the Kubernetes workspace (docs/design/kubernetes-workspace.md). Commands validate and
+//! Backend of the Kubernetes workspace. Commands validate and
 //! delegate; the work is in the modules below.
 mod action;
 #[cfg(all(test, unix))]

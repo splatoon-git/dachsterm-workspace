@@ -24,7 +24,7 @@ Windows MSVC에서 russh의 Ed25519·비밀번호·암호화 개인키 인증과
 
 `ssh2` 자체가 일반적으로 Ed25519를 지원하지 않는다는 뜻이 아니다. **이번에 빌드한 기본 Windows crypto backend**의 결과다. OpenSSL backend로 feature를 변경하면 결과가 달라질 수 있으나 해당 구성은 실증하지 않았다. 공개키 메모리 인증 API도 openssl feature 또는 Unix 조건부다. 별도 crypto 배포 의존과 동시성 dispatcher 비용을 추가하면서 후보를 더 확장할 근거가 없어 우선순위 후보 russh를 선택한다.
 
-실행 근거: [Windows 검증 기록](../verification/phase-0-windows.md), `crates/ssh-probe/src/main.rs`, `npm run probe` 최종 종료 코드 0. Windows 결과를 Mac 성공으로 간주하지 않는다.
+실행 근거: `crates/ssh-probe/src/main.rs`, `npm run probe` 최종 종료 코드 0. Windows 결과를 Mac 성공으로 간주하지 않는다.
 
 ## 보안·자원 관리 계약
 

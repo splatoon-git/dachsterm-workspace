@@ -1,6 +1,6 @@
 # 앱 업데이트 검증 (CG.6)
 
-[roadmap §26](../roadmap.md#26-상용-제품-대비-보완-2026-11-16-사용자-요청--cg) CG.6의 실행 기록이다. 구현 요약과 남은 항목은 [progress](../progress.md)에 있다.
+[roadmap §6.12](../roadmap.md#612-상용-제품-대비-보완-cg) CG.6의 실행 기록이다. 구현 요약과 남은 항목은 [progress](../progress.md)에 있다.
 
 ## 구성
 

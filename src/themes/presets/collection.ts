@@ -1,6 +1,6 @@
 import { createTheme } from './create';
 
-// Palette references and deliberate readability adjustments: docs/verification/themes.md.
+// Palettes follow their references, adjusted where needed to meet the contrast tests.
 export const whiteTheme = createTheme({
   id: 'github-light',
   name: 'GitHub White',

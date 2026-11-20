@@ -1,6 +1,6 @@
 import { createTheme } from './create';
 
-// Requested palettes and the tokens derived from them: docs/verification/themes.md.
+// Requested palettes; the tokens are derived from them and adjusted to meet the contrast tests.
 export const retroLightTheme = createTheme({
   id: 'retro-light',
   name: 'Retro Light',

@@ -1,5 +1,5 @@
 //! Proxy negotiation against fixed answers. The answers are the ones tinyproxy and microsocks gave
-//! in the CG.0 measurement (docs/verification/commercial-gaps.md §2).
+//! in the CG.0 measurement.
 use super::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, duplex};
 

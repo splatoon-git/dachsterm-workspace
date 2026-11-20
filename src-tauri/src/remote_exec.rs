@@ -1,6 +1,6 @@
 //! One bounded remote command on its own exec channel. Every remote command runs through here
 //! except `archive.rs`, which sends its request on stdin and must not be cut off at its time limit
-//! (see the DX.1 note in docs/design/developer-workflow.md).
+//! (DX.1).
 use crate::ssh::Host;
 use russh::{ChannelMsg, client};
 use std::{ops::ControlFlow, time::Duration};
