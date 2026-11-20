@@ -43,7 +43,9 @@ sha1 = "0.10"
 tempfile = "3"
 arboard = { version = "=3.6.1", default-features = false, features = ["image-data"] }
 png = "0.18"
-open = "=5.3.3"
+# Windows hands the path to the shell itself. The default goes through `cmd /c start`, which
+# expands %NAME% inside a file path.
+open = { version = "=5.3.3", features = ["shellexecute-on-windows"] }
 tauri-plugin-notification = "=2.8.0"
 # App updates (CG.6). Only the Rust side calls it; the web view gets none of its commands.
 # The default `zip` feature unpacks old v1 Windows packages, which these releases never publish.

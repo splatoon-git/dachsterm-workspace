@@ -1,6 +1,7 @@
 use crate::{
     AppState,
     editor::Edit,
+    file_opener::Opener,
     sftp::{self, Listing, Transfer},
     storage::Result,
 };
@@ -203,11 +204,50 @@ pub async fn edit_start(
     encoding: Option<String>,
     upload_mode: Option<String>,
 ) -> Result<Edit> {
-    let mode = upload_mode.as_deref().unwrap_or("ask");
+    let mode = upload_mode_of(upload_mode.as_deref())?;
+    crate::editor_launch::check(&app, &program, &args).await?;
+    let opener = Opener::Editor { program, args };
+    let encoding = encoding.as_deref().unwrap_or("original");
+    start_edit(&state, id, profile_id, path, &opener, encoding, mode).await
+}
+/// The same edit as `edit_start`, opened by the program this computer has for the file's type.
+#[tauri::command]
+pub async fn edit_open_default(
+    state: State<'_, AppState>,
+    id: String,
+    profile_id: String,
+    path: String,
+    upload_mode: Option<String>,
+) -> Result<Edit> {
+    let mode = upload_mode_of(upload_mode.as_deref())?;
+    crate::file_opener::check_default(crate::file_read::file_name(&path, false)).await?;
+    start_edit(
+        &state,
+        id,
+        profile_id,
+        path,
+        &Opener::Default,
+        "original",
+        mode,
+    )
+    .await
+}
+fn upload_mode_of(chosen: Option<&str>) -> Result<&str> {
+    let mode = chosen.unwrap_or("ask");
     if !["ask", "auto", "manual"].contains(&mode) {
         return Err("업로드 방식 오류".into());
     }
-    crate::editor_launch::check(&app, &program, &args).await?;
+    Ok(mode)
+}
+async fn start_edit(
+    state: &AppState,
+    id: String,
+    profile_id: String,
+    path: String,
+    opener: &Opener,
+    encoding: &str,
+    mode: &str,
+) -> Result<Edit> {
     let edit = state
         .editors
         .start(
@@ -216,9 +256,8 @@ pub async fn edit_start(
             profile_id,
             path,
             &state.directory.join("edits"),
-            &program,
-            &args,
-            encoding.as_deref().unwrap_or("original"),
+            opener,
+            encoding,
         )
         .await?;
     state.editors.set_mode(&edit.id, mode).await?;

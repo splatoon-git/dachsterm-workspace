@@ -29,6 +29,7 @@ import { verifyAgentTerminal } from './verify-agent-terminal.mjs';
 import { verifyAgentLaunch, verifyDeveloperWorkflow } from './verify-developer-workflow.mjs';
 import { verifyTunnels } from './verify-tunnels.mjs';
 import { verifyEditSaveCard } from './verify-edit-save-card.mjs';
+import { fileOpener, verifyServerOpenByDefault } from './verify-file-preview.mjs';
 import { verifyFileSave } from './verify-file-save.mjs';
 const directory = await mkdtemp(path.join(tmpdir(), 'dachsterm-native-'));
 const screenshots = path.resolve('test-results-native');
@@ -62,6 +63,8 @@ async function launch() {
       DACHSTERM_TEST_CDP_PORT: String(debugPort),
       // verify-edit-save-card.mjs starts node as the editor; the app would otherwise ask first.
       DACHSTERM_TEST_EDITOR: process.execPath,
+      // A stand-in for the desktop's program, so "open by default" starts no real viewer.
+      DACHSTERM_TEST_OPENER: await fileOpener(directory),
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort} --remote-debugging-address=127.0.0.1`,
     },
@@ -277,6 +280,16 @@ try {
       invoke,
       docker,
       probe,
+      setStage: (value) => {
+        stage = value;
+      },
+    });
+    await verifyServerOpenByDefault({
+      pane,
+      invoke,
+      docker,
+      probe,
+      directory,
       setStage: (value) => {
         stage = value;
       },

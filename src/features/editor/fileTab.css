@@ -118,22 +118,6 @@
   margin: 0;
 }
 
-.file-tab-image {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-md);
-  overflow: auto;
-}
-
-.file-tab-image img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-
 .markdown-preview {
   height: 100%;
   padding: var(--space-md) var(--space-lg);

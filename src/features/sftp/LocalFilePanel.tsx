@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, errorText } from '../../lib/ipc';
 import { useFileDrop } from '../../lib/fileDrop';
 import { useFileDragOut } from './dragOut';
-import { savedEditor, savedEditorArgs } from '../../lib/externalEdit';
+import { openByDefault, savedEditor, savedEditorArgs } from '../../lib/externalEdit';
 import { revealItem } from '../../lib/revealItem';
 import { copyPathsItem, fileKeys } from './fileMenuItems';
 import type { LocalTarget, TerminalSession } from '../terminal/session';
@@ -338,8 +338,13 @@ export function LocalFilePanel({
             ...(target.kind === 'wsl'
               ? [{ label: '다운로드…', disabled: !selection.length, run: () => void download() }]
               : []),
-            ...fileMenu(editable ? selectedPaths[0] : undefined, () =>
-              ask({ kind: 'edit', program: savedEditor() }),
+            ...fileMenu(
+              editable ? selectedPaths[0] : undefined,
+              () => ask({ kind: 'edit', program: savedEditor() }),
+              () =>
+                void openByDefault(source, undefined, selectedPaths[0]).catch((e) =>
+                  setError(errorText(e)),
+                ),
             ),
             revealItem(source, selection.length === 1 ? selectedPaths[0] : undefined, setError),
             {

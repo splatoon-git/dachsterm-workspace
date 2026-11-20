@@ -16,6 +16,8 @@ export type FileRead = Facts &
         hash: string;
       }
     | { kind: 'image'; mime: string; data: string; hash: string }
+    /** A whole document for a viewer in the tab. `format` is one of `documentFormats`. */
+    | { kind: 'document'; format: string; data: string; hash: string }
     | { kind: 'binary'; format: string }
     | { kind: 'large' }
     | { kind: 'tooLarge' }

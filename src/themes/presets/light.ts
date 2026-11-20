@@ -28,6 +28,7 @@ export const lightTheme = {
     },
     focus: { ring: '#3978A8' },
     overlay: { backdrop: '#26344718' },
+    document: { paper: '#FFFFFF', ink: '#1F2328' },
   },
   terminal: {
     background: surface.panel,

@@ -1,7 +1,19 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { packageFolders } from './scripts/vite-package-folders.mjs';
+
+const pdfjs = 'node_modules/pdfjs-dist';
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    packageFolders({
+      '/pdfjs/cmaps/': { from: `${pdfjs}/cmaps` },
+      '/pdfjs/standard_fonts/': { from: `${pdfjs}/standard_fonts` },
+      '/pdfjs/iccs/': { from: `${pdfjs}/iccs` },
+      // The script sandbox is for forms that run code, which the preview never does.
+      '/pdfjs/wasm/': { from: `${pdfjs}/wasm`, skip: /quickjs/i },
+    }),
+  ],
   resolve: {
     alias: [
       // Monaco 0.57 ships its own copy of DOMPurify 3.4.15, inside the advisories fixed in 3.4.17.

@@ -55,6 +55,12 @@ pub enum Content {
         data: String,
         hash: String,
     },
+    /// The whole file for a viewer in the tab. `format` is the viewer's id, not a label.
+    Document {
+        format: String,
+        data: String,
+        hash: String,
+    },
     Binary {
         format: String,
     },
@@ -131,7 +137,8 @@ async fn load(mut reader: impl AsyncRead + Unpin, request: Request<'_>) -> io::R
     if request.size.is_some_and(|size| size > LIMIT) {
         return Ok(stopped(Content::TooLarge));
     }
-    let limit = if request.large || matches!(kind, Kind::Image(_)) {
+    let whole = matches!(kind, Kind::Image(_) | Kind::Document(_));
+    let limit = if request.large || whole {
         LIMIT
     } else {
         TEXT_LIMIT
@@ -152,10 +159,16 @@ async fn load(mut reader: impl AsyncRead + Unpin, request: Request<'_>) -> io::R
         }));
     }
     let hash = digest(&data);
+    let encoded = || base64::engine::general_purpose::STANDARD.encode(&data);
     let content = match kind {
         Kind::Image(mime) => Content::Image {
             mime: mime.into(),
-            data: base64::engine::general_purpose::STANDARD.encode(&data),
+            data: encoded(),
+            hash,
+        },
+        Kind::Document(format) => Content::Document {
+            format: format.into(),
+            data: encoded(),
             hash,
         },
         _ => {
@@ -447,6 +460,30 @@ mod tests {
             .decode(data)
             .unwrap();
         assert_eq!(decoded, bytes);
+    }
+
+    #[test]
+    fn documents_come_whole_past_the_text_limit() {
+        let mut bytes = b"%PDF-1.7\n".to_vec();
+        bytes.resize(TEXT_LIMIT as usize + 100, b' ');
+        let result = loaded(bytes.clone(), local_request("a.pdf", false));
+        assert!(result.complete);
+        let Content::Document { format, data, hash } = result.content else {
+            panic!("expected a document");
+        };
+        assert_eq!((format.as_str(), hash), ("pdf", digest(&bytes)));
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .unwrap();
+        assert_eq!(decoded, bytes);
+        let request = Request {
+            size: Some(LIMIT + 1),
+            ..local_request("a.pdf", false)
+        };
+        assert_eq!(
+            loaded(b"%PDF-1.7".to_vec(), request).content,
+            Content::TooLarge
+        );
     }
 
     #[test]

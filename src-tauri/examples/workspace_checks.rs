@@ -1,4 +1,4 @@
-use dachsterm::{editor::Editors, sftp, ssh::Connections};
+use dachsterm::{editor::Editors, file_opener::Opener, sftp, ssh::Connections};
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 pub async fn files(
@@ -59,6 +59,10 @@ pub async fn files(
     let listing = sftp::list(&manager, id, &root).await?;
     assert_eq!(listing.entries.len(), 1);
     let editor = Editors::default();
+    let missing_editor = Opener::Editor {
+        program: "dachsterm-nonexistent-editor".into(),
+        args: vec![],
+    };
     // A missing executable exercises preserved recovery. The editor file itself is then changed as a real editor would.
     let edit = editor
         .start(
@@ -67,8 +71,7 @@ pub async fn files(
             profile.into(),
             remote.clone(),
             &local.path().join("edits"),
-            "dachsterm-nonexistent-editor",
-            &[],
+            &missing_editor,
             "original",
         )
         .await?;
@@ -116,8 +119,7 @@ pub async fn files(
             profile.into(),
             legacy.clone(),
             &local.path().join("edits"),
-            "dachsterm-nonexistent-editor",
-            &[],
+            &missing_editor,
             "euc-kr",
         )
         .await?;

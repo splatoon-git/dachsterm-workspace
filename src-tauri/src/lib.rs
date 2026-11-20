@@ -17,6 +17,7 @@ pub mod editor;
 mod editor_launch;
 mod editor_location;
 pub mod encoding;
+pub mod file_opener;
 pub mod file_ops;
 mod file_read;
 mod file_write;
@@ -269,6 +270,7 @@ pub fn run() {
             local_files::local_files_download,
             local_files::local_file_pick,
             local_files::local_files_edit,
+            local_files::local_files_open_default,
             desktop_files::files_drag_prepare,
             desktop_files::files_drag_out,
             desktop_files::files_reveal,
@@ -404,6 +406,7 @@ pub fn run() {
             workspace::transfer_discard,
             workspace::edit_close,
             workspace::edit_start,
+            workspace::edit_open_default,
             workspace::edit_mode,
             workspace::editor_list,
             workspace::editor_pick,

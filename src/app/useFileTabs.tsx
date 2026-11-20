@@ -98,6 +98,7 @@ function FileCell({
       path={file.path}
       name={file.name}
       live={live}
+      profileId={owner?.profile.id}
       pin={pin}
       renamed={renamed}
     />

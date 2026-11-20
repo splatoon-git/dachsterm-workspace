@@ -1,0 +1,229 @@
+/* Previews of files a tab cannot edit: pictures, PDF, office and 한글 documents. */
+
+.preview-count {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.preview-zoom button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 22px;
+}
+
+.preview-zoom button[aria-pressed='true'] {
+  background: var(--color-action-selected);
+}
+
+.preview-open {
+  flex: none;
+  min-height: 22px;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-small);
+}
+
+.preview-pages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 0;
+  padding: var(--space-md);
+  overflow: auto;
+  background: var(--color-surface-subtle);
+  scrollbar-gutter: stable;
+}
+
+/* A page keeps its own colors in every theme: it shows a document as it was written. */
+.preview-page {
+  flex: none;
+  /* A page wider than the pane scrolls sideways instead of being cut off at the left. */
+  margin: 0 auto;
+  background: var(--color-document-paper);
+  color: var(--color-document-ink);
+  box-shadow: var(--shadow-panel);
+}
+
+.preview-page canvas,
+.preview-page img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.preview-image {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-md);
+  overflow: auto;
+}
+
+.preview-image img {
+  flex: none;
+  margin: auto;
+}
+
+.preview-flow {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-surface-subtle);
+}
+
+.preview-note {
+  margin: 0;
+  padding: var(--space-lg);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+/* A spreadsheet's values. The column letters and row numbers stay in view while it scrolls. */
+.preview-sheet {
+  --sheet-number-width: 44px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--color-surface-panel);
+  font-size: var(--font-small);
+  user-select: text;
+}
+
+.preview-sheet th,
+.preview-sheet td {
+  max-width: 320px;
+  padding: var(--space-xxs) var(--space-sm);
+  overflow: hidden;
+  border-right: var(--border-width-default) solid var(--color-border-subtle);
+  border-bottom: var(--border-width-default) solid var(--color-border-subtle);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-sheet th {
+  position: sticky;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-normal);
+  text-align: center;
+}
+
+.preview-sheet thead th {
+  top: 0;
+  z-index: var(--layer-raised);
+}
+
+.preview-sheet tbody th,
+.preview-sheet thead th:first-child {
+  left: 0;
+  min-width: var(--sheet-number-width);
+}
+
+.preview-sheet thead th:first-child {
+  z-index: var(--layer-handle);
+}
+
+.preview-sheets {
+  display: flex;
+  flex: none;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  overflow-x: auto;
+  border-top: var(--border-width-default) solid var(--color-border-subtle);
+}
+
+.preview-sheets button {
+  flex: none;
+  min-height: 24px;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-small);
+}
+
+.preview-sheets button[aria-selected='true'] {
+  background: var(--color-action-selected);
+}
+
+/* A presentation as an outline: one card for each slide. */
+.preview-slides {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.preview-slide {
+  --slide-indent: 20px;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-lg);
+  border: var(--border-width-default) solid var(--color-border-subtle);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-panel);
+  user-select: text;
+}
+
+.preview-slide header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.preview-slide h3 {
+  margin: 0;
+  font-size: var(--font-heading);
+  overflow-wrap: anywhere;
+}
+
+.preview-slide-number {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-small);
+}
+
+.preview-slide-line {
+  margin: 0;
+  padding-left: calc(var(--slide-level, 0) * var(--slide-indent));
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.preview-slide img {
+  align-self: flex-start;
+  max-width: 100%;
+  max-height: 420px;
+}
+
+.preview-slide-table {
+  align-self: flex-start;
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-small);
+}
+
+.preview-slide-table td {
+  padding: var(--space-xxs) var(--space-sm);
+  border: var(--border-width-default) solid var(--color-border-default);
+  overflow-wrap: anywhere;
+  vertical-align: top;
+  white-space: pre-wrap;
+}
+
+/* The Word viewer brings its own page styles. These put its pages on the app's surface and keep
+   the page itself paper-colored in every theme. */
+.preview-docx .docx-wrapper {
+  padding-bottom: 0;
+  background: var(--color-surface-subtle);
+  user-select: text;
+}
+
+.preview-docx .docx-wrapper > section.docx {
+  background: var(--color-document-paper);
+  color: var(--color-document-ink);
+  box-shadow: var(--shadow-panel);
+}
