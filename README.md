@@ -140,4 +140,4 @@ React는 화면과 터미널 렌더링을 맡고, SSH 연결·전송·터널·�
 
 ## 라이선스
 
-프로젝트 라이선스는 아직 지정하지 않았다. 사용 중인 오픈소스의 고지는 [licenses/](licenses/)에 있다.
+[Apache License 2.0](LICENSE)으로 배포한다. 저작권 표시는 [NOTICE](NOTICE)에, 사용 중인 오픈소스의 고지는 [licenses/](licenses/)에 있다. 이 라이선스는 DachsTerm 이름과 Dachs 마스코트의 상표 사용권을 주지 않는다.
