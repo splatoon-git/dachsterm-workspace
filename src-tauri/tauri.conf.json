@@ -26,7 +26,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhEQTA1ODFCRDFFOTQ5MzcKUldRM1NlblJHMWlnamZkOWtrbjQzazZpa3BXelkwOFZFLzVxMFhCNXhwVVozM2lBVjY1WFNRTUgK",
       "endpoints": [
         "https://github.com/splatoon-git/dachsterm-workspace/releases/latest/download/latest.json"
       ],
