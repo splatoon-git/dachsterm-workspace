@@ -1,0 +1,110 @@
+name: Release
+# Pushing a v<version> tag builds the Windows and macOS installers with their signed update files
+# and leaves them in a draft release. Publishing the draft is a manual step, so nothing reaches
+# `releases/latest` (and the apps that check it) before someone has looked at it.
+#
+# Repository secrets: TAURI_SIGNING_PRIVATE_KEY (the update key's contents) and
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD. The Tauri CLI reads them while building; no step prints them.
+# The procedure is in docs/development.md#앱-업데이트-배포.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            bundles: nsis
+          - os: macos-latest
+            bundles: app,dmg
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      # The app refuses an update whose signed version differs from latest.json, so a tag that
+      # disagrees with any manifest would publish a release no installed app can take.
+      - name: Tag matches the app version
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const tag = process.env.GITHUB_REF_NAME.replace(/^v/, "");
+            const found = {
+              "package.json": JSON.parse(fs.readFileSync("package.json", "utf8")).version,
+              "tauri.conf.json": JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8")).version,
+              "Cargo.toml": (fs.readFileSync("src-tauri/Cargo.toml", "utf8").match(/^version = "(.+)"$/m) || [])[1],
+            };
+            const wrong = Object.entries(found).filter(([, v]) => v !== tag);
+            if (wrong.length) {
+              console.error(`태그 v${tag}와 버전이 다릅니다: ${wrong.map(([f, v]) => `${f} ${v}`).join(", ")}`);
+              process.exit(1);
+            }'
+      - name: Locked dependencies
+        run: npm ci
+      - name: Rust toolchain
+        run: rustup show
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
+      - name: Build installers and update files
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri -- build --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
+      # collect copies the update package (on Windows that is also the installer) and records
+      # its signature; the DMG is the macOS installer and is not an update package.
+      - name: Collect release files
+        shell: bash
+        run: |
+          node scripts/update-release.mjs collect --out release --config src-tauri/tauri.release.conf.json
+          if [ "$RUNNER_OS" = macOS ]; then cp target/release/bundle/dmg/*.dmg release/; fi
+          ls -l release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}
+          path: release
+          retention-days: 7
+          if-no-files-found: error
+
+  draft:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+      # The annotated tag's message becomes the notes shown in the app's update screen and on
+      # the release page.
+      - name: Release notes from the tag
+        run: |
+          git fetch --depth=1 origin "+refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git for-each-ref "refs/tags/$GITHUB_REF_NAME" --format='%(contents)' > notes.md
+          cat notes.md
+      - name: latest.json
+        run: node scripts/update-release.mjs manifest --out release --notes notes.md
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "DachsTerm ${GITHUB_REF_NAME#v}" --notes-file notes.md \
+            release/*.exe release/*.dmg release/*.app.tar.gz release/latest.json
