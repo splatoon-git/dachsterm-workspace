@@ -32,17 +32,13 @@ env -i HOME="$HOME" USER="$USER" LOGNAME="$LOGNAME" /usr/bin/open -n \
 ps eww -p "$(pgrep -f 'DachsTerm.app/Contents/MacOS')" | tr ' ' '\n' | grep '^PATH='   # /usr/bin:/bin:/usr/sbin:/sbin 이어야 한다
 ```
 
-[macos-readiness](../../../docs/verification/macos-readiness.md)의 작업 ID를 먼저 확인한 뒤, 아래 체크리스트를 순서대로 진행한다. 사람의 조작이 필요한 항목(Keychain 승인, 한글 IME, 파일 대화상자, 로컬 네트워크 권한)은 절차를 안내하고 사용자의 관찰 결과를 받아 기록한다.
-
-1. [Phase 0 Mac](../../../docs/verification/phase-0-macos.md)
-2. [Phase 1 Mac](../../../docs/verification/phase-1-macos.md)
-3. [Phase 2~5 Mac](../../../docs/verification/phase-2-5-macos.md)
+[macos-readiness](../../../docs/verification/macos-readiness.md)의 작업 ID를 먼저 확인한 뒤, [macos-checklist](../../../docs/verification/macos-checklist.md)를 순서대로 진행한다. 사람의 조작이 필요한 항목(Keychain 승인, 한글 IME, 파일 대화상자, 로컬 네트워크 권한)은 절차를 안내하고 사용자의 관찰 결과를 받아 기록한다.
 
 사용자가 범위를 지정했으면 그 범위만 진행한다.
 
 ## 5. 기록
 
 - 인증정보, 개인키, Passphrase는 로그와 스크린샷에도 남기지 않는다.
-- 항목별 결과는 해당 Phase의 Mac 문서에, 전체 요약과 작업 ID 상태는 `macos-readiness.md`에 적는다. 명령, 범위, 대상 커밋을 함께 적는다.
+- 결과와 작업 ID 상태는 `macos-readiness.md`에 적는다. `macos-checklist.md`는 절차만 두고 결과를 적지 않는다. 명령, 범위, 대상 커밋을 함께 적는다.
 - `docs/progress.md`의 해당 ID 상태와 다음 첫 행동을 갱신한다.
 - 실행하지 않은 항목은 이유와 함께 대기로 남긴다.

@@ -31,4 +31,4 @@ OS 저장소와 SQLite는 공동 트랜잭션을 지원하지 않는다. 새 OS 
 - [Tauri Channel](https://v2.tauri.app/develop/calling-frontend/)
 - [Playwright WebView2](https://playwright.dev/docs/webview2)
 - [keyring 3.6](https://docs.rs/keyring/3.6.3/keyring/)
-- 구현 검증: `npm run probe:phase1`, `npm run test:native`, [Windows 기록](../verification/phase-1-windows.md).
+- 구현 검증: `npm run probe:phase1`, `npm run test:native`.

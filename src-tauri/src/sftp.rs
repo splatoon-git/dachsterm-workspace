@@ -23,8 +23,8 @@ pub fn failure(e: impl std::fmt::Display) -> String {
 /// One SFTP request waits while its connection lives. A lost connection is found by keepalive,
 /// which counts unanswered probes rather than elapsed time, and ending it ends the transfers on
 /// it. The library's 10s per request, measured on the clock, failed transfers on a 12s network
-/// stall and on every wake from sleep where the clock counts sleep (Windows); see
-/// docs/verification/endurance.md. This hour only stops a server that answers keepalives but
+/// stall and on every wake from sleep where the clock counts sleep (Windows), in the 5.1
+/// endurance measurement. This hour only stops a server that answers keepalives but
 /// never answers SFTP.
 const REQUEST_BACKSTOP_SECS: u64 = 3600;
 pub async fn open(connections: &Connections, id: &str) -> Result<SftpSession> {

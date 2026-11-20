@@ -5,7 +5,7 @@
 //! the last one has been drawn, so a busy server cannot outrun the screen. While a frame waits,
 //! the data that arrives is gathered into the next frame, up to 32KiB. Sending each SSH message
 //! as its own frame kept a terminal at one ~4KiB message per round trip (the 5.1 endurance
-//! measurement in docs/verification/endurance.md).
+//! measurement).
 //!
 //! A window that acknowledges nothing for 30 one-second steps ends the connection. The steps
 //! are counted, not measured: after the PC wakes from sleep the clock may have moved on by

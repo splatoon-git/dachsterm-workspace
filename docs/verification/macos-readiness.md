@@ -1,202 +1,103 @@
 # macOS 준비 상태
 
-Mac 빌드와 동작의 현재 상태, 남은 작업 ID의 정본이다. 항목별 실기기 체크리스트는 [Phase 0](phase-0-macos.md), [Phase 1](phase-1-macos.md), [Phase 2~5](phase-2-5-macos.md)에 있다.
+Mac 빌드와 동작의 현재 상태, 남은 작업 ID, Windows와의 알려진 차이의 정본이다. 확인 절차는 [macos-checklist](macos-checklist.md)에 있다.
 
-- 기록일: 2026-11-06 / 대상: `0fcf569`. 2026-11-08 GE 항목 등록(M.17 확장, M.18~M.20): GE 코드는 `dev`에만 있어 **macOS CI도 아직 컴파일한 적이 없다.**
-- **macOS CI 통과**(실행 `42170815875`, `macos-26-arm64`). 빌드와 자동 테스트만 확인한 것이다.
-- **실기기 앱 결과는 M.23의 쿠버네티스 범위 외에는 아직 없다.** CI는 앱을 띄우지 않으며, Keychain·IME·파일 대화상자·실제 SSH 접속은 실행되지 않았다.
+- **실기기 결과와 CI 결과를 구분한다.** macOS CI(`macos.yml`)는 빌드와 자동 테스트만 확인한다. 앱을 띄우지 않으므로 Keychain, IME, 파일 대화상자, 실제 SSH 접속, 권한 창은 CI 통과로 기록하지 않는다.
+- Mac 실기기 결과는 대부분 에이전트의 **자동 조작**(System Events·CGEvent 입력, 창 캡처·디스크 내용·서버 기록으로 판정)이다. 사람이 직접 확인한 항목은 따로 표시한다.
+- 실행 환경: macOS 26.5, Apple Silicon. 다른 macOS 버전에서는 실행하지 않았다.
 
-## CI에서 확인한 것
+## 자동 게이트와 실제 SSH 엔진
 
-같은 커밋의 Windows 실행(`42170815900`)도 통과했다.
+| 범위 | 마지막 기록 |
+|---|---|
+| macOS CI | 실행 `44676990208`(`d21781c`) 성공. 빌드와 자동 테스트만 |
+| Mac에서 `bash scripts/verify-macos.sh --package` | `17cc876` + 미커밋 수정 트리에서 종료 0. CG.10(`201b5e1` 위 미커밋 트리)에서는 게임 Vitest 1건이 부하로 시간 초과해, 그 파일을 `--testTimeout=60000`으로 다시 돌린 뒤 나머지 단계 종료 0 |
+| Mac에서 `npm run probe`, `probe:phase1`, `probe:ftp` | `17cc876`에서 모두 종료 0. `probe:phase1`은 큐·NFD·SFTP·터널·모니터링·Git·tmux·Keychain·금고·agent 전달·HTTPS 자격 증명·LFS 단계 포함 |
+| Mac에서 `probe:connect`, `probe:telnet`, `probe:serial`, `probe:inband` | CG 각 브랜치 병합 전 통과. 이후 바뀐 `connect_probe.rs`·`proxy_command.rs`의 Mac 컴파일과 `probe:connect`는 대기 |
 
-| 항목 | macOS | Windows |
-|---|---|---|
-| Vitest | 18파일 231개 통과 | 231개 통과 |
-| Playwright (Chromium) | 87개 통과 | 87개 통과 |
-| `cargo test --workspace` (앱 / ssh-probe) | 66개 / 1개 통과 | 61개 / 1개 통과 |
-| `cargo clippy --workspace --all-targets -D warnings` | 통과 | 통과 |
-| C 컴파일과 링크 (`ring`, SQLite, `libssh2`) | 통과 | 통과 |
-| 앱 번들 | debug `DachsTerm.app` 81.96MiB 생성 | 이 실행에서는 생성하지 않음 |
+Playwright는 Mac에서도 대부분 Chromium으로 실행된다. WebKit은 `*.webkit.spec.ts`만 macOS에서 실행하며 WKWebView 앱 결과를 대신하지 않는다.
 
-Rust 테스트 수 차이는 Mac 전용 6개(`login_path` 5개, `local_links` 1개)와 Windows 전용 1개(`wsl_unicode_names`) 때문이다. Playwright는 Mac에서도 Chromium으로 실행된다. WKWebView 동작을 검증한 것이 아니다.
+## 작업 ID 상태
 
-이 통과가 M.1, M.5~M.11의 해결을 뜻하지는 않는다. 이 게이트는 해당 경로를 실행하지 않는다. M.1은 러너에 OpenSSL이 있어 CI에서 드러나지 않는다.
+상태 표기: **대기** = Mac 앱에서 미실행 / **일부 확인** = Mac에서 일부만 실행 / **확인** = Mac에서 실행해 통과. 항목별 확인 방법은 [macos-checklist](macos-checklist.md)의 같은 ID를 본다.
 
-## 교차 검사와 코드 읽기로 확인한 것
+### 빌드와 검증 도구
 
-| 항목 | 결과 | 근거 |
-|---|---|---|
-| 앱 크레이트 Rust 코드 | 통과 | `cargo clippy -p dachsterm --all-targets --locked --target aarch64-apple-darwin -- -D warnings` 종료 0. 라이브러리, 바이너리, 테스트, 예제 3개 포함 |
-| npm lockfile | Mac 바이너리 포함 | `sharp`, `rolldown`, `lightningcss`, `@tauri-apps/cli`의 `darwin-arm64`, `darwin-x64` 항목 존재 |
-| Cargo.lock | Mac 의존성 포함 | 위 검사가 `--locked`로 해석됨 |
-| 번들 입력 | 존재 | `icon.icns`, `targets: all`, `keyring`의 `apple-native` |
-| UI 테스트 기준 이미지 | 없음 | `toHaveScreenshot` 미사용. OS별 이미지 차이로 실패할 일이 없다 |
-
-위 Rust 검사는 Windows에서 C 컴파일러를 빈 파일만 만드는 스텁으로 바꿔 실행했다. C 컴파일, 링크, 번들 생성, 테스트 실행은 이후 CI 실행으로 확인했다.
-
-## 작업 목록
-
-M.2~M.4는 수정했고(`0fcf569`), 나머지는 미착수다. Mac 실기기에서 확인해야 완료로 기록한다. roadmap의 5.2, 5.3에 속한다.
-
-표시: **확인** = 코드 또는 명령 출력으로 확인(Mac 실행은 아님) / **추정** = Mac에서 재현 필요
-
-### 빌드
-
-| ID | 영향 | 상태 | 내용 | 조치 |
+| ID | 영향 | 상태 | 내용 | 남은 것 |
 |---|---|---|---|---|
-| M.1 | 높음 | 확인 | `crates/ssh-probe`의 `ssh2`가 Unix에서만 `libssh2-sys`→`openssl-sys`를 끌어온다. OpenSSL이 없는 Mac에서는 `cargo clippy --workspace`, `cargo test --workspace`가 실패한다. 앱 빌드(`tauri build`)는 이 크레이트를 포함하지 않는다. CI 러너에 OpenSSL이 있으면 CI에서는 드러나지 않는다. | 당장은 `brew install openssl@3`를 전제로 한다. 장기적으로는 `ssh2` 비교 실증을 유지할지 결정한다 |
+| M.1 | 높음 | 알려진 제약 | `crates/ssh-probe`의 `ssh2`가 Unix에서 `openssl-sys`를 끌어와, OpenSSL이 없는 Mac에서는 `--workspace` 명령이 실패한다. 앱 빌드는 이 크레이트를 포함하지 않는다. CI 러너에는 OpenSSL이 있어 드러나지 않는다 | `brew install openssl@3`를 전제로 한다. `ssh2` 비교 실증을 유지할지 결정 |
+| M.9 | 중간 | `probe:ftp` 확인 / UI 수동 | `*-native.mjs`는 WebView2 CDP에 의존해 Mac에서 실행할 수 없다. `run-ftp.mjs`의 `--native` 계열은 Mac에서 이유를 밝히고 멈춘다 | 앱 UI는 체크리스트로 수동 확인 |
+| M.10 | 중간 | 확인(CI) | `audit-dependencies.mjs`와 `generate-notices.mjs`가 Windows·macOS 의존성 그래프를 합쳐 본다. `verify-macos.sh`와 `macos.yml`에 연결됨. Mac에서 감사 0건 | 없음 |
+| M.11 | 낮음 | 일부 도입 | `playwright.config.ts`에 macOS 전용 WebKit 프로젝트가 있고 `*.webkit.spec.ts`만 실행한다 | 필요한 화면에 WebKit 시험 추가. WKWebView 결과를 대신하지 않는다 |
 
 ### 동작
 
-| ID | 영향 | 상태 | 내용 | 조치 |
-|---|---|---|---|---|
-| M.2 | 높음 | 수정, 실기기 대기 | `transfer_queue.rs`의 `local_guard`는 모든 상위 경로의 심볼릭 링크를 거부한다. macOS의 `/tmp`, `/var`는 심볼릭 링크라서 이 아래 경로의 전송이 "링크 또는 junction" 오류로 실패한다. `tempfile`의 기본 위치(`/var/folders/…`)도 해당되어 `examples/queue/checks.rs` 같은 실증이 막힌다. `refuses_link_ancestor` 테스트는 링크가 없어도 통과하게 되어 검증력을 잃는다. | OS가 소유한 최상위 링크를 허용하고 사용자 링크 거부는 유지한다. 테스트는 정상 경로 통과도 함께 단언한다 |
-| M.3 | 높음 | 수정, 실기기 대기 | Finder로 실행한 앱의 `PATH`에는 Homebrew가 없다. 로컬 PodTree는 `--noprofile --norc`로 실행되어 `command -v kubectl`이 실패한다. `bash_target`이 Homebrew Bash를 골라도 `podtree.rs`의 `exec bash`는 `PATH`의 Bash 3.2를 실행하는데, `podtree.sh`는 `declare -A`, `mapfile`을 쓴다. `tauri dev`는 터미널의 `PATH`를 물려받아 재현되지 않는다. | 시작 시 로그인 셸의 `PATH`를 얻어 적용하고, `exec`에는 선택한 Bash의 절대 경로를 쓴다 |
-| M.4 | 높음 | 수정, 실기기 대기 | `editor.rs`의 `editor_program`은 Windows에서만 설치 경로를 찾는다. Mac에서는 `code`, `cursor`, `subl`을 이름으로 실행하므로 Finder 실행 앱에서 M.3과 같은 이유로 실패한다. | `.app` 내부 CLI 경로 탐색을 추가한다 |
-| M.15 | 높음 | 구현, 실기기 대기 | DX.2~DX.9를 Windows와 Docker에서만 실행했다. macOS CI는 빌드와 자동 테스트만 확인한다. 실기기에서 확인할 것: ① **Finder로 실행한 앱의 `SSH_AUTH_SOCK`**(launchd가 GUI 앱에 주는 값이 있는지, 없으면 SSH agent 인증과 키 전달이 모두 안 된다)과 `agent_forward.rs`의 **Unix 소켓 중계**(`cfg(unix)` 경로, 서버의 `ssh-add -l`·서명 카드·거부·`ssh-add -D` 차단), ② **tmux**(DX.3 재접속, DX.7 tmux 시작과 붙기만, 재접속 뒤 `SSH_AUTH_SOCK` 안내), ③ **단축키** `Cmd+Shift+G`(변경 검토), `Cmd+Shift+.`(다음 입력 대기), 터미널 안 `Cmd+Shift+↑↓`(프롬프트 이동)와 IME·시스템 단축키 충돌, ④ **검토 탭**(WKWebView에서 diff 가상화 스크롤, `color-mix` 색, 좁은 칸 위아래 배치, 의견을 Enter 없이 프롬프트에 넣기), ⑤ **실제 앱의 Bash 3.2**(`/bin/bash` 3.2.57에서 DX.9 명령 경계의 Enter 방식, 실패 표시, 프롬프트 이동. 지금은 Docker `bash:3.2`에서 훅 단독으로만 확인), ⑥ 연결 트리·파일 트리의 **에이전트 시작…** 우클릭(두 손가락 클릭·Control+클릭)과 Zsh 프롬프트 입력, 현황판에서 독립 창 포커스(`setFocus`·`unminimize`), ⑦ **DX.11 앱 내장 agent**(시스템 agent 없이 Finder 앱에서 로그인 키와 추가 키 전달, 승인 카드의 Passphrase 입력과 **이 PC에 저장**이 Keychain에 들어가는지, `~/.ssh` 경로 입력과 한글 NFD 파일 이름, `SSH_AUTH_SOCK`이 있을 때 시스템 agent 키와 합치기·중복 없음. `/usr/bin/ssh-keygen`을 쓰는 단위 테스트는 macOS CI에서 처음 실행된다), ⑧ **DX.13 로컬 탭의 키 제공**(설정 › 에이전트에서 켠 뒤 새 로컬 탭의 `SSH_AUTH_SOCK`이 `$TMPDIR` 아래 `dachsterm-agent-*` 0700 폴더의 `agent.sock`인지, 경로가 104바이트를 넘으면 `/tmp`로 가는지, `ssh-add -l`에 앱의 키와 시스템 agent 키가 중복 없이 보이는지, 앱 키 서명은 탭 카드로 승인·거부되고 시스템 agent 키는 카드 없이 서명되는지, `git push`, 탭을 닫으면 소켓과 폴더가 사라지는지, 로그인 셸의 rc 파일이 `SSH_AUTH_SOCK`을 덮어쓰는 경우의 안내 필요 여부. Unix 소켓 경로의 단위 테스트는 macOS CI에서 처음 실행된다) | 패키지된 앱(`.app`)을 Finder로 실행해 `mac-verify`로 확인. Windows·CI 결과로 대체하지 않는다 |
-| M.16 | 높음 | 자동 키 이벤트 통과, 사람 입력 대기 | 2026-11-09 Mac 시험 앱에서 실제 한글 입력기를 거친 자동 키 이벤트로 통과해 Monaco를 유지한다([결과](editor-trial.md#mac-실기기-자동-키-이벤트-2026-11-09)). 일본어·중국어와 사람의 실제 타이핑은 미실행이다. 그 전까지는 GE.4 편집기 시험을 Windows WebView2에서만 실행했다. **Monaco가 Mac 한글 조합에서 글자를 잃거나 중복하면 CodeMirror 6로 바꾼다**(설계안 GE.4). `editContext: false`라 WKWebView와 입력 코드는 같지만 엔진과 IME가 다르다. 확인할 것: ① 한글 2벌식의 받침, 받침 넘어가기(`안녕`, `값이`), 조합 중 화살표 이동, 조합 중 `Cmd+S`에서 글자 손실·중복·자모 잔류, ② 일본어·중국어 입력기 변환과 확정, ③ 10만 줄 스크롤과 마지막 줄 도달, ④ 테마 전환, ⑤ diff 좌우·한 줄, ⑥ `tauri://` 아래 웹 워커 시작(TypeScript 화면의 빨간 밑줄), Web Inspector의 CSP 오류, 아이콘 글꼴 | 시험 앱을 만들어 확인한다(이 명령은 Mac에서 미실행): 일반 앱을 닫고 `CARGO_TARGET_DIR="$PWD/target/editor-trial" npm run tauri -- build --debug --bundles app --config tests/editor-trial/tauri.trial.json`, `target/editor-trial/debug/bundle/macos/DachsTerm.app`을 Finder로 실행한다. 시험 화면 위쪽에서 화면과 테마를 고른다. 결과는 [편집기 시험 기록](editor-trial.md)에 적는다 |
-| M.17 | 중간 | 구현, 실기기 대기 | GE.3 끌어내기를 Windows 쪽만 작성·검사했다. Rust 타입 검사(`aarch64-apple-darwin`, C 컴파일러 대역)만 통과했고 링크·실행은 하지 않았다. `drag` 크레이트는 폴더도 파일 URL(`isDirectory: false`)로 넘기므로 폴더 끌기를 확인해야 한다. | Finder로 파일·폴더 끌어내기, 서버 파일 끌어내기(버튼을 누른 채 받기, 10MiB 초과·폴더 거부), 앱 위에 놓았을 때 무시, **Finder에서 보기**(`/usr/bin/open -R`), GE.2의 **Finder → 로컬 파일 패널 끌어 놓기**(점선 테두리, 지금 폴더로 복사, NFD 한글 파일 이름)를 패키지된 앱에서 확인 |
-| M.18 | 높음 | 구현, 실기기 대기 | GE.5·GE.6·GE.8의 파일 탭과 편집을 Windows WebView2에서만 실행했다. M.16은 시험 화면이고, 이 항목은 **실제 앱의 한글 입력과 저장**이다. M.16에서 부품을 바꾸면 이 항목도 다시 확인한다. | 패키지된 앱을 Finder로 실행해 확인: ① **한글 입력**: 파일 탭, diff 탭 오른쪽, Git 커밋 메시지에서 받침·받침 넘어가기·조합 중 화살표 이동, 조합 중 `Cmd+S`, 커밋 메시지의 조합 중 `Cmd+Enter`에서 글자 손실·중복·자모 잔류, ② **표시**: 파일 탭의 구문 강조, Markdown 미리보기, data URI 이미지, 2MiB 초과 **크게 열기**, diff 좌우·한 줄, ③ **저장**: `Cmd+S`, `Cmd+Shift+S`(파일 탭 포커스일 때만 다른 이름, 그 밖에는 명령 창), 다른 이름 저장, 저장 후 권한 유지, SFTP·FTP·로컬 저장과 충돌 카드, ④ **한글 파일 이름**: NFD 이름의 열기·저장·다른 이름 저장(M.5와 함께), ⑤ **`Cmd+Q`**: 앱 메뉴 종료가 저장 안 함 확인을 거치는지(창 닫기 경로와 다를 수 있다. 서바이버 정산 가드도 같은 경로) |
-| M.19 | 중간 | 구현, 실기기 대기 | GE.7·GE.9·GE.10·GE.12·GE.14·GE.15의 Git 화면을 Windows·Docker에서만 실행했다. Finder로 실행한 앱의 `PATH`에는 Homebrew git이 없고, 명령줄 도구가 없는 Mac의 `/usr/bin/git`은 실행하면 설치 창을 띄운다. `git_config` 쪽 `aarch64-apple-darwin` 타입 검사도 미실행이다. | 패키지된 앱을 Finder로 실행해 확인: ① 로컬 탭의 Git 보기에서 git 찾기, 명령줄 도구가 없을 때 `/usr/bin/git`을 실행하지 않고 설치 안내, **설정 → Git**의 파일 선택, ② 스테이지·커밋·변경 버리기·브랜치·stash, 커밋 훅 실행, ③ fetch·pull·push가 탭 터미널에 입력되고 키·자격 증명 카드로 응답(M.15의 `SSH_AUTH_SOCK` 확인과 함께), ④ 그래프의 SVG 표시와 펼치기, 상태바 Git 항목 클릭과 파일 정보, 표시 방식 미리보기(WKWebView), ⑤ 우클릭(두 손가락 클릭·Control+클릭) 메뉴, ⑥ GE.15: 변경 목록과 그래프 사이 끌기, 커밋 호버 카드 위치(WKWebView `ResizeObserver` 포함), 커밋 파일 diff 탭, 브랜치 빠른 선택의 한글 입력(조합 중 Enter로 고르지 않는지) |
-| M.20 | 중간 | 구현, 실기기 대기 | GE.11 터미널 안 브랜치는 Docker의 Bash 3.2/4.4/5.2·Zsh에서 훅 단독으로, 실제 앱은 SSH 탭과 WSL 탭으로 확인했다. Mac 로컬 탭은 실행하지 않았다. | 패키지된 앱의 로컬 탭에서 `/bin/bash` 3.2와 Zsh의 배지 표시, `git checkout` 뒤 첫 프롬프트 갱신, **한글 브랜치 이름**, Zsh 오른쪽 프롬프트와의 겹침, `Ctrl+L`·창 크기 변경 뒤 위치 |
-| M.21 | 중간 | 구현, 실기기 대기 | TL.3 SSH 키 만들기는 Windows 실제 앱과 Docker OpenSSH로 확인했다. Mac 분기(`0600`, `~/.ssh` `0700`, `/bin/hostname`)는 실행하지 않았다. | 패키지된 앱에서 도구 → SSH 키 만들기로 Passphrase 있음·없음 키 생성, `ls -l`로 `0600`, `~/.ssh`가 없을 때 `0700`으로 생성, 기본 주석(Finder 실행), 폴더 창, `ssh -i`로 실제 로그인, 세션 폼 **새 키…** |
-| M.22 | 중간 | 구현, 실기기 대기 | TL.6~TL.9 네트워크 도구를 Windows 실제 앱과 Docker OpenSSH로만 실행했다. Mac 분기는 실행하지 않았다. 코드상 차이: `/usr/sbin/lsof -nP -F`(포트 사용 여부), `/usr/sbin/traceroute`의 TCP(`-P tcp -p`) 시도 후 UDP로 넘어가기(경로 추적), `rustls_native_certs`의 Keychain 읽기(서비스 연결의 신뢰 결과). | 패키지된 앱을 Finder로 실행해 확인: ① 도구 → 포트 사용 여부의 로컬 목록과 프로세스 이름, 다른 계정 소켓의 표시, ② 서비스 연결의 HTTPS 공인 인증서 `신뢰 OK`와 자체 서명 표시, ③ 경로 추적이 일반 권한에서 TCP로 되는지, 안 되면 UDP(참고용)로 넘어가는지, 표시되는 안내, 취소 뒤 `traceroute` 프로세스가 남지 않는지, ④ 로컬 네트워크 권한(M.6) 프롬프트와 사내망 대상, ⑤ 결과 행 우클릭(두 손가락 클릭·Control+클릭)과 `서비스 연결로 보기` |
-| M.23 | 중간 | 일부 확인 | KV.13 실시간 로그·요청 흐름·서버 `kubectl` 정리와 KV.9 런타임 탭을 Mac 패키지 앱(`e56215c`, 검사 스크립트를 주입한 임시 빌드)과 실제 OpenSSH·kind로 통과했다. [기록](kubernetes-workspace.md#kv13kv9-mac-실기기-검증-2026-11-09). 합성 이벤트로 조작했고 화면 모양은 보지 못했다. 이때 찾은 스트림 재개 중복 표시는 수정했고 앱 재실행은 하지 않았다. | 대시보드 판정·권한 없음 계정·프로브 단독 감시를 실기기에서 확인한다 |
-| M.25 | 중간 | 일부 확인 | KV.12 파드 터미널(`kube/terminal.rs`)과 **보이는 트리 복사**를 Mac 패키지 앱(`ed799a4` 기준 미커밋, 조작 스크립트를 주입한 임시 빌드, `open` 실행)과 실제 OpenSSH·kind, 로컬 클러스터로 확인했다. 합성 이벤트로 조작했고 화면 모양은 보지 못했다. [기록](kubernetes-workspace.md#kv12-터미널-ui-제거-검증-2026-11-09) | 사람의 직접 조작 |
-| M.5 | 중간 | 수정, 실기기 대기 | 업로드할 때 서버 쪽 이름만 NFC로 만든다(`remote_name.rs`). 로컬 경로는 OS가 준 그대로 읽는다. 큐 검사로 실제 FTP/FTPS·OpenSSH에 NFC로 저장됨을 Mac에서 확인했다. 파일 대화상자와 Finder 드롭으로 받은 이름은 실기기 확인이 남았다. | 패키지된 앱에서 Finder 한글 파일을 드롭·선택해 업로드하고 서버에서 이름 확인 |
-| M.6 | 중간 | 구현, 실기기 대기 | `src-tauri/Info.plist`의 `NSLocalNetworkUsageDescription`, `tauri.macos.conf.json`의 `minimumSystemVersion` 13.1과 ad hoc 서명(`-`)을 넣었다. 빌드한 `.app`의 plist와 `codesign`(`Signature=adhoc`)은 확인했다. 권한 창과 LAN 접속은 실행하지 않았다. ad hoc 서명은 빌드마다 달라져 Keychain 승인을 다시 물을 수 있다. | LAN 서버 접속으로 권한 창과 연결을 확인한다. Developer ID는 Apple 등록 뒤 구성한다 |
-| M.12 | 중간 | 구현, 실기기 대기 | F.1의 로컬 파일 트리와 경로 따라가기는 Mac에서 실행한 적이 없다. 기본 셸이 Bash·Zsh이면 첫 프롬프트에 경로 알림을 입력하고 에코를 숨기는 경로를 쓴다. 코드는 실제 OpenSSH로 검증한 SSH 경로와 같지만 macOS PTY와 Zsh 프롬프트(`PROMPT_SP`, 오른쪽 프롬프트)는 확인되지 않았다. | 패키지된 앱에서 로컬 탭을 열어 입력 잔상 없이 `cd`를 따라가는지, 파일 트리와 복사·삭제가 동작하는지 확인한다 |
-| M.13 | 중간 | 구현, 실기기 대기 | AT.5·AT.6·DX.3을 Windows에서만 실행했다. Mac에서는 `arboard`의 `image-data` 기능(새 macOS 의존성), Cmd+V의 `paste` 이벤트, WKWebView 드롭 좌표, Finder 실행 앱의 첨부, 임시 터널 뒤 브라우저 열기를 확인하지 않았다 | `mac-verify`로 확인 |
-| M.14 | 중간 | 구현, 실기기 대기 | TW.4·TW.8을 Windows에서만 실행했다. `tauri.macos.conf.json`과 독립 창 빌더에 `titleBarStyle: Overlay`, `hiddenTitle`을 넣고 왼쪽 78px를 비웠다. 신호등 버튼이 36px 제목 줄의 세로 가운데에 오는지와 앱 이름·보기 메뉴와 겹치지 않는지, 빈 곳 끌기·더블클릭 확대, 전체화면 전환 후 복귀, 독립 창도 같은지 확인하지 않았다. 신호등 위치(`trafficLightPosition`)는 정하지 않았다. 탭·연결 카드의 두 손가락 클릭과 Control+클릭 메뉴, `Cmd+Option+방향키`, WKWebView 포인터 캡처(탭 드래그), 상태바 팝오버도 미확인이다. TW.5~TW.7(Windows에서만 실행): 상태바 입력 범위 라디오와 탭 바 체크, `Cmd+Shift+M`·`Cmd+Shift+\`, IME 조합 중 상태바 변경, macOS 로컬 기본 셸(Zsh)과 `/bin/bash` 3.2에 입력해 넣는 조작표 훅(Bash 3.2는 Docker `bash:3.2`에서만 확인), 전체 화면 프로그램 일반 안내. 일반 안내는 Mac에서 선택 키를 표시하지 않는다. xterm은 Mac에서 `Shift+드래그`로 강제 선택하지 않으므로 터미널 설정의 `Shift+드래그` 안내 문구도 실기기에서 확인한다 | 패키지된 앱(`.app`)에서 `mac-verify`로 확인. 신호등이 어긋나면 `trafficLightPosition`을 정한다 |
-| M.7 | 낮음 | 구현, 실기기 대기 | 터미널 글꼴이 `'Cascadia Code', 'SFMono-Regular', Consolas, monospace`라 WebKit에서 Courier로 떨어졌다. `foundations.ts`에 `ui-monospace`, `Menlo`와 한글 대체 글꼴을 넣었다. Playwright WebKit에서 터미널 글꼴 표시까지 확인했고 실제 앱은 사용자 확인 대기다. | 실기기에서 확인한다 |
-| M.8 | 낮음 | 구현, 실기기 대기 | **Option 키를 Meta로 사용** 설정(기본 꺼짐)은 AT.1에서 구현됐다. 파일 패널 메뉴의 복사·잘라내기·붙여넣기 표기는 Mac에서 `⌘C`로 나온다. | 실기기에서 Option 조합과 Command 복사·붙여넣기 확인 |
+| ID | 영향 | 상태 | 내용 | Mac에서 확인한 것 | 남은 것 |
+|---|---|---|---|---|---|
+| M.2 | 높음 | 일부 확인 | `/tmp`, `/var`, `/etc`가 시스템 심볼릭 링크라 전송 경로 검사가 막히던 문제. 이 세 링크만 허용하고 사용자 링크는 거부한다(`local_links.rs`) | `probe:phase1` 전송 | 앱 화면의 전송 |
+| M.3 | 높음 | 대기 | Finder로 실행한 앱의 `PATH`에 Homebrew가 없다. 시작 시 로그인 셸의 `PATH`를 적용한다(`login_path.rs`, 3초 제한, 실패하면 Homebrew 경로) | 없음(M.3 항목으로는). M.24·CG.10에서 최소 `PATH` 앱이 `kubectl`·exec 플러그인 대역·`socat`을 찾은 기록이 있다 | Finder 실행 앱의 `kubectl` 탐지와 편집기 실행, 앱 시작 지연 |
+| M.4 | 높음 | 대기 | 외부 편집기를 `.app` 번들 안의 CLI 경로로 찾는다(`editor_location.rs`) | 없음 | Finder 실행 앱에서 VS Code·Cursor·Sublime 열기. GE.1 저장 확인 카드와 OS 알림 |
+| M.5 | 중간 | 일부 확인 | 업로드할 때 서버 쪽 이름만 NFC로 만든다(`remote_name.rs`) | `probe:ftp`의 `NFD local name arrives as NFC`, 실제 FTP/FTPS·OpenSSH 큐 | 파일 대화상자·Finder 드롭으로 받은 한글 이름 |
+| M.6 | 중간 | 일부 확인 | `NSLocalNetworkUsageDescription`, 최소 macOS 13.1, ad hoc 서명 | `plutil`, `codesign --verify --deep --strict`(`Signature=adhoc`) | 로컬 네트워크 권한 창과 LAN 접속, Developer ID 서명(Apple 등록 뒤) |
+| M.7 | 낮음 | 대기 | 터미널 글꼴 스택에 `ui-monospace`, `Menlo`, 한글 대체 글꼴 추가 | Playwright WebKit에서 표시(앱 아님) | 실제 앱 글꼴 |
+| M.8 | 낮음 | 대기 | **Option 키를 Meta로 사용**(기본 꺼짐), 파일 메뉴의 `⌘C` 표기 | 없음 | Option 조합, Command 복사·붙여넣기 |
+| M.12 | 중간 | 일부 확인 | 로컬 탭의 파일 트리와 경로 따라가기 | Zsh 로컬 탭의 `cd` 따라가기, 파일 트리, 입력 잔상 없음 | 복사·삭제, `/bin/bash` 3.2 |
+| M.13 | 중간 | 대기 | AT.5·AT.6·DX.3: `arboard` 이미지 클립보드, `Cmd+V` 붙여넣기, 드롭 좌표, 첨부, 임시 터널 뒤 브라우저 열기 | 없음 | 전부 |
+| M.14 | 중간 | 일부 확인 | `titleBarStyle: Overlay`, 왼쪽 78px 비움. TW.4~TW.8의 Mac 조작 | 신호등 세로 위치, 앱 이름과 겹치지 않음, Control+클릭·우클릭 메뉴 | 빈 곳 끌기·더블클릭 확대, 전체화면, 독립 창, `Cmd+Option+방향키`, 탭 드래그, 상태바 입력 범위·단축키, 조작표 훅(Zsh, Bash 3.2) |
+| M.15 | 높음 | 대기 | DX.2~DX.13: Finder 실행 앱의 `SSH_AUTH_SOCK`, agent 중계(Unix 소켓), tmux, 단축키, 검토 탭, Bash 3.2 명령 경계, 앱 내장 agent, 로컬 탭 키 제공 | 없음(`probe:phase1`의 agent 전달은 엔진 결과) | 전부 |
+| M.16 | 높음 | 일부 확인 | GE.4 편집기(Monaco) 한글 입력. 조합에서 글자를 잃거나 중복하면 CodeMirror 6로 바꾼다 | 시험 앱에서 실제 한글 입력기를 거친 자동 키 이벤트 통과. Monaco 유지 | 사람의 직접 타이핑, 일본어·중국어 입력기, 10만 줄 스크롤, 테마, diff, 웹 워커·CSP, 아이콘 글꼴 |
+| M.17 | 중간 | 대기 | GE.2·GE.3 Finder와의 끌어 놓기, **Finder에서 보기**. `drag` 크레이트가 폴더도 파일 URL로 넘긴다 | 없음 | 전부 |
+| M.18 | 높음 | 일부 확인 | GE.5·GE.6·GE.8 실제 앱의 파일 탭 한글 입력과 저장 | 파일 탭 한글 2벌식(2회 중 1회 온전, 1회는 다른 사람의 입력이 섞여 판정 제외), 조합 중 `Cmd+S`가 조합 글자까지 저장, diff 좌우 표시 | 커밋 메시지 한글, Markdown·이미지 미리보기, 2MiB 초과 크게 열기, 다른 이름 저장, SFTP·FTP 저장과 충돌 카드, NFD 이름, `Cmd+Q` |
+| M.19 | 중간 | 일부 확인 | GE.7~GE.15 Git 화면. Finder 실행 앱의 git 탐색, 명령줄 도구 없는 Mac의 `/usr/bin/git` 설치 창 | 로컬 Git 보기, 변경 목록, 그래프, diff 탭, Control+클릭 메뉴, 스테이지, `Cmd+Enter` 커밋 | 브랜치·stash, 변경 버리기, 커밋 훅, fetch·pull·push, 명령줄 도구 없는 환경, **설정 → Git**, GE.15 화면 |
+| M.20 | 중간 | 대기 | GE.11 터미널 안 브랜치 배지. Docker의 Bash·Zsh 훅과 Windows 앱에서만 확인 | 없음 | Mac 로컬 탭의 `/bin/bash` 3.2·Zsh 전부 |
+| M.21 | 중간 | 대기 | TL.3 SSH 키 만들기의 Mac 분기(`0600`, `~/.ssh` `0700`, `/bin/hostname`) | 없음 | 전부 |
+| M.22 | 중간 | 대기 | TL.6~TL.9 네트워크 도구의 Mac 분기(`/usr/sbin/lsof`, `/usr/sbin/traceroute` TCP 뒤 UDP, Keychain 인증서) | 없음 | 전부 |
+| M.23 | 중간 | 일부 확인 | KV.13 실시간 로그·요청 흐름·서버 `kubectl` 정리, KV.9 런타임 탭 | 패키지 앱(`e56215c`, 검사 스크립트를 주입한 임시 빌드)과 실제 OpenSSH·kind. 합성 이벤트, 화면 모양은 보지 않음. 이때 찾은 스트림 재개 중복 표시는 수정 후 앱 재실행 안 함 | 대시보드 판정, 권한 없는 계정, 프로브 단독 감시, 중복 표시 수정 확인 |
+| M.24 | 중간 | 일부 확인 | KV.11 로컬 클러스터 | 패키지 앱(`c2198f5` 위 미커밋, 임시 빌드)과 kind. 탐지한 절대 경로의 `kubectl`, 로그인 셸 `PATH`로 찾는 exec 인증 플러그인(대역) | 실제 인증 플러그인, 사람의 직접 조작 |
+| M.25 | 중간 | 일부 확인 | KV.12 파드 터미널(`kube/terminal.rs`)과 보이는 트리 복사 | 패키지 앱(`ed799a4` 위 미커밋, 임시 빌드)과 실제 OpenSSH·kind·로컬 클러스터. 합성 이벤트, 화면 모양은 보지 않음 | 사람의 직접 조작 |
+| M.26 | 높음 | 확인(사람) | macOS 입력 예측이 xterm 보조 입력칸 전체를 조합 영역으로 잡아 글자가 사라지고 줄이 다시 입력되던 문제. `TerminalPane.tsx`의 `writingsuggestions="false"`로 수정 | 사람이 패키지 앱 터미널에 영어 문장을 직접 쳐서 그대로 출력됨 | 없음. 회귀 시험은 속성만 본다(`terminal-visibility.spec.ts`) |
+| M.27 | 높음 | 일부 확인(사람) | `Cmd+W`가 앱 전체를 확인 없이 종료하던 문제. macOS 메뉴에서 창 닫기만 뺐다(`macos_menu.rs`). `Cmd+W`는 포커스된 탭을 닫고, 탭이 없으면 창 닫기 확인을 거친다. `Ctrl+W`는 셸로 간다 | 사람이 탭 닫기와 탭이 없을 때의 창 닫기 확인 | 분리 창의 `Cmd+W` |
+| M.28 | 낮음 | 미수정 | 연결 트리의 로컬 셸 항목을 더블클릭하면 탭이 2개 열린다. SSH 세션은 1개 | 재현 | 수정 |
+| M.29 | 중간 | 알려진 제약 | ad hoc 서명 앱은 다시 빌드·업데이트하면 이전 빌드가 만든 Keychain 항목에 접근할 때 로그인 암호 창을 띄운다 | 세션 삭제에서 창 발생 | Developer ID 서명(M.6) 뒤 재확인 |
 
-### 검증 도구
+### Phase 기본 기능
 
-| ID | 영향 | 상태 | 내용 | 조치 |
-|---|---|---|---|---|
-| M.9 | 중간 | `probe:ftp` 수정·Mac 통과 / UI 수동 | `*-native.mjs`는 WebView2 CDP에 의존하므로 실제 앱 UI는 Mac에서 수동으로 검증한다. `run-ftp.mjs`는 플랫폼별로 분기하고 `--native` 계열은 Mac에서 이유를 밝히고 멈춘다. | UI는 수동 체크리스트 유지 |
-| M.10 | 중간 | 수정, Windows·macOS CI 통과(`2129fc1`) | `audit-dependencies.mjs`(옛 `audit-windows.mjs`)와 `generate-notices.mjs`가 Windows·macOS 그래프를 합쳐 본다. `verify-macos.sh`와 `macos.yml`에 연결했다. 이 Mac에서 감사 0건(대상 밖 5건), 고지 505개, 검토 필요 0건이다. | Windows에서 바뀐 스크립트 실행 확인(CI) |
-| M.11 | 낮음 | 제안 | Playwright는 Chromium만 실행한다. WebKit 프로젝트를 추가하면 Windows에서도 WKWebView 차이를 일부 미리 잡을 수 있다. WKWebView 결과를 대신하지는 않는다. | 첫 CI 결과 후 판단 |
-
-## M.2~M.4 수정 범위 (`0fcf569`)
-
-| ID | 변경 | CI가 확인한 것 | 실기기에서 확인할 것 |
+| 범위 | 상태 | Mac에서 확인한 것 | 남은 것 |
 |---|---|---|---|
-| M.2 | `/etc`, `/tmp`, `/var`의 정확한 시스템 링크만 허용(`local_links.rs`) | 수정 전 macOS에서 `refuses_link_ancestor` 실패(실행 `42169858010`), 수정 후 통과. 사용자 링크는 계속 거부 | 실제 파일 전송(`npm run probe:phase1`) |
-| M.3 | 시작 시 로그인 셸의 `PATH` 적용. 3초 제한, 실패 시 Homebrew 경로 사용(`login_path.rs`). 로컬 PodTree는 선택한 Bash 유지(`podtree/launch.rs`) | zsh에서 `PATH` 읽기, 프로필 출력·시간 초과 처리, 명령 문자열. `exec "$BASH"`는 WSL Ubuntu에서 직접 확인 | Finder로 실행한 앱의 PodTree 실행, 앱 시작 지연 |
-| M.4 | 앱 번들 안의 CLI 탐색(`editor_location.rs`) | 탐색 로직만. 번들 내부 경로가 실제 설치본과 맞는지는 미확인 | Finder로 실행한 앱에서 VS Code, Cursor, Sublime 열기 |
-| M.24 | 중간 | 일부 확인 | KV.11 로컬 클러스터를 Mac 패키지 앱(`c2198f5` 기준 미커밋, 조작 스크립트를 주입한 임시 빌드, `open` 실행)과 kind로 확인했다. 탐지한 절대 경로의 kubectl 실행과 로그인 셸 `PATH`로 찾는 exec 인증 플러그인(대역) 포함. 실제 인증 플러그인과 사람의 직접 조작은 대기. [기록](kubernetes-workspace.md#kv11-로컬-kubeconfig-검증-2026-11-09) |
+| Phase 0 | 일부 확인 | 자동 게이트, `npm run probe` | 마스코트·포커스·좁은 창·한글 표시 |
+| Phase 1 | 일부 확인 | 최초 지문 카드(서버 `ssh-keygen -lf`와 일치), `known_hosts` 저장, 변경된 호스트키 차단, 비밀번호 연결, 인증 거부 안내와 재접속 카드, Keychain 저장과 교체, 앱 데이터 폴더 평문 0건, SSH 연결 5개 동시, `stty size`, UTF-8 한글 출력, 세션 삭제 확인 창과 `credential_gc` 기록 | 지문 거부, 키 인증(RSA·Ed25519·암호화 키), 세션 삭제의 Keychain 정리(M.29 창에서 멈춤), 저장소 실패, 그룹·검색·즐겨찾기, 터미널 한글 IME, vim·htop 화면, KeepAlive, 종료 뒤 정리 |
+| Phase 2~5 | 대기(앱) | 엔진은 `probe:phase1`, `probe:ftp` | 분할 배치, 파일 작업, 전송, 외부 편집, 터널, 모니터링, 금고, DMG 설치, 장시간·절전 |
 
-로컬 PodTree와 이 Bash 4 전제는 KV.12에서 스크립트와 함께 제거했다. M.3의 PATH 적용은 쿠버네티스 작업 화면의 `kubectl` 탐지와 편집기 실행에 계속 쓴다.
+### 기능별 Mac 확인
 
-## 결정 사항 (2026-11-06 사용자 확인)
+| 기능 | 상태 | Mac에서 확인한 것 | 남은 것 |
+|---|---|---|---|
+| CG.6 앱 업데이트 | 일부 확인(설치는 사람) | ad hoc 시험 앱 0.5.1 → 0.5.2 번들 교체, 자동 재시작, 격리 속성 없음, 서명 불일치 거부, 자동 확인 끄기. [기록](app-updates.md) | 열린 세션 정리와 세션 로그, DMG 첫 실행, 이전 Keychain 항목 접근, 관리자 권한 위치 |
+| CG.1~CG.9 연결 확장 | 일부 확인 | 최소 `PATH`로 띄운 패키지 앱에서 ProxyCommand(Homebrew `socat` 이름만), 가져오기 명령 승인, HTTP 프록시 암호 카드, 하이라이트 색, Telnet 로그인·종료, 터미널 안 `sz`·`rz` 왕복(SHA-256 일치), 시리얼 포트 목록(`/dev/cu.*`) | 우클릭 붙여넣기(자동 조작에서 실패, 원인 미확인), XQuartz, 실제 USB 시리얼, 업데이트 뒤 Keychain, 앱 안 하이라이트 성능 |
+| FV 그림·문서 미리보기 | 대기(앱) | macOS CI 컴파일과 자동 테스트만 | WKWebView에서 PDF·hwp·hwpx·docx·xlsx·pptx·bmp 열기, 기본 프로그램으로 열기, 서버 파일 복사본의 `com.apple.quarantine` |
 
-- **Apple Silicon만 지원한다.** Intel Mac 빌드와 검증은 하지 않는다.
-- **배포**: 지금은 본인만 사용하므로 로컬 빌드로 충분하다. 이후 Apple Developer 프로그램에 등록할 예정이며, 그때 Developer ID 서명과 공증을 구성한다. 등록 전까지 M.6의 서명 항목은 ad hoc 기준으로 확인한다.
+### 알려졌지만 고치지 않은 문제
 
-## M.5·M.6·M.8·M.9·M.10 수정 결과 (2026-11-09, 미커밋 트리)
-
-결정:
-- **NFD 충돌 비교는 하지 않는다.** 서버는 이름을 바이트로 비교하므로 NFD와 NFC는 다른 파일이다. 서버에 NFD 이름이 이미 있으면 NFC 파일이 따로 생기고, 앱이 쓰지 않은 이름을 덮어쓰지 않는다.
-- 한 폴더의 두 항목이 같은 NFC 이름이 되면 업로드를 거부한다. APFS에서는 생기지 않고 NTFS·ext4에서만 가능하다.
-- 정규화는 두 OS에 똑같이 적용한다. 다운로드 이름은 바꾸지 않는다.
-- **최소 macOS는 13.1**이다. 코드가 쓰는 `color-mix`에 Safari 16.2가 필요하기 때문이다. 실행 확인은 macOS 26.5뿐이다.
-
-| 명령 | 결과 |
-|---|---|
-| `bash scripts/verify-macos.sh --package` | 종료 0. Vitest 1322, Playwright 519, Rust 637(무시 3)+1, `npm audit` 0, 의존성 감사 0(대상 밖 5), 고지 505개·검토 필요 0, debug `.app` |
-| `npm run probe:ftp` | 종료 0. FTP, FTPS, EUC-KR, 큐, `NFD local name arrives as NFC` |
-| 위 NFD 검사, 정규화를 임시로 끈 코드 | 실패(재현 확인) 후 원복 |
-| `npm run probe:phase1` | **종료 1.** 큐·NFD·SFTP·터널·모니터링·Git·tmux 단계는 통과. 인증정보 저장 단계에서 실패. [`ed799a4`의 깨끗한 트리에서도 같은 지점](kubernetes-workspace.md)이고 `credentials.rs`와 검사 코드는 바꾸지 않았다. 뒤 단계는 실행되지 않았다. **뒤에 확인한 원인:** `run-phase1.mjs`가 git 격리용 `HOME`을 프로브 전체에 적용해 Keychain이 `-25307`(기본 키체인 없음)을 냈다. 제품 결함이 아니다. Mac에서 `HOME`을 유지하게 고친 뒤(`9855a93` + 미커밋 스크립트 수정) 종료 0, PASS 61건, Keychain·금고·agent 전달·HTTPS 자격 증명·LFS까지 통과. git은 `GIT_CONFIG_GLOBAL`·`GIT_CONFIG_NOSYSTEM`으로 계속 격리된다 |
-| `plutil`, `codesign --verify --deep --strict` | `NSLocalNetworkUsageDescription`, `LSMinimumSystemVersion` 13.1, `Signature=adhoc`, 검증 종료 0 |
-
-미실행: Windows 게이트와 CI, LAN 권한 창, 앱 화면 조작.
-
-## 실제 앱 조작 1차 (2026-11-09, `17cc876`)
-
-macOS 26.5, Apple Silicon, Node 26.0.0, Rust 1.99.1, Docker 29.8.0. 패키지 앱을 `open`으로 실행하고 `DACHSTERM_TEST_DATA_DIR`로 앱 데이터를 격리했다. 입력은 System Events와 CGEvent, 판정은 창 캡처·디스크 내용·서버 프로세스다. **사람의 직접 조작이 아니다.**
-
-**도중에 중단했다.** 같은 Mac을 사람이 쓰고 있어 맨 앞 앱이 두 번 바뀌었고, 보내지 않은 글자가 입력됐다(`채`, 터미널의 `기`, 사용자 이름에서 빠진 `o`). 입력이 섞일 수 있어 그 뒤의 키보드 조작은 하지 않았다.
-
-| 명령 | 결과 |
-|---|---|
-| `npm ci`, `bash scripts/verify-macos.sh --package` | 종료 0. Vitest 1325, Playwright 519, Rust 637(무시 3)+1, `npm audit` 0, 의존성 감사 0(대상 밖 5), 고지 505개, debug `.app` |
-| `npm run probe`, `npm run probe:phase1`, `npm run probe:ftp` | 모두 종료 0 |
-
-| ID | 실제 앱에서 확인 | 남은 것 |
-|---|---|---|
-| Phase 1 | 최초 지문 카드(서버 `ssh-keygen -lf`와 일치), `known_hosts` 저장, 비밀번호 연결, 틀린 값의 인증 거부 안내와 재접속 카드, Keychain 저장과 새 값 교체(항목은 UUID 하나), 앱 데이터 폴더에 비밀번호 평문 0건 | 지문 거부·변경 키, 키 인증, 세션 삭제의 Keychain 정리(시험 항목은 `security`로 지웠다), 5개 연결, vim·top, KeepAlive |
-| M.2 | `probe:phase1` 전송 통과 | 앱 화면의 전송 |
-| M.12 | Zsh 로컬 탭의 `cd` 따라가기, 파일 트리, 입력 잔상 없음 | 복사·삭제, Bash 3.2 |
-| M.14 | 신호등 세로 위치, 앱 이름과 겹치지 않음, Control+클릭·우클릭 메뉴 | 끌기, 전체화면, 독립 창, 단축키 |
-| M.18 | 파일 탭 한글 2벌식 `안녕 값이 닭을` 일치(2회 중 1회 온전, 1회는 위 혼입), 조합 중 `Cmd+S`가 조합 글자까지 저장, diff 좌우 표시 | 커밋 메시지 한글(입력기 자동 전환이 불안정해 판정 불가), Markdown·이미지 미리보기, 다른 이름 저장, SFTP·FTP 저장, `Cmd+Q` |
-| M.19 | 로컬 Git 보기, 변경 목록, 그래프, diff 탭, Control+클릭 메뉴, 스테이지, `Cmd+Enter` 커밋 | 브랜치·stash, 변경 버리기, fetch·pull·push, 명령줄 도구 없는 환경 |
-
-찾은 문제(수정 전):
-
-- `Welcome.tsx:49` 시작 화면 카드가 Mac에서도 `이 컴퓨터의 셸 · WSL`로 표시한다.
-- 연결 트리의 로컬 셸 항목을 더블클릭하면 탭이 2개 열린다.
+- `Welcome.tsx`의 로컬 터미널 카드가 Mac에서도 `이 컴퓨터의 셸 · WSL`로 표시한다.
 - 세션을 우클릭하면 이름 글자가 선택돼 파랗게 표시된다.
 - `GitCommitBox.tsx`의 `Cmd+Enter`는 `isComposing`을 확인하지 않는다(코드 확인, 실제 조합 동작은 미판정).
-- `generate-notices.mjs`가 고지 파일을 CRLF로 써서 게이트 뒤 작업 트리가 수정 상태가 된다(내용 차이는 없음).
+- `generate-notices.mjs`가 Mac에서 고지 파일을 CRLF로 써서 게이트 뒤 작업 트리가 수정 상태가 된다(내용 차이 없음).
 
-미실행: M.3~M.8, M.13, M.15, M.17, M.20~M.22의 앱 조작, Keychain 승인 창, LAN 권한 창, Finder 끌기, 파일 대화상자, 장시간·절전.
+## Windows와의 알려진 차이
 
-보안 점검 결과는 [security-review](security-review.md)에 있다.
-
-## 실제 앱 조작 2차 (2026-11-09, `17cc876` + `fix/s1-s5-security` 미커밋 트리)
-
-환경과 방법은 1차와 같다. 입력 장치가 14분 이상 유휴일 때 시작했다. 1차의 글자 혼입은 없었다.
-
-| 명령 | 결과 |
-|---|---|
-| `bash scripts/verify-macos.sh --package` | 종료 0. Rust 643(무시 3) |
-| `npm run probe:phase1`, `npm run probe:ftp` | 종료 0 |
-| 터미널 수정 뒤 typecheck, lint, format, Vitest, build, Playwright, `cargo fmt --check` | 종료 0. Vitest 1325, Playwright 521 |
-
-| ID | 실제 앱에서 확인 | 남은 것 |
-|---|---|---|
-| Phase 1 | SSH 연결 5개 동시(서버 `pts` 5개), `stty size` 41 114, UTF-8 한글 출력, 서버 교체 뒤 **변경된 호스트키 차단**(known_hosts 그대로), 세션 삭제와 확인 창, `credential_gc` 기록 | 지문 거부, 키 인증, vim·htop 화면 판정, KeepAlive. Keychain 삭제는 아래 암호 창에서 멈춰 시험 항목을 `security`로 지웠다 |
-
-**M.26 터미널 입력이 망가짐 (수정, 실제 앱 확인):** 영어 단어를 치면 일부 글자가 사라지고 그때까지 친 줄 전체가 다시 입력돼 잘못된 명령이 실행됐다. `echo connected-5`가 `echo conneecho conneed-5`가 됐다. Zsh 로컬 탭 5/5, SSH 탭 1/1 재현, Monaco에서는 재현되지 않았다. 원인은 macOS 입력 예측이 xterm의 보조 입력칸 전체를 조합 영역으로 잡는 동작으로 본다. `TerminalPane.tsx`에서 `writingsuggestions="false"`를 설정한 빌드에서는 같은 문장 4개가 모두 정확했다. 이어서 사람이 패키지 앱(격리 데이터) 터미널에 `echo connected tomorrow`를 직접 쳐 그대로 출력됨을 확인했다(2026-11-10). 회귀 테스트는 속성만 본다(`terminal-visibility.spec.ts`).
-
-찾은 문제(수정 전):
-
-| ID | 영향 | 내용 |
-|---|---|---|
-| M.27 | 높음 | `Cmd+W`가 탭이 아니라 **앱 전체를 확인 없이 종료**한다. 탭 9개가 있는 상태에서 재현했고 크래시 기록은 없다. 코드에 `Cmd+W` 처리가 없어 macOS 기본 창 닫기로 가는 것으로 본다. **수정:** macOS 메뉴를 Tauri 기본에서 창 닫기만 뺀 것으로 바꿨다(`macos_menu.rs`). 키 이벤트만 막은 첫 시도에서는 탭이 닫히지 않았다. `Cmd+W`는 포커스된 탭을 탭 메뉴의 닫기와 같은 경로로 닫고, 탭이 없으면 창 닫기 확인(`useWindowClose`)을 거쳐 창을 닫는다. 분리 창은 그 창을 닫는다. 대화상자가 열려 있으면 아무것도 하지 않고, `Ctrl+W`는 셸로 간다. 사람이 패키지 앱에서 탭 닫기와 탭이 없을 때의 창 닫기를 확인했다(2026-11-10). 분리 창의 `Cmd+W`는 실기기 대기 |
-| M.28 | 낮음 | 로컬 셸 항목을 더블클릭하면 탭이 2개 열린다(더블클릭 4회에 8개). SSH 세션은 더블클릭에 1개다 |
-| M.29 | 중간 | ad hoc 서명 앱은 다시 빌드하면 이전 빌드가 만든 Keychain 항목에 접근할 때 로그인 암호 창을 띄운다. 세션 삭제에서 실제로 떴다. Developer ID 서명 전까지 업데이트마다 생긴다(M.6) |
-
-미실행: M.3~M.8, M.13, M.15, M.17, M.20~M.22의 앱 조작, 커밋 메시지 한글, 독립 창, 전체화면, Finder 끌기, 파일 대화상자, LAN 권한 창, 장시간·절전. Keychain 암호 창이 화면에 남아 자동 조작을 멈췄다.
-
-## 다음 첫 행동
-
-1. MacBook에서 `mac-verify` 스킬로 실기기 검증을 시작한다. M.2~M.4의 위 표부터 확인한다.
-2. M.5(Finder 드롭·파일 선택의 한글 이름), M.6(LAN 접속과 권한 창)을 패키지된 앱에서 확인한다.
-3. GE는 M.16 시험 앱의 한글 입력을 먼저 확인해 편집기 부품을 확정하고, 이어서 패키지된 앱으로 M.18(한글 입력·저장), M.17(Finder 끌기), M.19, M.20을 확인한다. GE.1 저장 확인 카드는 M.4의 외부 편집기 실행과 함께 패키지된 앱에서 카드와 OS 알림까지 본다.
-
-## CG.6 앱 업데이트 (2026-11-16, `feat/cg6-updater` 미커밋 트리)
-
-서명 없는(ad hoc) 시험 앱 0.5.1 → 0.5.2 업데이트를 이 Mac에서 사람이 직접 눌러 설치했다. 번들 교체, 자동 재시작, 격리 속성 없음, 서명 불일치 거부, 자동 확인 끄기를 확인했다. 열린 세션 정리, DMG 첫 실행, 이전 Keychain 항목 접근, 관리자 권한 위치는 대기다. [기록](app-updates.md)
-
-## CG.10 패키지 앱 (2026-11-17, `feat/cg10-docs-mac` 미커밋 트리)
-
-에이전트가 접근성 API와 창 캡처로 조작했다(사람 조작 아님). Finder와 같은 최소 `PATH`로 띄운 앱에서 ProxyCommand(Homebrew `socat` 이름만), 가져오기 명령 승인, HTTP 프록시 암호 카드, 하이라이트 색(WKWebView), Telnet 프롬프트·종료, 시리얼 포트 목록을 확인했고, 사용자명 없는 Telnet·시리얼 세션을 가져올 수 없던 결함을 고쳤다. Telnet 로그인과 터미널 안 전송 `sz`·`rz` 왕복(SHA-256 일치)도 확인했다. 우클릭 붙여넣기(자동 조작에서 실패, 원인 미확인), XQuartz, 실제 USB 시리얼, 업데이트 뒤 Keychain은 대기다. 터미널에서 그냥 `open`으로 띄운 앱은 셸 `PATH`를 받으므로 Finder 실행 확인에는 빈 환경 `open`을 쓴다(`mac-verify` 스킬). [기록](commercial-gaps.md#mac-패키지-앱)
-
-## FV 그림·문서 미리보기 (2026-11-20)
-
-Windows에서 구현하고 검증했다([기록](file-preview.md)). **Mac에서는 컴파일도 실행도 하지 않았다.** `main`에 올리기 전 Mac에서 확인할 것:
-
-- `bash scripts/verify-macos.sh`: `file_opener.rs`의 `cfg(target_os = "macos")` 경로(`/usr/bin/xattr`로 quarantine 표시)와 새 npm 의존성 빌드.
-- 패키지 앱(WKWebView)에서 PDF·hwp·hwpx·docx·xlsx·pptx·bmp를 열어 본다. 볼 것: WebAssembly 엔진과 PDF 워커가 내용 정책 아래 뜨는지, Word 보기의 확대(`zoom` CSS), 한글 글꼴 대체(Apple SD Gothic Neo).
-- **기본 프로그램으로 열기**: 로컬 파일이 연결된 앱으로 열리는지, 한글 이름(NFD), 실행될 수 있는 종류에서 확인 창이 뜨는지.
-- 서버 파일을 받아 연 복사본에 `com.apple.quarantine`이 붙는지(`xattr -l`), 그 표시가 미리보기·Pages·한컴 등에서 여는 것을 막지 않는지, 저장 뒤 업로드 확인이 뜨는지.
-- WKWebView에는 `test:file-preview` 같은 자동 경로가 없다. 사람이 연다.
+- **실행 환경**: Finder로 실행한 앱의 `PATH`는 `/usr/bin:/bin:/usr/sbin:/sbin`뿐이다. 앱은 시작할 때 로그인 셸의 `PATH`를 얻어 적용한다. 터미널에서 그냥 `open`이나 `tauri dev`로 띄우면 셸 `PATH`를 물려받아 이 차이가 드러나지 않는다.
+- **셸**: `/bin/bash`는 3.2다. 로컬 기본 셸은 Zsh다.
+- **경로**: `/tmp`, `/var`, `/etc`는 시스템 심볼릭 링크다. 전송 경로 검사는 이 세 링크만 허용한다.
+- **파일 이름**: 로컬 이름은 NFD 한글일 수 있다. 업로드할 때 서버 쪽 이름만 NFC로 만들며 두 OS에 똑같이 적용한다. 다운로드 이름은 바꾸지 않는다. 서버는 이름을 바이트로 비교하므로 NFD 충돌 비교는 하지 않고, 한 폴더의 두 항목이 같은 NFC 이름이 되면 업로드를 거부한다.
+- **인증정보와 서명**: Keychain을 쓴다. ad hoc 서명은 빌드마다 달라 다시 빌드하거나 업데이트하면 Keychain 암호 창이 뜬다(M.29). Developer ID 서명과 공증은 Apple Developer 등록 뒤 구성한다.
+- **권한**: LAN 대상 접속에 로컬 네트워크 권한이 필요하다(`NSLocalNetworkUsageDescription`).
+- **지원 범위**: Apple Silicon만 지원한다. 최소 macOS는 13.1이다(`color-mix`에 Safari 16.2 필요).
+- **웹뷰**: WKWebView다. 실제 앱 UI를 자동으로 검사하는 경로(`*-native.mjs`)가 없어 사람이 확인한다.
+- **창과 키**: 제목 줄은 `titleBarStyle: Overlay`이고 왼쪽 78px를 신호등 버튼에 비워 둔다. `Cmd+W`는 앱 메뉴 대신 탭 닫기로 처리한다. 터미널의 `xterm`은 Mac에서 `Shift+드래그`로 강제 선택하지 않는다. Option을 Meta로 쓰는 설정은 기본 꺼짐이다.
+- **입력**: macOS 입력 예측은 터미널 입력칸에서 끈다(`writingsuggestions="false"`).
+- **OS 도구**: 포트 사용 여부는 `/usr/sbin/lsof`, 경로 추적은 `/usr/sbin/traceroute`(TCP 시도 후 UDP), 인증서 신뢰는 Keychain, Finder에서 보기는 `/usr/bin/open -R`, 받은 파일의 격리 표시는 `/usr/bin/xattr`을 쓴다. 시리얼 포트는 `/dev/cu.*`만 보인다.
+- **빌드**: `--workspace` 명령에는 OpenSSL이 필요하다(M.1). OS 전용 Rust 시험이 있어 시험 수가 OS마다 다르다.
 
 ## 참고
 
 - [TN3179: Understanding local network privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
-- [How local network privacy could affect you](https://eclecticlight.co/2026/01/14/how-local-network-privacy-could-affect-you/)

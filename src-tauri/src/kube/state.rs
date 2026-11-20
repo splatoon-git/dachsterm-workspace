@@ -117,7 +117,7 @@ pub enum ShellCheck {
     },
 }
 
-/// Measured against containerd in KV.0 and KV.4 (docs/verification/kubernetes-workspace.md). Once
+/// Measured against containerd in KV.0 and KV.4. Once
 /// kubectl has reached the container, 126 and 127 are the container's codes rather than the
 /// missing-kubectl signal, and kubectl says so on its own line.
 pub fn classify_shell(exit: Option<u32>, stderr: &[u8]) -> ShellCheck {
@@ -225,7 +225,7 @@ mod tests {
         );
     }
 
-    /// Every line here is what real kubectl printed in KV.0 (docs/verification/kubernetes-workspace.md).
+    /// Every line here is what real kubectl printed in KV.0.
     #[test]
     fn reads_the_measured_kubectl_messages() {
         let cases = [

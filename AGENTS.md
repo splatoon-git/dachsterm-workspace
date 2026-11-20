@@ -30,7 +30,7 @@ Mac 실행 결과와 알려진 차이는 [macos-readiness](docs/verification/mac
 ## 작업 절차
 
 1. `git status`를 확인한다. 다른 에이전트가 같은 트리에서 작업할 수 있으므로 내가 만들지 않은 변경은 건드리지 않는다.
-2. `docs/progress.md`의 상단과 상태 표, 해당 작업 ID의 섹션만 읽는다. `docs/roadmap.md`도 해당 절만 찾아 읽는다. 두 문서는 합쳐 300KB가 넘으니 전체를 읽지 않는다.
+2. `docs/progress.md`에서 현재 상태와 남은 작업을 확인하고, `docs/roadmap.md`는 해당 작업 ID의 절만 찾아 읽는다.
 3. 작업 ID를 정하면 시작 전에 `git worktree list`로 다른 작업 트리를 보고, 각 트리의 브랜치 이름과 미커밋 변경(`git -C <경로> status --short`, `git -C <경로> diff docs/progress.md`)으로 같은 작업 ID가 진행 중인지 확인한다. 겹치면 시작하지 말고 사용자에게 알린다. progress는 커밋돼야 공유되므로 dev의 progress만 보고 판단하지 않는다.
 4. 기능 작업은 `dev`에서 갈라진 작업 ID 브랜치(예: `feat/dx5-git-status`)에서 하고, 끝나면 `dev`에 병합한다. 다른 세션이 브랜치 이름으로 진행 중인 작업을 알 수 있게 하기 위해서다. 아래 브랜치 규칙을 따른다.
 5. 코드를 쓰기 전에 [engineering-rules](docs/engineering-rules.md)를 따른다. 구조를 바꾸기 전에는 [architecture-review](docs/architecture-review.md)의 정리 목록을 확인한다.
@@ -151,7 +151,6 @@ Tauri 2 앱이다. React는 화면과 터미널 렌더링만 맡고, SSH 연결�
 | `session_transfer.rs` | 파일 전송이 아니라 세션 설정 이관 |
 | `sftp_list`, `features/sftp/` | FTP/FTPS도 처리 |
 | `run-phase1.mjs`, `probe:phase1` | Phase 2~4 검사 포함 |
-| roadmap §6 모듈 구성 | 계획이며 실제 구조와 다름 (`commands/`, `ssh/` 폴더 없음) |
 
 ### 수정에 주의할 외부 유래 코드
 
@@ -166,5 +165,5 @@ Tauri 2 앱이다. React는 화면과 터미널 렌더링만 맡고, SSH 연결�
 | [docs/progress.md](docs/progress.md) | 현재 상태와 이어갈 위치의 정본 |
 | [docs/engineering-rules.md](docs/engineering-rules.md) | 코드 작성과 검증 보고 규칙 |
 | [docs/architecture-review.md](docs/architecture-review.md) | 구조 부채와 수정 순서 |
-| [docs/verification/](docs/verification/) | 실행한 검증의 상세 기록 |
+| [docs/verification/](docs/verification/) | 진행 중인 작업의 검증 기록과 macOS·릴리스 체크리스트 |
 | `.agents/skills/` | 공용 스킬 정본. `.claude/skills/`는 이를 가리키는 포인터만 둔다 |

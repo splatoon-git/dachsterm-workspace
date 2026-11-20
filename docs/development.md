@@ -29,7 +29,7 @@ npm run tauri -- dev
 | `npm run tauri -- build --bundles app,dmg` | macOS 앱과 DMG(미검증) |
 | `npm run icons` | `src/assets/brand` 원본에서 앱 아이콘 재생성 |
 
-공개 배포에는 Windows 코드 서명과 macOS Developer ID 서명·공증이 필요하고, 별도의 자격증명과 실기기 검증이 있어야 한다. 개인 로컬 빌드와 서명된 공개 배포를 구분한다. OS 코드 서명은 하지 않기로 했다(roadmap §26 CG.6, 사용자 결정).
+공개 배포에는 Windows 코드 서명과 macOS Developer ID 서명·공증이 필요하고, 별도의 자격증명과 실기기 검증이 있어야 한다. 개인 로컬 빌드와 서명된 공개 배포를 구분한다. OS 코드 서명은 하지 않기로 했다(roadmap §6.12 CG.6, 사용자 결정).
 
 ### 앱 업데이트 배포
 
@@ -152,30 +152,21 @@ docker ps -a --filter label=app.dachsterm.purpose=phase1-probe
 | `src/themes/store.ts`, `useTheme.ts` | 저장, 창 동기화, 기본값 복귀 |
 | `src/themes/ThemePicker.tsx` | 키보드로 선택할 수 있는 미리보기 카드 |
 
-모든 테마의 일반 글자 4.5:1, 포커스·입력 경계 3:1과 ANSI 대비를 테스트한다. 다크 테마의 ANSI black은 TUI 배경 위 검은 글자 용도로 유지한다. 네이티브 검사는 `node scripts/test-themes-native.mjs`다.
+모든 테마의 일반 글자 4.5:1, 포커스·입력 경계 3:1과 ANSI 대비를 테스트한다. 다크 테마의 ANSI black은 TUI 배경 위 검은 글자 용도로 유지한다.
 
 ## 설계와 검증 기록
 
-- **설계**: [docs/design/](design/), [docs/adr/](adr/)
+- **범위와 현재 상태**: [roadmap.md](roadmap.md), [progress.md](progress.md)
+- **설계**: [docs/adr/](adr/), [에이전트 채팅](design/agent-chat.md), [UI 일관성 기준](design/ui-consistency.md)
+- **구조 부채**: [architecture-review.md](architecture-review.md)
 - **세션 교환 형식**: [session-transfer.md](session-transfer.md), [session-format.schema.json](session-format.schema.json)
-- **릴리스**: [Windows 안정화·복구 절차](verification/windows-hardening.md), [수동 검증 체크리스트](verification/windows-release-checklist.md)
+- **macOS**: [준비 상태](verification/macos-readiness.md), [실기기 검증 절차](verification/macos-checklist.md)
+- **릴리스**: [Windows 수동 검증 체크리스트](verification/windows-release-checklist.md), [앱 업데이트](verification/app-updates.md)
+- **네이티브 검사 불안정 원인**: [native-test-flakiness.md](verification/native-test-flakiness.md)
 - **제3자 고지**: [licenses/README.md](../licenses/README.md)
 
-| 영역 | 기록 |
-|---|---|
-| 기반 실증 | [Windows](verification/phase-0-windows.md), [macOS 절차](verification/phase-0-macos.md) |
-| SSH 터미널 | [Windows](verification/phase-1-windows.md), [macOS 절차](verification/phase-1-macos.md) |
-| SFTP·터널·모니터링·안정화 | [Windows](verification/phase-2-5-windows.md), [macOS 절차](verification/phase-2-5-macos.md) |
-| 인증·터미널 기본 동작 | [RSA·agent·MFA](verification/security-terminal-basics.md) |
-| 폴더 전송·영속 큐 | [기록](verification/phase-6-1.md) |
-| 스니펫·명령 모음·조작표 | [기록](verification/phase-6-2-6.md) |
-| 세션 로그 | [기록](verification/phase63-67.md) (PodTree 단계는 KV.12에서 제거) |
-| 점프 호스트·세션 이관 | [기록](verification/phase-6-jump-sessions.md) |
-| 설정 UI | [기록](verification/settings-ui.md) |
-| 테마 | [기록](verification/themes.md) |
-| 제품명 변경 | [기록](verification/rename.md) |
-| 서바이버 게임 | [영구 성장](verification/survivor-profile.md), [UI](verification/survivor-ui.md), [품질](verification/survivor-quality.md), [통합 검증](verification/survivor-validation.md) |
+완료된 작업의 단계별 검증 기록은 git 이력에 있다.
 
 ## 명명
 
-제품명은 **DachsTerm**, 마스코트는 **Dachs**다. 패키지는 `dachsterm`, Windows 실행 파일은 `dachsterm.exe`, 앱 ID와 OS 보안 저장소 서비스명은 `app.dachsterm.desktop`이다. 2026-11-06 개명 이전의 개발 데이터는 이전하거나 호환하지 않고, 자동 삭제하지도 않는다. 과거 검증 기록의 산출물 경로와 해시는 당시 이름을 유지한다.
+제품명은 **DachsTerm**, 마스코트는 **Dachs**다. 패키지는 `dachsterm`, Windows 실행 파일은 `dachsterm.exe`, 앱 ID와 OS 보안 저장소 서비스명은 `app.dachsterm.desktop`이다. 이전 이름으로 만든 개발 데이터는 이전하거나 호환하지 않고, 자동 삭제하지도 않는다.
