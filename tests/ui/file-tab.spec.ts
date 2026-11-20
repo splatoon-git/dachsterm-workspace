@@ -275,7 +275,8 @@ test.describe('showing formats', () => {
     await expect
       .poll(() => image.evaluate((node: HTMLImageElement) => node.naturalWidth))
       .toBeGreaterThan(0);
-    await expect(page.locator('.file-tab svg')).toHaveCount(0);
+    // The bar's own icons are drawings too, so only the picture's area is looked at.
+    await expect(page.locator('.preview-image svg')).toHaveCount(0);
     expect(await page.evaluate(() => window.__pwned)).toBeUndefined();
   });
 });

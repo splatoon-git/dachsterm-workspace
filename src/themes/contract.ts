@@ -86,6 +86,8 @@ export type ThemeDefinition = {
     status: { success: string; info: string; warning: string; error: string };
     focus: { ring: string };
     overlay: { backdrop: string };
+    // A page of a document shown as it was written: white paper in every theme, dark ones too.
+    document: { paper: string; ink: string };
   };
   terminal: {
     background: string;

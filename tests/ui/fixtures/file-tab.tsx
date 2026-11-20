@@ -51,6 +51,10 @@ declare global {
       sources?: Source[];
       /** What `fail` was told. */
       failures?: string[];
+      /** Every request to open a file in this computer's program for it: the command and its arguments. */
+      defaults?: { command: string; args: Record<string, unknown> }[];
+      /** Makes those requests fail with this message. */
+      defaultFail?: string;
     };
     __pwned?: boolean;
     __fileTabEnd?: () => void;
@@ -76,6 +80,11 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', {
         return pick;
       }
       if (command === 'local_targets') return { targets: state.targets ?? [], warning: null };
+      if (command === 'edit_open_default' || command === 'local_files_open_default') {
+        (state.defaults ??= []).push({ command, args });
+        if (state.defaultFail) throw state.defaultFail;
+        return null;
+      }
       if (command === 'file_read' || command === 'file_write')
         state.sources?.push(args.source as Source);
       if (command === 'file_write') {
@@ -118,7 +127,7 @@ const session = {
   tabId: 't1',
   kind: 'ssh',
   connectionId: 'c1',
-  profile: { protocol: 'ssh', name: '서버' },
+  profile: { id: 'p1', protocol: 'ssh', name: '서버' },
   subscribe: (listener: () => void) => {
     sessionListeners.add(listener);
     return () => sessionListeners.delete(listener);

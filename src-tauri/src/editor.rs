@@ -1,4 +1,4 @@
-use crate::{sftp, ssh::Connections, storage::Result};
+use crate::{file_opener::Opener, sftp, ssh::Connections, storage::Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -163,8 +163,7 @@ impl Editors {
         profile: String,
         remote: String,
         root: &Path,
-        program: &str,
-        args: &[String],
+        opener: &Opener,
         encoding: &str,
     ) -> Result<Edit> {
         sftp::path(&remote)?;
@@ -175,11 +174,7 @@ impl Editors {
         if self.list().len() >= 32 {
             return Err("편집 작업은 최대 32개입니다.".into());
         }
-        if program.is_empty()
-            || program.len() > 4096
-            || args.len() > 32
-            || args.iter().any(|a| a.len() > 4096)
-        {
+        if !opener.valid() {
             return Err("편집기 실행 설정 오류".into());
         }
         let s = sftp::open(connections, &connection).await?;
@@ -193,15 +188,25 @@ impl Editors {
             .next()
             .filter(|n| !n.is_empty() && !n.contains(['\\', ':']))
             .ok_or("파일 이름 오류")?;
-        let extension = Path::new(name)
-            .extension()
-            .and_then(|v| v.to_str())
-            .unwrap_or("txt");
+        let by_type = matches!(opener, Opener::Default);
+        // The desktop picks the program from the extension, so there it has to be a plain one.
+        let extension = if by_type {
+            crate::file_opener::plain_extension(name)
+                .ok_or("확장자가 없거나 특수문자가 든 파일은 기본 프로그램으로 열 수 없습니다.")?
+        } else {
+            Path::new(name)
+                .extension()
+                .and_then(|v| v.to_str())
+                .unwrap_or("txt")
+        };
         let local = dir.join(format!("working.{extension}"));
         let local_bytes = crate::encoding::to_local(&bytes, encoding)?;
         tokio::fs::write(&local, &local_bytes)
             .await
             .map_err(sftp::failure)?;
+        if by_type {
+            crate::file_opener::mark_downloaded(&local);
+        }
         let mut edit = Edit {
             id: id.clone(),
             connection_id: connection,
@@ -218,24 +223,9 @@ impl Editors {
             mode_after_connection: None,
         };
         persist(&edit)?;
-        // Never interpolate a shell command. The file argument is always a separate argument.
-        let mut command = std::process::Command::new(crate::editor_location::resolve(program));
-        command.args(args).arg(&edit.local);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(0x08000000);
-        }
-        match command.spawn() {
-            Ok(mut child) => {
-                std::thread::spawn(move || {
-                    let _ = child.wait();
-                });
-            }
-            Err(_) => {
-                edit.status = "error".into();
-                edit.message = "편집기를 실행할 수 없습니다. 로컬 파일은 보존되었습니다.".into();
-            }
+        if opener.launch(&edit.local).is_err() {
+            edit.status = "error".into();
+            edit.message = opener.failure().into();
         }
         self.entries.lock().unwrap().insert(id, edit.clone());
         Ok(edit)

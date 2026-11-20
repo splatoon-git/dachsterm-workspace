@@ -18,7 +18,7 @@
 | gitleaks v8.28.0 (git 이력 165커밋, redact) | 3건 모두 `vendor/ssh-key` 문서·코드의 PEM 예시 |
 | Cargo 출처 | 689개 모두 crates.io. 패치는 `vendor/ssh-key` 하나 |
 | npm 출처 | 모두 npm 레지스트리, integrity 있음. 설치 스크립트는 `fsevents`뿐 |
-| CSP | `script-src 'self'`, `object-src 'none'`, `frame-src 'none'` |
+| CSP | `script-src 'self'`, `object-src 'none'`, `frame-src 'none'`. 2026-11-20 FV에서 `script-src`에 `'wasm-unsafe-eval'`, `connect-src`에 `'self'`를 추가했다([이유](file-preview.md#내용-정책csp-변경)) |
 
 대상 밖 5건은 Linux 그래프에만 있다: `glib` 0.18.5(RUSTSEC-2024-0429), `proc-macro-error`(RUSTSEC-2024-0370), `zvariant`·`zvariant_derive`·`zbus_names`(RUSTSEC-2026-0370·0371·0372). Linux를 출시 대상에 넣으면 다시 봐야 한다.
 

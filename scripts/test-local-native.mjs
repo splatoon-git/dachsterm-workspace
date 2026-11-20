@@ -36,6 +36,7 @@ import {
 } from './verify-git-settings.mjs';
 import { checkGitDiff } from './verify-git-diff.mjs';
 import { checkDocumentEditor } from './verify-document-editor.mjs';
+import { checkFilePreview, fileOpener } from './verify-file-preview.mjs';
 
 if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.');
 // `--agent-only` runs only the DX.13 local agent steps after the first PowerShell tab,
@@ -44,7 +45,9 @@ if (process.platform !== 'win32') throw new Error('Windows WebView2 is required.
 // drag out to the file manager, which moves the real pointer for a few seconds, and
 // `--file-tab-only` only the GE.5 file tab steps, `--git-settings-only` only the GE.10
 // Settings → Git steps, `--git-diff-only` only the GE.8 diff tab steps, and
-// `--document-editor-only` only the TL.4 steps, which open no terminal at all.
+// `--document-editor-only` only the TL.4 steps, which open no terminal at all, and
+// `--file-preview-only` only the FV previews of pictures and documents.
+const filePreviewOnly = process.argv.includes('--file-preview-only');
 const documentEditorOnly = process.argv.includes('--document-editor-only');
 const agentOnly = process.argv.includes('--agent-only');
 const dropOnly = process.argv.includes('--drop-only');
@@ -84,6 +87,8 @@ async function launch() {
       WEBVIEW2_USER_DATA_FOLDER: path.join(directory, 'webview'),
       GIT_CONFIG_NOSYSTEM: '1',
       GIT_CONFIG_GLOBAL: path.join(directory, 'gitconfig'),
+      // A stand-in for the desktop's program, so "open by default" starts no real viewer.
+      ...(filePreviewOnly ? { DACHSTERM_TEST_OPENER: await fileOpener(directory) } : {}),
       // Only these steps need it: WSL's git then writes to the scratch file as well.
       ...(gitSettingsOnly ? { WSLENV: 'GIT_CONFIG_GLOBAL/p' } : {}),
     },
@@ -1249,7 +1254,8 @@ try {
     gitDiffOnly ||
     dropOnly ||
     dragOnly ||
-    fileTabOnly
+    fileTabOnly ||
+    filePreviewOnly
   ) {
     if (agentOnly) await checkLocalAgent(page, command, pane);
     if (credentialsOnly) await checkWslCredentials(page, command);
@@ -1258,6 +1264,7 @@ try {
     if (gitDiffOnly) await checkGitDiff(page, command, pane, directory, () => openWslTab(page));
     if (dropOnly) await checkLocalDrop(page, command, pane);
     if (dragOnly) await checkDragOut(page, command, pane);
+    if (filePreviewOnly) await checkFilePreview(page, command, pane, directory);
     if (fileTabOnly) {
       await checkFileTab(page, command, pane);
       await checkDiscardCloses(page, command, pane);

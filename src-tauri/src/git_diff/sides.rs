@@ -74,7 +74,9 @@ impl From<Content> for Side {
                 hash,
             },
             Content::Image { mime, .. } => Self::Binary { format: mime },
-            Content::Binary { format } => Self::Binary { format },
+            Content::Document { format, .. } | Content::Binary { format } => {
+                Self::Binary { format }
+            }
             Content::Large | Content::TooLarge => Self::TooLarge,
         }
     }

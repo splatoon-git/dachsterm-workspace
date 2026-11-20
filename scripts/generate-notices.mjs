@@ -33,7 +33,9 @@ const items = [...packages.values()]
   }));
 const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
 for (const [location, p] of Object.entries(lock.packages)) {
-  if (!location || p.dev) continue;
+  // An optional package is a native add-on for running a library under Node (the PDF library's
+  // canvas). The web bundle cannot contain it, and which ones are installed depends on the OS.
+  if (!location || p.dev || p.optional) continue;
   const manifest = JSON.parse(await readFile(path.join(location, 'package.json'), 'utf8'));
   items.push({
     ecosystem: 'npm',

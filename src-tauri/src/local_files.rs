@@ -1,7 +1,7 @@
 //! File browsing for local terminal tabs. Paths keep the form the shell reports: WSL tabs use
 //! Linux paths, mapped here to the distribution's network share. The SFTP transfer queue and
 //! edit sync do not apply, because these files are already on this computer.
-use crate::{AppState, file_ops::Outcome, local::Target, storage::Result};
+use crate::{AppState, file_opener::Opener, file_ops::Outcome, local::Target, storage::Result};
 use serde::Serialize;
 use std::{
     fs, io,
@@ -428,21 +428,34 @@ pub async fn local_files_edit(
     let location = locate(&state.locals.target(&target_id)?, &path)?;
     crate::editor_launch::check(&app, &program, &args).await?;
     blocking(move || {
-        // Never interpolate a shell command. The file argument is always a separate argument.
-        let mut command = std::process::Command::new(crate::editor_location::resolve(&program));
-        command.args(args).arg(&location.native);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(0x08000000);
+        Opener::Editor { program, args }
+            .launch(&location.native)
+            .map_err(|_| "편집기를 실행할 수 없습니다. 프로그램 경로를 확인하세요.".into())
+    })
+    .await
+}
+
+/// Opens a file of this computer in the program the desktop has for its type.
+#[tauri::command]
+pub async fn local_files_open_default(
+    state: State<'_, AppState>,
+    target_id: String,
+    path: String,
+) -> Result<()> {
+    let location = locate(&state.locals.target(&target_id)?, &path)?;
+    let name = location
+        .native
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("이 파일 이름은 기본 프로그램으로 열 수 없습니다.")?;
+    crate::file_opener::check_default(name).await?;
+    blocking(move || {
+        if !location.native.is_file() {
+            return Err("파일을 찾을 수 없습니다.".into());
         }
-        let mut child = command
-            .spawn()
-            .map_err(|_| "편집기를 실행할 수 없습니다. 프로그램 경로를 확인하세요.")?;
-        std::thread::spawn(move || {
-            let _ = child.wait();
-        });
-        Ok(())
+        Opener::Default
+            .launch(&location.native)
+            .map_err(|_| "이 파일을 여는 프로그램을 실행할 수 없습니다.".into())
     })
     .await
 }

@@ -91,6 +91,7 @@ export function createTheme(p: Palette): ThemeDefinition {
       status: { success, info, warning, error },
       focus: { ring: p.primary },
       overlay: { backdrop: p.colorScheme === 'dark' ? '#00000080' : '#18203030' },
+      document: { paper: '#FFFFFF', ink: '#1F2328' },
     },
     terminal: {
       background: p.terminalBackground ?? panel,

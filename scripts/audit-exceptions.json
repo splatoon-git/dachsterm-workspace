@@ -1,12 +1,5 @@
 {
-  "npm": [
-    {
-      "id": "GHSA-fc5q-39xc-vjpf",
-      "package": "picomatch",
-      "reason": "ReDoS in glob matching. Reached only through vite, vitest and typescript-eslint while building and testing; the released app does not contain it and production dependencies are not affected. No patched version exists (all versions up to 4.0.7).",
-      "review": "2026-12-18"
-    }
-  ],
+  "npm": [],
   "cargo": [
     {
       "id": "RUSTSEC-2026-0543",

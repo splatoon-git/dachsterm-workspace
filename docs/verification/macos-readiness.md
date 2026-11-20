@@ -186,6 +186,16 @@ macOS 26.5, Apple Silicon, Node 26.0.0, Rust 1.99.1, Docker 29.8.0. 패키지 �
 
 에이전트가 접근성 API와 창 캡처로 조작했다(사람 조작 아님). Finder와 같은 최소 `PATH`로 띄운 앱에서 ProxyCommand(Homebrew `socat` 이름만), 가져오기 명령 승인, HTTP 프록시 암호 카드, 하이라이트 색(WKWebView), Telnet 프롬프트·종료, 시리얼 포트 목록을 확인했고, 사용자명 없는 Telnet·시리얼 세션을 가져올 수 없던 결함을 고쳤다. Telnet 로그인과 터미널 안 전송 `sz`·`rz` 왕복(SHA-256 일치)도 확인했다. 우클릭 붙여넣기(자동 조작에서 실패, 원인 미확인), XQuartz, 실제 USB 시리얼, 업데이트 뒤 Keychain은 대기다. 터미널에서 그냥 `open`으로 띄운 앱은 셸 `PATH`를 받으므로 Finder 실행 확인에는 빈 환경 `open`을 쓴다(`mac-verify` 스킬). [기록](commercial-gaps.md#mac-패키지-앱)
 
+## FV 그림·문서 미리보기 (2026-11-20)
+
+Windows에서 구현하고 검증했다([기록](file-preview.md)). **Mac에서는 컴파일도 실행도 하지 않았다.** `main`에 올리기 전 Mac에서 확인할 것:
+
+- `bash scripts/verify-macos.sh`: `file_opener.rs`의 `cfg(target_os = "macos")` 경로(`/usr/bin/xattr`로 quarantine 표시)와 새 npm 의존성 빌드.
+- 패키지 앱(WKWebView)에서 PDF·hwp·hwpx·docx·xlsx·pptx·bmp를 열어 본다. 볼 것: WebAssembly 엔진과 PDF 워커가 내용 정책 아래 뜨는지, Word 보기의 확대(`zoom` CSS), 한글 글꼴 대체(Apple SD Gothic Neo).
+- **기본 프로그램으로 열기**: 로컬 파일이 연결된 앱으로 열리는지, 한글 이름(NFD), 실행될 수 있는 종류에서 확인 창이 뜨는지.
+- 서버 파일을 받아 연 복사본에 `com.apple.quarantine`이 붙는지(`xattr -l`), 그 표시가 미리보기·Pages·한컴 등에서 여는 것을 막지 않는지, 저장 뒤 업로드 확인이 뜨는지.
+- WKWebView에는 `test:file-preview` 같은 자동 경로가 없다. 사람이 연다.
+
 ## 참고
 
 - [TN3179: Understanding local network privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)

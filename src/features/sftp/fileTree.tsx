@@ -91,10 +91,18 @@ export function useFileTree<T extends FileEntry>(
     rows,
     /** The app's own menu items for one selected folder; none for anything else. */
     folderMenu: (path?: string): MenuItem[] => (path && decorations?.folderActions?.(path)) || [],
-    /** Opening one selected file: in a tab where this window has them, and in an external editor. */
-    fileMenu: (path: string | undefined, external?: () => void): MenuItem[] => [
+    /**
+     * Opening one selected file: in a tab where this window has them, in an external editor, and
+     * in the program this computer has for its type.
+     */
+    fileMenu: (
+      path: string | undefined,
+      external?: () => void,
+      byDefault?: () => void,
+    ): MenuItem[] => [
       ...(open ? [{ label: '열기', disabled: !path, run: () => path && open(path, true) }] : []),
       { label: '외부 편집기로 열기', disabled: !path || !external, run: () => external?.() },
+      { label: '기본 프로그램으로 열기', disabled: !path || !byDefault, run: () => byDefault?.() },
     ],
     toggle(folder: string) {
       const expanded = new Set(tree.expanded);

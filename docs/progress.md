@@ -1,6 +1,7 @@
 # DachsTerm 구현 진행 현황
 
-- 마지막 갱신: 2026-11-18
+- 마지막 갱신: 2026-11-20
+- **FV 그림·문서 미리보기와 기본 프로그램으로 열기: 구현·Windows 실제 앱과 실제 SSH 검사 통과·`dev` 병합 / 실제 문서 표본·실제 오피스 프로그램·Mac 대기** — [roadmap §28](roadmap.md#28-그림문서-미리보기와-기본-프로그램으로-열기-2026-11-18-사용자-요청--fv), [검증 기록](verification/file-preview.md), [아래 절](#fv--그림문서-미리보기와-기본-프로그램으로-열기-2026-11-20). 파일 탭이 그림(BMP·ICO 추가, 확대)·PDF·Word·Excel·PowerPoint·한글(hwp·hwpx)을 읽기 전용으로 보여 주고, 파일 우클릭과 탭에서 **기본 프로그램으로 열기**를 쓴다(로컬은 그대로, SFTP는 받아서 열고 저장하면 업로드를 묻는다, FTP는 미지원). 내용 정책에 `'wasm-unsafe-eval'`과 `connect-src 'self'`를 추가했다. `npm run test:file-preview`와 `test:native:edit`의 FV.2 단계 통과. 감사 예외의 npm 항목(`picomatch`)은 더 보고되지 않아 지웠다. 남은 ID: FV.6(실제 문서 표본, 실제 오피스·한글 프로그램 왕복, 구형 WebView2, Mac). 다음 첫 행동: 앱을 빌드해 실제 hwp·docx·pdf 몇 개를 열어 모양을 보고, 서버의 docx를 **기본 프로그램으로 열기**로 열어 편집 사용 → 저장 → 업로드 카드까지 사람이 확인한다.
 - **W.2 사용자명 없이 저장한 SSH 세션은 연결할 때 묻기: 구현·대상 테스트·clippy 통과 / 실제 SSH 접속·앱 빌드·Mac 대기** — [아래 절](#w2--연결할-때-사용자명-묻기-2026-11-18). SSH 세션의 사용자는 비워도 저장되고, 연결하면 사용자명 카드가 먼저 뜬다(경유지 포함, 저장하지 않음). FTP·FTPS는 종전대로 필수다. 가져오기 미리보기는 사용자명 없는 SSH 세션을 막지 않는다. 다음 첫 행동: Docker가 응답하면 사용자명을 비운 세션으로 실제 OpenSSH 접속(암호·키·경유지·ProxyCommand `%r`)을 확인하고, 앱을 빌드해 카드와 암호 대화상자 순서를 본다.
 - **UI.1 배치·글자·컨트롤 일관성: `dev` 병합·Windows ZIP 완료 / 실제 앱·Mac·배율 확인 대기** — [기준](design/ui-consistency.md), [검증·ZIP 해시](verification/ui-consistency.md). 후속 팝업·설정 점검은 터미널 본문 제외: 54상태×4너비×3테마 648조합, UI 598/598, Vitest 1,433/1,433, typecheck·lint·format 통과. 마지막 보관함 간격 보완 12/12도 통과했다. 긴 이름 넘침·제목/컨트롤·설정 스크롤·탭 방향키를 고쳤다. `5f5e6cb` Windows release 빌드·ZIP CRC/EXE 해시 검증 통과. 산출물 `target/release/bundle/DachsTerm_0.5.1_x64_5f5e6cb.zip`. 남은 ID: UI.1 실제 앱/OS 배율·Mac. 다음 첫 행동: 이 ZIP을 실행해 설정·팝업을 실제 Windows 배율에서 확인하고 Mac에서 같은 화면을 확인한다.
 - **W.1 구형 WebView2 화면 붕괴·I.2 찾은 설정 미리보기 보완: 구현·자동 UI 검사·Windows ZIP 완료 / 전체 Rust 검사·다른 PC 확인 대기** — [아래 절](#w1--구형-webview2와-찾은-설정-미리보기-2026-11-18), [I.2 기록](verification/import-detect.md#추가-2026-11-18-제외-사유와-다른-파일). 사용자의 다른 Windows 11 PC(WebView2 100.0.1185.36)에서 하단 상태 줄이 화면 중간에 뜨고, 찾은 세션 북마크 파일의 미리보기가 꺼져 있었다. `100dvh`(Chromium 108부터)를 `100vh`로 바꾸고, 런타임이 111 미만이면 시작할 때 경고한다. 0개의 원인은 북마크 이름이 `[`로 시작하면 그 줄을 섹션 머리글로 읽던 파서 결함이었고, 고친 뒤 그 PC의 실제 ini에서 13개·제외 0개로 읽힌다. 찾은 파일의 세션이 모두 제외돼도 미리보기를 열어 사유를 보이고, 줄마다 **다른 파일…**을 둔다. 다음 첫 행동: UI.1의 새 Windows ZIP을 그 PC에서 열어 화면 배치·경고 창과 북마크 미리보기를 확인한다.
@@ -243,6 +244,7 @@
 
 | ID | 작업 | 상태 | 근거 또는 남은 사항 |
 |---|---|---|---|
+| FV.1~FV.6 | 그림·문서 미리보기, 기본 프로그램으로 열기 | 구현·Windows 검증 / FV.6 일부 대기 | [검증 기록](verification/file-preview.md). 실제 문서 표본·실제 오피스 프로그램 왕복·구형 WebView2·Mac 대기 |
 | UI.1 | UI 배치·글자·컨트롤 일관성 | `dev` 병합·Windows ZIP 완료 | [기준](design/ui-consistency.md)·[검증·ZIP 해시](verification/ui-consistency.md), 실제 앱·Mac/배율 확인 대기 |
 | 0.1 | 도구·Tauri 초기 구성 | 완료 | 기존 Windows 개발 앱·내장 자산 앱 실행/빌드 |
 | 0.2 | 토큰·라이트 테마·마스코트·레이아웃 | 완료 | 1개 테마·토큰 계약, 좁은 창·포커스 검사. Phase 1에서 htop ANSI 배경 대비 보정 |
@@ -519,6 +521,14 @@
 - 검증(커밋 전 트리, 상세는 [기록](verification/import-detect.md)): `cargo fmt --check`, 라이브러리 clippy, `cargo test -p dachsterm --lib` 758(무시 8), typecheck·lint·format, Vitest 1430, Playwright 548, 디버그 앱 빌드, `test:import-detect` 7개 확인 통과(임시 PuTTY 레지스트리 세션 → 빈 목록 안내 → 미리보기 → PuTTY 그룹에 저장 → 재가져오기 시 선택 해제, 이 PC의 실제 MobaXterm ini 탐지). `--all-targets` clippy는 `dev`에 있던 `ssh/proxy_command.rs` 테스트 미사용 import 1건으로 실패(이 작업 밖, `verify/cg-windows`에서 수정 중).
 - 대기: Mac 빌드·실기기, 실제 PuTTY 설치본, SSH 북마크가 있는 실제 MobaXterm ini, 휴대용 MobaXterm만 쓰는 PC.
 - 다음 첫 행동: 위 상단 줄과 같다.
+
+## FV — 그림·문서 미리보기와 기본 프로그램으로 열기 (2026-11-20)
+
+- 요청(2026-11-18): 파일 트리에서 텍스트 말고 이미지·한글·워드·오피스도 미리보기와 외부 연결이 되게 한다.
+- 백엔드: `file_read/format.rs`가 PDF, ZIP 묶음(docx·xlsx·pptx·hwpx와 매크로 변형), 복합 파일(hwp), HWP 3.0을 `Kind::Document`로, BMP·ICO를 그림으로 판정한다. `file_read.rs`의 `Content::Document`가 32MiB까지 통째로 보낸다. 새 `file_opener.rs`의 `Opener`(편집기 또는 연결 프로그램)가 실행을 맡고 `editor.rs`·`local_files.rs`의 중복 실행 코드를 대신한다. 명령 `local_files_open_default`, `edit_open_default`를 네 곳에 등록했다. 실행될 수 있는 종류는 웹뷰 밖 확인 창을 거치고, 서버에서 받은 복사본에는 다운로드 표시를 붙인다. `open` 크레이트는 `shellexecute-on-windows`로 바꿨다(`url_open`도 같은 경로가 된다).
+- 프런트: `features/editor/DocumentPreview.tsx`가 형식별 보기를 lazy 로드한다. `preview/`에 `PdfView`·`DocxView`·`SheetView`·`SlidesView`·`HwpView`·`ImageView`, 쪽 목록과 확대(`Pages.tsx`, `zoom.ts`), ZIP 선언 크기 검사(`zipEntries.ts`), OOXML 읽기(`officeXml.ts`, `sheetModel.ts`, `slidesModel.ts`)가 있다. `FilePane.tsx`에 미리보기와 버튼, `fileTree.tsx`의 파일 메뉴에 항목을 넣었다. `FilePanel.tsx`는 편집기 선택 저장을 `lib/externalEdit.ts` `rememberEditor`로 옮겨 줄 수 순증이 없다. 테마 계약에 `color.document.paper`·`ink`를 추가했다.
+- 빌드: `scripts/vite-package-folders.mjs`가 PDF 보조 폴더를 개발 서버와 빌드에 싣는다. `generate-notices.mjs`는 optional npm 패키지(PDF 라이브러리의 Node용 캔버스)를 건너뛴다. `isarray`의 라이선스 원문은 패키지 README에서 `licenses/upstream/`에 고정했다.
+- 결과와 미확인 항목은 [검증 기록](verification/file-preview.md)에 있다. 한글 엔진은 WebAssembly 26.8MB(압축 약 10MB)라 설치 패키지가 그만큼 커진다.
 
 ## W.2 — 연결할 때 사용자명 묻기 (2026-11-18)
 

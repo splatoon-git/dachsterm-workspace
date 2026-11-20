@@ -4,6 +4,7 @@ import { PermissionEditor } from './PermissionEditor';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { call, desktop, errorText, userAtHost } from '../../lib/ipc';
 import { useFileDrop } from '../../lib/fileDrop';
+import { rememberEditor, savedEditor, savedUploadMode } from '../../lib/externalEdit';
 import type { ExternalEdit as Edit } from '../../lib/externalEdit';
 import { TerminalSession } from '../terminal/session';
 import { Dialog } from '../../components/Dialog';
@@ -75,16 +76,14 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
   const [trayChoice, setTrayChoice] = useState<boolean | null>(null);
   const [operation, setOperation] = useState('');
   const [value, setValue] = useState('');
-  const [uploadMode, setUploadMode] = useState(
-    () => localStorage.getItem('dachsterm.uploadMode') ?? 'ask',
-  );
+  const [uploadMode, setUploadMode] = useState<string>(savedUploadMode);
   const requestId = useRef(0);
   const panel = useRef<HTMLElement>(null);
   const [fileEncoding, setFileEncoding] = useState('original');
   const [editorArgs, setEditorArgs] = useState(
     () => localStorage.getItem('dachsterm.editorArgs') ?? '[]',
   );
-  const [editor, setEditor] = useState(() => localStorage.getItem('dachsterm.editor') ?? 'code');
+  const [editor, setEditor] = useState(savedEditor);
   const load = useCallback(
     async (next: string) => {
       const request = ++requestId.current;
@@ -262,6 +261,8 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
       return false;
     }
   }
+  const openDefault = () =>
+    void run('edit_open_default', { id, profileId: session.profile.id, path: target, uploadMode });
   async function resolve(edit: Edit, choice: string, newPath?: string) {
     await run('edit_resolve', {
       id: edit.id,
@@ -599,6 +600,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
             ...fileMenu(
               selection.length === 1 && !selected?.directory ? target : undefined,
               isFtp ? undefined : () => setOperation('edit'),
+              isFtp ? undefined : openDefault,
             ),
             {
               label: '이름 바꾸기',
@@ -666,8 +668,6 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
               void (async () => {
                 let ok: boolean;
                 if (operation === 'edit') {
-                  localStorage.setItem('dachsterm.editor', editor);
-                  localStorage.setItem('dachsterm.uploadMode', uploadMode);
                   let args: unknown;
                   try {
                     args = JSON.parse(editorArgs);
@@ -677,7 +677,7 @@ function ConnectedFiles({ session }: { session: TerminalSession }) {
                     setError('편집기 인자는 JSON 문자열 배열이어야 합니다.');
                     return;
                   }
-                  localStorage.setItem('dachsterm.editorArgs', editorArgs);
+                  rememberEditor(editor, uploadMode, editorArgs);
                   ok = await run('edit_start', {
                     id,
                     profileId: session.profile.id,
